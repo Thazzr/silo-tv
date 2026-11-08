@@ -53,7 +53,7 @@ describe('device headers', () => {
       expect(request.headers.get('X-Silo-Device-Id')).toBe(device.id);
       expect(request.headers.get('X-Silo-Device-Name')).toBe('LG webOS TV');
       expect(request.headers.get('X-Silo-Device-Platform')).toBe('webos');
-      expect(request.headers.get('X-Silo-Client')).toBe('silo-lg');
+      expect(request.headers.get('X-Silo-Client')).toBe('silo-tv');
       expect(request.headers.get('X-Silo-Client-Version')).toBe('1.2.3');
     }
   });

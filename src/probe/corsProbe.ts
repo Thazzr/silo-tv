@@ -55,7 +55,7 @@ const SIMPLE_GET: RequestSpec = { method: 'GET', path: '/api/v2/system/info', he
 const PREFLIGHT_GET: RequestSpec = {
   method: 'GET',
   path: '/api/v2/auth/device/capability',
-  headers: { 'X-Silo-Device-Id': 'silo-lg-probe' },
+  headers: { 'X-Silo-Device-Id': 'silo-tv-probe' },
 };
 // JSON content type forces a preflight; the token is invalid on purpose, so a reachable server
 // answers 4xx and nothing real is ever sent.
@@ -63,7 +63,7 @@ const PREFLIGHT_POST: RequestSpec = {
   method: 'POST',
   path: '/api/v2/auth/refresh',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ refresh_token: 'silo-lg-probe-invalid' }),
+  body: JSON.stringify({ refresh_token: 'silo-tv-probe-invalid' }),
 };
 
 type Verdict = Omit<CorsCheckResult, 'id' | 'transport' | 'ms'>;

@@ -1,7 +1,7 @@
 import { getPlatform, type KeyValueStore } from '../platform';
 
 // Bump when the stored shape changes.
-const STORAGE_KEY = 'silo-lg.server.v1';
+const STORAGE_KEY = 'silo-tv.server.v1';
 
 /** The origin of the server the user connected to last, or null. */
 export function loadServer(storage: KeyValueStore | null = getPlatform().storage): string | null {

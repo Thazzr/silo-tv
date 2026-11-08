@@ -122,14 +122,14 @@ describe('runCorsProbe request shapes', () => {
       [
         `${SERVER}/api/v2/auth/device/capability`,
         'GET',
-        { 'X-Silo-Device-Id': 'silo-lg-probe' },
+        { 'X-Silo-Device-Id': 'silo-tv-probe' },
         undefined,
       ],
       [
         `${SERVER}/api/v2/auth/refresh`,
         'POST',
         { 'Content-Type': 'application/json' },
-        '{"refresh_token":"silo-lg-probe-invalid"}',
+        '{"refresh_token":"silo-tv-probe-invalid"}',
       ],
     ]);
     expect(f.calls.every((c) => c.init.credentials === 'omit')).toBe(true);
@@ -138,7 +138,7 @@ describe('runCorsProbe request shapes', () => {
       {
         method: 'GET',
         url: `${SERVER}/api/v2/auth/device/capability`,
-        headers: { 'X-Silo-Device-Id': 'silo-lg-probe' },
+        headers: { 'X-Silo-Device-Id': 'silo-tv-probe' },
         body: null,
         timeout: CHECK_TIMEOUT_MS,
       },
@@ -148,7 +148,7 @@ describe('runCorsProbe request shapes', () => {
       {
         url: `${SERVER}/api/v2/auth/device/capability`,
         method: 'GET',
-        headers: { 'X-Silo-Device-Id': 'silo-lg-probe' },
+        headers: { 'X-Silo-Device-Id': 'silo-tv-probe' },
         body: undefined,
         timeoutMs: CHECK_TIMEOUT_MS,
       },
@@ -156,7 +156,7 @@ describe('runCorsProbe request shapes', () => {
         url: `${SERVER}/api/v2/auth/refresh`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{"refresh_token":"silo-lg-probe-invalid"}',
+        body: '{"refresh_token":"silo-tv-probe-invalid"}',
         timeoutMs: CHECK_TIMEOUT_MS,
       },
     ]);

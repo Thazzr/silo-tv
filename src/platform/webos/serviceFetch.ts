@@ -2,7 +2,7 @@ import type { ProxyFetchRequest, ProxyFetchResponse, ProxyPingResponse } from '.
 import { lunaCall } from './luna';
 
 /** The app ID is the single source; the JS service id is derived from it. */
-export const APP_ID = 'io.github.thazzr.silolg';
+export const APP_ID = 'io.github.thazzr.silotv';
 export const SERVICE_ID = `${APP_ID}.service`;
 
 // The service's own timeout (default 15 s) must fire before the bridge gives up.

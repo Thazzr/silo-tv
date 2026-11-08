@@ -12,7 +12,7 @@ import {
 
 const URL_ = 'https://silo.example.test/api/v2/x';
 // Id of the bundled JS service (the app ID plus .service).
-const SERVICE_ID = 'io.github.thazzr.silolg.service';
+const SERVICE_ID = 'io.github.thazzr.silotv.service';
 
 afterEach(() => {
   vi.unstubAllGlobals();
