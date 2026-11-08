@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'silo-lg.deviceId';
+const STORAGE_KEY = 'silo-tv.deviceId';
 // Silo accepts letters, digits and . _ : - up to 128 characters; 32 hex characters fit easily.
 export const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 

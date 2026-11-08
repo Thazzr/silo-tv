@@ -11,7 +11,7 @@ describe('package metadata', () => {
     expect(read('public/appinfo.json').version).toBe(read('package.json').version);
   });
 
-  it('uses the app id io.github.thazzr.silolg', () => {
-    expect(read('public/appinfo.json').id).toBe('io.github.thazzr.silolg');
+  it('uses the app id io.github.thazzr.silotv', () => {
+    expect(read('public/appinfo.json').id).toBe('io.github.thazzr.silotv');
   });
 });

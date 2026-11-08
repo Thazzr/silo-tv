@@ -15,8 +15,8 @@ import { saveServer } from './serverStore';
 vi.mock('../platform/serviceFetch', () => ({
   serviceFetch: vi.fn(),
   servicePing: vi.fn(),
-  APP_ID: 'io.github.thazzr.silolg',
-  SERVICE_ID: 'io.github.thazzr.silolg.service',
+  APP_ID: 'io.github.thazzr.silotv',
+  SERVICE_ID: 'io.github.thazzr.silotv.service',
 }));
 
 const server = setupServer();

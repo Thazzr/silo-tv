@@ -12,7 +12,7 @@ $ErrorActionPreference = "Stop"
 $verify = Join-Path $PSScriptRoot "verify.ps1"
 $pwsh = (Get-Process -Id $PID).Path
 
-$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "silo-lg-verify-tests-$PID"
+$tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "silo-tv-verify-tests-$PID"
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $fakeNpm = Join-Path $tempDir "fake-npm.cmd"
 $fakeLog = Join-Path $tempDir "calls.log"

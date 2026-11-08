@@ -15,7 +15,7 @@ export interface SessionData {
 export type SessionEvent = 'changed' | 'signedOut';
 
 // Bump when the stored shape changes; an unknown version is treated as "signed out".
-const STORAGE_KEY = 'silo-lg.session.v1';
+const STORAGE_KEY = 'silo-tv.session.v1';
 
 /**
  * Holds the signed-in session and mirrors it to localStorage.

@@ -1,5 +1,5 @@
 {
-  "name": "io.github.thazzr.silolg.service",
+  "name": "io.github.thazzr.silotv.service",
   "version": "0.0.1",
   "description": "HTTP proxy for the Silo API, used when webOS enforces CORS for the file:// app",
   "private": true,

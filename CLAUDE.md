@@ -143,7 +143,7 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
 ## TV UI rules
 
 - **Look:** The app looks like a Silo app. Colours and the three-bar motif may be reused. **Silo's logo, wordmark and icons may not**, except unchanged on a "Connect to Silo" hint.
-- **Name:** The app needs a name of its own (Silo trademark policy). "Silo …", "Silo[word]" and "[word]Silo" are not allowed; wordplay is. The description reads "a client for Silo". Until the user decides, it is called `silo-lg` in code and in `appinfo.json` (app ID `io.github.thazzr.silolg`).
+- **Name:** The app needs a name of its own (Silo trademark policy). "Silo …", "Silo[word]" and "[word]Silo" are not allowed; wordplay is. The description reads "a client for Silo". Until the user decides, it is called `silo-tv` (repository Thazzr/silo-tv, app ID `io.github.thazzr.silotv`, fixed before the first store release).
 - **Text:**
   - UI text exists in German (informal "du") and English.
   - Every key is in both `src/i18n/de.json` and `src/i18n/en.json`.

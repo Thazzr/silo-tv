@@ -214,11 +214,11 @@ describe('proxy fetch', () => {
   });
 });
 
-const APP_ID = 'io.github.thazzr.silolg';
+const APP_ID = 'io.github.thazzr.silotv';
 
 describe('appIdOf', () => {
   it('strips the .service suffix, and matches the app ID of the app side', () => {
-    expect(appIdOf('io.github.thazzr.silolg.service')).toBe(APP_ID);
+    expect(appIdOf('io.github.thazzr.silotv.service')).toBe(APP_ID);
     // Read as text: importing the app module would pull browser-only code into the node typecheck.
     const source = readFileSync('src/platform/serviceFetch.ts', 'utf8');
     expect(appIdOf(pkg.name)).toBe(/APP_ID = '([^']+)'/.exec(source)?.[1]);

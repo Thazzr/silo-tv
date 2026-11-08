@@ -17,7 +17,7 @@ describe('getDeviceId', () => {
   });
 
   it('replaces a stored id with characters Silo would drop', () => {
-    localStorage.setItem('silo-lg.deviceId', 'not valid!');
+    localStorage.setItem('silo-tv.deviceId', 'not valid!');
     expect(getDeviceId()).toMatch(/^[0-9a-f]{32}$/);
   });
 

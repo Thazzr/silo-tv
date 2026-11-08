@@ -74,7 +74,7 @@ describe('parseInspectorUrl', () => {
 });
 
 describe('pickTarget', () => {
-  const appId = 'io.github.thazzr.silolg';
+  const appId = 'io.github.thazzr.silotv';
   const page = (url: string, extra = {}) => ({ type: 'page', url, ...extra });
 
   it('prefers a page with index.html', () => {

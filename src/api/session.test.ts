@@ -224,26 +224,26 @@ describe('refresh on 401', () => {
 describe('Session', () => {
   it('persists under one versioned key and restores', () => {
     const first = signedInSession();
-    expect(Object.keys({ ...localStorage })).toEqual(['silo-lg.session.v1']);
+    expect(Object.keys({ ...localStorage })).toEqual(['silo-tv.session.v1']);
     expect(new Session(localStorage).get()).toEqual(first.get());
   });
 
   it('rejects a well-formed record of another or no version', () => {
     const valid = { accessToken: 'a', refreshToken: 'r', expiresAt: 1 };
-    localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 2, session: valid }));
+    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 2, session: valid }));
     expect(new Session(localStorage).get()).toBeNull();
-    localStorage.setItem('silo-lg.session.v1', JSON.stringify({ session: valid }));
+    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ session: valid }));
     expect(new Session(localStorage).get()).toBeNull();
-    localStorage.setItem('silo-lg.session.v1', JSON.stringify(valid));
+    localStorage.setItem('silo-tv.session.v1', JSON.stringify(valid));
     expect(new Session(localStorage).get()).toBeNull();
-    localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 1, session: valid }));
+    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 1, session: valid }));
     expect(new Session(localStorage).get()).toEqual(valid);
   });
 
   it('ignores stored data of another version or shape', () => {
-    localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 2, session: {} }));
+    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 2, session: {} }));
     expect(new Session(localStorage).get()).toBeNull();
-    localStorage.setItem('silo-lg.session.v1', 'not json');
+    localStorage.setItem('silo-tv.session.v1', 'not json');
     expect(new Session(localStorage).get()).toBeNull();
   });
 

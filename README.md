@@ -1,8 +1,8 @@
-# silo-lg
+# silo-tv
 
-A native client for LG TVs running webOS (model year 2021 and later, webOS 6+) for the self-hosted media server [Silo](https://github.com/Silo-Server/silo-server).
+A native TV client for the self-hosted media server [Silo](https://github.com/Silo-Server/silo-server): first for LG TVs running webOS (model year 2021 and later, webOS 6+), later also for Samsung TVs running Tizen.
 
-> Not an official Silo project. "Silo" is a trademark of Silo Media L.L.C.; this app is an independent client for Silo. `silo-lg` is a working title.
+> Not an official Silo project. "Silo" is a trademark of Silo Media L.L.C.; this app is an independent client for Silo. `silo-tv` is a working title; the app name will be chosen before the first store release.
 
 ## Status
 

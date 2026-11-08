@@ -31,7 +31,7 @@ function deviceMiddleware(options: SiloClientOptions): Middleware {
       request.headers.set('X-Silo-Device-Id', options.device.id);
       request.headers.set('X-Silo-Device-Name', headerSafe(options.device.name));
       request.headers.set('X-Silo-Device-Platform', 'webos');
-      request.headers.set('X-Silo-Client', 'silo-lg');
+      request.headers.set('X-Silo-Client', 'silo-tv');
       request.headers.set('X-Silo-Client-Version', version);
       return request;
     },

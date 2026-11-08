@@ -1,5 +1,5 @@
 // Bump when the stored shape changes.
-const STORAGE_KEY = 'silo-lg.server.v1';
+const STORAGE_KEY = 'silo-tv.server.v1';
 
 function safeStorage(): Storage | null {
   try {

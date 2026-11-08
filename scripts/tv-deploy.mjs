@@ -10,7 +10,7 @@ import { buildLaunchParams } from './launch-params.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const device = process.env.WEBOS_DEVICE || 'tv';
-const appId = 'io.github.thazzr.silolg';
+const appId = 'io.github.thazzr.silotv';
 const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'));
 const ipk = `out/${appId}_${version}_all.ipk`;
 const aresBin = resolve(root, 'node_modules', '@webos-tools', 'cli', 'bin');
