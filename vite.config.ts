@@ -7,12 +7,19 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
   version: string;
 };
 
+// Dev only: when SILO_SERVER is set (the origin of a Silo server), the dev server proxies /api to
+// it. Silo sends no CORS headers, so a browser on localhost could not call it directly.
+const siloServer = process.env.SILO_SERVER;
+
 export default defineConfig({
   base: './',
   plugins: [react(), webosHtml()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  server: siloServer
+    ? { proxy: { '/api': { target: siloServer, changeOrigin: true, secure: true } } }
+    : {},
   build: {
     target: 'chrome79',
     modulePreload: false,

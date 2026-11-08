@@ -2,6 +2,8 @@ dist/
 out/
 coverage/
 package-lock.json
+src/api/generated/
+openapi/silo-v2.json
 public/*.png
 # Process files owned by the main session are not formatted by this repo tooling
 .claude/
