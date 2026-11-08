@@ -1,29 +1,29 @@
 #!/usr/bin/env pwsh
-# Regeneriert CHANGELOG.md aus der Conventional-Commits-Historie mit git-cliff (über die ganze Historie).
+# Regenerates CHANGELOG.md from the Conventional Commits history with git-cliff (over the whole history).
 #
-# CHANGELOG.md wird NIE von Hand editiert - immer dieses Skript verwenden.
+# CHANGELOG.md is NEVER edited by hand - always use this script.
 #
-# Versionierung: SemVer 0.MINOR.PATCH (siehe CLAUDE.md -> "Versioning"). Ein Tag wird am Ende jeder
-# abgeschlossenen Phase gesetzt (MINOR wenn die Phase >=1 feat-/Breaking-Commit enthält, sonst PATCH).
-# cliff.toml gruppiert CHANGELOG.md automatisch nach vorhandenen Tags - sobald ein Tag existiert, fällt der bis
-# dahin angesammelte [Unreleased]-Block in einen eigenen `## [x.y.z] - Datum`-Abschnitt.
+# Versioning: SemVer 0.MINOR.PATCH (see CLAUDE.md -> "Versioning"). A tag is set at the end of every
+# completed phase (MINOR if the phase contains >=1 feat/breaking commit, otherwise PATCH).
+# cliff.toml groups CHANGELOG.md by existing tags automatically - as soon as a tag exists, the [Unreleased]
+# block accumulated up to then falls into its own `## [x.y.z] - date` section.
 #
-# Übliche Nutzung (nach einem Commit, ohne Versions-Sprung):
+# Usual use (after a commit, without a version bump):
 #   pwsh tools/update-changelog.ps1
-#   git commit -m "docs(changelog): update" CHANGELOG.md   # taucht selbst nicht im Changelog auf
+#   git commit -m "docs(changelog): update" CHANGELOG.md   # does not itself show up in the changelog
 #
-# Atomar (Changelog-Eintrag im SELBEN Commit wie die Änderung):
+# Atomic (changelog entry in the SAME commit as the change):
 #   git add -A
 #   pwsh tools/update-changelog.ps1 -WithCommit "feat(scope): subject"
 #   git add CHANGELOG.md
-#   git commit -m "feat(scope): subject" -m "...Body mit Details (Ursache, Lösung, Verifikation)..."
+#   git commit -m "feat(scope): subject" -m "...body with details (cause, solution, verification)..."
 #
-# Phasenabschluss mit Versions-Tag (setzt den Tag auf HEAD, dann Regenerierung):
-#   pwsh tools/update-changelog.ps1 -Tag v0.2.0 -TagMessage "Kurzbeschreibung der Phase"
+# Phase completion with a version tag (sets the tag on HEAD, then regenerates):
+#   pwsh tools/update-changelog.ps1 -Tag v0.2.0 -TagMessage "Short description of the phase"
 #   git add CHANGELOG.md
 #   git commit -m "docs(changelog): update"
 #
-# Voraussetzung: `npm ci` (git-cliff ist eine devDependency und läuft über npx, ohne Download).
+# Prerequisite: `npm ci` (git-cliff is a devDependency and runs through npx, without a download).
 param(
     [string]$WithCommit,
     [string]$Tag,
@@ -31,24 +31,24 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($Tag -and -not $TagMessage) {
-    throw "-TagMessage ist erforderlich, wenn -Tag gesetzt wird (annotierter Tag braucht eine Beschreibung)."
+    throw "-TagMessage is required when -Tag is set (an annotated tag needs a description)."
 }
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
     if ($Tag) {
         git tag -a $Tag -m $TagMessage
-        if ($LASTEXITCODE -ne 0) { throw "git tag $Tag ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
-        Write-Host "Tag $Tag gesetzt auf HEAD."
+        if ($LASTEXITCODE -ne 0) { throw "git tag $Tag failed (exit code $LASTEXITCODE)." }
+        Write-Host "Tag $Tag set on HEAD."
     }
 
     $cliffArgs = @('-c', 'cliff.toml', '-o', 'CHANGELOG.md')
     if ($WithCommit) { $cliffArgs += @('--with-commit', $WithCommit) }
 
-    # --no-install: nie ein Paket aus dem Netz holen, falls git-cliff in node_modules fehlt.
+    # --no-install: never fetch a package from the network if git-cliff is missing from node_modules.
     & npx --no-install git-cliff @cliffArgs
-    if ($LASTEXITCODE -ne 0) { throw "git-cliff ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
-    Write-Host "CHANGELOG.md regeneriert."
+    if ($LASTEXITCODE -ne 0) { throw "git-cliff failed (exit code $LASTEXITCODE)." }
+    Write-Host "CHANGELOG.md regenerated."
 }
 finally {
     Pop-Location

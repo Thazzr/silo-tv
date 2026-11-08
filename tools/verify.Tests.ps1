@@ -1,11 +1,11 @@
 #!/usr/bin/env pwsh
-# Tests der Fehlerlogik von tools/verify.ps1: wann sagt das Gate "failed", und bleibt es rot.
+# Tests of the error logic in tools/verify.ps1: when does the gate say "failed", and does it stay red.
 #
-# Ohne Pester, mit einem gefälschten npm (eine .cmd im Temp-Ordner), dessen Exit-Code pro Skriptname über
-# FAKE_NPM_FAIL steuerbar ist ("lint,build"). Jeder Fall startet ein Gate als eigenen Prozess und prüft Exit-Code,
-# Tabelle und die Liste der Skripte, die das gefälschte npm wirklich aufgerufen hat.
+# Without Pester, using a fake npm (a .cmd in the temp folder) whose exit code per script name is controlled
+# through FAKE_NPM_FAIL ("lint,build"). Each case starts a gate as its own process and checks the exit code,
+# the table, and the list of scripts the fake npm was actually called with.
 #
-# Ausgabe: je Fall PASS/FAIL. Exit-Code 0 nur, wenn alle Fälle PASS sind.
+# Output: PASS/FAIL per case. Exit code 0 only if all cases PASS.
 
 $ErrorActionPreference = "Stop"
 
@@ -16,7 +16,7 @@ $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "silo-lg-verify-tests-$PI
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $fakeNpm = Join-Path $tempDir "fake-npm.cmd"
 $fakeLog = Join-Path $tempDir "calls.log"
-# %2 ist der Skriptname in `npm run <name>`.
+# %2 is the script name in `npm run <name>`.
 $fakeScript = @(
     "@echo off",
     '>>"%FAKE_NPM_LOG%" echo %2',
@@ -28,8 +28,8 @@ Set-Content -LiteralPath $fakeNpm -Encoding ascii -Value $fakeScript
 
 $allCalls = "typecheck,lint,test,build,check:bundle,test:e2e,package"
 
-# Startet ein Gate. $Fail: Skriptnamen, bei denen das gefälschte npm scheitert. Die Rekursionsmarke ist immer
-# gesetzt: ein Gate-Lauf der Tests darf den Schritt "verify script tests" nie wirklich starten.
+# Starts a gate. $Fail: script names for which the fake npm fails. The recursion marker is always
+# set: a gate run by the tests must never actually start the "verify script tests" step.
 function Invoke-Gate {
     param([string[]]$GateArgs = @(), [string]$Fail = "")
     Remove-Item -LiteralPath $fakeLog -Force -ErrorAction SilentlyContinue
@@ -42,7 +42,7 @@ function Invoke-Gate {
     [pscustomobject]@{ Exit = $exit; Output = @($output); Calls = $calls }
 }
 
-# Das Ergebnis eines Schritts aus der Tabelle am Ende: "ok", "failed (exit 1)", "skipped (build failed)".
+# The result of a step from the table at the end: "ok", "failed (exit 1)", "skipped (build failed)".
 function Get-TableResult {
     param($Run, [string]$Step)
     $summaryAt = [array]::IndexOf($Run.Output, "==> summary")
@@ -109,7 +109,7 @@ $cases["-Only lint runs only lint"] = {
 }
 
 $cases["-Only with an unknown name -> exit 2, nothing runs"] = {
-    $run = Invoke-Gate -GateArgs @("-Only", "gibtsnicht")
+    $run = Invoke-Gate -GateArgs @("-Only", "doesnotexist")
     $problems = @()
     if ($run.Exit -ne 2) { $problems += "exit $($run.Exit), expected 2" }
     if ($run.Calls.Count -ne 0) { $problems += "calls were: $($run.Calls -join ',')" }

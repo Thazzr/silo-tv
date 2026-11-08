@@ -1,123 +1,123 @@
-# Fahrplan und Features
+# Roadmap and features
 
-Ziel: Auf dem LG-TV soll alles gehen, was der Silo-Web-Client einem Zuschauer bietet. Die Liste ist aus dem Silo-Web-Client (`silo-server/web/src/pages`) und der Spezifikation des offiziellen Roku-Clients (`silo-roku/docs/spec.md`, Abschnitt 3) abgeleitet. Was der Server nur optional anbietet, zeigt die App nur, wenn er es über seine Capabilities meldet.
+Goal: the LG TV app should offer everything the Silo web client offers a viewer. The list is derived from the Silo web client (`silo-server/web/src/pages`) and the specification of the official Roku client (`silo-roku/docs/spec.md`, section 3). What the server offers only optionally is shown only when the server reports it through its capabilities.
 
-Status: ⬜ geplant · 🟨 in Arbeit · ✅ fertig und auf dem TV geprüft
+Status: ⬜ planned · 🟨 in progress · ✅ done and checked on the TV (or, for repository items, done)
 
-## Phase 0 – Machbarkeit (Ziel v0.1.0)
+## Phase 0 – Feasibility (target v0.1.0)
 
-Beantwortet die Plattformfragen, bevor UI gebaut wird. Das Aussehen ist hier noch egal.
+Answers the platform questions before any real UI is built. Looks do not matter yet.
 
-- ⬜ Projektgerüst: Vite, React, TypeScript, ESLint/Prettier, Vitest, Playwright, i18n-Grundgerüst
-- ⬜ Werkzeuge: `tools/verify.ps1` mit Selbsttest, `tools/update-changelog.ps1`, webOS-CLI
-- ⬜ Build für webOS 6: ein klassisches Skript, Chromium-79-Syntax, Polyfills; `appinfo.json`, Icons mit Arbeitstitel
-- ⬜ App auf den TV installieren und starten
-- ⬜ CORS-Test auf dem TV: direktes `fetch` gegen `/api/v2`, sonst ein Luna-JS-Service als Proxy. Danach fällt die Entscheidung.
-- ⬜ Generierter API-Client aus Silos OpenAPI, Transport-Schicht, Pflicht-Header, Token-Refresh
-- ⬜ Server-URL prüfen (`/system/info`, `api_major == 2`)
-- ⬜ Anmeldung per Code/QR (Device-Login)
-- ⬜ Ein Titel per Wiedergabeprotokoll v3: Direct Play und HLS, Fortschritt alle 10 s, Stopp
-- ⬜ Geräteprofil-Probe: welche Codecs, Container und HDR-Formate der TV wirklich kann
-- ⬜ Diagnose-Overlay mit Plan, Route und Player-Zustand, ohne Geheimnisse
+- ✅ Project scaffold: Vite, React, TypeScript, ESLint/Prettier, Vitest, Playwright, i18n basics
+- ✅ Tooling: `tools/verify.ps1` with self-tests, `tools/update-changelog.ps1`, webOS CLI
+- 🟨 Build for webOS 6: one classic script, Chromium 79 syntax, polyfills; `appinfo.json`, placeholder icons (built and packaged; not yet installed on a TV)
+- ⬜ Install and launch the app on the TV
+- ⬜ CORS test on the TV: direct `fetch` against `/api/v2`, otherwise a Luna JS service as a proxy; decide afterwards
+- ⬜ Generated API client from Silo's OpenAPI, transport layer, required headers, token refresh
+- ⬜ Check a server address (`/system/info`, `api_major == 2`)
+- ⬜ Sign-in by code/QR (device login)
+- ⬜ One title through playback protocol v3: direct play and HLS, progress every 10 s, stop
+- ⬜ Device profile probe: which codecs, containers and HDR formats the TV really supports
+- ⬜ Diagnostics overlay with plan, route and player state, without secrets
 
-## Phase 1 – Fundament: Server, Konto, Profile, Shell (Ziel v0.2.0)
+## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
-- ⬜ Mehrere Server speichern und wechseln; jeder behält seine Anmeldung
-- ⬜ Anmelden per Code/QR (zuerst angeboten) und per Passwort mit Bildschirmtastatur; Abmelden
-- ⬜ Profile: Auswahl, PIN, Kinderprofile, Profil anlegen
-- ⬜ Profil beim Start: Automatisch, Jedes Mal, nach 1 Stunde, nach 12 Stunden
-- ⬜ Profil und Server wechseln
-- ⬜ App-Shell mit oberer Leiste: Startseite, Filme, Serien, Für dich, Kalender, Suche, Avatar-Menü
-- ⬜ Fokus-Navigation mit Pfeilen, OK und Zurück; Fokus-Gedächtnis; Magic-Remote-Zeiger
-- ⬜ Server-Branding (Servername), Lade-, Leer- und Fehlerzustände
-- ⬜ Deutsch und Englisch nach TV-Sprache
+- ⬜ Save several servers and switch between them; each keeps its sign-in
+- ⬜ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out
+- ⬜ Profiles: picker, PIN, child profiles, create a profile
+- ⬜ Profile at launch: automatic, every time, after 1 hour, after 12 hours
+- ⬜ Switch profile and server
+- ⬜ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu
+- ⬜ Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer
+- ⬜ Server branding (server name); loading, empty and error states
+- ⬜ German and English following the TV's language
 
-## Phase 2 – Stöbern (Ziel v0.3.0)
+## Phase 2 – Browse (target v0.3.0)
 
-- ⬜ Startseite aus den Server-Sektionen: Weiterschauen, Next Up, Neu hinzugefügt und alle weiteren Zeilen, die der Admin konfiguriert
-- ⬜ Reihen mit höchstens 20 Karten und einer „Alle anzeigen“-Karte, die die volle Seite mit Paging öffnet
-- ⬜ Bibliotheks-Tabs Filme und Serien:
-  - Empfohlen-Zeilen
-  - Durchsuchen-Raster mit Sortierung, Filtern und Alphabet-Leiste
-  - Sammlungen
-- ⬜ Suche über Filme, Serien und Folgen; passende Box-Sets zuerst
-- ⬜ Film-Detailseite: Hero, Beschreibung, Credit-Zeile, externe Bewertungen, Qualitäts-Badges
-- ⬜ Serien-Detailseite mit Staffeln und Folgen, Besetzung, Empfehlungen
-- ⬜ Ähnliche Titel
-- ⬜ Personenseite: Biografie und Filmografie, gefiltert nach Alle, Filme oder Serien
-- ⬜ Box-Sets: Seite mit Filmen in Erscheinungsreihenfolge, „Nächsten abspielen“
-- ⬜ Trailer & mehr: lokale Trailer und Extras; YouTube-Trailer über die YouTube-App des TVs
-- ⬜ Titelmusik auf Detailseiten, wenn das Profil sie einschaltet
-- ⬜ Title-Art (Logo statt Text) nach Profileinstellung
-- ⬜ Spoilerschutz: Standbild unscharf und Beschreibung verborgen bei ungesehenen Folgen
-- ⬜ KI-Übersetzung von Beschreibungen, wenn der Server sie anbietet
+- ⬜ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures
+- ⬜ Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
+- ⬜ Library tabs for Movies and Series:
+  - Recommended rows
+  - Browse grid with sort, filters and an alphabet rail
+  - Collections
+- ⬜ Search across movies, series and episodes; matching box sets first
+- ⬜ Movie detail page: hero, description, credit line, external ratings, quality badges
+- ⬜ Series detail page with seasons and episodes, cast, recommendations
+- ⬜ Similar titles
+- ⬜ Person page: biography and filmography, filtered by All, Movies or Series
+- ⬜ Box sets: page with the films in release order, "Play next"
+- ⬜ Trailers & More: local trailers and extras; YouTube trailers through the TV's YouTube app
+- ⬜ Theme music on detail pages when the profile turns it on
+- ⬜ Title art (logo instead of text) following the profile setting
+- ⬜ Spoiler protection: blurred still and hidden description for unwatched episodes
+- ⬜ AI translation of descriptions when the server offers it
 
-## Phase 3 – Player (Ziel v0.4.0)
+## Phase 3 – Player (target v0.4.0)
 
-- ⬜ Abspielen, Fortsetzen, Von vorn, jeweils nach dem Server-Fortschritt
-- ⬜ Version, Tonspur und Untertitel vorab auf der Detailseite wählen; Auswahl als Präferenz am Server speichern
-- ⬜ Direct Play, HLS-Remux und Transcode, wie Protokoll v3 sie plant
-  - Geräteprofil mit H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision und Mehrkanal-Ton, soweit der TV sie kann
-- ⬜ Steuerung:
-  - Play/Pause, Springen und Spulstufen
-  - Scrubbing mit Vorschaubildern (Trickplay)
-  - Kapitel: Auswahl, Anzeige und Marken auf der Zeitleiste
-- ⬜ Ton-, Untertitel- und Qualitätswechsel während der Wiedergabe (Replan)
-- ⬜ Untertitel suchen und herunterladen über die Untertitel-Anbieter des Servers
-- ⬜ Untertitel-Darstellung nach Profileinstellung (Größe, Stil)
-- ⬜ Intro, Recap und Abspann überspringen; automatisches Überspringen nach Profileinstellung
-- ⬜ Up Next: nächste Folge automatisch, On-Deck-Vorschläge am Ende eines Films
-- ⬜ Shuffle für Bibliothek, Sammlung, Serie und Staffel
-- ⬜ Fortschritt laufend und am Ende melden
-- ⬜ Sleep-Timer
-- ⬜ Wiedergabegeschwindigkeit und Bildformat (beim Roku-Client nicht möglich, auf webOS schon)
-- ⬜ Ton- und Untertitelverzögerung
+- ⬜ Play, resume and start over, following the server's progress
+- ⬜ Choose version, audio track and subtitle on the detail page beforehand; save the choice as a server preference
+- ⬜ Direct play, HLS remux and transcode, as protocol v3 plans them
+  - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
+- ⬜ Controls:
+  - play/pause, skip and seek steps
+  - scrubbing with preview thumbnails (trickplay)
+  - chapters: picker, display and marks on the timeline
+- ⬜ Audio, subtitle and quality changes during playback (replan)
+- ⬜ Search and download subtitles through the server's subtitle providers
+- ⬜ Subtitle appearance following the profile setting (size, style)
+- ⬜ Skip intro, recap and credits; automatic skipping following the profile setting
+- ⬜ Up Next: next episode automatically, On Deck suggestions at the end of a movie
+- ⬜ Shuffle for a library, collection, series and season
+- ⬜ Report progress continuously and at the end
+- ⬜ Sleep timer
+- ⬜ Playback speed and aspect ratio (not possible in the Roku client, possible on webOS)
+- ⬜ Audio and subtitle delay
 
-## Phase 4 – Persönliches und Entdecken (Ziel v0.5.0)
+## Phase 4 – Personal and discovery (target v0.5.0)
 
-- ⬜ „Für dich“ mit den Empfehlungszeilen des Servers
-- ⬜ Kalender: eine Woche mit Veröffentlichungen und Ausstrahlungen für gefolgte, trendende oder alle Titel
-- ⬜ Merkliste, Favoriten und Verlauf, jeweils mit Entfernen
-- ⬜ Als gesehen oder ungesehen markieren: Film, Serie, Staffel, Folge
-- ⬜ Requests, wenn der Server sie anbietet:
-  - Discover-Zeilen
-  - Anfragen, Abbrechen, Benachrichtigen
-  - Meine Requests
-  - Request-Suche für fehlende Titel
-- ⬜ Einstellungen des Profils:
-  - Wiedergabe, Untertitel-Aussehen, Oberfläche, Startseite
-  - Metadaten-Sprache, Profilauswahl beim Start
-  - Konto und angemeldete Geräte
+- ⬜ "For You" with the server's recommendation rows
+- ⬜ Calendar: one week of releases and airings for followed, trending or all titles
+- ⬜ Watchlist, favorites and history, each with removal
+- ⬜ Mark as watched or unwatched: movie, series, season, episode
+- ⬜ Requests, when the server offers them:
+  - Discover rows
+  - request, cancel, notify me
+  - My Requests
+  - request search for missing titles
+- ⬜ Profile settings:
+  - playback, subtitle appearance, interface, home screen
+  - metadata language, profile picker at launch
+  - account and signed-in devices
 
-## Phase 5 – Extras (ab v0.6.0)
+## Phase 5 – Extras (from v0.6.0)
 
-- ⬜ Watch Party: Räume hosten und beitreten, Host- und Abstimmungsräume, synchrone Wiedergabe
-- ⬜ Startseiten-Zeilen bearbeiten
-- ⬜ Benachrichtigungen
-- ⬜ Musik und Hörbücher mit eigenem Audio-Player
-- ⬜ Start-Parameter und Deep Links (z. B. direkt zu einem Titel); Anzeige im LG-Home-Launcher
-- ⬜ Prüfen: Fernsteuerung durch die Silo-Handy-App (SiloControl) und Anmeldung über die Handy-App. Beides braucht Netzwerkdienste, die eine webOS-App eventuell nicht anbieten darf.
-- ⬜ Eigener App-Name und eigenes Icon; später eventuell der LG Content Store
+- ⬜ Watch Party: host and join rooms, host-pick and vote rooms, synchronized playback
+- ⬜ Edit home rows
+- ⬜ Notifications
+- ⬜ Music and audiobooks with an audio player of their own
+- ⬜ Launch parameters and deep links (e.g. straight to a title); presence in the LG home launcher
+- ⬜ To investigate: remote control from the Silo phone app (SiloControl) and sign-in through the phone app. Both need network services a webOS app may not be allowed to provide.
 
-## Veröffentlichung (begleitend, spätestens vor v1.0)
+## Release (alongside, at the latest before v1.0)
 
-Das Projekt ist öffentlich und soll für jeden Silo-Nutzer so verwendbar sein wie Silo selbst.
+The project is public and should be as usable for every Silo user as Silo itself.
 
-- ⬜ Funktioniert mit jedem Silo-Server: die Adresse wird in der App eingegeben, nichts ist fest eingebaut
-- ✅ Lizenz wie Silo: AGPL-3.0-or-later
-- ✅ Keine Serveradressen, Kontonamen oder Mailadressen in Repo und Historie
-- ⬜ Eigener Name und eigenes Icon nach der Silo-Markenrichtlinie
-- ⬜ CI auf GitHub: das Gate bei jedem Push und Pull Request
-- ⬜ Releases: signierte Tags, `.ipk` als Release-Asset, Changelog aus git-cliff
-- ⬜ Installationsanleitung für Entwicklermodus und gerootete TVs (Homebrew Channel), später eventuell ein Eintrag im Homebrew-Channel-Repository
-- ⬜ Beitragsrichtlinie und Issue-Vorlagen
+- ⬜ Works with any Silo server: the address is entered in the app, nothing is built in
+- ✅ License like Silo: AGPL-3.0-or-later
+- ✅ No server addresses, account names or e-mail addresses in the repository or its history
+- ✅ Repository in English (docs, comments, commit messages, changelog)
+- ⬜ A name and icon of its own, following the Silo trademark policy
+- ⬜ CI on GitHub: the gate on every push and pull request
+- ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
+- ⬜ Installation guide for Developer Mode and rooted TVs (Homebrew Channel); later perhaps an entry in the Homebrew Channel repository
+- ⬜ Contribution guidelines and issue templates
 
-## Bewusst nicht geplant
+## Deliberately not planned
 
-- **Admin-Bereich:** Server-Einrichtung, Bibliotheken, Benutzer, Plugins, Metadaten bearbeiten
-- **Sammlungen** anlegen oder bearbeiten (bietet keine Silo-TV-App)
-- **Lesen:** E-Books, Comics, Manga, Dokumente
-- **Downloads** und Offline-Wiedergabe
-- **Live-TV**, DVR, IPTV: Silo schließt das grundsätzlich aus
-- **Browser-Anmeldung** per OIDC/OAuth auf dem TV und Registrierung. Die Code-Anmeldung deckt diese Konten ab, weil die Bestätigung im Browser des Handys passiert.
-- **Server-Suche im Netzwerk** (mDNS): Eine webOS-Web-App kann das nicht; die Server-Adresse wird eingegeben.
+- **Admin area:** server setup, libraries, users, plugins, metadata editing
+- **Collections:** creating or editing them (no Silo TV app offers it)
+- **Reading:** e-books, comics, manga, documents
+- **Downloads** and offline playback
+- **Live TV**, DVR, IPTV: Silo rules these out on principle
+- **Browser sign-in** via OIDC/OAuth on the TV, and account sign-up. Code sign-in covers those accounts, because the confirmation happens in the phone's browser.
+- **Server discovery on the network** (mDNS): a webOS web app cannot do it; the server address is entered.

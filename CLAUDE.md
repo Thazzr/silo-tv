@@ -1,185 +1,190 @@
-## Projekt
+## Project
 
-Ein nativer Client für LG-Fernseher mit webOS für den selbst gehosteten Medienserver [Silo](https://github.com/Silo-Server/silo-server). Er soll alles können, was der Silo-Web-Client für Zuschauer kann (Feature-Plan und Phasen: [`docs/roadmap.md`](docs/roadmap.md)). Den Admin-Bereich braucht er nicht.
+A native client for LG webOS TVs for the self-hosted media server [Silo](https://github.com/Silo-Server/silo-server). It should do everything the Silo web client offers a viewer (feature plan and phases: [`docs/roadmap.md`](docs/roadmap.md)); it does not need the admin area.
 
-- **Sprache:** TypeScript. Die App selbst ist React mit Vite. Ein kleiner webOS-JS-Service in Node ist geplant, falls Phase 0 ihn als CORS-Proxy braucht. Die Werkzeuge in `tools/` sind PowerShell.
-- **Referenzen** (nur lesen, nie Code ungeprüft übernehmen):
-  - `Silo-Server/silo-server`: API-Doku in `docs/*-api.md` und `docs/architecture/`, die OpenAPI-Datei `contracts/api/v2/openapi.json` und der React-Web-Client in `web/src`.
-  - `Silo-Server/silo-roku`: Der native Roku-Client. Seine `docs/spec.md` ist die beste Vorlage für Verhalten und Abläufe eines TV-Clients.
-  - Beide stehen unter AGPL-3.0-or-later. Übernommener Code macht diese App ebenfalls AGPL.
-- **Öffentliches Projekt:** Das Repo ist öffentlich, und die App soll für jeden Silo-Nutzer so verwendbar sein wie Silo selbst. Sie funktioniert mit jedem Silo-Server.
-  - **Nichts Nutzerspezifisches ins Repo:** keine Serveradressen, Kontonamen, Mailadressen oder Tokens, weder in Dateien noch in Commit-Nachrichten.
-  - Solche Angaben stehen in der gitignorierten `CLAUDE.local.md`.
-- **Testserver und Dev-Konto:** Beide stehen in `CLAUDE.local.md`. Der Testserver ist der echte Server des Nutzers. Gearbeitet wird ausschließlich mit dem Dev-Konto ohne Admin-Rechte, nie mit dem Hauptkonto des Nutzers.
-- **Testgerät:** ein LG-TV ab Modelljahr 2021 im Entwicklermodus. Der Nutzer richtet es einmalig mit `ares-setup-device` ein; die Passphrase tippt nur er.
+- **Language:** TypeScript. The app is React with Vite. A small webOS JS service in Node is planned in case Phase 0 shows it is needed as a CORS proxy. The tooling in `tools/` is PowerShell.
+- **Repository language: English.** Everything in the repository is English: docs, code comments, script output, test names, commit messages and the generated changelog (user decision 2026-11-08). The only German in the repository is the app's German translation, `src/i18n/de.json`. Conversation with the user stays German.
+- **Public project:** The repository is public, and the app should be as usable for every Silo user as Silo itself. It works with any Silo server.
+  - **Nothing user-specific goes into the repository:** no server addresses, account names, e-mail addresses or tokens, neither in files nor in commit messages.
+  - Such details live in the git-ignored `CLAUDE.local.md`.
+  - Commits use the GitHub noreply address that is set in this repository's local git config.
+- **License:** AGPL-3.0-or-later, like Silo.
+- **References** (read only, never copy code unchecked):
+  - `Silo-Server/silo-server`: API docs in `docs/*-api.md` and `docs/architecture/`, the OpenAPI file `contracts/api/v2/openapi.json`, and the React web client in `web/src`.
+  - `Silo-Server/silo-roku`: the native Roku client. Its `docs/spec.md` is the best reference for how a TV client behaves.
+  - Both are AGPL-3.0-or-later, which allows reusing their code here.
+- **Test server and dev account:** both are named in `CLAUDE.local.md`. The test server is the user's real server. Work only with the dev account, which has no admin rights, never with the user's main account.
+- **Test device:** an LG TV from model year 2021 or later in Developer Mode. The user sets it up once with `ares-setup-device`; only the user types its passphrase.
 
 ## Workflow
 
-- Vor Architekturänderungen oder breiten Umbauten erst planen.
-- Bei größeren Codeblöcken (>20 Zeilen) für unveränderte Abschnitte kurze Platzhalter verwenden, z. B. `// ... existing code ...`.
-- Änderungen mit den Edit-Werkzeugen umsetzen; Codeblöcke im Text nur, um hypothetische Optionen aufzuzählen.
-- Codeblöcke bekommen Sprache und Dateinamen im Info-String.
-- Nach jeder abgeschlossenen Umsetzung die passende Verifikation laufen lassen, bevor geantwortet wird.
-- Abgeschlossene, verifizierte Arbeit mit Conventional Commits committen.
-- `CHANGELOG.md` wird von [git-cliff](https://git-cliff.org) aus den Commit-Messages **generiert**: Konfiguration `cliff.toml`, Helfer `tools/update-changelog.ps1`. **Nie von Hand bearbeiten.**
-  - Der Commit-*Subject* wird zur Changelog-Zeile.
-  - Ursache, Lösung und Verifikation gehören in den Commit-*Body*.
-- Nach jeder abgeschlossenen Aufgabe die nächsten sinnvollen Schritte vorschlagen.
-- Keinen Dev-Server und keine App auf dem TV starten, wenn die Aufgabe es nicht braucht.
+- Plan before architecture-level changes or broad refactors.
+- For larger code blocks (>20 lines), use brief placeholders for unmodified sections, e.g. `// ... existing code ...`.
+- Make changes with the edit tools; write code blocks in text only to enumerate hypothetical options.
+- Code blocks carry the language and file name in the info string.
+- After a completed implementation task, run the relevant verification before answering.
+- Commit completed, verified work with Conventional Commits, in English.
+- `CHANGELOG.md` is **generated** by [git-cliff](https://git-cliff.org) from the commit messages: config `cliff.toml`, helper `tools/update-changelog.ps1`. **Never edit it by hand.**
+  - The commit *subject* becomes the changelog line.
+  - Root cause, fix and verification go into the commit *body*.
+- After each completed task, suggest the next sensible steps.
+- Do not start a dev server or launch the app on the TV unless the task needs it.
 
-### Arbeitsteilung: planen und kontrollieren – umsetzen (übernommen aus `core`, Nutzerentscheidung 2026-11-08)
+### Division of work: plan and review – implement (adopted from `core`, user decision 2026-11-08)
 
-- **Die Hauptsitzung (Opus) plant und kontrolliert. Sie schreibt keinen Produktcode.**
-  - Sie klärt die Anforderung und zerlegt sie in Arbeitspakete.
-  - Sie prüft das Ergebnis, schreibt Commit-Nachrichten und setzt Tags.
-  - Sie pflegt `README.md`, `CLAUDE.md`, `docs/roadmap.md` und das Gedächtnis.
-  - Code und Tests gehen als Paket an einen Subagenten, auch kleine Korrekturen aus dem Review und Werkzeugskripte.
-- **Umsetzen: Subagent `implementer`** (Sonnet, `.claude/agents/implementer.md`). Ein Paket pro Aufruf, mit
-  - Ziel,
-  - betroffenen Dateien bzw. Bereichen,
-  - Akzeptanzkriterien,
-  - den zu schreibenden Tests,
-  - den Prüfbefehlen.
+- **The main session (Opus) plans and reviews. It writes no product code.**
+  - It clarifies the requirement and splits it into work packages.
+  - It reviews the result, writes commit messages and sets tags.
+  - It maintains `README.md`, `CLAUDE.md`, `docs/roadmap.md` and the memory.
+  - Code and tests go to a subagent as a package, including small review fixes and tooling scripts.
+- **Implementation: subagent `implementer`** (Sonnet, `.claude/agents/implementer.md`). One package per call, with
+  - the goal,
+  - the files or areas involved,
+  - the acceptance criteria,
+  - the tests to write,
+  - the checks to run.
 
-  Produktentscheidungen trifft die Hauptsitzung vorher mit dem Nutzer. Ein Paket enthält keine offene Frage, die der Subagent raten müsste.
-- **Parallel nur, was keine Dateien teilt.** Gemeinsame Engstellen sind die i18n-JSONs (`src/i18n/*.json`), der generierte API-Client (`src/api/generated/`), `package.json`/`package-lock.json` und `appinfo.json`. Pakete, die sie berühren, laufen nacheinander. Parallele Pakete laufen mit `isolation: "worktree"`; ein Worktree hat kein `node_modules`, also zuerst `npm ci`.
-- **Kontrollieren, bevor committet wird.** Die Hauptsitzung
-  1. liest den Diff (`git diff`) gegen Paket und Hausregeln;
-  2. lässt den Subagenten `mutation-checker` (Sonnet, `.claude/agents/mutation-checker.md`) die neuen Tests mit gezielten Gegenproben prüfen;
-  3. führt `tools/verify.ps1` aus;
-  4. sieht sichtbare Änderungen an: im Browser bei 1920×1080 mit Tastatur-Navigation, und am Ende einer Phase auf dem TV.
+  The main session makes product decisions beforehand, with the user. A package contains no open question the subagent would have to guess.
+- **Parallel only what shares no files.** Shared bottlenecks are the i18n JSONs (`src/i18n/*.json`), the generated API client (`src/api/generated/`), `package.json`/`package-lock.json` and `appinfo.json`. Packages that touch them run one after another. Parallel packages run with `isolation: "worktree"`; a worktree has no `node_modules`, so run `npm ci` first.
+- **Review before committing.** The main session
+  1. reads the diff (`git diff`) against the package and the house rules;
+  2. has the subagent `mutation-checker` (Sonnet, `.claude/agents/mutation-checker.md`) check the new tests with targeted counter-tests;
+  3. runs `tools/verify.ps1`;
+  4. looks at visible changes: in the browser at 1920×1080 with keyboard navigation, and at the end of a phase on the TV.
 
-  Befunde gehen als neues Paket zurück an den `implementer`. Committet wird erst, wenn Diff, Gegenproben und Gate stimmen.
-- **Subagenten** committen, taggen und pushen nicht. Sie starten keine weiteren Subagenten und berichten nach dem festen Schema ihrer Definition. Der Bericht ist Material, kein Beweis: Was er behauptet, prüft die Hauptsitzung selbst nach.
+  Findings go back to the `implementer` as a new package. Commit only when diff, counter-tests and gate agree.
+- **Subagents** do not commit, tag or push. They start no other subagents and report in the fixed schema of their definition, in English. A report is material, not proof: the main session verifies what it claims.
 
-### Nach JEDER Phase (obligatorisch, in dieser Reihenfolge)
+### After EVERY phase (mandatory, in this order)
 
-1. **`README.md` und `docs/roadmap.md` prüfen und ggf. aktualisieren.** Das gilt, wenn die Phase Struktur, Setup, Architektur, Testzahlen, Prüfbefehle, Abhängigkeiten oder den Stand eines Features ändert.
-2. **Commit mit Conventional Commit.** Format `type(scope): description`, z. B. `feat(player): Intro überspringen`.
-   - Der Subject wird zur Changelog-Zeile, deshalb **immer einen Body** schreiben: Ursache, Lösung, Verifikation, bei Phasenende auch das Ergebnis des TV-Tests.
-   - Typ → Sektion: `feat`→Added, `fix`→Fixed, `perf`/`refactor`/`docs`/`test`/`chore`/`build`→Changed, `revert`→Removed, `fix(sec…)`/`sec…`→Security.
-3. **Versions-Tag setzen und `CHANGELOG.md` generieren.**
-   - Ist die Phase eigenständig abgeschlossen: `pwsh tools/update-changelog.ps1 -Tag v0.X.0 -TagMessage "<Kurzbeschreibung>"`.
-   - Sonst reicht `pwsh tools/update-changelog.ps1`.
-   - Die aktualisierte `CHANGELOG.md` als `docs(changelog): update` mitcommitten.
-4. **Nächste Schritte vorschlagen.**
-5. **Keine offenen Änderungen mitschleifen.** Vor Beginn der nächsten Phase ist `git status` clean.
+1. **Check `README.md` and `docs/roadmap.md` and update them if needed.** This applies when the phase changes structure, setup, architecture, test counts, verification commands, dependencies or the state of a feature.
+2. **Commit with a Conventional Commit.** Format `type(scope): description`, e.g. `feat(player): skip intro`.
+   - The subject becomes the changelog line, so **always write a body**: root cause, fix, verification, and at the end of a phase the result of the TV test.
+   - Type → section: `feat`→Added, `fix`→Fixed, `perf`/`refactor`/`docs`/`test`/`chore`/`build`→Changed, `revert`→Removed, `fix(sec…)`/`sec…`→Security.
+3. **Set the version tag and generate `CHANGELOG.md`.**
+   - When the phase is complete on its own: `pwsh tools/update-changelog.ps1 -Tag v0.X.0 -TagMessage "<short description>"`.
+   - Otherwise `pwsh tools/update-changelog.ps1` is enough.
+   - Commit the updated `CHANGELOG.md` as `docs(changelog): update`.
+4. **Suggest the next steps.**
+5. **Carry nothing over.** Before the next phase starts, `git status` is clean.
 
 ## Versioning
 
-- **Schema:** SemVer `0.MINOR.PATCH`, solange das Projekt pre-1.0 ist. MAJOR bleibt `0`, bis der Nutzer die App ausdrücklich für „stabil im Alltag“ erklärt.
-- **Bump:** MINOR, wenn die Phase mindestens einen `feat`- oder Breaking-Commit enthält, sonst PATCH.
-- **Version in der App:** `appinfo.json` und `package.json` tragen dieselbe Version. Der Tag-Commit hebt beide an.
-- **Tags** werden lokal gesetzt. Pushen ist ein eigener, ausdrücklicher Schritt.
+- **Scheme:** SemVer `0.MINOR.PATCH` while the project is pre-1.0. MAJOR stays `0` until the user explicitly declares the app stable for everyday use.
+- **Bump:** MINOR when the phase contains at least one `feat` or breaking commit, otherwise PATCH.
+- **Version in the app:** `appinfo.json` and `package.json` carry the same version. The tag commit raises both.
+- **Tags** are set locally. Pushing is a separate, explicit step.
 
-## MemPalace (Projektgedächtnis)
+## MemPalace (project memory)
 
-Ein lokaler MemPalace-Server hängt als MCP-Server (`palace_query` / `palace_exec`) in dieser Session. Wing dieses Projekts: `wing_silo_lg`. Die Hooks filen Sessions laufend in `sessions`.
+A local MemPalace server is attached to this session as an MCP server (`palace_query` / `palace_exec`). This project's wing is `wing_silo_lg`. Hooks file sessions into `sessions` continuously.
 
-- **Vor Aussagen über frühere Entscheidungen** zuerst suchen: `palace_query FIND "…" IN wing_silo_lg LIMIT 5`. Findet sich nichts, das sagen und nichts erfinden.
-- **Gefundenes wörtlich zitieren**, nicht paraphrasieren.
-- **Bei Widerspruch gewinnt das Repo.** Transkripte konservieren auch verworfene Zwischenstände.
-- **Dauerhafte Ergebnisse ablegen** (`palace_exec ADD IN wing_silo_lg/decisions "…"`): Entscheidungen samt Begründung, bestätigte Befunde, Geräte-Erkenntnisse vom TV. Nie Secrets, Tokens oder Zugangsdaten.
+- **Before stating anything about earlier decisions,** search first: `palace_query FIND "…" IN wing_silo_lg LIMIT 5`. If nothing turns up, say so and invent nothing.
+- **Quote what you find verbatim**; do not paraphrase.
+- **On conflict, the repository wins.** Transcripts also preserve discarded intermediate states.
+- **Store lasting results** (`palace_exec ADD IN wing_silo_lg/decisions "…"`): decisions with their reasons, confirmed findings, device findings from the TV. Never secrets, tokens or credentials. The palace is local, so it may name the test server; the repository may not.
 
 ## Project State
 
-- Frühe Entwicklung. Es gibt keine veröffentlichte Version und keine fremden Nutzer.
-- Breaking Changes an Code, Struktur und gespeicherten App-Daten (`localStorage`) sind erlaubt, wenn sie das Fundament verbessern. Altes Verhalten nur erhalten, wenn der Nutzer es verlangt.
-- **Der Silo-Server ist nicht disposable.** Er ist der echte Server des Nutzers. Die App ändert dort nur, was ein Zuschauer selbst ändern darf: Fortschritt, Merkliste, Gesehen-Status, Präferenzen des Dev-Profils. Nie Admin-Endpunkte aufrufen.
+- Early development. There is no released version and there are no outside users yet.
+- Breaking changes to code, structure and stored app data (`localStorage`) are allowed when they improve the foundation. Keep old behaviour only when the user asks for it.
+- **The Silo server is not disposable.** It is the user's real server. The app changes only what a viewer may change there: progress, watchlist, watched state, the dev profile's preferences. Never call admin endpoints.
 
-## webOS-Plattformregeln
+## webOS platform rules
 
-- **Zielplattform: webOS TV 6.0 und neuer** (LG ab 2021). Deren Web-Engine ist Chromium 79; webOS 22 bringt Chromium 87, 23 Chromium 94, 24 Chromium 108.
-- **Syntax:** Das Bundle darf keine Syntax enthalten, die Chromium 79 nicht kennt.
-  - Vite baut mit `build.target: 'chrome79'`, das senkt `?.`/`??` und Klassenfelder ab.
-  - `es-check` prüft das gebaute Bundle im Gate.
-- **APIs jünger als Chromium 79** (`Array.prototype.at`, `Object.hasOwn`, `structuredClone`, `String.prototype.replaceAll`, `Promise.any`, `AbortSignal.timeout`, …) nur mit Polyfill aus `core-js`, der zentral in `src/polyfills.ts` importiert wird. Im Zweifel `caniuse` für Chrome 79 prüfen.
-- **Keine ES-Module im ausgelieferten HTML.** Eine installierte App läuft unter `file://`, und dort blockiert webOS `<script type="module">`.
-  - Der Build erzeugt ein klassisches Skript (IIFE, ein Bundle, kein dynamischer Chunk-Import).
-  - Ein Gate-Schritt prüft, dass `dist/index.html` kein `type="module"` enthält.
-- **CORS:** Silos `/api/v2` sendet keine CORS-Header. Geprüft am 2026-11-08 gegen den Testserver: `OPTIONS` gibt 405 ohne `Access-Control-Allow-Origin`.
-  - Ob webOS das für eine `file://`-App durchsetzt, klärt Phase 0 auf dem TV.
-  - Bis dahin läuft jeder API-Aufruf über eine **Transport-Schicht** (`src/api/transport/`), die zwischen direktem `fetch` und dem Luna-Proxy-Service umschalten kann.
-  - `<video>`, `<img>` und `<track>` laden direkt; Medien-Elemente unterliegen nicht CORS.
-- **Fernbedienung:**
-  - Jedes interaktive Element ist mit den Pfeiltasten erreichbar, und OK löst es aus.
-  - Zurück (webOS-Keycode 461, im Browser `Escape`/`Backspace`) ist überall definiert.
-  - Der Magic-Remote-Zeiger funktioniert zusätzlich, ist aber nie der einzige Weg.
-- **Performance auf TV-Hardware:**
-  - Lange Reihen und Raster virtualisieren.
-  - Bilder in passender Breite anfordern (`poster_width`, `backdrop_width`, …).
-  - Kein `backdrop-filter`, keine großen Schatten-Animationen, keine Layout-Animationen; Animation nur über `transform`/`opacity`.
-- **Bildschirm:** Das Layout wird für 1920×1080 entworfen und skaliert auf 1280×720. Sicherer Bereich: 5 % Rand.
+- **Target platform: webOS TV 6.0 and newer** (LG from 2021). Its web engine is Chromium 79; webOS 22 ships Chromium 87, 23 Chromium 94, 24 Chromium 108.
+- **Syntax:** The bundle must not contain syntax that Chromium 79 does not know.
+  - Vite builds with `build.target: 'chrome79'`, which lowers `?.`/`??` and class fields.
+  - `es-check es2019` checks the built bundle in the gate.
+- **APIs newer than Chromium 79** (`Array.prototype.at`, `Object.hasOwn`, `structuredClone`, `String.prototype.replaceAll`, `Promise.any`, …) come from `core-js/stable`, imported first in `src/polyfills.ts`. Web APIs that core-js does not cover (e.g. `Intl.DisplayNames`, `AbortSignal.timeout`) must not be used without a check against Chrome 79 and a fallback.
+- **No ES modules in the shipped HTML.** An installed app runs under `file://`, and there webOS blocks `<script type="module">` and `crossorigin` loads.
+  - The build produces one classic script (IIFE, one bundle, no dynamic chunks) loaded with `defer`.
+  - The bundle check fails on `type="module"`, `crossorigin`, absolute paths or more than one JS file.
+- **CORS:** Silo's `/api/v2` sends no CORS headers. Checked on 2026-11-08 against the test server: `OPTIONS` returns 405 without `Access-Control-Allow-Origin`.
+  - Whether webOS enforces this for a `file://` app is settled in Phase 0 on the TV.
+  - Until then, every API call goes through a **transport layer** (`src/api/transport/`) that can switch between a direct `fetch` and the Luna proxy service.
+  - `<video>`, `<img>` and `<track>` load directly; media elements are not subject to CORS.
+- **JS service code** (if needed) runs on the TV's own Node.js, which is old on older TVs: plain CommonJS JavaScript, ES2019 at most, no optional chaining.
+- **`requiredACG`** stays out of `appinfo.json` until the app targets webOS 27: once present, webOS enforces ACG permissions for every Luna call.
+- **Remote control:**
+  - Every interactive element is reachable with the arrow keys and activated with OK.
+  - Back (webOS key code 461; `Escape`/`Backspace` in the browser) is defined everywhere.
+  - The Magic Remote pointer works too, but is never the only way.
+- **Performance on TV hardware:**
+  - Virtualize long rows and grids.
+  - Request images at a fitting width (`poster_width`, `backdrop_width`, …).
+  - No `backdrop-filter`, no large shadow animations, no layout animations; animate only `transform`/`opacity`.
+- **Screen:** The layout is designed for 1920×1080 and scales to 1280×720. Safe area: 5 % margin.
 
-## Silo-API-Regeln
+## Silo API rules
 
-- **Nur die native API `/api/v2`.** Die Jellyfin-Kompatibilität und `/api/v1` werden nicht benutzt.
-- **Jeder API-Aufruf läuft über den generierten Client.** Er wird mit `openapi-typescript` aus der gepinnten Spezifikation `openapi/silo-v2.json` erzeugt, mit `npm run generate:api`.
-  - Rohes `fetch` auf API-Endpunkte ist verboten. Einzige Ausnahme ist die Transport-Schicht selbst.
-  - Fehlt ein Endpunkt im Client, wird die Spezifikation vom Server neu geholt und der Client neu erzeugt. Das ist ein eigenes Paket, kein Workaround.
-- **Header bei jedem Aufruf:**
-  - `X-Silo-Device-Id` (stabil pro Installation), `X-Silo-Device-Name`, `X-Silo-Device-Platform: webos`
+- **Only the native API `/api/v2`.** The Jellyfin compatibility API and `/api/v1` are not used.
+- **Every API call goes through the generated client.** It is generated with `openapi-typescript` from the pinned specification in `openapi/`, with `npm run generate:api`.
+  - Raw `fetch` against API endpoints is forbidden. The only exception is the transport layer itself.
+  - If an endpoint is missing from the client, fetch the specification from the server again and regenerate the client. That is a package of its own, not a workaround.
+- **Headers on every call:**
+  - `X-Silo-Device-Id` (stable per installation), `X-Silo-Device-Name`, `X-Silo-Device-Platform: webos`
   - `X-Silo-Client`, `X-Silo-Client-Version`
-  - authentifiziert zusätzlich `Authorization: Bearer …`, `X-Profile-Id` und gegebenenfalls `X-Profile-Token`
-- **Fehler** sind RFC-9457-Problem-Details.
-  - Bei `401 invalid_token` bzw. `token_refresh_required` genau einmal refreshen (Single-Flight: parallele Aufrufe warten auf denselben Refresh) und genau einmal wiederholen.
-  - Ein abgelehnter Refresh meldet ab.
-  - Bei 503 die Tokens behalten und später erneut versuchen.
-- **Medien-URLs sind opak.** Sie werden nie selbst gebaut oder verändert.
-  - Braucht ein `<video>` den Token, wird `token=` nur an URLs auf dem Origin des Silo-Servers gehängt, nie an einen Proxy- oder Transcode-Node-Origin.
-- **Wiedergabe nur über Protokoll v3:** `capabilities` → `start` → `progress` (alle 10 s, `sequence` steigend) → `DELETE` zum Stoppen, `replan` für Spur- und Qualitätswechsel. Das Geräteprofil (`client_capabilities`, `client_playback_context`) meldet nur, was der TV wirklich kann.
-- **Feature-Erkennung statt Annahmen:** Was der Server über Capabilities-Endpunkte anbietet (Requests, Shuffle, Watchlist, Box-Sets, KI-Übersetzung, …), zeigt die App nur, wenn er es anbietet.
+  - authenticated calls also `Authorization: Bearer …`, `X-Profile-Id` and, where needed, `X-Profile-Token`
+- **Errors** are RFC 9457 problem details.
+  - On `401 invalid_token` or `token_refresh_required`, refresh exactly once (single flight: parallel calls wait for the same refresh) and retry exactly once.
+  - A refused refresh signs the user out.
+  - On 503, keep the tokens and try again later.
+- **Media URLs are opaque.** Never build or modify one yourself.
+  - When a `<video>` needs the token, append `token=` only to URLs on the Silo server's origin, never to a proxy or transcode-node origin.
+- **Playback only through protocol v3:** `capabilities` → `start` → `progress` (every 10 s, increasing `sequence`) → `DELETE` to stop, `replan` for track and quality changes. The device profile (`client_capabilities`, `client_playback_context`) reports only what the TV really can do.
+- **Feature detection, not assumptions:** what the server offers through its capability endpoints (requests, shuffle, watchlist, box sets, AI translation, …) is shown only when the server offers it.
 
-## TV-UI-Regeln
+## TV UI rules
 
-- **Aussehen:** Die App sieht aus wie eine Silo-App. Farben und Drei-Balken-Motiv dürfen übernommen werden. **Logo, Wortmarke und Icons von Silo nicht**, außer unverändert auf einem „Mit Silo verbinden“-Hinweis.
-- **Name:** Die App braucht einen eigenen Namen (Silo-Markenrichtlinie). Nicht erlaubt sind „Silo …“, „Silo[Wort]“ und „[Wort]Silo“; ein Wortspiel ist erlaubt. Die Beschreibung lautet „ein Client für Silo“. Bis der Nutzer entscheidet, heißt sie im Code und in `appinfo.json` Arbeitstitel `silo-lg`.
+- **Look:** The app looks like a Silo app. Colours and the three-bar motif may be reused. **Silo's logo, wordmark and icons may not**, except unchanged on a "Connect to Silo" hint.
+- **Name:** The app needs a name of its own (Silo trademark policy). "Silo …", "Silo[word]" and "[word]Silo" are not allowed; wordplay is. The description reads "a client for Silo". Until the user decides, it is called `silo-lg` in code and in `appinfo.json` (app ID `io.github.thazzr.silolg`).
 - **Text:**
-  - UI-Texte gibt es auf Deutsch (mit „du“) und Englisch.
-  - Jeder Schlüssel steht in `src/i18n/de.json` und `src/i18n/en.json`.
-  - Die Sprache folgt der TV-Sprache.
-- **Fokus:** Der fokussierte Zustand ist immer klar sichtbar (Rahmen und Skalierung) und bleibt beim Zurücknavigieren erhalten: Zurück landet auf der Karte, von der man kam.
-- **Ladezustände:** Jedes Lade-Skeleton entspricht dem Layout, das es ersetzt (Reihen-Skeleton für Reihen, Raster-Skeleton für Raster).
-- **Daten** laufen über React Query. Eine `queryFn` wirft bei Fehlern.
+  - UI text exists in German (informal "du") and English.
+  - Every key is in both `src/i18n/de.json` and `src/i18n/en.json`.
+  - The language follows the TV's language.
+- **Focus:** The focused state is always clearly visible (outline and scale) and is kept when navigating back: Back lands on the card you came from.
+- **Loading states:** Every loading skeleton matches the layout it replaces (a row skeleton for rows, a grid skeleton for grids).
+- **Data** goes through React Query. A `queryFn` throws on errors.
 
-## Zugangsdaten
+## Credentials
 
-- **Claude tippt nie Passwörter, Tokens oder API-Keys** in Formulare, Dateien oder Befehle und gibt keine aus.
-- **Anmeldung auf dem TV:** per Code/QR (Device-Login). Der Nutzer bestätigt den Code selbst auf der `/activate`-Seite des Servers, und zwar in einem Browser, der mit dem Dev-Konto angemeldet ist. Sonst bekommt der TV das Konto, mit dem der Browser gerade angemeldet ist.
-- **Automatisierte Live-Prüfungen** gegen den Server lesen ihre Zugangsdaten aus `.env.local`. Die Datei ist gitignored, nur der Nutzer füllt sie, und ihr Inhalt wird nie angezeigt. Ohne `.env.local` werden Live-Prüfungen übersprungen, und das wird so gemeldet.
-- **TV-Zugang:** Die Geräte-Passphrase des Entwicklermodus gibt nur der Nutzer ein (`ares-setup-device`, `ares-novacom --getkey`).
+- **Claude never types passwords, tokens or API keys** into forms, files or commands, and never prints any.
+- **Sign-in on the TV:** by code/QR (device login). The user confirms the code on the server's `/activate` page, in a browser that is signed in with the dev account. Otherwise the TV gets whichever account that browser is signed in with.
+- **Automated live checks** against the server read their credentials from `.env.local`. The file is git-ignored, only the user fills it, and its content is never shown. Without `.env.local`, live checks are skipped, and that is reported.
+- **TV access:** Only the user types the Developer Mode device passphrase (`ares-setup-device`, `ares-novacom --getkey`).
 
 ## Testing Rules
 
-- **Jede neue Regel, jeder Hook, jede Komponente und jedes UI-Verhalten bekommt einen Test, der ohne die Änderung fehlschlagen würde.**
-- **Unit- und Komponententests:** Vitest mit React Testing Library und jsdom.
-  - Die API wird mit MSW gemockt.
-  - Fixtures sind gegen die generierten Typen getippt, sodass eine Spec-Änderung sie brechen lässt.
-- **Fokus-Navigation** wird mit Tastaturereignissen getestet: Pfeile, Enter, Zurück.
-- **E2E:** Playwright in Chromium bei 1920×1080 gegen den MSW- bzw. Mock-Server.
-  - Bedienung nur über die Tastatur, wie mit der Fernbedienung.
-  - Kritische Abläufe: Anmelden, Startseite, Detailseite, Wiedergabe starten, Fortschritt melden.
-- **Gerätetest am Phasenende** auf dem TV:
-  1. installieren, starten;
-  2. die Abläufe der Phase durchgehen;
-  3. Wiedergabe mit Direct Play und HLS prüfen.
+- **Every new rule, hook, component and UI behaviour gets a test that would fail without it.**
+- **Unit and component tests:** Vitest with React Testing Library and jsdom.
+  - The API is mocked with MSW.
+  - Fixtures are typed against the generated types, so a spec change breaks them.
+- **Focus navigation** is tested with keyboard events: arrows, Enter, Back.
+- **E2E:** Playwright in Chromium at 1920×1080, loading `dist/index.html` over `file://`, the way the TV loads the app.
+  - Operated by keyboard only, like a remote control.
+  - Critical flows: sign-in, home, detail page, starting playback, reporting progress.
+- **Device test at the end of a phase** on the TV:
+  1. install, launch;
+  2. walk through the phase's flows;
+  3. check playback with direct play and HLS.
 
-  Das Ergebnis gehört in den Commit-Body des Phasenabschlusses.
-- **Live-Prüfungen** gegen den Testserver (`npm run test:live`) sind nur lesend, außer Fortschritt und Stopp einer kurzen Testwiedergabe.
+  The result belongs in the commit body that closes the phase.
+- **Live checks** against the test server (`npm run test:live`) are read-only, except progress and stop of a short test playback.
 
 ## Verification
 
-`tools/verify.ps1` ist das vollständige Gate. Es führt diese Schritte aus:
+`tools/verify.ps1` is the full gate. It runs these steps in order:
 
-1. die eigenen Skripttests (`tools/verify.Tests.ps1`);
-2. `tsc --noEmit -p tsconfig.app.json`;
-3. ESLint und Prettier-Check;
-4. Vitest;
-5. Build;
-6. die Bundle-Prüfungen (`es-check`, kein `type="module"`);
-7. Playwright-E2E;
-8. `ares-package` als Paket-Probe.
+1. `verify script tests` – its own tests (`tools/verify.Tests.ps1`);
+2. `typecheck` – app and tooling configs;
+3. `lint` – ESLint and the Prettier check;
+4. `unit tests` – Vitest;
+5. `build`;
+6. `bundle check` – `es-check`, classic script, relative paths, one JS file, matching versions;
+7. `e2e` – Playwright;
+8. `package` – `ares-package` as a packaging probe.
 
-Am Ende druckt es eine Tabelle mit Dauer und Ergebnis jedes Schritts. Es endet mit einem Exit-Code ungleich 0, sobald ein Schritt weder `ok` noch `skipped` ist. Mit `-Only "<Schritt>"` laufen nur einzelne Schritte.
+A failing step stops nothing, except that a failed `build` skips the three steps that need it. At the end it prints a table with each step's time and result, and it exits non-zero as soon as a result is neither `ok` nor `skipped`. `-Only "<step>"` runs single steps; an unknown name exits 2 before anything runs.
 
-Schnelle Prüfungen pro Änderung: `npx tsc --noEmit -p tsconfig.app.json`, `npm run lint`, `npx vitest run <pfade>`.
+Quick checks per change: `npm run typecheck`, `npm run lint`, `npx vitest run <paths>`.

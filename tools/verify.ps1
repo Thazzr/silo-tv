@@ -1,28 +1,28 @@
 #!/usr/bin/env pwsh
-# Das vollständige lokale Gate: Skripttests, Typprüfung, Lint, Unit-Tests, Build, Bundle-Prüfung, E2E, Paket-Probe.
+# The full local gate: script tests, type check, lint, unit tests, build, bundle check, E2E, package probe.
 #
-#   pwsh -NoProfile -File tools/verify.ps1                  # alle Schritte
-#   pwsh -NoProfile -File tools/verify.ps1 -Only lint,build # nur diese Schritte, in Gate-Reihenfolge
+#   pwsh -NoProfile -File tools/verify.ps1                  # all steps
+#   pwsh -NoProfile -File tools/verify.ps1 -Only lint,build # only these steps, in gate order
 #
-# Exit-Code: 0 = alles ok (oder skipped), 1 = mindestens ein Schritt ist fehlgeschlagen,
-# 2 = -Only nennt einen unbekannten Schritt (dann läuft nichts).
+# Exit code: 0 = everything ok (or skipped), 1 = at least one step failed,
+# 2 = -Only names an unknown step (then nothing runs).
 param(
     [string[]]$Only,
-    # Austauschbar, damit tools/verify.Tests.ps1 ein gefälschtes npm einsetzen kann.
+    # Replaceable so that tools/verify.Tests.ps1 can substitute a fake npm.
     [string]$NpmCommand = "npm"
 )
 
 $ErrorActionPreference = "Stop"
 
-# Ein Strang, nacheinander. Ein fehlgeschlagener Schritt stoppt nichts, damit ein Lauf alle Fehler zeigt;
-# nur die Schritte, die das Build-Ergebnis brauchen, werden übersprungen, wenn "build" fehlschlägt.
+# One thread, one step after another. A failed step stops nothing, so a run shows all failures;
+# only the steps that need the build result are skipped when "build" fails.
 #
-# $ErrorActionPreference = "Stop" gilt NICHT für native Programme (npm, pwsh): sie melden Fehler über den
-# Exit-Code, und PowerShell macht daraus keinen Fehler. Ohne die ausdrückliche $LASTEXITCODE-Prüfung in
-# Invoke-Step wäre jeder Fehlschlag verschluckt worden. Diese Prüfung nicht entfernen.
+# $ErrorActionPreference = "Stop" does NOT apply to native programs (npm, pwsh): they report errors through the
+# exit code, and PowerShell does not turn that into an error. Without the explicit $LASTEXITCODE check in
+# Invoke-Step, every failure would have been swallowed. Do not remove that check.
 #
-# Die Entscheidungslogik steckt in Funktionen; wird die Datei dot-sourced, definiert sie nur diese
-# (siehe unten). tools/verify.Tests.ps1 testet das Gate als Prozess und ist der erste Schritt des Gates.
+# The decision logic lives in functions; when the file is dot-sourced, it defines only these
+# (see below). tools/verify.Tests.ps1 tests the gate as a process and is the first step of the gate.
 
 # `pwsh -File ... -Only lint,build` hands "lint,build" over as ONE string; no step name has a comma.
 if ($Only) {
@@ -36,16 +36,16 @@ function Format-Duration {
     '{0}:{1:00}' -f [int][math]::Floor($Span.TotalMinutes), $Span.Seconds
 }
 
-# Die Skripttests starten Gates in eigenen Prozessen. Läuft ein Gate selbst unter den Skripttests, würde dieser
-# Schritt sie erneut starten, ohne Ende. Die Tests setzen deshalb VERIFY_SCRIPT_TESTS_RUNNING, und der Schritt
-# meldet sich dann als "skipped" (Get-SkipReason).
+# The script tests start gates in their own processes. If a gate itself runs under the script tests, this step
+# would start them again, endlessly. The tests therefore set VERIFY_SCRIPT_TESTS_RUNNING, and the step
+# then reports itself as "skipped" (Get-SkipReason).
 function Invoke-VerifyScriptTests {
     & (Get-Process -Id $PID).Path -NoProfile -File "tools/verify.Tests.ps1"
 }
 
 function Get-Steps {
     @(
-        # Zuerst, damit das Gate seine eigene Fehlerbehandlung prüft, bevor es sich auf sie verlässt.
+        # First, so the gate checks its own error handling before it relies on it.
         @{ Name = "verify script tests"; Command = { Invoke-VerifyScriptTests } },
         @{ Name = "typecheck"; Command = { & $NpmCommand run typecheck } },
         @{ Name = "lint"; Command = { & $NpmCommand run lint } },
@@ -63,14 +63,14 @@ function Get-StepNames {
     }
 }
 
-# Namen aus -Only, die kein Schritt heißt. Ein solcher Name darf nicht zu einem Lauf führen, der still weniger tut.
+# Names from -Only that no step is called. Such a name must not lead to a run that silently does less.
 function Get-UnknownStepNames {
     param([string[]]$Requested)
     $known = @(Get-StepNames)
     @($Requested | Where-Object { $_ -notin $known })
 }
 
-# Warum ein Schritt nicht läuft, oder "" wenn er läuft. $Results sind die Ergebnisse der bisherigen Schritte.
+# Why a step does not run, or "" if it runs. $Results are the results of the steps so far.
 function Get-SkipReason {
     param(
         [string]$Name,
@@ -88,8 +88,8 @@ function Get-SkipReason {
     ""
 }
 
-# Jedes Ergebnis außer "ok" und "skipped" ist ein Fehler, damit auch ein neues oder falsch geschriebenes Ergebnis
-# das Gate rot macht.
+# Every result other than "ok" and "skipped" is a failure, so that even a new or misspelled result
+# turns the gate red.
 function Get-FailedResults {
     param([object[]]$Results)
     @($Results | Where-Object { $_.Result -notin @("ok", "skipped") })
@@ -114,8 +114,8 @@ function Invoke-Step {
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
     $exitCode = 0
     try {
-        # Out-Host, nicht die Pipeline: Was ein natives Programm druckt, würde sonst zusammen mit dem Ergebnis
-        # aus dieser Funktion zurückgegeben.
+        # Out-Host, not the pipeline: whatever a native program prints would otherwise be returned from this
+        # function together with the result.
         & $Command | Out-Host
         $exitCode = $LASTEXITCODE
     }
@@ -161,13 +161,13 @@ function Write-Summary {
     Write-Host ("Total: {0}" -f (Format-Duration $Total))
 }
 
-# Dot-sourced (`. tools/verify.ps1`) definiert das Skript nur seine Funktionen und ist fertig: das Gate läuft nur,
-# wenn es aufgerufen wird.
+# When dot-sourced (`. tools/verify.ps1`), the script only defines its functions and is done: the gate runs only
+# when the script is invoked.
 if ($MyInvocation.InvocationName -eq ".") {
     return
 }
 
-# Vor jedem Schritt: ein unbekannter Name darf nicht zu einem Lauf führen, der still weniger tut als verlangt.
+# Before any step: an unknown name must not lead to a run that silently does less than requested.
 if ($Only) {
     $unknownSteps = @(Get-UnknownStepNames -Requested $Only)
     if ($unknownSteps.Count -gt 0) {

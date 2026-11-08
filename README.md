@@ -1,31 +1,55 @@
 # silo-lg
 
-Ein nativer Client für LG-Fernseher mit webOS (ab Modelljahr 2021, webOS 6+) für den selbst gehosteten Medienserver [Silo](https://github.com/Silo-Server/silo-server).
+A native client for LG TVs running webOS (model year 2021 and later, webOS 6+) for the self-hosted media server [Silo](https://github.com/Silo-Server/silo-server).
 
-> Kein offizielles Silo-Projekt. „Silo“ ist eine Marke von Silo Media L.L.C.; diese App ist ein unabhängiger Client für Silo. `silo-lg` ist ein Arbeitstitel.
+> Not an official Silo project. "Silo" is a trademark of Silo Media L.L.C.; this app is an independent client for Silo. `silo-lg` is a working title.
 
-## Stand
+## Status
 
-Phase 0 (Machbarkeit) ist geplant. Was die App können soll und in welcher Reihenfolge: [`docs/roadmap.md`](docs/roadmap.md).
+Phase 0 (feasibility) is in progress. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md).
 
-## Technik
+## Tech stack
 
-| Bereich | Wahl |
+| Area | Choice |
 |---|---|
-| Sprache | TypeScript |
-| UI | React mit Vite, gebaut für Chromium 79 (webOS 6) als klassisches Skript |
-| Daten | TanStack Query; API-Client generiert aus Silos OpenAPI (`/api/v2`) |
-| Wiedergabe | natives `<video>` mit der Media-Pipeline des TVs; Silo-Wiedergabeprotokoll v3 |
+| Language | TypeScript |
+| UI | React with Vite, built for Chromium 79 (webOS 6) as one classic script |
+| Data | TanStack Query; API client generated from Silo's OpenAPI (`/api/v2`) |
+| Playback | the native `<video>` element with the TV's media pipeline; Silo playback protocol v3 |
 | Tests | Vitest, React Testing Library, MSW, Playwright |
-| TV-Werkzeuge | `@webos-tools/cli` (`ares-package`, `ares-install`, `ares-launch`, `ares-inspect`) |
-| Prozess-Werkzeuge | PowerShell (`tools/`), git-cliff für das Changelog |
+| TV tooling | `@webos-tools/cli` (`ares-package`, `ares-install`, `ares-launch`, `ares-inspect`) |
+| Process tooling | PowerShell (`tools/`), git-cliff for the changelog |
 
-## Entwicklung
+## Development
 
-Regeln und Ablauf stehen in [`CLAUDE.md`](CLAUDE.md): Opus plant und prüft, ein Sonnet-Subagent setzt um, und jede Phase endet mit Gate, Gerätetest, Commit, Tag und generiertem Changelog.
+Requirements: Node.js 24, PowerShell 7 (`pwsh`), and for the TV an LG TV in Developer Mode.
 
-Setup, Build und Installation auf dem TV werden hier ergänzt, sobald Phase 0 das Projektgerüst anlegt.
+```bash
+npm ci
+npx playwright install chromium --only-shell
+```
 
-## Lizenz
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server in the browser |
+| `npm run build` | production bundle in `dist/` (one classic script for webOS) |
+| `npm run check:bundle` | checks `dist/` for webOS compatibility |
+| `npm run package` | builds the `.ipk` in `out/` |
+| `npm run verify` | the full gate (see [`tools/README.md`](tools/README.md)) |
+| `npm run tv:deploy` | build, package, install and launch on the TV named `tv` (`WEBOS_DEVICE` overrides it) |
 
-[GNU Affero General Public License v3.0 oder neuer](LICENSE) (`AGPL-3.0-or-later`), wie Silo selbst. Jeder darf die App nutzen, ändern und weitergeben. Wer eine veränderte Version weitergibt, muss deren Quellcode unter derselben Lizenz veröffentlichen.
+Connect a TV once (the passphrase is shown in the Developer Mode app):
+
+```bash
+npx ares-setup-device --add tv --info "{'host':'<TV-IP>','port':'9922','username':'prisoner'}"
+```
+
+```bash
+npx ares-novacom --device tv --getkey
+```
+
+Rules and workflow are in [`CLAUDE.md`](CLAUDE.md): Opus plans and reviews, a Sonnet subagent implements, and every phase ends with the gate, a device test, a commit, a tag and a generated changelog.
+
+## License
+
+[GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`), like Silo itself. Anyone may use, change and share the app. Whoever shares a modified version must publish its source code under the same license.

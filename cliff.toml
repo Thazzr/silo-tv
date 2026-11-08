@@ -1,17 +1,17 @@
 # git-cliff configuration — https://git-cliff.org
-# Erzeugt CHANGELOG.md aus der Conventional-Commits-Historie im Keep-a-Changelog-Format.
-# Regenerieren: `pwsh tools/update-changelog.ps1` (siehe CLAUDE.md -> "Nach JEDER Phase").
+# Generates CHANGELOG.md from the Conventional Commits history in Keep a Changelog format.
+# Regenerate with `pwsh tools/update-changelog.ps1` (see CLAUDE.md -> "After EVERY phase").
 
 [changelog]
 header = """
 # Changelog
 
-Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
+All notable changes to this project are documented in this file.
 
-Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) und
-[Conventional Commits](https://www.conventionalcommits.org/de/v1.0.0/). Diese Datei wird
-automatisch mit [git-cliff](https://git-cliff.org) aus den Commit-Messages generiert –
-**nicht von Hand bearbeiten**.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). This file is
+generated automatically from the commit messages with [git-cliff](https://git-cliff.org) –
+**do not edit it by hand**.
 
 """
 
@@ -42,10 +42,10 @@ topo_order = false
 sort_commits = "oldest"
 tag_pattern = "v[0-9]*"
 
-# Reihenfolge der Sektionen über den <!-- N --> Präfix (Keep a Changelog: Added, Changed,
-# Removed, Fixed, Security). striptags entfernt den Kommentar in der Ausgabe wieder.
+# Section order via the <!-- N --> prefix (Keep a Changelog: Added, Changed,
+# Removed, Fixed, Security). striptags removes the comment again in the output.
 commit_parsers = [
-  # Reine Changelog-Housekeeping-Commits nicht ins Changelog selbst aufnehmen.
+  # Pure changelog housekeeping commits stay out of the changelog itself.
   { message = "^(docs|chore)\\(changelog\\)", skip = true },
   { message = "^feat", group = "<!-- 0 -->Added" },
   { message = "^fix\\(sec", group = "<!-- 4 -->Security" },

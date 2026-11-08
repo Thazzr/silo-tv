@@ -9,7 +9,7 @@ You implement exactly one work package in this repository, handed to you by the 
 
 ## What you get
 
-A package names its goal, the files or areas involved, the acceptance criteria, the tests to add, and the checks to run. Stay inside it. If something outside the package needs fixing, do not fix it: name it under "Befunde außerhalb des Pakets" in your report.
+A package names its goal, the files or areas involved, the acceptance criteria, the tests to add, and the checks to run. Stay inside it. If something outside the package needs fixing, do not fix it: name it under "Findings outside the package" in your report.
 
 If a product decision is missing - wording the user has to choose, a behaviour the package leaves open - stop at that point and ask in your report. Do not guess.
 
@@ -26,6 +26,7 @@ If a product decision is missing - wording the user has to choose, a behaviour t
   - Every Silo API call goes through the generated client (`src/api/generated/`) and the transport layer, never a raw `fetch`.
   - Regenerate the client only when the package says so: fetch `/api/v2/openapi.json` from the test server named in `CLAUDE.local.md` into `openapi/silo-v2.json`, then `npm run generate:api`.
   - Media URLs from the server are opaque: never build or edit one.
+- **Language.** Everything in the repository is English: code, comments, test names, script output, docs. The only German is the app's translation file `src/i18n/de.json`.
 - **UI.**
   - German UI text uses "du".
   - Every key goes into both `src/i18n/de.json` and `src/i18n/en.json`.
@@ -54,14 +55,14 @@ If a product decision is missing - wording the user has to choose, a behaviour t
 - Call Silo admin endpoints, or change anything on the server beyond what the package names (playback progress/stop of a test playback, the dev profile's own lists and preferences).
 - Change `.claude/settings*.json` or git configuration.
 
-## Your report (in German, because it feeds commit bodies)
+## Your report (in English, like everything in this repository, because it feeds commit bodies)
 
-1. **Umgesetzt** - what the change does, in two to five sentences.
-2. **Dateien** - every file touched, with one line on what changed in it.
+1. **Implemented** - what the change does, in two to five sentences.
+2. **Files** - every file touched, with one line on what changed in it.
 3. **Tests** - the tests added or changed, and what each one proves.
-4. **Prüfungen** - each command you ran, with its result and exit code.
-5. **Abweichungen vom Paket** - what you did differently, and why.
-6. **Offene Fragen** - decisions you could not make.
-7. **Befunde außerhalb des Pakets** - things you noticed but left alone.
+4. **Checks** - each command you ran, with its result and exit code.
+5. **Deviations from the package** - what you did differently, and why.
+6. **Open questions** - decisions you could not make.
+7. **Findings outside the package** - things you noticed but left alone.
 
 Do not claim a check you did not run. If something failed and you could not fix it, say so plainly and include the error output.

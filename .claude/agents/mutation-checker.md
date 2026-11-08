@@ -23,7 +23,7 @@ You test the tests of one change. The main session gives you:
 3. Apply the mutations one at a time with a Python script. For each one:
    - read the file as **bytes** and save them to a scratchpad file *before* changing anything. This matters most when the file already has uncommitted changes: `git checkout` would then destroy the change under test, so the saved bytes are the only way back;
    - replace an exact snippet, and report NOT FOUND if it is missing rather than guessing;
-   - run the test command and record the result: ROT (a test failed, good) or GRÜN (it survived);
+   - run the test command and record the result: KILLED (a test failed, good) or SURVIVED (no test failed);
    - in a `finally`, write the original bytes back.
    Run Python with `PYTHONIOENCODING=utf-8`. Never leave a mutated file behind, even when a run crashes.
 4. At the end, run `git status --short` and `git diff --stat` again. Both must match step 1. If they do not, restore the files from your saved bytes and say so in the report.
@@ -36,8 +36,8 @@ A type error is not a finding: a mutation that no longer type-checks proves noth
 - No commits, no dev servers, no TV installs. You never start other subagents.
 - Vitest runs with `npx vitest run <paths>` in the Bash tool; Playwright with `npx playwright test <paths>` only when the main session names it.
 
-## Report (in German)
+## Report (in English, like everything in this repository)
 
-- A table: mutation (file, what was changed), test command, ROT or GRÜN, and the failing test's name when ROT.
+- A table: mutation (file, what was changed), test command, KILLED or SURVIVED, and the failing test's name when KILLED.
 - For every survivor: why it matters, and a one-line description of the test that would catch it.
 - The final `git status` result, confirming the tree is as it was.
