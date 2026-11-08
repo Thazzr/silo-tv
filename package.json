@@ -17,7 +17,8 @@
     "check:bundle": "node scripts/check-bundle.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "package": "ares-package dist service -o out -n",
-    "tv:deploy": "node scripts/tv-deploy.mjs"
+    "tv:deploy": "node scripts/tv-deploy.mjs",
+    "tv:eval": "node scripts/tv-eval.mjs"
   },
   "dependencies": {
     "core-js": "^3.51.0",

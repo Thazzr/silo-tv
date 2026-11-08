@@ -2,20 +2,23 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { I18nProvider } from './i18n';
+import { makeReport } from './test/probeFixture';
+
+const probe = () => Promise.resolve(makeReport());
 
 function renderApp() {
   return render(
     <I18nProvider lang="en">
-      <App />
+      <App probe={probe} />
     </I18nProvider>,
   );
 }
 
 describe('App', () => {
-  it('renders the heading and the app version', () => {
+  it('renders the heading and the app version', async () => {
     renderApp();
     expect(screen.getByRole('heading', { level: 1, name: 'Platform' })).toBeInTheDocument();
-    expect(screen.getByText(__APP_VERSION__)).toBeInTheDocument();
+    expect(await screen.findByText(__APP_VERSION__)).toBeInTheDocument();
   });
 
   it('lists a Back press (keyCode 461) as a back entry', () => {
@@ -71,7 +74,7 @@ describe('I18nProvider', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue(navLang);
     render(
       <I18nProvider lang={lang}>
-        <App />
+        <App probe={probe} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
@@ -81,7 +84,7 @@ describe('I18nProvider', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('de-DE');
     render(
       <I18nProvider>
-        <App />
+        <App probe={probe} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Plattform' })).toBeInTheDocument();

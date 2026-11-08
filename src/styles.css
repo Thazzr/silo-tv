@@ -48,3 +48,90 @@ dd {
   padding-left: 48px;
   font-family: monospace;
 }
+
+h3 {
+  font-size: 30px;
+  margin: 16px 0 8px;
+}
+
+.rerun {
+  margin: 24px 0 0;
+  padding: 12px 32px;
+  font: inherit;
+  color: #f2f4f7;
+  background: #2a3342;
+  border: 3px solid #4a5568;
+  border-radius: 8px;
+}
+
+.rerun:focus {
+  outline: 4px solid #ffd54a;
+  outline-offset: 4px;
+  transform: scale(1.04);
+}
+
+.rerun[data-running='true'] {
+  color: #9aa3b0;
+}
+
+.verdict {
+  font-weight: bold;
+}
+
+.grid {
+  border-collapse: collapse;
+  font-size: 24px;
+}
+
+.grid th,
+.grid td {
+  text-align: left;
+  padding: 4px 24px 4px 0;
+}
+
+.grid th {
+  color: #9aa3b0;
+  font-weight: normal;
+}
+
+.grid.compact {
+  font-size: 22px;
+}
+
+.grid.compact td {
+  padding: 2px 16px 2px 0;
+}
+
+.outcome-reached,
+.ok {
+  color: #6fdc8c;
+}
+
+.outcome-blocked,
+.outcome-error {
+  color: #ff7b7b;
+}
+
+.outcome-unavailable,
+.off {
+  color: #9aa3b0;
+}
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0 32px;
+}
+
+.media-group h3 {
+  margin: 8px 0 4px;
+}
+
+.raw {
+  margin: 0;
+  padding: 12px;
+  font-size: 20px;
+  background: #1a1f28;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

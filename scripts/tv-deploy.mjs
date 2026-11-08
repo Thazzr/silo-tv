@@ -35,3 +35,5 @@ run('check-bundle', resolve(root, 'scripts', 'check-bundle.mjs'), []);
 run('ares-package', resolve(aresBin, 'ares-package.js'), ['dist', 'service', '-o', 'out', '-n']);
 run('ares-install', resolve(aresBin, 'ares-install.js'), ['-d', device, ipk]);
 run('ares-launch', resolve(aresBin, 'ares-launch.js'), launchArgs);
+
+console.log('\nLaunched. To read the probe results from the TV, run: npm run tv:eval');
