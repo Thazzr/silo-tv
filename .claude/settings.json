@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npm install *)",
+      "Bash(npm ci *)",
+      "Bash(npm ls *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx playwright *)",
+      "Bash(npx es-check *)",
+      "Bash(npx ares-package *)",
+      "Bash(npx ares-install *)",
+      "Bash(npx ares-launch *)",
+      "Bash(npx ares-inspect *)",
+      "Bash(npx ares-device *)",
+      "Bash(git status *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git log *)",
+      "Bash(git diff *)"
+    ],
+    "deny": [
+      "Read(./.env.local)",
+      "Bash(npx ares-setup-device *)",
+      "Bash(npx ares-novacom *)"
+    ]
+  }
+}
