@@ -7,7 +7,10 @@ Ein nativer Client für LG-Fernseher mit webOS für den selbst gehosteten Medien
   - `Silo-Server/silo-server`: API-Doku in `docs/*-api.md` und `docs/architecture/`, die OpenAPI-Datei `contracts/api/v2/openapi.json` und der React-Web-Client in `web/src`.
   - `Silo-Server/silo-roku`: Der native Roku-Client. Seine `docs/spec.md` ist die beste Vorlage für Verhalten und Abläufe eines TV-Clients.
   - Beide stehen unter AGPL-3.0-or-later. Übernommener Code macht diese App ebenfalls AGPL.
-- **Testserver:** `<Testserver aus CLAUDE.local.md>`. Das ist der echte Server des Nutzers, hinter Cloudflare. Gearbeitet wird ausschließlich mit dem Dev-Konto **`<Dev-Konto aus CLAUDE.local.md>`** (siehe *Zugangsdaten*), nie mit dem Hauptkonto des Nutzers.
+- **Öffentliches Projekt:** Das Repo ist öffentlich, und die App soll für jeden Silo-Nutzer so verwendbar sein wie Silo selbst. Sie funktioniert mit jedem Silo-Server.
+  - **Nichts Nutzerspezifisches ins Repo:** keine Serveradressen, Kontonamen, Mailadressen oder Tokens, weder in Dateien noch in Commit-Nachrichten.
+  - Solche Angaben stehen in der gitignorierten `CLAUDE.local.md`.
+- **Testserver und Dev-Konto:** Beide stehen in `CLAUDE.local.md`. Der Testserver ist der echte Server des Nutzers. Gearbeitet wird ausschließlich mit dem Dev-Konto ohne Admin-Rechte, nie mit dem Hauptkonto des Nutzers.
 - **Testgerät:** ein LG-TV ab Modelljahr 2021 im Entwicklermodus. Der Nutzer richtet es einmalig mit `ares-setup-device` ein; die Passphrase tippt nur er.
 
 ## Workflow
@@ -94,7 +97,7 @@ Ein lokaler MemPalace-Server hängt als MCP-Server (`palace_query` / `palace_exe
 - **Keine ES-Module im ausgelieferten HTML.** Eine installierte App läuft unter `file://`, und dort blockiert webOS `<script type="module">`.
   - Der Build erzeugt ein klassisches Skript (IIFE, ein Bundle, kein dynamischer Chunk-Import).
   - Ein Gate-Schritt prüft, dass `dist/index.html` kein `type="module"` enthält.
-- **CORS:** Silos `/api/v2` sendet keine CORS-Header. Geprüft am 2026-11-08 gegen `dem Testserver`: `OPTIONS` gibt 405 ohne `Access-Control-Allow-Origin`.
+- **CORS:** Silos `/api/v2` sendet keine CORS-Header. Geprüft am 2026-11-08 gegen den Testserver: `OPTIONS` gibt 405 ohne `Access-Control-Allow-Origin`.
   - Ob webOS das für eine `file://`-App durchsetzt, klärt Phase 0 auf dem TV.
   - Bis dahin läuft jeder API-Aufruf über eine **Transport-Schicht** (`src/api/transport/`), die zwischen direktem `fetch` und dem Luna-Proxy-Service umschalten kann.
   - `<video>`, `<img>` und `<track>` laden direkt; Medien-Elemente unterliegen nicht CORS.
@@ -142,7 +145,7 @@ Ein lokaler MemPalace-Server hängt als MCP-Server (`palace_query` / `palace_exe
 ## Zugangsdaten
 
 - **Claude tippt nie Passwörter, Tokens oder API-Keys** in Formulare, Dateien oder Befehle und gibt keine aus.
-- **Anmeldung auf dem TV:** per Code/QR (Device-Login). Der Nutzer bestätigt den Code selbst unter `der /activate-Seite des Testservers`, und zwar im Browser als `<Dev-Konto aus CLAUDE.local.md>` angemeldet. Sonst bekommt der TV das Konto, mit dem der Browser gerade angemeldet ist.
+- **Anmeldung auf dem TV:** per Code/QR (Device-Login). Der Nutzer bestätigt den Code selbst auf der `/activate`-Seite des Servers, und zwar in einem Browser, der mit dem Dev-Konto angemeldet ist. Sonst bekommt der TV das Konto, mit dem der Browser gerade angemeldet ist.
 - **Automatisierte Live-Prüfungen** gegen den Server lesen ihre Zugangsdaten aus `.env.local`. Die Datei ist gitignored, nur der Nutzer füllt sie, und ihr Inhalt wird nie angezeigt. Ohne `.env.local` werden Live-Prüfungen übersprungen, und das wird so gemeldet.
 - **TV-Zugang:** Die Geräte-Passphrase des Entwicklermodus gibt nur der Nutzer ein (`ares-setup-device`, `ares-novacom --getkey`).
 
@@ -162,7 +165,7 @@ Ein lokaler MemPalace-Server hängt als MCP-Server (`palace_query` / `palace_exe
   3. Wiedergabe mit Direct Play und HLS prüfen.
 
   Das Ergebnis gehört in den Commit-Body des Phasenabschlusses.
-- **Live-Prüfungen** gegen `dem Testserver` (`npm run test:live`) sind nur lesend, außer Fortschritt und Stopp einer kurzen Testwiedergabe.
+- **Live-Prüfungen** gegen den Testserver (`npm run test:live`) sind nur lesend, außer Fortschritt und Stopp einer kurzen Testwiedergabe.
 
 ## Verification
 

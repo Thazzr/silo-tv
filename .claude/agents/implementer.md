@@ -24,7 +24,7 @@ If a product decision is missing - wording the user has to choose, a behaviour t
   - Check `caniuse` data when unsure, and name every new polyfill in your report.
 - **API.**
   - Every Silo API call goes through the generated client (`src/api/generated/`) and the transport layer, never a raw `fetch`.
-  - Regenerate the client only when the package says so: fetch `/api/v2/openapi.json des Testservers` into `openapi/silo-v2.json`, then `npm run generate:api`.
+  - Regenerate the client only when the package says so: fetch `/api/v2/openapi.json` from the test server named in `CLAUDE.local.md` into `openapi/silo-v2.json`, then `npm run generate:api`.
   - Media URLs from the server are opaque: never build or edit one.
 - **UI.**
   - German UI text uses "du".
