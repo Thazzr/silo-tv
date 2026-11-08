@@ -3,6 +3,8 @@ import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_URL } from '../../test/apiFixtures';
+import { installFakeBridge } from '../../test/fakeBridge';
+import { setPlatformForTests } from '../../platform';
 import { capability, deviceStart, devicePoll, tokenPair } from '../../test/flowFixtures';
 import { renderWithSilo } from '../../test/renderFlow';
 import { formatUserCode } from './format';
@@ -39,6 +41,8 @@ beforeEach(() => {
 });
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }));
 afterEach(() => {
+  vi.unstubAllGlobals();
+  setPlatformForTests(null);
   vi.useRealTimers();
   server.resetHandlers();
 });
@@ -101,6 +105,9 @@ describe('formatUserCode', () => {
 
 describe('SignInScreen', () => {
   it('starts a code for this device and shows it grouped, with the address and a QR code', async () => {
+    // On webOS the server is told "webos", as before.
+    installFakeBridge();
+    setPlatformForTests(null);
     const calls = mockServer();
     setup();
     await advance(0);

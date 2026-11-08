@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { DEVICE_ID_PATTERN, deviceName, getDeviceId, getDeviceIdentity } from './deviceIdentity';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installFakeBridge } from '../test/fakeBridge';
+import { setPlatformForTests } from '../platform';
+import { DEVICE_ID_PATTERN, getDeviceId, getDeviceIdentity } from './deviceIdentity';
 
 beforeEach(() => localStorage.clear());
 
@@ -28,11 +30,18 @@ describe('getDeviceId', () => {
   });
 });
 
-describe('deviceName', () => {
-  it('adds the model name when known', () => {
-    expect(deviceName()).toBe('LG webOS TV');
-    expect(deviceName('  ')).toBe('LG webOS TV');
-    expect(deviceName('OLED55C1')).toBe('LG webOS TV OLED55C1');
+describe('getDeviceIdentity', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setPlatformForTests(null);
+  });
+
+  it('takes the name from the platform: a browser label, or LG webOS TV plus the model', () => {
+    expect(getDeviceIdentity('OLED55C1').name).toBe('Web browser');
+    installFakeBridge();
+    setPlatformForTests(null);
+    expect(getDeviceIdentity().name).toBe('LG webOS TV');
+    expect(getDeviceIdentity('  ').name).toBe('LG webOS TV');
     expect(getDeviceIdentity('OLED55C1').name).toBe('LG webOS TV OLED55C1');
   });
 });

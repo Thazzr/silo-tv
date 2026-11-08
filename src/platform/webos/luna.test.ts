@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FakeBridge, fake, installFakeBridge } from '../test/fakeBridge';
+import { FakeBridge, fake, installFakeBridge } from '../../test/fakeBridge';
 import { isWebOS, lunaCall, pendingBridgeCount } from './luna';
 
 afterEach(() => {

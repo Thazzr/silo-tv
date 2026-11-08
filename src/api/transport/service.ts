@@ -1,4 +1,4 @@
-import { serviceFetch } from '../../platform/serviceFetch';
+import { getPlatform } from '../../platform';
 import type { Transport } from './types';
 
 // A response with these statuses must not carry a body (the Response constructor throws).
@@ -17,9 +17,16 @@ export const serviceTransport: Transport = async (request) => {
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
   const body = hasBody ? await request.text() : '';
 
+  // The proxy exists only where the platform bundles a service (webOS).
+  const proxyFetch = getPlatform().proxyFetch;
+  if (!proxyFetch) {
+    // Same shape as a browser network failure, so callers handle one kind of "unreachable".
+    throw new TypeError('Network request failed: no proxy service on this platform');
+  }
+
   let result;
   try {
-    result = await serviceFetch({
+    result = await proxyFetch({
       url: request.url,
       method: request.method,
       headers,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fake, installFakeBridge } from '../test/fakeBridge';
+import { fake, installFakeBridge } from '../../test/fakeBridge';
 import { pendingBridgeCount } from './luna';
 import { APP_ID, SERVICE_ID, serviceFetch, servicePing } from './serviceFetch';
 

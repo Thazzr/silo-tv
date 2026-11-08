@@ -3,6 +3,31 @@ import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
+const RAW_REQUEST_SELECTORS = [
+  {
+    selector:
+      'CallExpression[callee.name="fetch"], CallExpression[callee.object.name="window"][callee.property.name="fetch"]',
+    message: 'Raw fetch is not allowed here; use the generated API client and the transport layer.',
+  },
+  {
+    selector: 'NewExpression[callee.name="XMLHttpRequest"]',
+    message:
+      'Raw XMLHttpRequest is not allowed here; use the generated API client and the transport layer.',
+  },
+];
+
+// webOS globals and Luna belong to src/platform/webos only.
+const PLATFORM_SELECTORS = [
+  {
+    selector: 'Identifier[name=/^(webOSSystem|PalmSystem|WebOSServiceBridge|PalmServiceBridge)$/]',
+    message: 'webOS globals are only allowed inside src/platform; use getPlatform().',
+  },
+  {
+    selector: 'Literal[value=/luna:/], TemplateElement[value.raw=/luna:/]',
+    message: 'Luna calls are only allowed inside src/platform; use getPlatform().',
+  },
+];
+
 export default tseslint.config(
   { ignores: ['dist/', 'out/', 'coverage/', 'src/api/generated/'] },
   js.configs.recommended,
@@ -21,21 +46,42 @@ export default tseslint.config(
     // CLAUDE.md: every API call goes through the generated client and the transport layer, so
     // raw fetch and XMLHttpRequest are banned in src/. The CORS probe is a diagnostic exception
     // (it must see what the engine does with a raw request); the transport layer is the other.
+    // The platform selectors apply here too: one no-restricted-syntax list per file.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/probe/**', 'src/api/transport/**'],
+    ignores: ['src/platform/**', 'src/probe/**', 'src/api/transport/**', 'src/test/**'],
+    rules: { 'no-restricted-syntax': ['error', ...RAW_REQUEST_SELECTORS, ...PLATFORM_SELECTORS] },
+  },
+  {
+    files: ['src/probe/**/*.{ts,tsx}', 'src/api/transport/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...PLATFORM_SELECTORS] },
+  },
+  {
+    // The shared test helpers fake the webOS bridge, so they may name it and Luna URIs.
+    files: ['src/test/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...RAW_REQUEST_SELECTORS] },
+  },
+  {
+    // Everything platform-specific sits behind the Platform adapter (src/platform/index.ts), so
+    // a Samsung Tizen port adds an adapter instead of touching screens, features or the API layer.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/platform/**'],
     rules: {
-      'no-restricted-syntax': [
+      'no-restricted-imports': [
         'error',
         {
-          selector:
-            'CallExpression[callee.name="fetch"], CallExpression[callee.object.name="window"][callee.property.name="fetch"]',
-          message:
-            'Raw fetch is not allowed here; use the generated API client and the transport layer.',
-        },
-        {
-          selector: 'NewExpression[callee.name="XMLHttpRequest"]',
-          message:
-            'Raw XMLHttpRequest is not allowed here; use the generated API client and the transport layer.',
+          patterns: [
+            {
+              group: [
+                '**/platform/webos',
+                '**/platform/webos/**',
+                '**/platform/browser',
+                '**/platform/browser/**',
+                '**/platform/shared',
+                '**/platform/shared/**',
+              ],
+              message: 'Import from the platform adapter (src/platform), not from its internals.',
+            },
+          ],
         },
       ],
     },

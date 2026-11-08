@@ -4,7 +4,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTransportMode, setTransportMode } from '../api/transport';
 import { Session } from '../api/session';
-import { serviceFetch } from '../platform/serviceFetch';
+import { getPlatform, setPlatformForTests, type KeyValueStore } from '../platform';
 import { BASE_URL, account } from '../test/apiFixtures';
 import { capability, catalogPage, library, profile, profileCollection } from '../test/flowFixtures';
 import { makeReport } from '../test/probeFixture';
@@ -12,24 +12,21 @@ import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { AppRoot } from './AppRoot';
 import { saveServer } from './serverStore';
 
-vi.mock('../platform/serviceFetch', () => ({
-  serviceFetch: vi.fn(),
-  servicePing: vi.fn(),
-  APP_ID: 'io.github.thazzr.silolg',
-  SERVICE_ID: 'io.github.thazzr.silolg.service',
-}));
+// The service transport goes through the platform's proxy; a spy stands in for the JS service.
+const serviceFetch = vi.fn();
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => {
   server.resetHandlers();
   setTransportMode('direct');
-  vi.mocked(serviceFetch).mockReset();
+  serviceFetch.mockReset();
 });
 afterAll(() => server.close());
 
-let storage: Storage;
+let storage: KeyValueStore;
 beforeEach(() => {
+  setPlatformForTests({ ...getPlatform(), proxyFetch: serviceFetch });
   storage = memoryStorage();
 });
 
@@ -88,7 +85,7 @@ describe('AppRoot routing', () => {
 
   it('sets the transport mode from the launch parameter before the first request', async () => {
     saveServer(BASE_URL, storage);
-    vi.mocked(serviceFetch).mockResolvedValue({
+    serviceFetch.mockResolvedValue({
       returnValue: true,
       status: 200,
       statusText: 'OK',
@@ -108,7 +105,7 @@ describe('AppRoot routing', () => {
     // The sign-in screen's first request already goes through the JS service (no MSW handler
     // exists, so a direct request would fail the test).
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
-    expect(vi.mocked(serviceFetch).mock.calls[0]?.[0].url).toBe(
+    expect((serviceFetch.mock.calls[0]?.[0] as { url: string }).url).toBe(
       `${BASE_URL}/api/v2/auth/device/capability`,
     );
   });

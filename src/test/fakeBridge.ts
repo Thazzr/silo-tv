@@ -26,6 +26,11 @@ export class FakeBridge {
   }
 }
 
+/** The Luna URI of a service method, as the app calls it. */
+export function lunaUri(service: string, method: string): string {
+  return `luna://${service}/${method}`;
+}
+
 export function installFakeBridge(
   name: 'WebOSServiceBridge' | 'PalmServiceBridge' = 'WebOSServiceBridge',
 ) {

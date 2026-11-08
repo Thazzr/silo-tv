@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getDeviceIdentity, type DeviceIdentity } from '../api/deviceIdentity';
 import { Session } from '../api/session';
+import type { KeyValueStore } from '../platform';
 import { SignInScreen } from '../features/auth/SignInScreen';
 import { LibraryScreen } from '../features/library/LibraryScreen';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
@@ -17,7 +18,7 @@ export interface FlowAppProps {
   /** Injected by tests; the app creates its own. */
   session?: Session;
   device?: DeviceIdentity;
-  storage?: Storage | null;
+  storage?: KeyValueStore | null;
 }
 
 function startStep(launch: Launch, server: string | null, session: Session): Step {

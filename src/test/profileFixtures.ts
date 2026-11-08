@@ -1,6 +1,5 @@
 // Probe fixtures for the device profile tests: one TV modelled on the first test TV, one browser.
-import type { HdrConfig } from '../platform/device';
-import { CANDIDATES, type DisplayInfo, type ProbeRow } from '../platform/mediaProbe';
+import { CANDIDATES, type DisplayInfo, type HdrConfig, type ProbeRow } from '../platform';
 import type { ProfileProbe } from '../playback/deviceProfile';
 
 type Answer = '' | 'maybe' | 'probably';
@@ -56,7 +55,9 @@ export function tvProbe(overrides: Partial<ProfileProbe> = {}): ProfileProbe {
     media: tvRows,
     display: tvDisplay,
     hdr: hdrFlags,
-    platform: 'webos',
+    siloPlatform: 'webos',
+    isTv: true,
+    manufacturer: 'LG',
     appVersion: '0.0.1',
     osVersion: '24.0.0',
     ...overrides,
@@ -68,7 +69,9 @@ export function browserProbe(overrides: Partial<ProfileProbe> = {}): ProfileProb
     media: browserRows,
     display: { ...tvDisplay, devicePixelRatio: 1 },
     hdr: { known: false, hdr: false, dolbyVision: false, atmos: false },
-    platform: 'browser',
+    siloPlatform: 'web',
+    isTv: false,
+    manufacturer: null,
     appVersion: '0.0.1',
     ...overrides,
   };

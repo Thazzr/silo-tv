@@ -1,13 +1,10 @@
-import { readDeviceInfo, type DeviceInfo } from '../platform/device';
-import { readLaunchParams } from '../platform/launchParams';
 import {
-  probeDecodingInfo,
-  probeDisplay,
-  probeMedia,
+  getPlatform,
   type DecodingResult,
+  type DeviceInfo,
   type DisplayInfo,
   type ProbeRow,
-} from '../platform/mediaProbe';
+} from '../platform';
 import { corsVerdict, runCorsProbe, type CorsCheckResult, type CorsVerdict } from './corsProbe';
 
 export interface ProbeReport {
@@ -78,12 +75,15 @@ export async function runProbe(deps: ProbeDeps = {}): Promise<ProbeReport> {
     }
   };
 
-  const device = await part('device', deps.device ?? readDeviceInfo);
-  const display = await part('display', deps.display ?? probeDisplay);
-  const media = await part('media', deps.media ?? (() => probeMedia()));
-  const decoding = await part('decoding', deps.decoding ?? probeDecodingInfo);
+  const platform = getPlatform();
+  const device = await part('device', deps.device ?? (() => platform.readDeviceInfo()));
+  const display = await part('display', deps.display ?? (() => platform.probeDisplay()));
+  const media = await part('media', deps.media ?? (() => platform.probeMedia()));
+  const decoding = await part('decoding', deps.decoding ?? (() => platform.probeDecodingInfo()));
 
-  const origin = normalizeServer((deps.launchParams ?? readLaunchParams)().server);
+  const origin = normalizeServer(
+    (deps.launchParams ?? (() => platform.readLaunchParams()))().server,
+  );
   const corsRun = deps.cors ?? ((server: string) => runCorsProbe(server));
   const cors = origin ? await part('cors', () => corsRun(origin)) : null;
 

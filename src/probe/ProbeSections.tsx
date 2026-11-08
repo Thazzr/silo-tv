@@ -1,6 +1,5 @@
 import { useT, type MessageKey } from '../i18n';
-import type { DeviceInfo } from '../platform/device';
-import type { DisplayInfo, ProbeRow } from '../platform/mediaProbe';
+import type { DeviceInfo, DisplayInfo, ProbeRow } from '../platform';
 import type { CorsCheckResult } from './corsProbe';
 import type { ProbeReport } from './runProbe';
 

@@ -1,3 +1,4 @@
+import { getPlatform, type KeyValueStore } from '../platform';
 import type { components } from './generated/schema';
 
 export type Account = components['schemas']['Account'];
@@ -30,7 +31,7 @@ export class Session {
     signedOut: new Set(),
   };
 
-  constructor(private readonly storage: Storage | null = safeStorage()) {
+  constructor(private readonly storage: KeyValueStore | null = getPlatform().storage) {
     this.data = this.load();
   }
 
@@ -72,7 +73,7 @@ export class Session {
 
   private load(): SessionData | null {
     try {
-      const raw = this.storage?.getItem(STORAGE_KEY);
+      const raw = this.storage?.get(STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { v?: unknown; session?: Partial<SessionData> };
       const s = parsed.session;
@@ -94,20 +95,12 @@ export class Session {
   private save(): void {
     try {
       if (this.data) {
-        this.storage?.setItem(STORAGE_KEY, JSON.stringify({ v: 1, session: this.data }));
+        this.storage?.set(STORAGE_KEY, JSON.stringify({ v: 1, session: this.data }));
       } else {
-        this.storage?.removeItem(STORAGE_KEY);
+        this.storage?.remove(STORAGE_KEY);
       }
     } catch {
       // Storage full or blocked: the session still works for this page load.
     }
-  }
-}
-
-function safeStorage(): Storage | null {
-  try {
-    return localStorage;
-  } catch {
-    return null;
   }
 }

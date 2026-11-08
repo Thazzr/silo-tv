@@ -9,7 +9,7 @@ import {
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
-import { mapKey } from '../platform/keys';
+import { getPlatform } from '../platform';
 import { formatClock, redact } from './format';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
 import {
@@ -210,7 +210,7 @@ function PlayingView({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const key = mapKey(e);
+      const key = getPlatform().mapKey(e);
       if (!key) return;
       const handled = () => e.preventDefault();
       switch (key) {

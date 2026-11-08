@@ -30,7 +30,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ Switch profile and server
 - ⬜ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu
 - ⬜ Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer
-- ⬜ Server branding (server name); loading, empty and error states
+- ⬜ Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
+- ⬜ Loading, empty and error states
 - ⬜ German and English following the TV's language
 
 ## Phase 2 – Browse (target v0.3.0)

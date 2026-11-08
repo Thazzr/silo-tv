@@ -1,4 +1,4 @@
-import { readLaunchParams } from '../platform/launchParams';
+import { getPlatform } from '../platform';
 import type { TransportMode } from '../api/transport';
 
 export interface Launch {
@@ -19,7 +19,9 @@ function isSet(value: unknown): boolean {
   return Boolean(value);
 }
 
-export function parseLaunch(params: Record<string, unknown> = readLaunchParams()): Launch {
+export function parseLaunch(
+  params: Record<string, unknown> = getPlatform().readLaunchParams(),
+): Launch {
   const transport = params.transport;
   return {
     probe: isSet(params.probe),

@@ -4,22 +4,18 @@ import type { ReactNode } from 'react';
 import { SiloProvider } from '../app/SiloContext';
 import type { DeviceIdentity } from '../api/deviceIdentity';
 import { Session } from '../api/session';
+import type { KeyValueStore } from '../platform';
 import { I18nProvider } from '../i18n';
 import { BASE_URL } from './apiFixtures';
 
 export const testDevice: DeviceIdentity = { id: 'a'.repeat(32), name: 'LG webOS TV' };
 
-export function memoryStorage(): Storage {
+export function memoryStorage(): KeyValueStore {
   const map = new Map<string, string>();
   return {
-    get length() {
-      return map.size;
-    },
-    clear: () => map.clear(),
-    getItem: (key) => map.get(key) ?? null,
-    key: (index) => [...map.keys()][index] ?? null,
-    removeItem: (key) => void map.delete(key),
-    setItem: (key, value) => void map.set(key, value),
+    get: (key) => map.get(key) ?? null,
+    set: (key, value) => void map.set(key, value),
+    remove: (key) => void map.delete(key),
   };
 }
 

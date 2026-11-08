@@ -1,3 +1,5 @@
+import { getPlatform } from '../platform';
+
 const STORAGE_KEY = 'silo-lg.deviceId';
 // Silo accepts letters, digits and . _ : - up to 128 characters; 32 hex characters fit easily.
 export const DEVICE_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -13,29 +15,18 @@ function randomHex(bytes: number): string {
   return Array.from(values, (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-/** The id is generated once per installation and then reused from localStorage. */
+/** The id is generated once per installation and then reused from platform storage. */
 export function getDeviceId(): string {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && DEVICE_ID_PATTERN.test(stored)) return stored;
-  } catch {
-    // Storage unavailable: fall through to a fresh id for this page load.
-  }
+  const { storage } = getPlatform();
+  // Storage unavailable reads as nothing stored: a fresh id for this page load.
+  const stored = storage.get(STORAGE_KEY);
+  if (stored && DEVICE_ID_PATTERN.test(stored)) return stored;
   const id = randomHex(16);
-  try {
-    localStorage.setItem(STORAGE_KEY, id);
-  } catch {
-    // Not persisted; the next load will generate another id.
-  }
+  // Not persisted when storage is blocked; the next load will generate another id.
+  storage.set(STORAGE_KEY, id);
   return id;
 }
 
-/** "LG webOS TV", plus the model name when the platform reported one. */
-export function deviceName(modelName?: string | null): string {
-  const model = modelName?.trim();
-  return model ? `LG webOS TV ${model}` : 'LG webOS TV';
-}
-
 export function getDeviceIdentity(modelName?: string | null): DeviceIdentity {
-  return { id: getDeviceId(), name: deviceName(modelName) };
+  return { id: getDeviceId(), name: getPlatform().deviceLabel(modelName) };
 }

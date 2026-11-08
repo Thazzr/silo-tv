@@ -1,4 +1,4 @@
-import { probeMedia } from '../platform/mediaProbe';
+import { getPlatform } from '../platform';
 import type { ProbeReport } from '../probe/runProbe';
 
 export function makeReport(overrides: Partial<ProbeReport> = {}): ProbeReport {
@@ -30,7 +30,7 @@ export function makeReport(overrides: Partial<ProbeReport> = {}): ProbeReport {
       height: 1080,
       devicePixelRatio: 1,
     },
-    media: probeMedia({
+    media: getPlatform().probeMedia({
       canPlayType: (mime) => (mime.includes('avc1') ? 'probably' : ''),
       isTypeSupported: (mime) => mime.includes('avc1'),
     }),

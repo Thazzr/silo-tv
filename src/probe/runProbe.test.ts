@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeviceInfo } from '../platform/device';
-import type { DisplayInfo, ProbeRow } from '../platform/mediaProbe';
+import type { DeviceInfo, DisplayInfo, ProbeRow } from '../platform';
 import type { CorsCheckResult } from './corsProbe';
 import { normalizeServer, runProbe, type ProbeDeps } from './runProbe';
 

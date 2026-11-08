@@ -1,32 +1,6 @@
-import { isWebOS, lunaCall } from './luna';
-
-export interface ScreenInfo {
-  width: number;
-  height: number;
-  colorDepth: number;
-}
-
-export type Part<T> = T | { error: string };
-
-export interface DeviceInfo {
-  platform: 'browser' | 'webos';
-  userAgent: string;
-  screen: ScreenInfo;
-  devicePixelRatio: number;
-  /** Chromium major version from the user agent, when present. */
-  chromeMajor?: number | null;
-  /** Parsed window.webOSSystem.deviceInfo; absent when missing or unparsable. */
-  deviceInfo?: Record<string, unknown> | null;
-  platformVersion?: string | null;
-  systemInfo?: Part<Record<string, unknown>>;
-  /** Raw getConfigs response; the key names are not known in advance. */
-  configs?: Part<Record<string, unknown>>;
-}
-
-export function chromeMajorFromUserAgent(ua: string): number | null {
-  const match = /Chrome\/(\d+)/.exec(ua);
-  return match?.[1] ? Number(match[1]) : null;
-}
+import { chromeMajorFromUserAgent, readBasicDeviceInfo } from '../shared/deviceBasics';
+import type { DeviceInfo, HdrConfig, Part } from '../types';
+import { lunaCall } from './luna';
 
 function parseDeviceInfo(): Record<string, unknown> | null {
   const raw = window.webOSSystem?.deviceInfo ?? window.PalmSystem?.deviceInfo;
@@ -52,21 +26,10 @@ async function part(
 }
 
 export async function readDeviceInfo(): Promise<DeviceInfo> {
-  const userAgent = navigator.userAgent;
-  const base = {
-    userAgent,
-    screen: {
-      width: screen.width,
-      height: screen.height,
-      colorDepth: screen.colorDepth,
-    },
-    devicePixelRatio: window.devicePixelRatio,
-  };
-  if (!isWebOS()) return { platform: 'browser', ...base };
-
+  const base = readBasicDeviceInfo();
   const deviceInfo = parseDeviceInfo();
   const reported = deviceInfo?.platformVersion;
-  const chromeMajor = chromeMajorFromUserAgent(userAgent);
+  const chromeMajor = chromeMajorFromUserAgent(base.userAgent);
   const [systemInfo, configs] = await Promise.all([
     part(
       lunaCall('luna://com.webos.service.tv.systemproperty/getSystemInfo', {
@@ -91,15 +54,6 @@ export async function readDeviceInfo(): Promise<DeviceInfo> {
   };
 }
 
-/** The TV's own HDR and audio flags, from named config keys only. */
-export interface HdrConfig {
-  /** True when the TV answered the config call; false means "unknown", not "unsupported". */
-  known: boolean;
-  hdr: boolean;
-  dolbyVision: boolean;
-  atmos: boolean;
-}
-
 export const HDR_CONFIG_KEYS = [
   'tv.model.supportHDR',
   'tv.model.supportDolbyVisionHDR',
@@ -113,7 +67,7 @@ function flag(value: unknown): boolean {
 /**
  * Reads the three HDR and Atmos flags the device profile needs. Only these named keys are
  * queried: the wildcard dump of getConfigs also contains the TV's serial number. Any failure
- * (not on webOS, call refused, timeout) yields all false.
+ * (call refused, timeout) yields all false.
  */
 export async function readHdrConfig(): Promise<HdrConfig> {
   const none: HdrConfig = { known: false, hdr: false, dolbyVision: false, atmos: false };

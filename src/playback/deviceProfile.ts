@@ -1,8 +1,7 @@
 // The device profile for Silo playback protocol v3: what this TV can do, built only from what the
 // probes found. Pure; collecting the probes is in probe.ts.
 import type { components } from '../api/generated/schema';
-import type { HdrConfig } from '../platform/device';
-import type { DisplayInfo, ProbeRow } from '../platform/mediaProbe';
+import type { DisplayInfo, HdrConfig, ProbeRow } from '../platform';
 
 type S = components['schemas'];
 export type ClientCapabilities = S['ClientCodecCapabilitiesV3'];
@@ -14,7 +13,12 @@ export interface ProfileProbe {
   media: ProbeRow[];
   display: DisplayInfo;
   hdr: HdrConfig;
-  platform: 'webos' | 'browser';
+  /** `Platform.siloPlatformId`: what the server is told about this device. */
+  siloPlatform: string;
+  /** `Platform.isTv`: hardware decoding and native containers apply. */
+  isTv: boolean;
+  /** `Platform.manufacturer`. */
+  manufacturer: string | null;
   appVersion: string;
   /** webOS platform version, e.g. "24.0.0"; used for diagnostics on the server only. */
   osVersion?: string | null;
@@ -126,7 +130,7 @@ function maxResolution(display: DisplayInfo): string {
 function videoDecode(probe: ProfileProbe): S['VideoDecodeCapabilityV3'][] {
   // On the declared tier these entries only narrow the flat lists, so they carry just the bounds
   // the probe measured: the highest level that answered and the bit depths.
-  const hardware = probe.platform === 'webos';
+  const hardware = probe.isTv;
   const entries: S['VideoDecodeCapabilityV3'][] = [];
   const h264 = maxLevel(probe, H264_LEVELS);
   if (h264 !== undefined) {
@@ -152,7 +156,7 @@ export function buildClientCapabilities(probe: ProfileProbe): ClientCapabilities
     video_evidence: 'declared',
     audio_evidence: 'declared',
     codecs_video: codecsVideo,
-    codecs_video_hardware: probe.platform === 'webos' ? codecsVideo : [],
+    codecs_video_hardware: probe.isTv ? codecsVideo : [],
     codecs_audio: audioCodecs(probe),
     containers,
     max_resolution: maxResolution(probe.display),
@@ -169,7 +173,7 @@ export function buildClientCapabilities(probe: ProfileProbe): ClientCapabilities
 function originalContainers(probe: ProfileProbe): string[] {
   const list: string[] = [];
   if (containerOk(probe, 'mp4')) list.push('mp4');
-  if (probe.platform === 'webos' || containerOk(probe, 'mkv')) list.push('mkv');
+  if (probe.isTv || containerOk(probe, 'mkv')) list.push('mkv');
   if (containerOk(probe, 'webm')) list.push('webm');
   return list;
 }
@@ -229,8 +233,8 @@ export function buildPlaybackContext(probe: ProfileProbe): PlaybackContext {
     form_factor: 'tv',
     app_version: probe.appVersion,
     device: {
-      platform: probe.platform === 'webos' ? 'webos' : 'web',
-      ...(probe.platform === 'webos' ? { manufacturer: 'LG' } : {}),
+      platform: probe.siloPlatform,
+      ...(probe.manufacturer ? { manufacturer: probe.manufacturer } : {}),
       ...(probe.osVersion ? { os_version: probe.osVersion } : {}),
       platform_details: platformDetails,
     },

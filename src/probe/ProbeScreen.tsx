@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
-import { mapKey, type RemoteKey } from '../platform/keys';
+import { getPlatform, type RemoteKey } from '../platform';
 import {
   DeviceSection,
   DisplaySection,
@@ -52,7 +52,7 @@ export function ProbeScreen({ probe = runProbe }: { probe?: () => Promise<ProbeR
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       // Back must show up as an entry without leaving the app or the browser history.
-      const mapped = mapKey(e);
+      const mapped = getPlatform().mapKey(e);
       if (mapped === 'back') e.preventDefault();
       if (mapped === 'enter') start();
       if (mapped === 'up' || mapped === 'down') {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chromeMajorFromUserAgent, readDeviceInfo, readHdrConfig } from './device';
-import { fake, installFakeBridge } from '../test/fakeBridge';
+import { chromeMajorFromUserAgent } from '../shared/deviceBasics';
+import { readDeviceInfo, readHdrConfig, readPlatformVersion } from './device';
+import { fake, installFakeBridge } from '../../test/fakeBridge';
 
 const SYSTEM_INFO = 'luna://com.webos.service.tv.systemproperty/getSystemInfo';
 const CONFIGS = 'luna://com.webos.service.config/getConfigs';
@@ -30,20 +31,6 @@ describe('chromeMajorFromUserAgent', () => {
 });
 
 describe('readDeviceInfo', () => {
-  it('returns only basics in a browser', async () => {
-    const info = await readDeviceInfo();
-    expect(info.platform).toBe('browser');
-    expect(info.userAgent).toBe(navigator.userAgent);
-    expect(info.screen).toEqual({
-      width: screen.width,
-      height: screen.height,
-      colorDepth: screen.colorDepth,
-    });
-    expect(info.devicePixelRatio).toBe(window.devicePixelRatio);
-    expect(info).not.toHaveProperty('systemInfo');
-    expect(info).not.toHaveProperty('configs');
-  });
-
   it('collects deviceInfo and both Luna calls on webOS', async () => {
     installFakeBridge();
     vi.stubGlobal('navigator', { userAgent: WEBOS_UA });
@@ -97,6 +84,17 @@ describe('readDeviceInfo', () => {
   });
 });
 
+describe('readPlatformVersion', () => {
+  it('reads the launch-time platform version', () => {
+    window.webOSSystem = { deviceInfo: '{"platformVersion":"24.0.0"}' };
+    expect(readPlatformVersion()).toBe('24.0.0');
+  });
+
+  it('is null without a reported version', () => {
+    expect(readPlatformVersion()).toBeNull();
+  });
+});
+
 describe('readHdrConfig', () => {
   const NONE = { known: false, hdr: false, dolbyVision: false, atmos: false };
 
@@ -145,7 +143,7 @@ describe('readHdrConfig', () => {
     expect(await readHdrConfig()).toEqual(NONE);
   });
 
-  it('yields all false outside webOS', async () => {
+  it('yields all false without a Luna bridge', async () => {
     expect(await readHdrConfig()).toEqual(NONE);
   });
 });

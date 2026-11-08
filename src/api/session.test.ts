@@ -1,6 +1,7 @@
 import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getPlatform } from '../platform';
 import { BASE_URL, account, problem } from '../test/apiFixtures';
 import { createSiloClient } from './client';
 import type { components } from './generated/schema';
@@ -25,7 +26,7 @@ function problemJson(code: string, status: number, headers: Record<string, strin
 }
 
 function signedInSession() {
-  const session = new Session(localStorage);
+  const session = new Session(getPlatform().storage);
   session.set({
     accessToken: 'old',
     refreshToken: 'refresh-old',
@@ -225,26 +226,26 @@ describe('Session', () => {
   it('persists under one versioned key and restores', () => {
     const first = signedInSession();
     expect(Object.keys({ ...localStorage })).toEqual(['silo-lg.session.v1']);
-    expect(new Session(localStorage).get()).toEqual(first.get());
+    expect(new Session(getPlatform().storage).get()).toEqual(first.get());
   });
 
   it('rejects a well-formed record of another or no version', () => {
     const valid = { accessToken: 'a', refreshToken: 'r', expiresAt: 1 };
     localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 2, session: valid }));
-    expect(new Session(localStorage).get()).toBeNull();
+    expect(new Session(getPlatform().storage).get()).toBeNull();
     localStorage.setItem('silo-lg.session.v1', JSON.stringify({ session: valid }));
-    expect(new Session(localStorage).get()).toBeNull();
+    expect(new Session(getPlatform().storage).get()).toBeNull();
     localStorage.setItem('silo-lg.session.v1', JSON.stringify(valid));
-    expect(new Session(localStorage).get()).toBeNull();
+    expect(new Session(getPlatform().storage).get()).toBeNull();
     localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 1, session: valid }));
-    expect(new Session(localStorage).get()).toEqual(valid);
+    expect(new Session(getPlatform().storage).get()).toEqual(valid);
   });
 
   it('ignores stored data of another version or shape', () => {
     localStorage.setItem('silo-lg.session.v1', JSON.stringify({ v: 2, session: {} }));
-    expect(new Session(localStorage).get()).toBeNull();
+    expect(new Session(getPlatform().storage).get()).toBeNull();
     localStorage.setItem('silo-lg.session.v1', 'not json');
-    expect(new Session(localStorage).get()).toBeNull();
+    expect(new Session(getPlatform().storage).get()).toBeNull();
   });
 
   it('signOut clears storage, notifies once and is a no-op when already signed out', () => {

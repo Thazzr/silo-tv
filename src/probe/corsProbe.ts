@@ -1,14 +1,12 @@
 // Diagnostic CORS probe. Raw fetch/XHR is allowed here (and only here, besides the transport
 // layer): the point is to see what the TV's web engine does with a cross-origin request from a
 // file:// app. It never sends credentials and never logs request bodies.
-import { isWebOS } from '../platform/luna';
 import {
-  serviceFetch,
-  servicePing,
-  type ServiceFetchRequest,
-  type ServiceFetchResponse,
-  type ServicePingResponse,
-} from '../platform/serviceFetch';
+  getPlatform,
+  type ProxyFetchRequest,
+  type ProxyFetchResponse,
+  type ProxyPingResponse,
+} from '../platform';
 
 export type CorsCheckId =
   | 'direct-simple'
@@ -36,8 +34,8 @@ export type CorsVerdict = 'direct' | 'service' | 'none';
 export interface CorsProbeDeps {
   fetch?: typeof fetch;
   XMLHttpRequest?: typeof XMLHttpRequest;
-  serviceFetch?: (req: ServiceFetchRequest) => Promise<ServiceFetchResponse>;
-  servicePing?: () => Promise<ServicePingResponse>;
+  serviceFetch?: (req: ProxyFetchRequest) => Promise<ProxyFetchResponse>;
+  servicePing?: () => Promise<ProxyPingResponse>;
   isWebOS?: () => boolean;
   now?: () => number;
 }
@@ -123,7 +121,7 @@ function xhrCheck(Xhr: typeof XMLHttpRequest, server: string, spec: RequestSpec)
 }
 
 async function serviceCheck(
-  call: (req: ServiceFetchRequest) => Promise<ServiceFetchResponse>,
+  call: (req: ProxyFetchRequest) => Promise<ProxyFetchResponse>,
   server: string,
   spec: RequestSpec,
 ): Promise<Verdict> {
@@ -146,7 +144,9 @@ export async function runCorsProbe(
   deps: CorsProbeDeps = {},
 ): Promise<CorsCheckResult[]> {
   const now = deps.now ?? Date.now;
-  const onWebOS = (deps.isWebOS ?? isWebOS)();
+  const platform = getPlatform();
+  // The service checks only make sense where the platform offers the proxy.
+  const onWebOS = (deps.isWebOS ?? (() => platform.proxyFetch !== undefined))();
   const results: CorsCheckResult[] = [];
 
   const run = async (id: CorsCheckId, transport: CorsTransport, check: () => Promise<Verdict>) => {
@@ -159,7 +159,10 @@ export async function runCorsProbe(
 
   const f: FetchFn = (input, init) => (deps.fetch ?? fetch)(input, init);
   const xhrCtor = () => deps.XMLHttpRequest ?? XMLHttpRequest;
-  const callService = (req: ServiceFetchRequest) => (deps.serviceFetch ?? serviceFetch)(req);
+  const callService = (req: ProxyFetchRequest) => {
+    const call = deps.serviceFetch ?? platform.proxyFetch;
+    return call ? call(req) : Promise.reject(new Error('No proxy service on this platform'));
+  };
 
   await run('direct-simple', 'fetch', () => fetchCheck(f, server, SIMPLE_GET));
   await run('direct-preflight-get', 'fetch', () => fetchCheck(f, server, PREFLIGHT_GET));
@@ -170,7 +173,9 @@ export async function runCorsProbe(
     'service',
     needsService(async () => {
       try {
-        const response = await (deps.servicePing ?? servicePing)();
+        const ping = deps.servicePing ?? platform.proxyPing;
+        if (!ping) throw new Error('No proxy service on this platform');
+        const response = await ping();
         return { outcome: 'reached', detail: `node ${response.node} · sender ${response.sender}` };
       } catch (error) {
         return { outcome: 'error', detail: messageOf(error) };

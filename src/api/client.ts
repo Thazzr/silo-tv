@@ -1,4 +1,5 @@
 import createClient, { type Client, type Middleware } from 'openapi-fetch';
+import { getPlatform } from '../platform';
 import type { DeviceIdentity } from './deviceIdentity';
 import type { paths } from './generated/schema';
 import { SiloApiError, parseRetryAfter, problemCode } from './problem';
@@ -30,7 +31,7 @@ function deviceMiddleware(options: SiloClientOptions): Middleware {
     onRequest({ request }) {
       request.headers.set('X-Silo-Device-Id', options.device.id);
       request.headers.set('X-Silo-Device-Name', headerSafe(options.device.name));
-      request.headers.set('X-Silo-Device-Platform', 'webos');
+      request.headers.set('X-Silo-Device-Platform', getPlatform().siloPlatformId);
       request.headers.set('X-Silo-Client', 'silo-lg');
       request.headers.set('X-Silo-Client-Version', version);
       return request;

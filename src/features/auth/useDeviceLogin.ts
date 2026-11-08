@@ -4,6 +4,7 @@ import { toApiError } from '../../api/client';
 import type { components } from '../../api/generated/schema';
 import { SiloApiError } from '../../api/problem';
 import { useSilo } from '../../app/SiloContext';
+import { getPlatform } from '../../platform';
 
 export type DeviceLoginStart = components['schemas']['DeviceLoginStart'];
 
@@ -53,7 +54,7 @@ export function useDeviceLogin(onSignedIn: () => void) {
   const start = useMutation({
     mutationFn: async () => {
       const { data, error, response } = await client.POST('/api/v2/auth/device/start', {
-        body: { device_name: device.name, device_platform: 'webos' },
+        body: { device_name: device.name, device_platform: getPlatform().siloPlatformId },
       });
       if (!data) throw toApiError(error, response);
       return data;

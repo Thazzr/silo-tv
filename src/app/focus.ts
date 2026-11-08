@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { mapKey } from '../platform/keys';
+import { getPlatform } from '../platform';
 
 // Phase 0 focus handling: a screen is a vertical list of elements marked `data-focusable`, and a
 // container marked `data-columns="n"` inside it is a grid (digit pad). Phase 1 replaces this with
@@ -75,7 +75,7 @@ export function useFocusNavigation(ref: RefObject<HTMLElement | null>, onBack?: 
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const key = mapKey(e);
+      const key = getPlatform().mapKey(e);
       if (key === 'back') {
         // Backspace edits text in a field; every other Back key leaves the screen.
         if (e.keyCode === 8 && isTextField(e.target)) return;

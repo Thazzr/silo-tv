@@ -1,24 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BASE_URL, account, systemInfo } from '../test/apiFixtures';
+import { installFakeBridge } from '../test/fakeBridge';
+import { memoryStorage } from '../test/renderFlow';
+import { setPlatformForTests } from '../platform';
 import { createSiloClient, toApiError } from './client';
 import { Session } from './session';
 import type { Transport } from './transport';
 
-function memoryStorage(): Storage {
-  const map = new Map<string, string>();
-  return {
-    get length() {
-      return map.size;
-    },
-    clear: () => map.clear(),
-    getItem: (key) => map.get(key) ?? null,
-    key: (index) => [...map.keys()][index] ?? null,
-    removeItem: (key) => void map.delete(key),
-    setItem: (key, value) => void map.set(key, value),
-  };
-}
-
 const device = { id: 'a'.repeat(32), name: 'LG webOS TV' };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setPlatformForTests(null);
+});
 
 function setup(session = new Session(memoryStorage())) {
   const seen: Request[] = [];
@@ -47,6 +41,9 @@ const signedIn = {
 
 describe('device headers', () => {
   it('are set on every request, also without a session', async () => {
+    // webOS keeps sending exactly the values it always did.
+    installFakeBridge();
+    setPlatformForTests(null);
     const { client, seen } = setup();
     await client.GET('/api/v2/system/info');
     await client.GET('/api/v2/system/info');
@@ -59,6 +56,12 @@ describe('device headers', () => {
       expect(request.headers.get('X-Silo-Client')).toBe('silo-lg');
       expect(request.headers.get('X-Silo-Client-Version')).toBe('1.2.3');
     }
+  });
+
+  it('sends the platform id of the browser adapter as web', async () => {
+    const { client, seen } = setup();
+    await client.GET('/api/v2/system/info');
+    expect(seen[0]?.headers.get('X-Silo-Device-Platform')).toBe('web');
   });
 
   it('keep the device name header printable ASCII', async () => {

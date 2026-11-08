@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Session } from '../api/session';
+import type { KeyValueStore } from '../platform';
 import { BASE_URL, account, systemInfo } from '../test/apiFixtures';
 import {
   capability,
@@ -26,7 +27,7 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-let storage: Storage;
+let storage: KeyValueStore;
 beforeEach(() => {
   storage = memoryStorage();
 });

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fake, installFakeBridge } from '../../test/fakeBridge';
-import { SERVICE_ID } from '../../platform/serviceFetch';
+import { fake, installFakeBridge, lunaUri } from '../../test/fakeBridge';
+import { getPlatform, setPlatformForTests } from '../../platform';
 import {
   currentTransport,
   directTransport,
@@ -11,14 +11,17 @@ import {
 } from '.';
 
 const URL_ = 'https://silo.example.test/api/v2/x';
+// Id of the bundled JS service (the app ID plus .service).
+const SERVICE_ID = 'io.github.thazzr.silolg.service';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setPlatformForTests(null);
   setTransportMode('direct');
 });
 
 function respond(payload: object) {
-  fake.responders.set(`luna://${SERVICE_ID}/fetch`, () => JSON.stringify(payload));
+  fake.responders.set(lunaUri(SERVICE_ID, 'fetch'), () => JSON.stringify(payload));
 }
 
 describe('directTransport', () => {
@@ -36,7 +39,14 @@ describe('serviceTransport', () => {
     fake.responders.clear();
     fake.calls.length = 0;
     installFakeBridge();
+    // The platform is detected once; detect again now that the bridge exists.
+    setPlatformForTests(null);
   }
+
+  it('fails like a network error when the platform has no proxy service', async () => {
+    expect(getPlatform().proxyFetch).toBeUndefined();
+    await expect(serviceTransport(new Request(URL_))).rejects.toThrow(TypeError);
+  });
 
   it('maps the request to a service call and the result back to a Response', async () => {
     setup();
@@ -112,6 +122,7 @@ describe('transport selection', () => {
 
     fake.responders.clear();
     installFakeBridge();
+    setPlatformForTests(null);
     respond({ returnValue: true, status: 200, statusText: 'OK', headers: {}, body: 'svc' });
     setTransportMode('service');
     const response = await currentTransport(new Request(URL_));
