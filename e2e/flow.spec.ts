@@ -6,11 +6,13 @@ import { distIndexUrl } from './paths.ts';
 // A fake Silo server on 127.0.0.1 with permissive CORS (like probe.spec.ts, a real server instead
 // of page.route(): Playwright does not apply the response-side CORS check to routed requests).
 // It speaks just enough of /api/v2 for the first flow: server check, device-code sign-in that is
-// approved on the second poll, one profile without a PIN, and one library with two titles.
+// approved on the second poll, one profile without a PIN, one library with two titles, and the
+// playback protocol up to a plan whose media never answers (the loading cue stays).
 
 interface Seen {
   method: string;
   path: string;
+  search: string;
   authorization: string | undefined;
   profileId: string | undefined;
 }
@@ -35,6 +37,7 @@ async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
     seen.push({
       method: req.method ?? '',
       path: url.pathname,
+      search: url.search,
       authorization: req.headers.authorization,
       profileId: req.headers['x-profile-id'] as string | undefined,
     });
@@ -84,6 +87,48 @@ async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
         });
       case 'GET /api/v2/user/libraries':
         return send(200, { items: [{ id: 'lib-1', name: 'Movies', type: 'movies' }] });
+      case 'GET /api/v2/playback/capabilities':
+        return send(200, {
+          state: 'available',
+          allowed: true,
+          protocol_versions: [3],
+          features: ['sequenced_progress_v1'],
+          installation_id: 'install-1',
+          deliveries: [],
+          revision: 'r',
+        });
+      case 'GET /api/v2/watch/m2':
+        return send(200, {
+          content_id: 'm2',
+          title: 'Second Title',
+          type: 'movie',
+          subtitles: [],
+          versions: [{ file_id: 'file-2' }],
+        });
+      case 'POST /api/v2/playback/start':
+        return send(201, {
+          outcome: 'playable',
+          protocol_version: 3,
+          session_id: 'e2e-session',
+          playback_plan: {
+            plan_id: 'plan:1',
+            plan_attempt_key: 'v3:1',
+            delivery: 'original_http',
+            session_id: 'e2e-session',
+            selected_tracks: {},
+            effective_recipe: {},
+            source: { duration_seconds: 5400 },
+            stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
+            timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
+          },
+        });
+      case 'POST /api/v2/playback/e2e-session/progress':
+        return send(200, { outcome: 'applied' });
+      case 'DELETE /api/v2/playback/e2e-session':
+        return send(200, { outcome: 'stopped' });
+      case 'GET /api/v2/stream/e2e-session':
+        // The media never answers: the player keeps its loading cue.
+        return;
       case 'GET /api/v2/catalog':
         return send(200, {
           items: [
@@ -103,6 +148,7 @@ async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
 }
 
 test.afterAll(async () => {
+  for (const server of servers) server.closeAllConnections();
   await Promise.all(servers.map((server) => new Promise((done) => server.close(done))));
 });
 
@@ -130,15 +176,34 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByRole('button', { name: /First Title/ })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movies');
-  // The first title has the focus; Down, Enter selects the second and shows the note.
+  // The first title has the focus; Down, Enter opens the second one in the player.
   await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('playback-note')).toContainText('Second Title');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('player-cue')).toBeVisible();
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/playback/start')).toBe(true);
+
+  // Back leaves the player: the session is stopped and the list has its focus on that title.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('title-list')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect
+    .poll(() =>
+      seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+    )
+    .toBe(true);
 
   // The authenticated calls carried the token and the profile.
   const catalog = seen.find((entry) => entry.path === '/api/v2/catalog');
   expect(catalog?.authorization).toBe('Bearer fake-access');
   expect(catalog?.profileId).toBe('profile-1');
+  // Playback went through protocol v3 with the same credentials.
+  const start = seen.find((entry) => entry.path === '/api/v2/playback/start');
+  expect(start?.authorization).toBe('Bearer fake-access');
+  expect(start?.profileId).toBe('profile-1');
+  // A video element cannot set headers: the media request carries the token as a query parameter.
+  const media = seen.find((entry) => entry.path === '/api/v2/stream/e2e-session');
+  expect(media?.search).toBe('?st=x&token=fake-access');
   expect(seen.filter((entry) => entry.path === '/api/v2/auth/device/poll')).toHaveLength(2);
 });

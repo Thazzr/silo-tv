@@ -23,6 +23,9 @@ export default defineConfig({
   build: {
     target: 'chrome79',
     modulePreload: false,
+    // One bundle is intentional on webOS (classic script, no dynamic chunks; check:bundle
+    // enforces it), so the default 500 kB chunk warning does not apply.
+    chunkSizeWarningLimit: 2000,
     cssCodeSplit: false,
     rollupOptions: {
       output: { format: 'iife' },

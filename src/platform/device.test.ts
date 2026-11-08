@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chromeMajorFromUserAgent, readDeviceInfo } from './device';
+import { chromeMajorFromUserAgent, readDeviceInfo, readHdrConfig } from './device';
 import { fake, installFakeBridge } from '../test/fakeBridge';
 
 const SYSTEM_INFO = 'luna://com.webos.service.tv.systemproperty/getSystemInfo';
@@ -94,5 +94,58 @@ describe('readDeviceInfo', () => {
     const info = await readDeviceInfo();
     expect(info.deviceInfo).toBeNull();
     expect(info.platformVersion).toBe('79');
+  });
+});
+
+describe('readHdrConfig', () => {
+  const NONE = { known: false, hdr: false, dolbyVision: false, atmos: false };
+
+  it('queries exactly the three named keys and never a wildcard', async () => {
+    installFakeBridge();
+    fake.responders.set(CONFIGS, () =>
+      JSON.stringify({
+        returnValue: true,
+        configs: {
+          'tv.model.supportHDR': true,
+          'tv.model.supportDolbyVisionHDR': false,
+          'tv.config.supportDolbyTVATMOS': true,
+        },
+      }),
+    );
+    const config = await readHdrConfig();
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]?.uri).toBe(CONFIGS);
+    expect(fake.calls[0]?.params).toEqual({
+      configNames: [
+        'tv.model.supportHDR',
+        'tv.model.supportDolbyVisionHDR',
+        'tv.config.supportDolbyTVATMOS',
+      ],
+    });
+    expect(JSON.stringify(fake.calls[0]?.params)).not.toContain('*');
+    expect(config).toEqual({ known: true, hdr: true, dolbyVision: false, atmos: true });
+  });
+
+  it('takes the string "true" as true and a missing key as false', async () => {
+    installFakeBridge();
+    fake.responders.set(CONFIGS, () =>
+      JSON.stringify({ returnValue: true, configs: { 'tv.model.supportHDR': 'true' } }),
+    );
+    expect(await readHdrConfig()).toEqual({
+      known: true,
+      hdr: true,
+      dolbyVision: false,
+      atmos: false,
+    });
+  });
+
+  it('yields all false when the call fails', async () => {
+    installFakeBridge();
+    fake.responders.set(CONFIGS, () => JSON.stringify({ returnValue: false, errorText: 'denied' }));
+    expect(await readHdrConfig()).toEqual(NONE);
+  });
+
+  it('yields all false outside webOS', async () => {
+    expect(await readHdrConfig()).toEqual(NONE);
   });
 });

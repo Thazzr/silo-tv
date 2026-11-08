@@ -1,13 +1,40 @@
 import { useState } from 'react';
 import { Button, ErrorState, ListSkeleton, Screen } from '../../app/ui';
 import { useT } from '../../i18n';
+import { PlayerScreen } from '../../playback/PlayerScreen';
 import { useFirstLibrary, useSignOut, type CatalogItem } from './queries';
 
 export function LibraryScreen({ onBack }: { onBack: () => void }) {
   const t = useT();
   const { library, items, isLoading, isError, noLibrary, retry } = useFirstLibrary();
   const signOut = useSignOut();
-  const [selected, setSelected] = useState<CatalogItem | null>(null);
+  const [playing, setPlaying] = useState<CatalogItem | null>(null);
+  // The title that was opened last: focus returns to it when the player closes.
+  const [lastOpened, setLastOpened] = useState<string | null>(null);
+  const [seriesNote, setSeriesNote] = useState(false);
+
+  const open = (item: CatalogItem) => {
+    setLastOpened(item.content_id);
+    // Series are not directly playable; their episodes come with Phase 2.
+    if (item.type.trim().toLowerCase() === 'series') {
+      setSeriesNote(true);
+      return;
+    }
+    setSeriesNote(false);
+    setPlaying(item);
+  };
+
+  if (playing) {
+    return (
+      <PlayerScreen
+        contentId={playing.content_id}
+        title={playing.title}
+        onExit={() => setPlaying(null)}
+      />
+    );
+  }
+
+  const focusIndex = Math.max(0, items?.findIndex((item) => item.content_id === lastOpened) ?? 0);
 
   let body;
   if (isLoading) {
@@ -25,8 +52,8 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
           <li key={item.content_id}>
             <Button
               className="row"
-              data-autofocus={index === 0 ? true : undefined}
-              onClick={() => setSelected(item)}
+              data-autofocus={index === focusIndex ? true : undefined}
+              onClick={() => open(item)}
             >
               <span className="grow">{item.title}</span>
               {item.year ? <span className="year">{item.year}</span> : null}
@@ -42,9 +69,9 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
       <Button className="secondary" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
         {t('library.signOut')}
       </Button>
-      {selected ? (
-        <p role="status" className="note toast" data-testid="playback-note">
-          {t('library.playbackNext', { title: selected.title })}
+      {seriesNote ? (
+        <p role="status" className="note toast" data-testid="series-note">
+          {t('library.seriesLater')}
         </p>
       ) : null}
       {body}

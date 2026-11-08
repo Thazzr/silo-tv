@@ -309,3 +309,83 @@ h3 {
   background: #1a1f28;
   border-radius: 8px;
 }
+
+/* Player: full-screen video; everything on top is plain text and a transform-only bar. */
+.player {
+  position: fixed;
+  inset: 0;
+  background: #000;
+}
+
+.player-video {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+.player-cue {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+.player-bar {
+  position: absolute;
+  right: 96px;
+  bottom: 54px;
+  left: 96px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 24px;
+  background: rgba(16, 19, 24, 0.8);
+  border-radius: 8px;
+}
+
+.player-state {
+  min-width: 140px;
+}
+
+.player-track {
+  flex: 1;
+  height: 12px;
+  overflow: hidden;
+  background: #4a5568;
+  border-radius: 6px;
+}
+
+.player-fill {
+  width: 100%;
+  height: 100%;
+  background: #ffd54a;
+  transform-origin: left center;
+}
+
+.player-diag {
+  position: absolute;
+  top: 54px;
+  left: 96px;
+  margin: 0;
+  padding: 16px 24px;
+  font-family: monospace;
+  font-size: 22px;
+  background: rgba(16, 19, 24, 0.85);
+  border-radius: 8px;
+}
+
+.player-diag-row {
+  display: flex;
+  gap: 24px;
+}
+
+.player-diag dt {
+  min-width: 260px;
+  color: #9aa3b0;
+}
+
+.player-diag dd {
+  margin: 0;
+}

@@ -90,3 +90,53 @@ export async function readDeviceInfo(): Promise<DeviceInfo> {
     configs,
   };
 }
+
+/** The TV's own HDR and audio flags, from named config keys only. */
+export interface HdrConfig {
+  /** True when the TV answered the config call; false means "unknown", not "unsupported". */
+  known: boolean;
+  hdr: boolean;
+  dolbyVision: boolean;
+  atmos: boolean;
+}
+
+export const HDR_CONFIG_KEYS = [
+  'tv.model.supportHDR',
+  'tv.model.supportDolbyVisionHDR',
+  'tv.config.supportDolbyTVATMOS',
+] as const;
+
+function flag(value: unknown): boolean {
+  return value === true || value === 'true' || value === 1;
+}
+
+/**
+ * Reads the three HDR and Atmos flags the device profile needs. Only these named keys are
+ * queried: the wildcard dump of getConfigs also contains the TV's serial number. Any failure
+ * (not on webOS, call refused, timeout) yields all false.
+ */
+export async function readHdrConfig(): Promise<HdrConfig> {
+  const none: HdrConfig = { known: false, hdr: false, dolbyVision: false, atmos: false };
+  try {
+    const answer = await lunaCall<{ configs?: Record<string, unknown> }>(
+      'luna://com.webos.service.config/getConfigs',
+      { configNames: [...HDR_CONFIG_KEYS] },
+    );
+    const configs = answer.configs;
+    if (!configs || typeof configs !== 'object') return none;
+    return {
+      known: true,
+      hdr: flag(configs['tv.model.supportHDR']),
+      dolbyVision: flag(configs['tv.model.supportDolbyVisionHDR']),
+      atmos: flag(configs['tv.config.supportDolbyTVATMOS']),
+    };
+  } catch {
+    return none;
+  }
+}
+
+/** The webOS platform version from the launch-time device info, when present. */
+export function readPlatformVersion(): string | null {
+  const reported = parseDeviceInfo()?.platformVersion;
+  return typeof reported === 'string' ? reported : null;
+}

@@ -1,16 +1,19 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
 import { BASE_URL, account, problem } from '../../test/apiFixtures';
 import { catalogItem, catalogPage, library } from '../../test/flowFixtures';
+import { servePlayback } from '../../test/playbackFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { clearInstallationCache } from '../../playback/usePlaybackSession';
 import { LibraryScreen } from './LibraryScreen';
 import { firstVideoLibrary } from './queries';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
+beforeEach(() => clearInstallationCache());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
@@ -105,14 +108,31 @@ describe('LibraryScreen', () => {
     expect(rows[0]).toHaveFocus();
   });
 
-  it('shows the playback note for the selected title', async () => {
+  it('opens the player for a selected movie and returns to the same title with Back', async () => {
     serve();
+    const calls = servePlayback(server);
     setup();
-    expect(screen.queryByTestId('playback-note')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /Second Title/ }));
-    expect(screen.getByTestId('playback-note')).toHaveTextContent(
-      'Playback of "Second Title" comes in the next step.',
-    );
+    expect(await screen.findByTestId('player')).toBeInTheDocument();
+    expect(screen.queryByTestId('title-list')).not.toBeInTheDocument();
+    expect(calls.start).toHaveLength(1);
+    fireEvent.keyDown(window, { keyCode: 461 });
+    // Back leaves the player, the list is back and the focus is on the title that was played.
+    expect(await screen.findByTestId('title-list')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: /Second Title/ })).toHaveFocus());
+    await waitFor(() => expect(calls.stop).toHaveLength(1));
+  });
+
+  it('says episodes come later for a series and does not start playback', async () => {
+    serve([library()], [catalogItem({ content_id: 's1', title: 'A Series', type: 'series' })]);
+    const calls = servePlayback(server);
+    setup();
+    expect(screen.queryByTestId('series-note')).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /A Series/ }));
+    expect(screen.getByTestId('series-note')).toHaveTextContent('Episodes come in Phase 2.');
+    expect(screen.queryByTestId('player')).not.toBeInTheDocument();
+    expect(calls.start).toHaveLength(0);
+    expect(calls.capabilities).toBe(0);
   });
 
   it('shows an error with Try again when the libraries fail, and recovers', async () => {
