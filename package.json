@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.service.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
@@ -16,7 +16,7 @@
     "verify": "pwsh -NoProfile -File tools/verify.ps1",
     "check:bundle": "node scripts/check-bundle.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "package": "ares-package dist -o out -n",
+    "package": "ares-package dist service -o out -n",
     "tv:deploy": "node scripts/tv-deploy.mjs"
   },
   "dependencies": {

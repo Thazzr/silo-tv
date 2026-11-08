@@ -11,4 +11,10 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
+  {
+    // The JS service runs on the TV's own Node.js as plain CommonJS.
+    files: ['service/**/*.js'],
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 );

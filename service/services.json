@@ -1,0 +1,10 @@
+{
+  "id": "io.github.thazzr.silolg.service",
+  "description": "HTTP proxy for the Silo API",
+  "services": [
+    {
+      "name": "io.github.thazzr.silolg.service",
+      "commands": [{ "name": "fetch" }, { "name": "ping" }]
+    }
+  ]
+}

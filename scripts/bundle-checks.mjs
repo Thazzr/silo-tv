@@ -53,3 +53,37 @@ export function checkVersions(appinfoVersion, packageVersion) {
         `appinfo.json version ${appinfoVersion} differs from package.json version ${packageVersion}`,
       ];
 }
+
+/**
+ * The service id must be "<app id>.service" in services.json (id and service names) and in the
+ * service's package.json name; webOS addresses the service by this id.
+ */
+export function checkServiceIds(appId, servicesJson, packageJson) {
+  const expected = `${appId}.service`;
+  const violations = [];
+  if (servicesJson?.id !== expected) {
+    violations.push(`service/services.json id "${servicesJson?.id}" must be "${expected}"`);
+  }
+  const names = (servicesJson?.services ?? []).map((service) => service.name);
+  if (names.length === 0 || names.some((name) => name !== expected)) {
+    violations.push(
+      `service/services.json service names [${names.join(', ')}] must all be "${expected}"`,
+    );
+  }
+  if (packageJson?.name !== expected) {
+    violations.push(`service/package.json name "${packageJson?.name}" must be "${expected}"`);
+  }
+  return violations;
+}
+
+/** es-check target files of the service: every .js file except tests. */
+export function serviceSourceFiles(fileNames) {
+  return fileNames.filter((name) => name.endsWith('.js') && !/\.test\.[cm]?[jt]s$/.test(name));
+}
+
+/** Tests live in tests/; anything test-like inside service/ would be packaged onto the TV. */
+export function checkNoServiceTests(fileNames) {
+  return fileNames
+    .filter((name) => /\.(test|spec)\./.test(name))
+    .map((name) => `service/${name} is a test file; tests belong in tests/, not in the package`);
+}

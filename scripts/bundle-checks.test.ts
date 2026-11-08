@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { checkDistFiles, checkHtml, checkVersions } from './bundle-checks.mjs';
+import {
+  checkDistFiles,
+  checkHtml,
+  checkNoServiceTests,
+  checkServiceIds,
+  checkVersions,
+  serviceSourceFiles,
+} from './bundle-checks.mjs';
 
 const goodHtml =
   '<html><head><script defer src="./assets/index-a.js"></script>' +
@@ -64,4 +71,66 @@ describe('checkVersions', () => {
   it('rejects differing versions', () => {
     expect(checkVersions('0.0.2', '0.0.1').join('\n')).toContain('0.0.2');
   });
+});
+
+describe('checkServiceIds', () => {
+  const services = {
+    id: 'io.example.app.service',
+    services: [{ name: 'io.example.app.service' }],
+  };
+  const pkg = { name: 'io.example.app.service' };
+
+  it('accepts matching ids', () => {
+    expect(checkServiceIds('io.example.app', services, pkg)).toEqual([]);
+  });
+
+  it('rejects a services.json id that differs from the app id', () => {
+    expect(checkServiceIds('io.example.other', services, pkg).join('\n')).toContain(
+      'services.json id',
+    );
+  });
+
+  it('rejects a wrong service name', () => {
+    const wrong = { ...services, services: [{ name: 'io.example.app.other' }] };
+    expect(checkServiceIds('io.example.app', wrong, pkg).join('\n')).toContain('service names');
+  });
+
+  it('rejects a missing service entry', () => {
+    const none = { ...services, services: [] };
+    expect(checkServiceIds('io.example.app', none, pkg).join('\n')).toContain('service names');
+  });
+
+  it('rejects a package.json name that differs', () => {
+    const wrong = { name: 'io.example.app' };
+    expect(checkServiceIds('io.example.app', services, wrong).join('\n')).toContain(
+      'package.json name',
+    );
+  });
+});
+
+describe('serviceSourceFiles', () => {
+  it('keeps service js files and drops tests and non-js files', () => {
+    expect(
+      serviceSourceFiles([
+        'index.js',
+        'proxy.js',
+        'proxy.test.js',
+        'proxy.test.ts',
+        'services.json',
+      ]),
+    ).toEqual(['index.js', 'proxy.js']);
+  });
+});
+
+describe('checkNoServiceTests', () => {
+  it('accepts a service folder without tests', () => {
+    expect(checkNoServiceTests(['index.js', 'proxy.js', 'services.json'])).toEqual([]);
+  });
+
+  it.each(['proxy.test.ts', 'proxy.test.js', 'proxy.spec.js', 'lib/a.spec.ts'])(
+    'rejects %s',
+    (name) => {
+      expect(checkNoServiceTests(['index.js', name]).join('\n')).toContain(name);
+    },
+  );
 });
