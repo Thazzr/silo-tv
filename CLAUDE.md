@@ -7,7 +7,7 @@ Ein nativer Client für LG-Fernseher mit webOS für den selbst gehosteten Medien
   - `Silo-Server/silo-server`: API-Doku in `docs/*-api.md` und `docs/architecture/`, die OpenAPI-Datei `contracts/api/v2/openapi.json` und der React-Web-Client in `web/src`.
   - `Silo-Server/silo-roku`: Der native Roku-Client. Seine `docs/spec.md` ist die beste Vorlage für Verhalten und Abläufe eines TV-Clients.
   - Beide stehen unter AGPL-3.0-or-later. Übernommener Code macht diese App ebenfalls AGPL.
-- **Testserver:** `<Testserver aus CLAUDE.local.md>`. Das ist der echte Server des Nutzers, hinter Cloudflare. Gearbeitet wird mit einem eigenen Dev-Konto ohne Admin-Rechte (siehe *Zugangsdaten*).
+- **Testserver:** `<Testserver aus CLAUDE.local.md>`. Das ist der echte Server des Nutzers, hinter Cloudflare. Gearbeitet wird ausschließlich mit dem Dev-Konto **`<Dev-Konto aus CLAUDE.local.md>`** (siehe *Zugangsdaten*), nie mit dem Hauptkonto des Nutzers.
 - **Testgerät:** ein LG-TV ab Modelljahr 2021 im Entwicklermodus. Der Nutzer richtet es einmalig mit `ares-setup-device` ein; die Passphrase tippt nur er.
 
 ## Workflow
@@ -142,7 +142,7 @@ Ein lokaler MemPalace-Server hängt als MCP-Server (`palace_query` / `palace_exe
 ## Zugangsdaten
 
 - **Claude tippt nie Passwörter, Tokens oder API-Keys** in Formulare, Dateien oder Befehle und gibt keine aus.
-- **Anmeldung auf dem TV:** per Code/QR (Device-Login). Der Nutzer bestätigt den Code selbst unter `der /activate-Seite des Testservers`.
+- **Anmeldung auf dem TV:** per Code/QR (Device-Login). Der Nutzer bestätigt den Code selbst unter `der /activate-Seite des Testservers`, und zwar im Browser als `<Dev-Konto aus CLAUDE.local.md>` angemeldet. Sonst bekommt der TV das Konto, mit dem der Browser gerade angemeldet ist.
 - **Automatisierte Live-Prüfungen** gegen den Server lesen ihre Zugangsdaten aus `.env.local`. Die Datei ist gitignored, nur der Nutzer füllt sie, und ihr Inhalt wird nie angezeigt. Ohne `.env.local` werden Live-Prüfungen übersprungen, und das wird so gemeldet.
 - **TV-Zugang:** Die Geräte-Passphrase des Entwicklermodus gibt nur der Nutzer ein (`ares-setup-device`, `ares-novacom --getkey`).
 
