@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { distIndexUrl } from './paths.ts';
+import { probeUrl } from './paths.ts';
 
 const { version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8'),
 ) as { version: string };
 
 async function openApp(page: Page) {
-  await page.goto(distIndexUrl);
+  await page.goto(probeUrl);
   await expect(page.getByRole('heading', { level: 1, name: 'Plattform' })).toBeVisible();
 }
 

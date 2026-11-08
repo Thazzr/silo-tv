@@ -1,20 +1,20 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { App } from './App';
-import { I18nProvider } from './i18n';
-import { makeReport } from './test/probeFixture';
+import { AppRoot } from './AppRoot';
+import { I18nProvider } from '../i18n';
+import { makeReport } from '../test/probeFixture';
 
 const probe = () => Promise.resolve(makeReport());
 
 function renderApp() {
   return render(
     <I18nProvider lang="en">
-      <App probe={probe} />
+      <AppRoot launch={{ probe: true }} probe={probe} />
     </I18nProvider>,
   );
 }
 
-describe('App', () => {
+describe('AppRoot probe mode', () => {
   it('renders the heading and the app version', async () => {
     renderApp();
     expect(screen.getByRole('heading', { level: 1, name: 'Platform' })).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe('App', () => {
   });
 });
 
-describe('App key handling', () => {
+describe('AppRoot probe key handling', () => {
   it.each([461, 8])('prevents the default action of Back (keyCode %i)', (keyCode) => {
     renderApp();
     const event = new KeyboardEvent('keydown', { keyCode, cancelable: true });
@@ -74,7 +74,7 @@ describe('I18nProvider', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue(navLang);
     render(
       <I18nProvider lang={lang}>
-        <App probe={probe} />
+        <AppRoot launch={{ probe: true }} probe={probe} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe('I18nProvider', () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('de-DE');
     render(
       <I18nProvider>
-        <App probe={probe} />
+        <AppRoot launch={{ probe: true }} probe={probe} />
       </I18nProvider>,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Plattform' })).toBeInTheDocument();

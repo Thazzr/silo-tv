@@ -1,14 +1,15 @@
 // Builds, checks, packages and installs the app on a webOS TV, then launches it.
 // The device name comes from WEBOS_DEVICE (default "tv"); it must exist in ares-setup-device.
-// When SILO_SERVER is set, it is passed to the app as the launch parameter "server".
+// Launch parameters come from the environment (see scripts/launch-params.mjs): SILO_SERVER, PROBE=1,
+// TRANSPORT=direct|service. Only what is set is passed.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildLaunchParams } from './launch-params.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const device = process.env.WEBOS_DEVICE || 'tv';
-const server = process.env.SILO_SERVER;
 const appId = 'io.github.thazzr.silolg';
 const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'));
 const ipk = `out/${appId}_${version}_all.ipk`;
@@ -26,7 +27,8 @@ function run(label, script, args) {
 }
 
 const launchArgs = ['-d', device];
-if (server) launchArgs.push('--params', JSON.stringify({ server }));
+const params = buildLaunchParams(process.env);
+if (Object.keys(params).length > 0) launchArgs.push('--params', JSON.stringify(params));
 launchArgs.push(appId);
 
 // These mirror the npm scripts "build", "check:bundle" and "package" without going through npm.

@@ -135,3 +135,177 @@ h3 {
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* App flow. Targets are at least 75x75 px and text at least 20 px (LG checklist). */
+.screen {
+  padding: 54px 96px 120px;
+}
+
+.btn,
+.input {
+  box-sizing: border-box;
+  min-width: 75px;
+  min-height: 75px;
+  margin: 12px 0;
+  padding: 12px 32px;
+  font: inherit;
+  color: #f2f4f7;
+  background: #2a3342;
+  border: 3px solid #4a5568;
+  border-radius: 8px;
+}
+
+.btn {
+  cursor: pointer;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  max-width: 1000px;
+  cursor: text;
+}
+
+/* Hover looks different from focus; the pointer also focuses what it hovers. */
+[data-focusable]:hover {
+  background: #36425a;
+  border-color: #7a8aa6;
+}
+
+[data-focusable]:focus {
+  outline: 4px solid #ffd54a;
+  outline-offset: 4px;
+  transform: scale(1.03);
+}
+
+.btn:disabled {
+  color: #9aa3b0;
+  cursor: default;
+}
+
+.list {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  text-align: left;
+}
+
+.row.skeleton {
+  height: 75px;
+  margin: 12px 0;
+  background: #1a1f28;
+  border-radius: 8px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.year,
+.lock {
+  color: #9aa3b0;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  font-weight: bold;
+  background: #4a5568;
+  border-radius: 50%;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #9aa3b0;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 4px solid #4a5568;
+  border-top-color: #ffd54a;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  color: #ff7b7b;
+}
+
+.note {
+  color: #6fdc8c;
+}
+
+.signin {
+  display: flex;
+  align-items: flex-start;
+  gap: 96px;
+}
+
+.url {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.user-code {
+  margin: 8px 0 24px;
+  font-family: monospace;
+  font-size: 96px;
+  font-weight: bold;
+  letter-spacing: 8px;
+}
+
+.qr {
+  flex: none;
+  width: 400px;
+  height: 400px;
+}
+
+.pin-dots {
+  min-height: 56px;
+  font-size: 48px;
+  letter-spacing: 12px;
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 120px);
+  gap: 12px;
+}
+
+.pad .btn {
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+}
+
+/* The note stays visible however far the list is scrolled. */
+.toast {
+  position: fixed;
+  right: 96px;
+  bottom: 54px;
+  left: 96px;
+  margin: 0;
+  padding: 16px 24px;
+  background: #1a1f28;
+  border-radius: 8px;
+}

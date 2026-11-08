@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
-import { distIndexUrl } from './paths.ts';
+import { probeUrl } from './paths.ts';
 
 interface CheckResult {
   id: string;
@@ -69,7 +69,7 @@ test('without CORS headers every direct and XHR check is blocked and the verdict
   page,
 }) => {
   const origin = await startServer(false);
-  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await page.goto(`${probeUrl}&server=${origin}`);
   const report = await finishedReport(page);
   const byId = outcomes(report);
 
@@ -98,7 +98,7 @@ test('without CORS headers every direct and XHR check is blocked and the verdict
 
 test('with full CORS headers the direct and XHR checks reach the server', async ({ page }) => {
   const origin = await startServer(true);
-  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await page.goto(`${probeUrl}&server=${origin}`);
   const report = await finishedReport(page);
   const byId = outcomes(report);
 
@@ -115,7 +115,7 @@ test('with full CORS headers the direct and XHR checks reach the server', async 
 test('without a server parameter the CORS section says so and the report is still done', async ({
   page,
 }) => {
-  await page.goto(distIndexUrl);
+  await page.goto(probeUrl);
   const report = await finishedReport(page);
   expect(report.server).toBeNull();
   expect(report.cors).toBeNull();
@@ -125,7 +125,7 @@ test('without a server parameter the CORS section says so and the report is stil
 });
 
 test('shows media rows and re-runs the probe on Enter', async ({ page }) => {
-  await page.goto(distIndexUrl);
+  await page.goto(probeUrl);
   const first = await finishedReport(page);
   expect(first.media?.length).toBeGreaterThan(30);
   await expect(page.locator('[data-media]').first()).toBeVisible();

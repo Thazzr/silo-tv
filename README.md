@@ -37,6 +37,13 @@ npx playwright install chromium --only-shell
 | `npm run package` | builds the `.ipk` in `out/` |
 | `npm run verify` | the full gate (see [`tools/README.md`](tools/README.md)) |
 | `npm run tv:deploy` | build, package, install and launch on the TV named `tv` (`WEBOS_DEVICE` overrides it) |
+| `npm run tv:eval` | read the TV probe report (or any expression) from the running app through the webOS Web Inspector |
+| `npm run openapi:update` | refresh the slim Silo API spec from `SILO_SERVER` (no address is stored) |
+| `npm run generate:api` | regenerate the typed API client from `openapi/silo-v2.json` |
+
+`tv:deploy` passes launch parameters from the environment: `SILO_SERVER` pre-fills the server, `PROBE=1` opens the diagnostics probe instead of the app, `TRANSPORT=direct|service` chooses how the app talks to Silo (default `direct`). In the browser the same parameters work as query strings, e.g. `?probe` or `?server=…`.
+
+For browser development against a real server, start `npm run dev` with `SILO_SERVER` set: the dev server proxies `/api` to it, because Silo sends no CORS headers.
 
 Connect a TV once (the passphrase is shown in the Developer Mode app):
 
