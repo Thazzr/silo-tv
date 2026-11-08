@@ -10,14 +10,14 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ✅ Project scaffold: Vite, React, TypeScript, ESLint/Prettier, Vitest, Playwright, i18n basics
 - ✅ Tooling: `tools/verify.ps1` with self-tests, `tools/update-changelog.ps1`, webOS CLI
-- 🟨 Build for webOS 6: one classic script, Chromium 79 syntax, polyfills; `appinfo.json`, placeholder icons (built and packaged; not yet installed on a TV)
-- ⬜ Install and launch the app on the TV
-- ⬜ CORS test on the TV: direct `fetch` against `/api/v2`, otherwise a Luna JS service as a proxy; decide afterwards
-- ⬜ Generated API client from Silo's OpenAPI, transport layer, required headers, token refresh
+- 🟨 Build for webOS 6: one classic script, Chromium 79 syntax, polyfills; `appinfo.json`, placeholder icons (runs on webOS 24; webOS 6 not yet tested on hardware)
+- ✅ Install and launch the app on the TV (webOS 24, 2026-11-08)
+- ✅ CORS test on the TV: webOS does not enforce CORS for the packaged app, so the app talks to Silo directly; the JS service works as a fallback (Node v16 on webOS 24)
+- ✅ Generated API client from Silo's OpenAPI, transport layer, required headers, token refresh
 - ⬜ Check a server address (`/system/info`, `api_major == 2`)
 - ⬜ Sign-in by code/QR (device login)
 - ⬜ One title through playback protocol v3: direct play and HLS, progress every 10 s, stop
-- ⬜ Device profile probe: which codecs, containers and HDR formats the TV really supports
+- 🟨 Device profile probe: which codecs, containers and HDR formats the TV really supports (probed on webOS 24: H.264, HEVC Main10, VP9, AV1, Dolby Vision 5/8, DTS, E-AC-3; turning it into Silo's device profile comes with playback)
 - ⬜ Diagnostics overlay with plan, route and player state, without secrets
 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)

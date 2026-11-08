@@ -101,10 +101,12 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
 - **No ES modules in the shipped HTML.** An installed app runs under `file://`, and there webOS blocks `<script type="module">` and `crossorigin` loads.
   - The build produces one classic script (IIFE, one bundle, no dynamic chunks) loaded with `defer`.
   - The bundle check fails on `type="module"`, `crossorigin`, absolute paths or more than one JS file.
-- **CORS:** Silo's `/api/v2` sends no CORS headers. Checked on 2026-11-08 against the test server: `OPTIONS` returns 405 without `Access-Control-Allow-Origin`.
-  - Whether webOS enforces this for a `file://` app is settled in Phase 0 on the TV.
-  - Until then, every API call goes through a **transport layer** (`src/api/transport/`) that can switch between a direct `fetch` and the Luna proxy service.
+- **CORS:** Silo's `/api/v2` sends no CORS headers (checked 2026-11-08: `OPTIONS` returns 405 without `Access-Control-Allow-Origin`).
+  - **webOS does not enforce CORS for the packaged `file://` app** (TV probe 2026-11-08 on webOS 24 / Chrome 120: simple GET, preflighted GET and POST via fetch and XHR all reached the server). The transport default is therefore `direct`.
+  - The **transport layer** (`src/api/transport/`) keeps the JS service as a fallback (launch parameter `transport=service`) until older webOS versions (6, 22, 23) are probed too.
   - `<video>`, `<img>` and `<track>` load directly; media elements are not subject to CORS.
+- **Device facts** (first test TV, 2026-11-08): webOS 24, Chrome 120, window 1920×1080 at device pixel ratio 2 on a 3840×2160 panel. The JS service runs on Node v16.20.2 there, and `message.sender` is exactly the app ID. The codec matrix and HDR flags are stored in the project memory; the device profile must read them on each TV, never assume them.
+- **Device identifiers are private:** `com.webos.service.config/getConfigs` with wildcards returns the TV's serial number among ~300 keys. The probe may show it on screen for diagnostics, but app code queries only named keys (e.g. `tv.model.supportHDR`, `tv.model.supportDolbyVisionHDR`, `tv.config.supportDolbyTVATMOS`) and never sends device identifiers anywhere.
 - **JS service code** (if needed) runs on the TV's own Node.js, which is old on older TVs: plain CommonJS JavaScript, ES2019 at most, no optional chaining.
 - **`requiredACG`** (ACG permission groups in `appinfo.json`) is mandatory for the Seller Lounge eligibility check from webOS 27 on, and enforced for every Luna call once present (webOS 26 can enforce it for testing; 25 and lower ignore it). Before the first store submission, `appinfo.json` declares every ACG group the app and its JS service use (`[]` if none), and every new Luna call adds its group in the same change. Until the TV probe has shown which calls we keep, the field stays out.
 - **JS service security:** the bundled service may be called by any app on the TV. It only serves our own app (caller check on `message.sender`), only proxies to `/api/v2/`, never to the TV itself or link-local addresses, and never logs headers or bodies.
