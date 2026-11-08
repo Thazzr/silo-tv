@@ -22,6 +22,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
+- ⬜ Platform adapter: everything webOS-specific (Luna calls, device info, key codes, exit, launch parameters, secure storage, later the player) behind one `Platform` interface with a webOS and a browser implementation, so a Samsung Tizen port (Phase 6) adds an adapter instead of touching the app
 - ⬜ Save several servers and switch between them; each keeps its sign-in
 - ⬜ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out
 - ⬜ Profiles: picker, PIN, child profiles, create a profile
@@ -97,6 +98,18 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ Music and audiobooks with an audio player of their own
 - ⬜ Launch parameters and deep links (e.g. straight to a title); presence in the LG home launcher
 - ⬜ To investigate: remote control from the Silo phone app (SiloControl) and sign-in through the phone app. Both need network services a webOS app may not be allowed to provide.
+
+## Phase 6 – Samsung Tizen port (after the LG release)
+
+The same app for Samsung TVs running Tizen. Most of it is shared (UI, i18n, API client, sign-in, focus navigation, screens, playback protocol logic); the port adds what is platform-specific. Planned once the LG version is in the LG Content Store.
+
+- ⬜ Tizen platform adapter: device info (`webapis.productinfo`), key codes (Back 10009, media keys registered through `tizen.tvinputdevice`), exit, launch parameters, storage
+- ⬜ Player on Samsung's AVPlay API for 4K, HDR10, HDR10+ and Dolby Vision, with the device profile built from AVPlay's capability queries; protocol v3 logic shared with webOS
+- ⬜ Build target for the oldest supported Tizen version (Tizen 5.5 / 2020 models ship Chromium 69 – decide the minimum model year before the port starts)
+- ⬜ Packaging: `config.xml` with the network access policy (Tizen allows cross-origin requests by configuration, so no proxy service is needed), Tizen CLI, Samsung author and distributor certificates
+- ⬜ Device tests on Samsung TVs in Developer Mode
+- ⬜ Samsung Seller Office account and Samsung's app review (check first whether individual sellers can publish in the target countries)
+- ⬜ Store material for Samsung: name, icon, screenshots, test account on the demo server
 
 ## Release – final goal: the LG Content Store
 

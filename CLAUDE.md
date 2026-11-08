@@ -9,6 +9,7 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
   - Such details live in the git-ignored `CLAUDE.local.md`.
   - Commits use the GitHub noreply address that is set in this repository's local git config.
 - **Final goal: publication in the LG Content Store** (user decision 2026-11-08). Every decision is measured against LG's app QA (see *LG Content Store rules*), not just against Developer Mode.
+- **Next platform: Samsung Tizen** (user decision 2026-11-08, Phase 6, after the LG release). From Phase 1 on, platform-specific code lives only behind the `Platform` adapter in `src/platform/` (webOS and browser implementations now, Tizen later). Screens, features, the API layer and the playback protocol logic never call webOS globals, Luna or `ares` specifics directly.
 - **License:** AGPL-3.0-or-later, like Silo.
 - **References** (read for behaviour, do not copy code):
   - `Silo-Server/silo-server`: API docs in `docs/*-api.md` and `docs/architecture/`, the OpenAPI file `contracts/api/v2/openapi.json`, and the React web client in `web/src`.
