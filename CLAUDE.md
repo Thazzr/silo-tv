@@ -8,11 +8,12 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
   - **Nothing user-specific goes into the repository:** no server addresses, account names, e-mail addresses or tokens, neither in files nor in commit messages.
   - Such details live in the git-ignored `CLAUDE.local.md`.
   - Commits use the GitHub noreply address that is set in this repository's local git config.
+- **Final goal: publication in the LG Content Store** (user decision 2026-11-08). Every decision is measured against LG's app QA (see *LG Content Store rules*), not just against Developer Mode.
 - **License:** AGPL-3.0-or-later, like Silo.
-- **References** (read only, never copy code unchecked):
+- **References** (read for behaviour, do not copy code):
   - `Silo-Server/silo-server`: API docs in `docs/*-api.md` and `docs/architecture/`, the OpenAPI file `contracts/api/v2/openapi.json`, and the React web client in `web/src`.
   - `Silo-Server/silo-roku`: the native Roku client. Its `docs/spec.md` is the best reference for how a TV client behaves.
-  - Both are AGPL-3.0-or-later, which allows reusing their code here.
+  - Both are AGPL-3.0-or-later and owned by Silo Media L.L.C. **No code is copied from them.** The store build should carry only code this project owns, so that distributing it under LG's store terms cannot conflict with someone else's copyleft. Reading them to understand the API and the behaviour is fine.
 - **Test server and dev account:** both are named in `CLAUDE.local.md`. The test server is the user's real server. Work only with the dev account, which has no admin rights, never with the user's main account.
 - **Test device:** an LG TV from model year 2021 or later in Developer Mode. The user sets it up once with `ares-setup-device`; only the user types its passphrase.
 
@@ -105,7 +106,8 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
   - Until then, every API call goes through a **transport layer** (`src/api/transport/`) that can switch between a direct `fetch` and the Luna proxy service.
   - `<video>`, `<img>` and `<track>` load directly; media elements are not subject to CORS.
 - **JS service code** (if needed) runs on the TV's own Node.js, which is old on older TVs: plain CommonJS JavaScript, ES2019 at most, no optional chaining.
-- **`requiredACG`** stays out of `appinfo.json` until the app targets webOS 27: once present, webOS enforces ACG permissions for every Luna call.
+- **`requiredACG`** (ACG permission groups in `appinfo.json`) is mandatory for the Seller Lounge eligibility check from webOS 27 on, and enforced for every Luna call once present (webOS 26 can enforce it for testing; 25 and lower ignore it). Before the first store submission, `appinfo.json` declares every ACG group the app and its JS service use (`[]` if none), and every new Luna call adds its group in the same change. Until the TV probe has shown which calls we keep, the field stays out.
+- **JS service security:** the bundled service may be called by any app on the TV. It only serves our own app (caller check on `message.sender`), only proxies to `/api/v2/`, never to the TV itself or link-local addresses, and never logs headers or bodies.
 - **Remote control:**
   - Every interactive element is reachable with the arrow keys and activated with OK.
   - Back (webOS key code 461; `Escape`/`Backspace` in the browser) is defined everywhere.
@@ -146,6 +148,20 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
 - **Focus:** The focused state is always clearly visible (outline and scale) and is kept when navigating back: Back lands on the card you came from.
 - **Loading states:** Every loading skeleton matches the layout it replaces (a row skeleton for rows, a grid skeleton for grids).
 - **Data** goes through React Query. A `queryFn` throws on errors.
+
+## LG Content Store rules
+
+From LG's app self-checklist, approval process, Back button, Magic Remote and ACG guides (read 2026-11-08). The full checklist is a download in Seller Lounge; re-read it before every submission, because LG rejects outdated checklist forms.
+
+- **Mandatory for QA:**
+  - Every navigation key works: Up/Down/Left/Right, OK, Back (461). All apps must support 5-way navigation **and** the Magic Remote pointer; every screen cursor must be operable.
+  - Every object provides a selection (focus/hover) effect, "with NO EXCEPTION".
+  - Back on the entry page: on webOS 6+ ask whether to exit (our own popup, then `window.close()`); LG's checklist also expects the Home screen on webOS 23–25 – confirm the exact expectation through the Seller Lounge 1:1 Q&A before submitting. Back on other pages goes to the previous page.
+  - The filled-in self-checklist with real test results, uploaded with the submission.
+- **Recommended, and adopted here:** 1920×1080 layout; clickable targets at least 75×75 px and text at least 20 px at 1080p; a visual cue while loading; the mouse wheel scrolls lists like a mouse; play/pause keys toggle playback.
+- **Submission material:** the `.ipk`, images and screenshots, a UX scenario for the testers, the self-checklist, and – because the app needs a server and an account – a reachable demo Silo server with a reviewer account and legally shareable content.
+- **Content and privacy:** nothing that facilitates piracy (Silo itself rules out IPTV and remote streams); no credentials or tokens in source or file names; tokens on the TV are stored as protected as the platform allows.
+- **Approval:** pretest, function test and content test; a failed app comes back with a list of issues. Every update after approval goes through approval again, including new ACG groups.
 
 ## Credentials
 

@@ -98,19 +98,34 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ Launch parameters and deep links (e.g. straight to a title); presence in the LG home launcher
 - ⬜ To investigate: remote control from the Silo phone app (SiloControl) and sign-in through the phone app. Both need network services a webOS app may not be allowed to provide.
 
-## Release (alongside, at the latest before v1.0)
+## Release – final goal: the LG Content Store
 
-The project is public and should be as usable for every Silo user as Silo itself.
+The project is public and should be as usable for every Silo user as Silo itself. The final goal is a listing in the LG Content Store; the requirements are summarised in `CLAUDE.md` → *LG Content Store rules*.
+
+Repository and project:
 
 - ⬜ Works with any Silo server: the address is entered in the app, nothing is built in
 - ✅ License like Silo: AGPL-3.0-or-later
 - ✅ No server addresses, account names or e-mail addresses in the repository or its history
 - ✅ Repository in English (docs, comments, commit messages, changelog)
-- ⬜ A name and icon of its own, following the Silo trademark policy
+- ⬜ No code copied from Silo's repositories, so the store build carries only code this project owns
 - ⬜ CI on GitHub: the gate on every push and pull request
 - ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
-- ⬜ Installation guide for Developer Mode and rooted TVs (Homebrew Channel); later perhaps an entry in the Homebrew Channel repository
-- ⬜ Contribution guidelines and issue templates
+- ⬜ Contribution guidelines and issue templates; a contributor agreement (CLA or DCO) that keeps store distribution possible
+
+LG Content Store:
+
+- ⬜ A name and icon of its own, following the Silo trademark policy; ask the Silo team (trademark@siloserver.org) before submitting
+- ⬜ LG QA requirements built in from the start: 5-way navigation and Magic Remote pointer everywhere, a selection effect on every object, exit popup on Back at the entry page, loading cues, 75 px targets and 20 px text at 1080p
+- ⬜ `requiredACG` in `appinfo.json` with exactly the ACG groups the app and its service use
+- ⬜ JS service secured: callable only by this app, no requests to the TV itself or link-local addresses
+- ⬜ Tokens stored as protected as the platform allows; no credentials in source or file names
+- ⬜ Seller Lounge account (individual or corporate seller)
+- ⬜ Demo Silo server for LG's testers: reachable from the internet, with a reviewer account and legally shareable content (e.g. Blender open movies)
+- ⬜ Privacy policy (what the app stores on the TV and sends to the user's own server)
+- ⬜ Submission material: screenshots, UX scenario, filled-in self-checklist (always the current form from Seller Lounge)
+- ⬜ Device tests on as many webOS versions as possible (6, 22, 23, 24, 25)
+- ⬜ For sideloading meanwhile: an installation guide for Developer Mode and the Homebrew Channel
 
 ## Deliberately not planned
 
