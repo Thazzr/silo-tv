@@ -23,6 +23,8 @@ export interface ServiceFetchResponse {
 export interface ServicePingResponse {
   returnValue: true;
   node: string;
+  /** The sender as the service received it; shows the real caller-id format on the device. */
+  sender: string;
 }
 
 // The service's own timeout (default 15 s) must fire before the bridge gives up.

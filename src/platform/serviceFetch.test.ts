@@ -56,9 +56,13 @@ describe('servicePing', () => {
   it('calls the ping command', async () => {
     installFakeBridge();
     fake.responders.set(`luna://${SERVICE_ID}/ping`, () =>
-      JSON.stringify({ returnValue: true, node: 'v12.0.0' }),
+      JSON.stringify({ returnValue: true, node: 'v12.0.0', sender: `${APP_ID} 4242` }),
     );
-    await expect(servicePing()).resolves.toEqual({ returnValue: true, node: 'v12.0.0' });
+    await expect(servicePing()).resolves.toEqual({
+      returnValue: true,
+      node: 'v12.0.0',
+      sender: `${APP_ID} 4242`,
+    });
     expect(fake.calls).toEqual([{ uri: `luna://${SERVICE_ID}/ping`, params: {} }]);
   });
 });

@@ -171,7 +171,7 @@ export async function runCorsProbe(
     needsService(async () => {
       try {
         const response = await (deps.servicePing ?? servicePing)();
-        return { outcome: 'reached', detail: response.node };
+        return { outcome: 'reached', detail: `node ${response.node} · sender ${response.sender}` };
       } catch (error) {
         return { outcome: 'error', detail: messageOf(error) };
       }

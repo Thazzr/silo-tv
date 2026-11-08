@@ -80,7 +80,13 @@ function deps(overrides: CorsProbeDeps = {}): CorsProbeDeps {
     fetch: fakeFetch(() => ({ status: 200 })).fn,
     XMLHttpRequest: fakeXhr().ctor,
     serviceFetch: okService(),
-    servicePing: vi.fn(() => Promise.resolve({ returnValue: true, node: 'v8.12.0' } as const)),
+    servicePing: vi.fn(() =>
+      Promise.resolve({
+        returnValue: true,
+        node: 'v8.12.0',
+        sender: 'io.github.test.app',
+      } as const),
+    ),
     isWebOS: () => true,
     ...overrides,
   };
@@ -289,9 +295,12 @@ describe('runCorsProbe service classification', () => {
     expect(ping).not.toHaveBeenCalled();
   });
 
-  it('reports the Node version of the ping as detail', async () => {
+  it('reports the Node version and the sender of the ping as detail', async () => {
     const results = await runCorsProbe(SERVER, deps());
-    expect(byId(results, 'service-ping')).toMatchObject({ outcome: 'reached', detail: 'v8.12.0' });
+    expect(byId(results, 'service-ping')).toMatchObject({
+      outcome: 'reached',
+      detail: 'node v8.12.0 · sender io.github.test.app',
+    });
   });
 
   it('reports the HTTP status from the service as reached', async () => {

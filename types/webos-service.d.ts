@@ -2,6 +2,8 @@
 declare module 'webos-service' {
   interface ServiceMessage {
     payload: Record<string, unknown> | undefined;
+    /** App ID of the calling app, or the bus ID when another service calls. */
+    sender: string | undefined;
     respond(response: Record<string, unknown>): void;
   }
 
