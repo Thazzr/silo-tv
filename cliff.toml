@@ -1,0 +1,63 @@
+# git-cliff configuration — https://git-cliff.org
+# Erzeugt CHANGELOG.md aus der Conventional-Commits-Historie im Keep-a-Changelog-Format.
+# Regenerieren: `pwsh tools/update-changelog.ps1` (siehe CLAUDE.md -> "Nach JEDER Phase").
+
+[changelog]
+header = """
+# Changelog
+
+Alle nennenswerten Änderungen an diesem Projekt werden in dieser Datei dokumentiert.
+
+Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) und
+[Conventional Commits](https://www.conventionalcommits.org/de/v1.0.0/). Diese Datei wird
+automatisch mit [git-cliff](https://git-cliff.org) aus den Commit-Messages generiert –
+**nicht von Hand bearbeiten**.
+
+"""
+
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{% if commit.breaking %}[**BREAKING**] {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
+{% endfor %}
+{% endfor %}\n
+"""
+
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+topo_order = false
+sort_commits = "oldest"
+tag_pattern = "v[0-9]*"
+
+# Reihenfolge der Sektionen über den <!-- N --> Präfix (Keep a Changelog: Added, Changed,
+# Removed, Fixed, Security). striptags entfernt den Kommentar in der Ausgabe wieder.
+commit_parsers = [
+  # Reine Changelog-Housekeeping-Commits nicht ins Changelog selbst aufnehmen.
+  { message = "^(docs|chore)\\(changelog\\)", skip = true },
+  { message = "^feat", group = "<!-- 0 -->Added" },
+  { message = "^fix\\(sec", group = "<!-- 4 -->Security" },
+  { message = "^sec", group = "<!-- 4 -->Security" },
+  { message = "^fix", group = "<!-- 3 -->Fixed" },
+  { message = "^perf", group = "<!-- 1 -->Changed" },
+  { message = "^refactor", group = "<!-- 1 -->Changed" },
+  { message = "^style", group = "<!-- 1 -->Changed" },
+  { message = "^docs", group = "<!-- 1 -->Changed" },
+  { message = "^test", group = "<!-- 1 -->Changed" },
+  { message = "^build", group = "<!-- 1 -->Changed" },
+  { message = "^chore", group = "<!-- 1 -->Changed" },
+  { message = "^revert", group = "<!-- 2 -->Removed" },
+  { message = "^ci", skip = true },
+]

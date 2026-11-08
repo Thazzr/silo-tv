@@ -1,0 +1,38 @@
+## Node / Vite
+node_modules/
+dist/
+.vite/
+coverage/
+npm-debug.log*
+
+## webOS packaging output (ares-package)
+*.ipk
+out/
+
+## Test output
+test-results/
+playwright-report/
+blob-report/
+
+## Local configuration and credentials (filled in by the user only, never committed)
+.env
+.env.*
+!.env.example
+
+## OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+# Editor settings are per machine; nothing of them belongs in the repository.
+.vscode/
+
+## Local, personal instructions for Claude Code (the shared ones are CLAUDE.md)
+CLAUDE.local.md
+
+## Claude Code worktrees
+.claude/worktrees/
+.claude/settings.local.json
+
+## MemPalace per-project files
+mempalace.yaml
+entities.json
