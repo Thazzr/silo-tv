@@ -2,7 +2,7 @@
 
 Goal: the LG TV app should offer everything the Silo web client offers a viewer. The list is derived from the Silo web client (`silo-server/web/src/pages`) and the specification of the official Roku client (`silo-roku/docs/spec.md`, section 3). What the server offers only optionally is shown only when the server reports it through its capabilities.
 
-Status: ⬜ planned · 🟨 in progress · ✅ done and checked on the TV (or, for repository items, done)
+Status: ⬜ planned · 🟨 built and tested in the browser, not yet checked on the TV · ✅ done and checked on the TV (or, for repository items, done)
 
 ## Phase 0 – Feasibility (target v0.1.0)
 
@@ -14,11 +14,11 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Install and launch the app on the TV (webOS 24, 2026-11-08)
 - ✅ CORS test on the TV: webOS does not enforce CORS for the packaged app, so the app talks to Silo directly; the JS service works as a fallback (Node v16 on webOS 24)
 - ✅ Generated API client from Silo's OpenAPI, transport layer, required headers, token refresh
-- ⬜ Check a server address (`/system/info`, `api_major == 2`)
-- ⬜ Sign-in by code/QR (device login)
-- ⬜ One title through playback protocol v3: direct play and HLS, progress every 10 s, stop
+- 🟨 Check a server address (`/system/info`, `api_major == 2`)
+- 🟨 Sign-in by code/QR (device login)
+- 🟨 One title through playback protocol v3: direct play and HLS, progress every 10 s, stop
 - 🟨 Device profile probe: which codecs, containers and HDR formats the TV really supports (probed on webOS 24: H.264, HEVC Main10, VP9, AV1, Dolby Vision 5/8, DTS, E-AC-3; turning it into Silo's device profile comes with playback)
-- ⬜ Diagnostics overlay with plan, route and player state, without secrets
+- 🟨 Diagnostics overlay with plan, route and player state, without secrets
 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
