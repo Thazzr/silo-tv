@@ -143,6 +143,7 @@ LG Content Store:
 
 ## Deliberately not planned
 
+- **Light mode:** the TV app stays dark only, like Silo's own TV apps (user decision 2026-11-08): bright surfaces glare in a dark room and wear OLED panels. Colours remain tokens, so the decision is cheap to revisit.
 - **Admin area:** server setup, libraries, users, plugins, metadata editing
 - **Collections:** creating or editing them (no Silo TV app offers it)
 - **Reading:** e-books, comics, manga, documents
