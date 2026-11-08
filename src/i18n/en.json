@@ -1,0 +1,11 @@
+{
+  "platform.title": "Platform",
+  "platform.version": "Version",
+  "platform.environment": "Environment",
+  "platform.userAgent": "User agent",
+  "platform.window": "Window",
+  "platform.keys": "Last key presses",
+  "platform.keysEmpty": "Press a key on the remote.",
+  "platform.keyEntry": "{key} (code {code}) → {mapped}",
+  "platform.unmapped": "unmapped"
+}

@@ -1,0 +1,8 @@
+dist/
+out/
+coverage/
+package-lock.json
+public/*.png
+# Process files owned by the main session are not formatted by this repo tooling
+.claude/
+*.md

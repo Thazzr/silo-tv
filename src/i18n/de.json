@@ -1,0 +1,11 @@
+{
+  "platform.title": "Plattform",
+  "platform.version": "Version",
+  "platform.environment": "Umgebung",
+  "platform.userAgent": "User-Agent",
+  "platform.window": "Fenster",
+  "platform.keys": "Letzte Tastendrücke",
+  "platform.keysEmpty": "Drück eine Taste auf der Fernbedienung.",
+  "platform.keyEntry": "{key} (Code {code}) → {mapped}",
+  "platform.unmapped": "nicht zugeordnet"
+}

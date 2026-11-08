@@ -1,0 +1,11 @@
+{
+  "id": "io.github.thazzr.silolg",
+  "version": "0.0.1",
+  "vendor": "Thazzr",
+  "type": "web",
+  "main": "index.html",
+  "title": "silo-lg",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "disableBackHistoryAPI": true
+}
