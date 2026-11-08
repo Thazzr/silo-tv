@@ -99,6 +99,19 @@ Beantwortet die Plattformfragen, bevor UI gebaut wird. Das Aussehen ist hier noc
 - ⬜ Prüfen: Fernsteuerung durch die Silo-Handy-App (SiloControl) und Anmeldung über die Handy-App. Beides braucht Netzwerkdienste, die eine webOS-App eventuell nicht anbieten darf.
 - ⬜ Eigener App-Name und eigenes Icon; später eventuell der LG Content Store
 
+## Veröffentlichung (begleitend, spätestens vor v1.0)
+
+Das Projekt ist öffentlich und soll für jeden Silo-Nutzer so verwendbar sein wie Silo selbst.
+
+- ⬜ Funktioniert mit jedem Silo-Server: die Adresse wird in der App eingegeben, nichts ist fest eingebaut
+- ✅ Lizenz wie Silo: AGPL-3.0-or-later
+- ✅ Keine Serveradressen, Kontonamen oder Mailadressen in Repo und Historie
+- ⬜ Eigener Name und eigenes Icon nach der Silo-Markenrichtlinie
+- ⬜ CI auf GitHub: das Gate bei jedem Push und Pull Request
+- ⬜ Releases: signierte Tags, `.ipk` als Release-Asset, Changelog aus git-cliff
+- ⬜ Installationsanleitung für Entwicklermodus und gerootete TVs (Homebrew Channel), später eventuell ein Eintrag im Homebrew-Channel-Repository
+- ⬜ Beitragsrichtlinie und Issue-Vorlagen
+
 ## Bewusst nicht geplant
 
 - **Admin-Bereich:** Server-Einrichtung, Bibliotheken, Benutzer, Plugins, Metadaten bearbeiten

@@ -28,4 +28,4 @@ Setup, Build und Installation auf dem TV werden hier ergänzt, sobald Phase 0 da
 
 ## Lizenz
 
-Noch offen. Wird Code aus Silo-Web oder dem Roku-Client übernommen, gilt AGPL-3.0-or-later.
+[GNU Affero General Public License v3.0 oder neuer](LICENSE) (`AGPL-3.0-or-later`), wie Silo selbst. Jeder darf die App nutzen, ändern und weitergeben. Wer eine veränderte Version weitergibt, muss deren Quellcode unter derselben Lizenz veröffentlichen.
