@@ -34,6 +34,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Above Testing Library's asyncUtilTimeout (3 s, src/test/setup.ts), so a waitFor reports its
+    // own error instead of the test timing out first.
+    testTimeout: 15_000,
     include: [
       'src/**/*.test.{ts,tsx}',
       'scripts/**/*.test.{ts,mjs}',

@@ -1,6 +1,6 @@
-import { useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useT } from '../i18n';
-import { useFocusNavigation } from './focus';
+import { Focusable, useBackHandler, type FocusableProps } from './nav';
 
 export function Screen({
   title,
@@ -9,32 +9,22 @@ export function Screen({
   children,
 }: {
   title: string;
+  /** Replaces the default Back (pop the stack, or the exit popup on the root screen). */
   onBack?: () => void;
   testId?: string;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLElement>(null);
-  useFocusNavigation(ref, onBack);
+  useBackHandler(onBack);
   return (
-    <main className="screen" ref={ref} data-testid={testId}>
+    <main className="screen" data-testid={testId}>
       <h1>{title}</h1>
       {children}
     </main>
   );
 }
 
-export function Button({
-  className,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { 'data-autofocus'?: boolean }) {
-  return (
-    <button
-      type="button"
-      data-focusable
-      {...props}
-      className={className ? `btn ${className}` : 'btn'}
-    />
-  );
+export function Button({ className, ...props }: FocusableProps) {
+  return <Focusable {...props} className={className ? `btn ${className}` : 'btn'} />;
 }
 
 /** A visual cue for loading; the rows mirror the list that replaces them. */
@@ -57,7 +47,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
   return (
     <div role="alert" data-testid="error-state">
       <p className="error">{message}</p>
-      <Button onClick={onRetry}>{t('common.retry')}</Button>
+      <Button focusKey="retry" autoFocus onClick={onRetry}>
+        {t('common.retry')}
+      </Button>
     </div>
   );
 }

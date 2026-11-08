@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Focusable } from '../app/nav';
 import { useT } from '../i18n';
 import { getPlatform, type RemoteKey } from '../platform';
 import {
@@ -28,7 +29,6 @@ export function ProbeScreen({ probe = runProbe }: { probe?: () => Promise<ProbeR
   const [entries, setEntries] = useState<KeyEntry[]>([]);
   const runningRef = useRef(false);
   const nextId = useRef(0);
-  const button = useRef<HTMLButtonElement>(null);
 
   // A ref guards re-entry synchronously: Enter on the focused button reaches both the window
   // key handler and the click handler within one event.
@@ -46,7 +46,6 @@ export function ProbeScreen({ probe = runProbe }: { probe?: () => Promise<ProbeR
 
   useEffect(() => {
     start();
-    button.current?.focus();
   }, [start]);
 
   useEffect(() => {
@@ -69,16 +68,16 @@ export function ProbeScreen({ probe = runProbe }: { probe?: () => Promise<ProbeR
   return (
     <main className="platform">
       <Header report={report} />
-      <button
-        ref={button}
-        type="button"
+      <Focusable
+        focusKey="probe-rerun"
+        autoFocus
         className="rerun"
         aria-disabled={running}
         onClick={start}
         data-running={running}
       >
         {running ? t('probe.running') : t('probe.rerun')}
-      </button>
+      </Focusable>
       <ServerSection report={report} />
       <DisplaySection display={report?.display ?? null} />
       {report ? <MediaSection media={report.media} /> : null}

@@ -31,9 +31,10 @@ function signedIn() {
 
 function setup() {
   const onBack = vi.fn();
+  const onPlay = vi.fn();
   const session = signedIn();
-  const view = renderWithSilo(<LibraryScreen onBack={onBack} />, { session });
-  return { onBack, ...view };
+  const view = renderWithSilo(<LibraryScreen onBack={onBack} onPlay={onPlay} />, { session });
+  return { onBack, onPlay, ...view };
 }
 
 const titles = [
@@ -105,32 +106,26 @@ describe('LibraryScreen', () => {
     expect(seen.catalog[0]?.searchParams.get('limit')).toBe('20');
     expect(seen.headers[0]?.get('X-Profile-Id')).toBe('p1');
     // The first title is focused, so OK on the remote selects it.
-    expect(rows[0]).toHaveFocus();
+    await waitFor(() => expect(rows[0]).toHaveFocus());
   });
 
-  it('opens the player for a selected movie and returns to the same title with Back', async () => {
+  it('hands a selected movie to onPlay and does not render a player itself', async () => {
     serve();
-    const calls = servePlayback(server);
-    setup();
+    const { onPlay } = setup();
     fireEvent.click(await screen.findByRole('button', { name: /Second Title/ }));
-    expect(await screen.findByTestId('player')).toBeInTheDocument();
-    expect(screen.queryByTestId('title-list')).not.toBeInTheDocument();
-    expect(calls.start).toHaveLength(1);
-    fireEvent.keyDown(window, { keyCode: 461 });
-    // Back leaves the player, the list is back and the focus is on the title that was played.
-    expect(await screen.findByTestId('title-list')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Second Title/ })).toHaveFocus());
-    await waitFor(() => expect(calls.stop).toHaveLength(1));
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'm2' }));
+    expect(screen.queryByTestId('player')).not.toBeInTheDocument();
   });
 
   it('says episodes come later for a series and does not start playback', async () => {
     serve([library()], [catalogItem({ content_id: 's1', title: 'A Series', type: 'series' })]);
     const calls = servePlayback(server);
-    setup();
+    const { onPlay } = setup();
     expect(screen.queryByTestId('series-note')).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /A Series/ }));
     expect(screen.getByTestId('series-note')).toHaveTextContent('Episodes come in Phase 2.');
-    expect(screen.queryByTestId('player')).not.toBeInTheDocument();
+    expect(onPlay).not.toHaveBeenCalled();
     expect(calls.start).toHaveLength(0);
     expect(calls.capabilities).toBe(0);
   });
@@ -197,6 +192,8 @@ describe('LibraryScreen', () => {
     await screen.findByTestId('title-list');
     fireEvent.keyDown(window, { keyCode: 461 });
     expect(onBack).toHaveBeenCalledTimes(1);
+    // The screen handles Back itself, so the exit popup stays closed.
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
   });
 
   it('signs out: calls logout and clears the session', async () => {

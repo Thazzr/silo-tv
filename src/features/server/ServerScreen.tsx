@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import type { DeviceIdentity } from '../../api/deviceIdentity';
 import { checkServer, normalizeServerUrl, type ServerCheckResult } from '../../api/server';
 import { currentTransport } from '../../api/transport';
+import { FocusableInput } from '../../app/nav';
 import { Button, Screen } from '../../app/ui';
 import { useT, type MessageKey } from '../../i18n';
 
@@ -57,11 +58,12 @@ export function ServerScreen({
     <Screen title={t('server.title')} testId="server-screen">
       <form onSubmit={submit}>
         <p>{t('server.hint')}</p>
-        <input
+        <FocusableInput
+          focusKey="server-input"
+          autoFocus
           type="text"
           inputMode="url"
           className="input"
-          data-focusable
           aria-label={t('server.label')}
           placeholder="https://silo.example.test"
           autoCapitalize="none"
@@ -70,7 +72,7 @@ export function ServerScreen({
           value={value}
           onChange={(e) => setValue(e.target.value)}
         />
-        <Button type="submit" disabled={connect.isPending}>
+        <Button focusKey="server-connect" type="submit" disabled={connect.isPending}>
           {t('server.connect')}
         </Button>
       </form>

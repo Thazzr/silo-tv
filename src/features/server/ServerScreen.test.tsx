@@ -1,9 +1,10 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BASE_URL, systemInfo } from '../../test/apiFixtures';
+import { KEY, pressKey } from '../../test/keys';
 import { renderApp, testDevice } from '../../test/renderFlow';
 import { ServerScreen } from './ServerScreen';
 
@@ -22,11 +23,11 @@ const answer = (handler: Parameters<typeof http.get>[1]) =>
   server.use(http.get(`${BASE_URL}/api/v2/system/info`, handler));
 
 describe('ServerScreen', () => {
-  it('focuses the input and pre-fills it', () => {
+  it('focuses the input and pre-fills it', async () => {
     setup('silo.example.test');
     const input = screen.getByLabelText('Server address');
     expect(input).toHaveValue('silo.example.test');
-    expect(input).toHaveFocus();
+    await waitFor(() => expect(input).toHaveFocus());
   });
 
   it('checks the server and reports its normalized origin on success', async () => {
@@ -42,9 +43,10 @@ describe('ServerScreen', () => {
     answer(() => HttpResponse.json(systemInfo));
     const { onConnected } = setup(BASE_URL);
     // Arrow down from the input to the button, then Enter, as with a remote.
-    fireEvent.keyDown(window, { keyCode: 40 });
+    await waitFor(() => expect(screen.getByLabelText('Server address')).toHaveFocus());
+    await pressKey(KEY.down);
     expect(screen.getByRole('button', { name: 'Connect' })).toHaveFocus();
-    fireEvent.keyDown(window, { keyCode: 13 });
+    await pressKey(KEY.enter);
     await waitFor(() => expect(onConnected).toHaveBeenCalledWith(BASE_URL));
   });
 
@@ -54,6 +56,20 @@ describe('ServerScreen', () => {
     await userEvent.type(screen.getByLabelText('Server address'), '{Enter}');
     await waitFor(() => expect(onConnected).toHaveBeenCalledTimes(1));
   });
+
+  it.each([KEY.left, KEY.right])(
+    'leaves keyCode %i to the input (caret) and keeps the focus on it',
+    async (keyCode) => {
+      setup(BASE_URL);
+      const input = screen.getByLabelText('Server address');
+      await waitFor(() => expect(input).toHaveFocus());
+      const event = new KeyboardEvent('keydown', { keyCode, cancelable: true, bubbles: true });
+      input.dispatchEvent(event);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(event.defaultPrevented).toBe(false);
+      expect(input).toHaveFocus();
+    },
+  );
 
   it('shows a loading cue while the server is checked', async () => {
     let release: () => void = () => undefined;

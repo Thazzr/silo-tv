@@ -38,7 +38,7 @@ export function ProfilesScreen({
     onSelected();
   }, [autoSelect, only, session, onSelected]);
 
-  // Back on the list does nothing for now (Phase 1 adds the exit popup); in PIN entry it returns to the list.
+  // Back in PIN entry returns to the list; on the list it is the default (the exit popup, as this is the root).
   const back = pinFor ? () => setPinFor(null) : undefined;
   const signOut = useSignOut();
 
@@ -60,8 +60,9 @@ export function ProfilesScreen({
         {items?.map((profile, index) => (
           <li key={profile.id}>
             <Button
+              focusKey={`profile-${profile.id}`}
               className="row profile"
-              data-autofocus={index === 0 ? true : undefined}
+              autoFocus={index === 0}
               onClick={() => (profile.has_pin ? setPinFor(profile) : choose(profile))}
             >
               <span className="avatar" aria-hidden="true">
@@ -84,7 +85,12 @@ export function ProfilesScreen({
     >
       {body}
       {pinFor ? null : (
-        <Button className="secondary" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+        <Button
+          focusKey="signout"
+          className="secondary"
+          disabled={signOut.isPending}
+          onClick={() => signOut.mutate()}
+        >
           {t('library.signOut')}
         </Button>
       )}

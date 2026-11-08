@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { Navigator } from '../app/nav';
 import { SiloProvider } from '../app/SiloContext';
 import type { DeviceIdentity } from '../api/deviceIdentity';
 import { Session } from '../api/session';
@@ -26,7 +27,10 @@ export function newQueryClient(): QueryClient {
   });
 }
 
-/** Renders a screen with i18n (English), React Query and a Silo client for the test server. */
+/**
+ * Renders a screen with i18n (English), React Query and a Silo client for the test server, as the
+ * only (root) entry of a screen stack: Back on it opens the exit popup unless the screen handles it.
+ */
 export function renderWithSilo(ui: ReactNode, options: { session?: Session } = {}) {
   const session = options.session ?? new Session(memoryStorage());
   const queryClient = newQueryClient();
@@ -34,7 +38,7 @@ export function renderWithSilo(ui: ReactNode, options: { session?: Session } = {
     <QueryClientProvider client={queryClient}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          {ui}
+          <Navigator initial={null} renderScreen={() => ui} />
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

@@ -1,0 +1,64 @@
+// The only place that talks to the spatial navigation library's service. Screens use the
+// components and hooks exported from ./index.ts (an ESLint rule keeps the package out of every
+// other file).
+import {
+  SpatialNavigation,
+  destroy,
+  init,
+  setKeyMap,
+  type SpatialNavigationServiceOptions,
+} from '@noriginmedia/norigin-spatial-navigation';
+
+/** Options of the service (key handling, layout measuring); tests pass a fake layout. */
+export type NavigationOptions = Partial<SpatialNavigationServiceOptions>;
+
+/** Remote keys the library handles. Back is not among them: the screen stack owns it. */
+export const NAV_KEYS = { left: 37, up: 38, right: 39, down: 40, enter: 13 } as const;
+
+const TEXT_FIELD_KEYS: readonly number[] = [NAV_KEYS.left, NAV_KEYS.right, NAV_KEYS.enter];
+
+export function isTextField(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+}
+
+// A text field keeps Left and Right (the caret) and Enter (submits the form; opens the virtual
+// keyboard on webOS). The library would swallow them, so this capture-phase listener stops the
+// event before the library's own listener sees it; the browser's default action still runs.
+function guardTextField(e: KeyboardEvent): void {
+  if (isTextField(e.target) && TEXT_FIELD_KEYS.includes(e.keyCode)) e.stopImmediatePropagation();
+}
+
+let teardown: (() => void) | null = null;
+
+/** Starts the spatial navigation service; call once at startup (tests call it per test). */
+export function initNavigation(options: NavigationOptions = {}): void {
+  destroyNavigation();
+  // shouldFocusDOMNode: the focused element also gets DOM focus, which text fields need for typing.
+  init({ shouldFocusDOMNode: true, ...options });
+  setKeyMap(NAV_KEYS);
+  window.addEventListener('keydown', guardTextField, true);
+  teardown = () => {
+    window.removeEventListener('keydown', guardTextField, true);
+    destroy();
+  };
+}
+
+export function destroyNavigation(): void {
+  teardown?.();
+  teardown = null;
+}
+
+export {
+  setFocus,
+  getCurrentFocusKey,
+  doesFocusableExist,
+} from '@noriginmedia/norigin-spatial-navigation';
+
+/** True when `focusKey` is focusable and sits somewhere below `ancestorKey`. */
+export function isInside(focusKey: string | null, ancestorKey: string): boolean {
+  if (!focusKey || focusKey === ancestorKey) return false;
+  return (
+    SpatialNavigation.doesFocusableExist(focusKey) &&
+    SpatialNavigation.isDescendantOf(focusKey, ancestorKey)
+  );
+}

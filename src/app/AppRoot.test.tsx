@@ -56,11 +56,18 @@ describe('AppRoot probe key handling', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it.each([13, 65])('does not prevent the default action of keyCode %i', (keyCode) => {
+  it('does not prevent the default action of an unmapped key', () => {
     renderApp();
-    const event = new KeyboardEvent('keydown', { keyCode, cancelable: true });
+    const event = new KeyboardEvent('keydown', { keyCode: 65, cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('cancels the default action of Enter: the navigation clicks the focused button itself', () => {
+    renderApp();
+    const event = new KeyboardEvent('keydown', { keyCode: 13, cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
   });
 });
 

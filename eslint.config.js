@@ -28,6 +28,23 @@ const PLATFORM_SELECTORS = [
   },
 ];
 
+const PLATFORM_IMPORTS = {
+  group: [
+    '**/platform/webos',
+    '**/platform/webos/**',
+    '**/platform/browser',
+    '**/platform/browser/**',
+    '**/platform/shared',
+    '**/platform/shared/**',
+  ],
+  message: 'Import from the platform adapter (src/platform), not from its internals.',
+};
+
+const NAV_IMPORT = {
+  name: '@noriginmedia/norigin-spatial-navigation',
+  message: 'Import navigation from src/app/nav; only that folder talks to the library.',
+};
+
 export default tseslint.config(
   { ignores: ['dist/', 'out/', 'coverage/', 'src/api/generated/'] },
   js.configs.recommended,
@@ -63,27 +80,20 @@ export default tseslint.config(
   {
     // Everything platform-specific sits behind the Platform adapter (src/platform/index.ts), so
     // a Samsung Tizen port adds an adapter instead of touching screens, features or the API layer.
+    // The spatial navigation library is wrapped the same way, by src/app/nav. One
+    // no-restricted-imports list per file, so the three blocks below split the two bans.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/platform/**'],
+    ignores: ['src/platform/**', 'src/app/nav/**'],
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: [
-                '**/platform/webos',
-                '**/platform/webos/**',
-                '**/platform/browser',
-                '**/platform/browser/**',
-                '**/platform/shared',
-                '**/platform/shared/**',
-              ],
-              message: 'Import from the platform adapter (src/platform), not from its internals.',
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', { patterns: [PLATFORM_IMPORTS], paths: [NAV_IMPORT] }],
     },
+  },
+  {
+    files: ['src/platform/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { paths: [NAV_IMPORT] }] },
+  },
+  {
+    files: ['src/app/nav/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [PLATFORM_IMPORTS] }] },
   },
 );

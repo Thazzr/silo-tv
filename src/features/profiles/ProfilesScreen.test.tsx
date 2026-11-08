@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Session } from '../../api/session';
 import { BASE_URL, account, problem } from '../../test/apiFixtures';
 import { profile, profileCollection } from '../../test/flowFixtures';
+import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { ProfilesScreen } from './ProfilesScreen';
 
@@ -225,20 +226,20 @@ describe('PIN entry', () => {
     setup();
     await openPin();
     // Focus starts on "1"; Down moves a row (to "4"), Right to "5".
-    expect(screen.getByRole('button', { name: '1' })).toHaveFocus();
-    fireEvent.keyDown(window, { keyCode: 40 });
-    fireEvent.keyDown(window, { keyCode: 39 });
+    await waitFor(() => expect(screen.getByRole('button', { name: '1' })).toHaveFocus());
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
     expect(screen.getByRole('button', { name: '5' })).toHaveFocus();
-    fireEvent.keyDown(window, { keyCode: 13 });
+    await pressKey(KEY.enter);
     expect(screen.getByTestId('pin-dots')).toHaveTextContent('•');
-    fireEvent.keyDown(window, { keyCode: 40 });
-    fireEvent.keyDown(window, { keyCode: 40 });
-    fireEvent.keyDown(window, { keyCode: 40 });
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
     // "5" is in the middle column: Down reaches "8", then "0" in the last row (the third Down stays
     // there, the grid ends), and Right moves on to OK.
-    fireEvent.keyDown(window, { keyCode: 39 });
+    await pressKey(KEY.right);
     expect(screen.getByRole('button', { name: 'OK' })).toHaveFocus();
-    fireEvent.keyDown(window, { keyCode: 13 });
+    await pressKey(KEY.enter);
     await waitFor(() => expect(bodies).toEqual([{ pin: '5' }]));
   });
 

@@ -6,6 +6,7 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
+import { useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
@@ -58,10 +59,12 @@ export function PlayerScreen({ contentId, title, onExit }: PlayerScreenProps) {
   if (state.kind === 'prompt') {
     return (
       <Screen title={title} onBack={onExit} testId="resume-prompt">
-        <Button data-autofocus onClick={() => playback.choose(state.positionSeconds)}>
+        <Button focusKey="resume" autoFocus onClick={() => playback.choose(state.positionSeconds)}>
           {t('player.resumeFrom', { time: formatClock(state.positionSeconds) })}
         </Button>
-        <Button onClick={() => playback.choose(0)}>{t('player.startOver')}</Button>
+        <Button focusKey="start-over" onClick={() => playback.choose(0)}>
+          {t('player.startOver')}
+        </Button>
       </Screen>
     );
   }
@@ -73,7 +76,7 @@ export function PlayerScreen({ contentId, title, onExit }: PlayerScreenProps) {
           {t(ERROR_TEXT[state.reason])}
         </p>
         {state.message ? <p>{redact(state.message, [token, state.mediaUrl])}</p> : null}
-        <Button data-autofocus onClick={onExit}>
+        <Button focusKey="player-back" autoFocus onClick={onExit}>
           {t('player.back')}
         </Button>
         {state.plan ? (
@@ -183,6 +186,9 @@ function PlayingView({
     onExit();
   }, [stop, onExit]);
 
+  // Back goes through the screen stack like everywhere else; only the stop key is handled below.
+  useBackHandler(leave);
+
   const toggle = useCallback(() => {
     const el = videoRef.current;
     if (!el) return;
@@ -243,7 +249,6 @@ function PlayingView({
           handled();
           setDiagnostics((on) => !on);
           break;
-        case 'back':
         case 'stop':
           handled();
           leave();

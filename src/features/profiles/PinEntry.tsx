@@ -98,24 +98,41 @@ export function PinEntry({
           {message}
         </p>
       ) : null}
-      <div className="pad" data-columns="3">
+      <div className="pad">
         {PAD.map((key) => {
           if (key === 'delete') {
             return (
-              <Button key={key} className="pad-key" onClick={() => setPin((p) => p.slice(0, -1))}>
+              <Button
+                key={key}
+                focusKey={`pin-${key}`}
+                className="pad-key"
+                onClick={() => setPin((p) => p.slice(0, -1))}
+              >
                 {t('pin.delete')}
               </Button>
             );
           }
           if (key === 'confirm') {
             return (
-              <Button key={key} className="pad-key" disabled={verify.isPending} onClick={confirm}>
+              <Button
+                key={key}
+                focusKey={`pin-${key}`}
+                className="pad-key"
+                disabled={verify.isPending}
+                onClick={confirm}
+              >
                 {t('pin.confirm')}
               </Button>
             );
           }
           return (
-            <Button key={key} className="pad-key" onClick={() => addDigit(key)}>
+            <Button
+              key={key}
+              focusKey={`pin-${key}`}
+              className="pad-key"
+              autoFocus={key === '1'}
+              onClick={() => addDigit(key)}
+            >
               {key}
             </Button>
           );

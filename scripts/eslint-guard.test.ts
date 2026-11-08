@@ -1,7 +1,14 @@
 import { ESLint } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-const eslint = new ESLint({ cwd: process.cwd() });
+// The first lint call loads typescript-eslint and the whole config, which takes seconds on a busy
+// machine: build the instance once and warm it up before any test runs.
+vi.setConfig({ testTimeout: 30_000 });
+let eslint: ESLint;
+beforeAll(async () => {
+  eslint = new ESLint({ cwd: process.cwd() });
+  await eslint.lintText('export {};', { filePath: 'src/app/warmup.ts' });
+}, 120_000);
 
 async function rulesFired(filePath: string, code: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath });
@@ -94,5 +101,57 @@ describe('platform adapter guard', () => {
       "import { a } from './webos/luna';\nimport { b } from '../browser';\nexport const z = [a, b];\n";
     const fired = await rulesFired(file, code);
     expect(fired).toEqual([]);
+  });
+});
+
+describe('navigation library guard', () => {
+  const PACKAGE = '@noriginmedia/norigin-spatial-navigation';
+  const IMPORT = [`import { setFocus } from '${PACKAGE}';`, 'export const y = setFocus;', ''].join(
+    '\n',
+  );
+
+  it.each([
+    'src/features/screen.ts',
+    'src/app/FlowApp.tsx',
+    'src/app/focus.ts',
+    'src/playback/PlayerScreen.tsx',
+    'src/platform/index.ts',
+    'src/app/navigation.ts',
+  ])('forbids importing the library in %s', async (file) => {
+    expect(await rulesFired(file, IMPORT)).toEqual(['no-restricted-imports']);
+  });
+
+  it('forbids a type import too', async () => {
+    expect(
+      await rulesFired(
+        'src/features/screen.ts',
+        [`import type { KeyMap } from '${PACKAGE}';`, 'export type K = KeyMap;', ''].join('\n'),
+      ),
+    ).toEqual(['no-restricted-imports']);
+  });
+
+  it.each(['src/app/nav/init.ts', 'src/app/nav/Focusable.tsx'])(
+    'allows it inside %s',
+    async (file) => {
+      expect(await rulesFired(file, IMPORT)).toEqual([]);
+    },
+  );
+
+  it('allows screens to import the wrapper', async () => {
+    expect(
+      await rulesFired(
+        'src/features/screen.ts',
+        ["import { setFocus } from '../app/nav';", 'export const y = setFocus;', ''].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps the platform import ban inside src/app/nav', async () => {
+    expect(
+      await rulesFired(
+        'src/app/nav/init.ts',
+        ["import { x } from '../../platform/webos/luna';", 'export const y = x;', ''].join('\n'),
+      ),
+    ).toEqual(['no-restricted-imports']);
   });
 });

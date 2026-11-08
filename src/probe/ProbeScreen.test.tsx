@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { makeReport } from '../test/probeFixture';
@@ -90,7 +90,7 @@ describe('ProbeScreen run again', () => {
   it('focuses the run button on mount and runs once', async () => {
     const probe = vi.fn(() => Promise.resolve(makeReport()));
     renderScreen(probe);
-    expect(screen.getByRole('button')).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('button')).toHaveFocus());
     await screen.findByText('https://silo.example.test');
     expect(probe).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: 'Run again' })).toBeInTheDocument();

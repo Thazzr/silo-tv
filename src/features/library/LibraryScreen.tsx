@@ -1,40 +1,30 @@
 import { useState } from 'react';
 import { Button, ErrorState, ListSkeleton, Screen } from '../../app/ui';
 import { useT } from '../../i18n';
-import { PlayerScreen } from '../../playback/PlayerScreen';
 import { useFirstLibrary, useSignOut, type CatalogItem } from './queries';
 
-export function LibraryScreen({ onBack }: { onBack: () => void }) {
+export function LibraryScreen({
+  onBack,
+  onPlay,
+}: {
+  onBack: () => void;
+  /** Opens the player for a title; the screen stack keeps this list underneath. */
+  onPlay: (item: CatalogItem) => void;
+}) {
   const t = useT();
   const { library, items, isLoading, isError, noLibrary, retry } = useFirstLibrary();
   const signOut = useSignOut();
-  const [playing, setPlaying] = useState<CatalogItem | null>(null);
-  // The title that was opened last: focus returns to it when the player closes.
-  const [lastOpened, setLastOpened] = useState<string | null>(null);
   const [seriesNote, setSeriesNote] = useState(false);
 
   const open = (item: CatalogItem) => {
-    setLastOpened(item.content_id);
     // Series are not directly playable; their episodes come with Phase 2.
     if (item.type.trim().toLowerCase() === 'series') {
       setSeriesNote(true);
       return;
     }
     setSeriesNote(false);
-    setPlaying(item);
+    onPlay(item);
   };
-
-  if (playing) {
-    return (
-      <PlayerScreen
-        contentId={playing.content_id}
-        title={playing.title}
-        onExit={() => setPlaying(null)}
-      />
-    );
-  }
-
-  const focusIndex = Math.max(0, items?.findIndex((item) => item.content_id === lastOpened) ?? 0);
 
   let body;
   if (isLoading) {
@@ -51,8 +41,9 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
         {items?.map((item, index) => (
           <li key={item.content_id}>
             <Button
+              focusKey={`title-${item.content_id}`}
               className="row"
-              data-autofocus={index === focusIndex ? true : undefined}
+              autoFocus={index === 0}
               onClick={() => open(item)}
             >
               <span className="grow">{item.title}</span>
@@ -66,7 +57,12 @@ export function LibraryScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <Screen title={library?.name ?? t('library.title')} onBack={onBack} testId="library-screen">
-      <Button className="secondary" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+      <Button
+        focusKey="signout"
+        className="secondary"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
         {t('library.signOut')}
       </Button>
       {seriesNote ? (

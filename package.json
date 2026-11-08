@@ -23,6 +23,8 @@
     "generate:api": "openapi-typescript openapi/silo-v2.json -o src/api/generated/schema.d.ts"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@noriginmedia/norigin-spatial-navigation": "^3.4.0",
     "@tanstack/react-query": "^5.107.1",
     "core-js": "^3.51.0",
     "openapi-fetch": "^0.17.0",

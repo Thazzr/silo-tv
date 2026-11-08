@@ -1,0 +1,46 @@
+/* Design tokens from docs/design.md. The TV app is dark only. Sizes are CSS pixels on the
+   1920x1080 layout. */
+:root {
+  color-scheme: dark;
+
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-raised: #15171c;
+  --text: #ededed;
+  --text-secondary: rgba(237, 237, 237, 0.6);
+  --hairline: rgba(255, 255, 255, 0.12);
+  --chrome: rgba(255, 255, 255, 0.07);
+  --chrome-border: rgba(255, 255, 255, 0.09);
+  --chrome-selected: rgba(255, 255, 255, 0.14);
+  --focus-fill: #ffffff;
+  --focus-content: #000000;
+  --focus-ring: rgba(255, 255, 255, 0.7);
+  --focus-ring-width: 4px;
+  --error: #ff6961;
+  --warning: #f4c869;
+  --danger: #ff453a;
+  --progress: #ededed;
+  --progress-track: rgba(255, 255, 255, 0.2);
+  --radius-card: 12px;
+  --radius-still: 18px;
+  --radius-control: 12px;
+
+  --font: 'Inter', system-ui, sans-serif;
+  /* Type scale (design.md); nothing below 20 px (LG checklist). */
+  --fs-body: 28px;
+  --fs-small: 20px;
+  --fs-card-title: 24px;
+  --fs-tab: 26px;
+  --fs-row-title: 36px;
+  --fs-profile-title: 64px;
+  --fs-first-run: 88px;
+
+  /* Layout */
+  --safe-x: 96px;
+  --safe-y: 54px;
+  --target: 75px;
+  --card-gap: 40px;
+
+  /* Motion: transform and opacity only. */
+  --transition: 150ms ease-out;
+}

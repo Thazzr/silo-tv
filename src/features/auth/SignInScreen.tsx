@@ -82,7 +82,9 @@ export function SignInScreen({
       {state.phase === 'error' ? (
         <div role="alert" data-testid="signin-error">
           <p className="error">{t('signIn.error')}</p>
-          <Button onClick={restart}>{t('common.retry')}</Button>
+          <Button focusKey="signin-retry" autoFocus onClick={restart}>
+            {t('common.retry')}
+          </Button>
         </div>
       ) : null}
 
@@ -91,7 +93,9 @@ export function SignInScreen({
           <p className="error">
             {t(state.phase === 'denied' ? 'signIn.denied' : 'signIn.expired')}
           </p>
-          <Button onClick={restart}>{t('signIn.newCode')}</Button>
+          <Button focusKey="signin-new-code" autoFocus onClick={restart}>
+            {t('signIn.newCode')}
+          </Button>
         </div>
       ) : null}
 
@@ -121,7 +125,9 @@ export function SignInScreen({
         </div>
       ) : null}
 
-      <Button onClick={back}>{t('signIn.changeServer')}</Button>
+      <Button focusKey="signin-change-server" onClick={back}>
+        {t('signIn.changeServer')}
+      </Button>
     </Screen>
   );
 }

@@ -207,3 +207,77 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   expect(media?.search).toBe('?st=x&token=fake-access');
   expect(seen.filter((entry) => entry.path === '/api/v2/auth/device/poll')).toHaveLength(2);
 });
+
+test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({
+  page,
+}) => {
+  await page.goto(distIndexUrl);
+  await expect(page.getByTestId('server-screen')).toBeVisible();
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveText(/App beenden\?/);
+  // Cancel has the focus first; the screen below no longer reacts to the pointer.
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Beenden' })).toBeFocused();
+  // The arrow keys cannot leave the popup.
+  for (const key of ['ArrowRight', 'ArrowDown', 'ArrowUp']) {
+    await page.keyboard.press(key);
+    await expect(page.getByRole('button', { name: 'Beenden' })).toBeFocused();
+  }
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  for (const key of ['ArrowLeft', 'ArrowDown', 'ArrowUp']) {
+    await page.keyboard.press(key);
+    await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  }
+
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The focus is back on the input.
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+
+  // Back closes the popup as well.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+});
+
+test('the Magic Remote pointer moves the focus and clicks, and the keys continue from there', async ({
+  page,
+}) => {
+  await page.goto(distIndexUrl);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.getByRole('button', { name: 'Verbinden' }).hover();
+  await expect(page.getByRole('button', { name: 'Verbinden' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+});
+
+test('the bundled Inter font loads under file://', async ({ page }) => {
+  await page.goto(distIndexUrl);
+  await expect(page.getByTestId('server-screen')).toBeVisible();
+  // A string, not a function: the e2e config has no DOM types.
+  const result = (await page.evaluate(`(async () => {
+    await document.fonts.ready;
+    // Faces load on first use; ask for the four weights the design uses.
+    await Promise.all(
+      [400, 500, 600, 700].map((weight) => document.fonts.load(weight + ' 26px Inter', 'Aä')),
+    );
+    const loaded = Array.from(document.fonts)
+      .filter((face) => face.family.replace(/["']/g, '') === 'Inter' && face.status === 'loaded')
+      .map((face) => face.weight)
+      .sort();
+    return {
+      check: document.fonts.check('600 26px Inter'),
+      loaded,
+      heading: getComputedStyle(document.querySelector('h1')).fontFamily,
+    };
+  })()`)) as { check: boolean; loaded: string[]; heading: string };
+  expect(result.check).toBe(true);
+  expect(result.loaded).toEqual(['400', '500', '600', '700']);
+  expect(result.heading).toContain('Inter');
+});

@@ -16,6 +16,7 @@ import {
   watchUserData,
   type PlaybackServerOptions,
 } from '../test/playbackFixtures';
+import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderWithSilo } from '../test/renderFlow';
 import { PlayerScreen } from './PlayerScreen';
 import { clearInstallationCache } from './usePlaybackSession';
@@ -431,7 +432,9 @@ describe('PlayerScreen resume prompt', () => {
     const prompt = await screen.findByTestId('resume-prompt');
     expect(prompt).toHaveTextContent('Resume from 1:30');
     expect(prompt).toHaveTextContent('Start over');
-    expect(screen.getByRole('button', { name: 'Resume from 1:30' })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Resume from 1:30' })).toHaveFocus(),
+    );
     expect(calls.start).toHaveLength(0);
   });
 
@@ -456,9 +459,12 @@ describe('PlayerScreen resume prompt', () => {
   it('Start over starts at zero, explicitly', async () => {
     const { calls } = render(resumable);
     await screen.findByTestId('resume-prompt');
-    fireEvent.keyDown(window, { keyCode: 40 });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Resume from 1:30' })).toHaveFocus(),
+    );
+    await pressKey(KEY.down);
     expect(screen.getByRole('button', { name: 'Start over' })).toHaveFocus();
-    key(OK);
+    await pressKey(KEY.enter);
     await screen.findByTestId('player');
     expect(calls.start[0]?.body.start_position).toBe(0);
   });

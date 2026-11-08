@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -18,6 +18,9 @@ import {
   tokenPair,
 } from '../test/flowFixtures';
 import { I18nProvider } from '../i18n';
+import { clearInstallationCache } from '../playback/usePlaybackSession';
+import { servePlayback } from '../test/playbackFixtures';
+import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { FlowApp } from './FlowApp';
 import { loadServer, saveServer } from './serverStore';
@@ -30,6 +33,7 @@ afterAll(() => server.close());
 let storage: KeyValueStore;
 beforeEach(() => {
   storage = memoryStorage();
+  clearInstallationCache();
 });
 
 const OTHER = 'https://other.example.test';
@@ -119,16 +123,18 @@ describe('FlowApp', () => {
     expect(await screen.findByRole('button', { name: /First Title/ })).toBeInTheDocument();
   });
 
-  it('Back on the profile list does nothing; Sign out ends the session and returns to sign-in', async () => {
+  it('Back on the profile list (the root) asks to exit; Sign out ends the session and returns to sign-in', async () => {
     saveServer(BASE_URL, storage);
     serveData([profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
     const session = sessionWith();
     flow(session);
     await screen.findByTestId('profile-list');
     fireEvent.keyDown(window, { keyCode: 461 });
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('profile-list')).toBeInTheDocument();
     expect(session.get()).not.toBeNull();
+    fireEvent.keyDown(window, { keyCode: 461 });
+    await waitFor(() => expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
     expect(session.get()).toBeNull();
@@ -218,6 +224,62 @@ describe('FlowApp', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
     await screen.findByRole('button', { name: /First Title/ });
     expect(ids).toEqual(['p2', 'p1']);
+  });
+
+  it('Back on the server screen (the root) opens the exit popup; Cancel closes it', async () => {
+    flow(new Session(memoryStorage()), BASE_URL);
+    await screen.findByTestId('server-screen');
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Exit the app?');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('server-screen')).toBeInTheDocument();
+  });
+
+  it('Back from the sign-in screen after a sign-out leads to the server screen, then asks to exit', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    const session = sessionWith('p1');
+    flow(session);
+    await screen.findByRole('button', { name: /First Title/ });
+    act(() => session.signOut());
+    await screen.findByTestId('signin-unavailable');
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('server-screen')).toBeInTheDocument();
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
+  });
+
+  it('opens the player over the library, and Back returns to the title that was played', async () => {
+    saveServer(BASE_URL, storage);
+    const items = [
+      catalogItem({ content_id: 'm1', title: 'First Title' }),
+      catalogItem({ content_id: 'm2', title: 'Second Title' }),
+      catalogItem({ content_id: 'm3', title: 'Third Title' }),
+    ];
+    serveData();
+    server.use(http.get(`${BASE_URL}/api/v2/catalog`, () => HttpResponse.json(catalogPage(items))));
+    const calls = servePlayback(server);
+    flow(sessionWith('p1'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /First Title/ })).toHaveFocus());
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus();
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('player')).toBeInTheDocument();
+    expect(screen.queryByTestId('title-list')).not.toBeInTheDocument();
+    expect(calls.start).toHaveLength(1);
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('title-list')).toBeInTheDocument();
+    // Back lands on the title that was played, not on the first one.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus());
+    await waitFor(() => expect(calls.stop).toHaveLength(1));
+    // Back on the library leaves to the profile list (the root), which asks to exit on Back.
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
 
   it('empties the profile, library and catalog caches when the session ends', async () => {
