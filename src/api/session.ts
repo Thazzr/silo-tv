@@ -18,6 +18,11 @@ export type SessionEvent = 'changed' | 'signedOut';
 // Bump when the stored shape changes; an unknown version is treated as "signed out".
 const STORAGE_KEY = 'silo-tv.session.v1';
 
+/** Storage key of the session of one server origin: every server keeps its own sign-in. */
+export function sessionStorageKey(origin: string): string {
+  return `${STORAGE_KEY}.${origin}`;
+}
+
 /**
  * Holds the signed-in session and mirrors it to localStorage.
  *
@@ -31,7 +36,10 @@ export class Session {
     signedOut: new Set(),
   };
 
-  constructor(private readonly storage: KeyValueStore | null = getPlatform().storage) {
+  constructor(
+    private readonly storage: KeyValueStore | null = getPlatform().storage,
+    private readonly storageKey: string = STORAGE_KEY,
+  ) {
     this.data = this.load();
   }
 
@@ -73,7 +81,7 @@ export class Session {
 
   private load(): SessionData | null {
     try {
-      const raw = this.storage?.get(STORAGE_KEY);
+      const raw = this.storage?.get(this.storageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { v?: unknown; session?: Partial<SessionData> };
       const s = parsed.session;
@@ -95,9 +103,9 @@ export class Session {
   private save(): void {
     try {
       if (this.data) {
-        this.storage?.set(STORAGE_KEY, JSON.stringify({ v: 1, session: this.data }));
+        this.storage?.set(this.storageKey, JSON.stringify({ v: 1, session: this.data }));
       } else {
-        this.storage?.remove(STORAGE_KEY);
+        this.storage?.remove(this.storageKey);
       }
     } catch {
       // Storage full or blocked: the session still works for this page load.

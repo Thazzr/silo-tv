@@ -3,6 +3,7 @@ import { encode } from 'uqr';
 import { Button, Screen } from '../../app/ui';
 import { useT } from '../../i18n';
 import { formatUserCode } from './format';
+import { useAuthProviders } from './queries';
 import { useDeviceLogin } from './useDeviceLogin';
 
 // Quiet zone in modules; the QR standard asks for four, and phones need it on a dark screen.
@@ -50,18 +51,29 @@ export function QrCode({ value, label }: { value: string; label: string }) {
 
 export function SignInScreen({
   onSignedIn,
+  onPassword,
   onBack,
 }: {
   onSignedIn: () => void;
+  /** Opens the password screen; the pending code is withdrawn first. */
+  onPassword: () => void;
   /** Leave the screen; the pending code is withdrawn first. */
   onBack: () => void;
 }) {
   const t = useT();
   const { state, restart, cancel } = useDeviceLogin(onSignedIn);
+  // Only a server that says so offers the password; until it answers, the code is all there is.
+  const providers = useAuthProviders();
+  const passwordLogin = providers.data?.password_login === true;
 
   const back = () => {
     cancel();
     onBack();
+  };
+
+  const openPassword = () => {
+    cancel();
+    onPassword();
   };
 
   return (
@@ -123,6 +135,19 @@ export function SignInScreen({
           </div>
           <QrCode value={state.code.verification_uri_complete} label={t('signIn.qrLabel')} />
         </div>
+      ) : null}
+
+      {passwordLogin ? (
+        <Button
+          // With no code on screen this is the way forward, so it takes the focus; autoFocus counts
+          // once per mount, hence the key.
+          key={state.phase === 'unavailable' ? 'only' : 'also'}
+          focusKey="signin-password"
+          autoFocus={state.phase === 'unavailable'}
+          onClick={openPassword}
+        >
+          {t('signIn.withPassword')}
+        </Button>
       ) : null}
 
       <Button focusKey="signin-change-server" onClick={back}>

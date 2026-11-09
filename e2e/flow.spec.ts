@@ -1,13 +1,15 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { distIndexUrl } from './paths.ts';
 
 // A fake Silo server on 127.0.0.1 with permissive CORS (like probe.spec.ts, a real server instead
 // of page.route(): Playwright does not apply the response-side CORS check to routed requests).
 // It speaks just enough of /api/v2 for the first flow: server check, device-code sign-in that is
-// approved on the second poll, one profile without a PIN, one library with two titles, and the
-// playback protocol up to a plan whose media never answers (the loading cue stays).
+// approved on the second poll (or, per option, password sign-in only), one profile without a PIN,
+// one library with two titles, and the playback protocol up to a plan whose media never answers
+// (the loading cue stays). Every instance has its own origin (its own port), which is what the
+// app keys servers and sessions by.
 
 interface Seen {
   method: string;
@@ -15,11 +17,25 @@ interface Seen {
   search: string;
   authorization: string | undefined;
   profileId: string | undefined;
+  /** The request body, for the sign-in call only. */
+  body: string;
+}
+
+interface FakeOptions {
+  /** Shown as the server's name. */
+  name?: string;
+  /** The access token this server hands out. */
+  token?: string;
+  /** Whether the server offers sign-in with a code. */
+  code?: boolean;
+  /** Whether the server offers password sign-in. */
+  password?: boolean;
 }
 
 const servers: Server[] = [];
 
-async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
+async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: string; seen: Seen[] }> {
+  const { name = 'E2E Silo', token = 'fake-access', code = true, password = false } = options;
   const seen: Seen[] = [];
   let polls = 0;
   const server = createServer((req: IncomingMessage, res) => {
@@ -34,120 +50,137 @@ async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
       res.end();
       return;
     }
-    seen.push({
-      method: req.method ?? '',
-      path: url.pathname,
-      search: url.search,
-      authorization: req.headers.authorization,
-      profileId: req.headers['x-profile-id'] as string | undefined,
-    });
-    const send = (status: number, body: unknown) => {
-      res.writeHead(status, { ...cors, 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(body));
-    };
-    // Drain the request body so the connection stays clean.
-    req.resume();
-    switch (`${req.method} ${url.pathname}`) {
-      case 'GET /api/v2/system/info':
-        return send(200, { api_major: 2, server_version: 'fake' });
-      case 'GET /api/v2/auth/device/capability':
-        return send(200, { state: 'available', allowed: true, cancel: true });
-      case 'POST /api/v2/auth/device/start':
-        return send(201, {
-          device_code: 'fake-device-code',
-          user_code: '4821-7730',
-          verification_uri: 'https://silo.example.test/activate',
-          verification_uri_complete: 'https://silo.example.test/activate?code=48217730',
-          interval: 1,
-          expires_in: 900,
-          expires_at: new Date(Date.now() + 900_000).toISOString(),
-        });
-      case 'POST /api/v2/auth/device/poll':
-        polls += 1;
-        if (polls < 2) {
-          return send(200, { status: 'pending', opened: false, poll_after: 1 });
-        }
-        return send(200, {
-          status: 'approved',
-          opened: true,
-          poll_after: 1,
-          profile_id: '',
-          profile_token: '',
-          temporary: false,
-          tokens: {
-            access_token: 'fake-access',
-            refresh_token: 'fake-refresh',
-            expires_in: 3600,
-            user: { id: 'user-1', username: 'viewer', role: 'user' },
-          },
-        });
-      case 'GET /api/v2/profiles':
-        return send(200, {
-          items: [{ id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true }],
-        });
-      case 'GET /api/v2/theme/branding':
-        return send(200, {
-          server_name: 'E2E Silo',
-          login_subtitle: '',
-          accent_color: '#e5a00d',
-          storage_available: false,
-        });
-      case 'GET /api/v2/user/libraries':
-        return send(200, { items: [{ id: 'lib-1', name: 'Movies', type: 'movies' }] });
-      case 'GET /api/v2/playback/capabilities':
-        return send(200, {
-          state: 'available',
-          allowed: true,
-          protocol_versions: [3],
-          features: ['sequenced_progress_v1'],
-          installation_id: 'install-1',
-          deliveries: [],
-          revision: 'r',
-        });
-      case 'GET /api/v2/watch/m2':
-        return send(200, {
-          content_id: 'm2',
-          title: 'Second Title',
-          type: 'movie',
-          subtitles: [],
-          versions: [{ file_id: 'file-2' }],
-        });
-      case 'POST /api/v2/playback/start':
-        return send(201, {
-          outcome: 'playable',
-          protocol_version: 3,
-          session_id: 'e2e-session',
-          playback_plan: {
-            plan_id: 'plan:1',
-            plan_attempt_key: 'v3:1',
-            delivery: 'original_http',
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => handle(Buffer.concat(chunks).toString('utf8')));
+    const handle = (requestBody: string) => {
+      seen.push({
+        method: req.method ?? '',
+        path: url.pathname,
+        search: url.search,
+        authorization: req.headers.authorization,
+        profileId: req.headers['x-profile-id'] as string | undefined,
+        body: url.pathname === '/api/v2/auth/login' ? requestBody : '',
+      });
+      const send = (status: number, body: unknown) => {
+        res.writeHead(status, { ...cors, 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(body));
+      };
+      const tokens = {
+        access_token: token,
+        refresh_token: `${token}-refresh`,
+        expires_in: 3600,
+        user: { id: 'user-1', username: 'viewer', role: 'user' },
+      };
+      switch (`${req.method} ${url.pathname}`) {
+        case 'GET /api/v2/system/info':
+          return send(200, { api_major: 2, server_version: 'fake' });
+        case 'GET /api/v2/auth/providers':
+          return send(200, {
+            items: [
+              { id: 'local', display_name: 'Silo account', mode: 'credentials', default: true },
+            ],
+            password_login: password,
+          });
+        case 'POST /api/v2/auth/login':
+          return send(200, tokens);
+        case 'POST /api/v2/auth/logout':
+          res.writeHead(204, cors);
+          return res.end();
+        case 'GET /api/v2/auth/device/capability':
+          return send(200, { state: code ? 'available' : 'disabled', allowed: code, cancel: true });
+        case 'POST /api/v2/auth/device/start':
+          return send(201, {
+            device_code: 'fake-device-code',
+            user_code: '4821-7730',
+            verification_uri: 'https://silo.example.test/activate',
+            verification_uri_complete: 'https://silo.example.test/activate?code=48217730',
+            interval: 1,
+            expires_in: 900,
+            expires_at: new Date(Date.now() + 900_000).toISOString(),
+          });
+        case 'POST /api/v2/auth/device/poll':
+          polls += 1;
+          if (polls < 2) {
+            return send(200, { status: 'pending', opened: false, poll_after: 1 });
+          }
+          return send(200, {
+            status: 'approved',
+            opened: true,
+            poll_after: 1,
+            profile_id: '',
+            profile_token: '',
+            temporary: false,
+            tokens,
+          });
+        case 'GET /api/v2/profiles':
+          return send(200, {
+            items: [{ id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true }],
+          });
+        case 'GET /api/v2/theme/branding':
+          return send(200, {
+            server_name: name,
+            login_subtitle: '',
+            accent_color: '#e5a00d',
+            storage_available: false,
+          });
+        case 'GET /api/v2/user/libraries':
+          return send(200, { items: [{ id: 'lib-1', name: 'Movies', type: 'movies' }] });
+        case 'GET /api/v2/playback/capabilities':
+          return send(200, {
+            state: 'available',
+            allowed: true,
+            protocol_versions: [3],
+            features: ['sequenced_progress_v1'],
+            installation_id: 'install-1',
+            deliveries: [],
+            revision: 'r',
+          });
+        case 'GET /api/v2/watch/m2':
+          return send(200, {
+            content_id: 'm2',
+            title: 'Second Title',
+            type: 'movie',
+            subtitles: [],
+            versions: [{ file_id: 'file-2' }],
+          });
+        case 'POST /api/v2/playback/start':
+          return send(201, {
+            outcome: 'playable',
+            protocol_version: 3,
             session_id: 'e2e-session',
-            selected_tracks: {},
-            effective_recipe: {},
-            source: { duration_seconds: 5400 },
-            stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
-            timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
-          },
-        });
-      case 'POST /api/v2/playback/e2e-session/progress':
-        return send(200, { outcome: 'applied' });
-      case 'DELETE /api/v2/playback/e2e-session':
-        return send(200, { outcome: 'stopped' });
-      case 'GET /api/v2/stream/e2e-session':
-        // The media never answers: the player keeps its loading cue.
-        return;
-      case 'GET /api/v2/catalog':
-        return send(200, {
-          items: [
-            { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
-            { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021 },
-          ],
-          total: 2,
-          total_exact: true,
-        });
-      default:
-        return send(404, { title: 'not found', status: 404 });
-    }
+            playback_plan: {
+              plan_id: 'plan:1',
+              plan_attempt_key: 'v3:1',
+              delivery: 'original_http',
+              session_id: 'e2e-session',
+              selected_tracks: {},
+              effective_recipe: {},
+              source: { duration_seconds: 5400 },
+              stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
+              timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
+            },
+          });
+        case 'POST /api/v2/playback/e2e-session/progress':
+          return send(200, { outcome: 'applied' });
+        case 'DELETE /api/v2/playback/e2e-session':
+          return send(200, { outcome: 'stopped' });
+        case 'GET /api/v2/stream/e2e-session':
+          // The media never answers: the player keeps its loading cue.
+          return;
+        case 'GET /api/v2/catalog':
+          return send(200, {
+            items: [
+              { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
+              { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021 },
+            ],
+            total: 2,
+            total_exact: true,
+          });
+        default:
+          return send(404, { title: 'not found', status: 404 });
+      }
+    };
   });
   servers.push(server);
   await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
@@ -340,4 +373,123 @@ test('the bundled Inter font loads under file://', async ({ page }) => {
   expect(result.check).toBe(true);
   expect(result.loaded).toEqual(['400', '500', '600', '700']);
   expect(result.heading).toContain('Inter');
+});
+
+// The list row of a server (its Remove button's name starts with the same words).
+const serverRow = (page: Page, name: string) => page.locator('button.server', { hasText: name });
+
+// From the Home tab to the avatar (Home, Movies, Series, For you, Calendar, Search, avatar), then
+// its menu: "Switch server" is the second item.
+async function openServerListFromShell(page: Page) {
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Server wechseln' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('server-list')).toBeVisible();
+}
+
+test('two servers: code sign-in on A, password sign-in on B, switching and removing, keyboard only', async ({
+  page,
+}) => {
+  const a = await startFakeSilo({ name: 'Silo A', token: 'token-a' });
+  const b = await startFakeSilo({ name: 'Silo B', token: 'token-b', code: false, password: true });
+  await page.goto(distIndexUrl);
+
+  // Add server A and sign in with a code.
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.type(a.origin);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('user-code')).toHaveText('4821 7730');
+  await expect(page.getByTestId('server-name')).toHaveText('Silo A', { timeout: 10_000 });
+
+  // Switch server: the list has A, focused; Add server is below it.
+  await openServerListFromShell(page);
+  await expect(serverRow(page, 'Silo A')).toBeFocused();
+  await expect(page.getByTestId('server-security')).toHaveText('HTTP');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Server hinzufügen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // Add server B: it has no code sign-in, so the password button is the way in and has the focus.
+  await expect(page.getByLabel('Serveradresse')).toHaveValue('');
+  await page.keyboard.type(b.origin);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('signin-unavailable')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mit Passwort anmelden' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('password-screen')).toBeVisible();
+  await expect(page.getByLabel('Benutzername')).toBeFocused();
+  await page.keyboard.type('test-viewer');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByLabel('Passwort')).toBeFocused();
+  await page.keyboard.type('fake-password-0000');
+  await expect(page.getByLabel('Passwort')).toHaveAttribute('type', 'password');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Anmelden' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('server-name')).toHaveText('Silo B', { timeout: 10_000 });
+
+  // The sign-in call went to B only, with the typed values; A never saw them.
+  const login = b.seen.find((entry) => entry.path === '/api/v2/auth/login');
+  expect(JSON.parse(login?.body ?? '{}')).toEqual({
+    username: 'test-viewer',
+    password: 'fake-password-0000',
+  });
+  expect(a.seen.some((entry) => entry.path === '/api/v2/auth/login')).toBe(false);
+  // B's catalog request carries B's token.
+  expect(b.seen.find((entry) => entry.path === '/api/v2/catalog')?.authorization).toBe(
+    'Bearer token-b',
+  );
+
+  // Switch back to A through the list: B is current (first), A is the second row; A still has its session.
+  await openServerListFromShell(page);
+  await expect(serverRow(page, 'Silo B')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(serverRow(page, 'Silo A')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('server-name')).toHaveText('Silo A', { timeout: 10_000 });
+  const catalogsOfA = a.seen.filter((entry) => entry.path === '/api/v2/catalog');
+  expect(catalogsOfA[catalogsOfA.length - 1]?.authorization).toBe('Bearer token-a');
+  // A was not asked to sign in again: its code flow ran once.
+  expect(a.seen.filter((entry) => entry.path === '/api/v2/auth/device/start')).toHaveLength(1);
+
+  // Remove B: Right from its row reaches Remove, the dialog asks, Cancel keeps it, Remove ends it.
+  await openServerListFromShell(page);
+  await expect(serverRow(page, 'Silo A')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(serverRow(page, 'Silo B')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Silo B entfernen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveText(/Server entfernen\?/);
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Silo B entfernen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Entfernen', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('server-list').locator('.server-row')).toHaveCount(1);
+  await expect(serverRow(page, 'Silo B')).toHaveCount(0);
+  // B was signed out on its server, and only B's session is gone from the storage.
+  await expect
+    .poll(
+      () =>
+        b.seen.find((entry) => entry.method === 'POST' && entry.path === '/api/v2/auth/logout')
+          ?.authorization,
+    )
+    .toBe('Bearer token-b');
+  const keys = (await page.evaluate(`Object.keys(localStorage)`)) as string[];
+  expect(keys).toContain(`silo-tv.session.v1.${a.origin}`);
+  expect(keys).not.toContain(`silo-tv.session.v1.${b.origin}`);
+  // A is the one left: Back leaves the list for A's shell.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('server-name')).toHaveText('Silo A');
 });

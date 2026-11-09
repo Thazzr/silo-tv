@@ -140,3 +140,20 @@ export function branding(
     ...overrides,
   };
 }
+
+export function authProvider(overrides: Partial<S['AuthProvider']> = {}): S['AuthProvider'] {
+  return {
+    default: true,
+    display_name: 'Silo account',
+    id: 'local',
+    mode: 'credentials',
+    ...overrides,
+  };
+}
+
+export function authProviders(
+  items: S['AuthProvider'][] = [authProvider()],
+  passwordLogin = true,
+): S['AuthProviderCollection'] {
+  return { items, password_login: passwordLogin };
+}

@@ -1,11 +1,18 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { notifyManager } from '@tanstack/react-query';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BASE_URL } from '../../test/apiFixtures';
 import { installFakeBridge } from '../../test/fakeBridge';
 import { setPlatformForTests } from '../../platform';
-import { capability, deviceStart, devicePoll, tokenPair } from '../../test/flowFixtures';
+import {
+  authProviders,
+  capability,
+  deviceStart,
+  devicePoll,
+  tokenPair,
+} from '../../test/flowFixtures';
 import { renderWithSilo } from '../../test/renderFlow';
 import { formatUserCode } from './format';
 import { encode } from 'uqr';
@@ -17,9 +24,10 @@ const realSetTimeout = globalThis.setTimeout;
 const realTurn = () => new Promise<void>((resolve) => realSetTimeout(resolve, 5));
 
 const server = setupServer();
-let inFlight = 0;
-server.events.on('request:start', () => void inFlight++);
-server.events.on('request:end', () => void inFlight--);
+// By request id: a request of an earlier test that ends late must not count against this one.
+const inFlight = new Set<string>();
+server.events.on('request:start', ({ requestId }) => void inFlight.add(requestId));
+server.events.on('request:end', ({ requestId }) => void inFlight.delete(requestId));
 
 /** Advances the fake clock, then lets every request that started finish and render. */
 async function advance(ms: number) {
@@ -31,13 +39,19 @@ async function advance(ms: number) {
       await realTurn();
       await vi.advanceTimersByTimeAsync(0);
     });
-    if (i >= 2 && inFlight <= 0) break;
+    if (i >= 2 && inFlight.size === 0) break;
   }
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: 'error' });
+  // React Query hands results to React through setTimeout(0), which the fake clock would turn into
+  // a 1 ms step whenever it is scheduled from inside a tick: the code's first poll then lands at
+  // 5001 ms. A microtask keeps the timing of the screen's own timers exact.
+  notifyManager.setScheduler((callback) => queueMicrotask(callback));
+});
 beforeEach(() => {
-  inFlight = 0;
+  inFlight.clear();
 });
 beforeEach(() => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] }));
 afterEach(() => {
@@ -46,7 +60,10 @@ afterEach(() => {
   vi.useRealTimers();
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
+});
 
 interface Calls {
   start: unknown[];
@@ -59,10 +76,14 @@ function mockServer(
     capabilityBody?: object;
     polls?: (n: number) => Response;
     starts?: object[];
+    providers?: object;
   } = {},
 ): Calls {
   const calls: Calls = { start: [], poll: [], cancel: [] };
   server.use(
+    http.get(`${BASE_URL}/api/v2/auth/providers`, () =>
+      HttpResponse.json(options.providers ?? authProviders([], false)),
+    ),
     http.get(`${BASE_URL}/api/v2/auth/device/capability`, () =>
       HttpResponse.json(options.capabilityBody ?? capability),
     ),
@@ -88,8 +109,11 @@ function mockServer(
 function setup() {
   const onSignedIn = vi.fn();
   const onBack = vi.fn();
-  const view = renderWithSilo(<SignInScreen onSignedIn={onSignedIn} onBack={onBack} />);
-  return { onSignedIn, onBack, ...view };
+  const onPassword = vi.fn();
+  const view = renderWithSilo(
+    <SignInScreen onSignedIn={onSignedIn} onPassword={onPassword} onBack={onBack} />,
+  );
+  return { onSignedIn, onBack, onPassword, ...view };
 }
 
 describe('formatUserCode', () => {
@@ -334,6 +358,54 @@ describe('SignInScreen', () => {
     await advance(0);
     expect(calls.cancel).toHaveLength(1);
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no password sign-in when the server does not allow it', async () => {
+    mockServer({ providers: authProviders([], false) });
+    setup();
+    await advance(0);
+    expect(screen.getByTestId('user-code')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in with password' })).not.toBeInTheDocument();
+  });
+
+  it('offers "Sign in with password" below the code when the server allows it', async () => {
+    mockServer({ providers: authProviders() });
+    const { onPassword } = setup();
+    await advance(0);
+    const button = screen.getByRole('button', { name: 'Sign in with password' });
+    // The code stays first on the screen.
+    expect(
+      screen.getByTestId('user-code').compareDocumentPosition(button) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(onPassword).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(onPassword).toHaveBeenCalledTimes(1);
+    // Let the withdrawal of the code finish, so it does not leak into the next test.
+    await advance(0);
+  });
+
+  it('withdraws the pending code when the user opens the password screen', async () => {
+    const calls = mockServer({ providers: authProviders() });
+    setup();
+    await advance(0);
+    await advance(5000);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with password' }));
+    await advance(0);
+    expect(calls.cancel).toEqual([{ device_code: 'device-code-1' }]);
+    await advance(30000);
+    expect(calls.poll).toHaveLength(1);
+  });
+
+  it('offers the password and gives it the focus when the server has no code sign-in', async () => {
+    mockServer({
+      providers: authProviders(),
+      capabilityBody: { ...capability, state: 'disabled' },
+    });
+    setup();
+    await advance(0);
+    expect(screen.getByTestId('signin-unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in with password' })).toHaveFocus();
   });
 
   it('does not send a cancel for a code that already ended', async () => {

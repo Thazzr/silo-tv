@@ -1,16 +1,15 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTransportMode, setTransportMode } from '../api/transport';
-import { Session } from '../api/session';
 import { getPlatform, setPlatformForTests, type KeyValueStore } from '../platform';
 import { BASE_URL, account } from '../test/apiFixtures';
 import { capability, catalogPage, library, profile, profileCollection } from '../test/flowFixtures';
 import { makeReport } from '../test/probeFixture';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { AppRoot } from './AppRoot';
-import { saveServer } from './serverStore';
+import { ServerRegistry } from './servers';
 
 // The service transport goes through the platform's proxy; a spy stands in for the JS service.
 const serviceFetch = vi.fn();
@@ -25,35 +24,47 @@ afterEach(() => {
 afterAll(() => server.close());
 
 let storage: KeyValueStore;
+let registry: ServerRegistry;
 beforeEach(() => {
   setPlatformForTests({ ...getPlatform(), proxyFetch: serviceFetch });
   storage = memoryStorage();
+  registry = new ServerRegistry(storage);
 });
 
 const probe = () => Promise.resolve(makeReport());
 const json = (body: unknown) => HttpResponse.json(body as Record<string, unknown>);
 
-function signedInSession(profileId?: string) {
-  const session = new Session(memoryStorage());
-  session.set({
+/** Saves the test server and signs in to it, with a profile when given. */
+function saveSignedIn(profileId?: string) {
+  registry.add(BASE_URL);
+  registry.session(BASE_URL).set({
     accessToken: 'a',
     refreshToken: 'r',
     expiresAt: Date.now() + 3600_000,
     user: account,
     ...(profileId ? { profileId } : {}),
   });
-  return session;
 }
 
 describe('AppRoot routing', () => {
   it('shows the probe screen when the probe parameter is set', () => {
-    renderApp(<AppRoot launch={{ probe: '' }} probe={probe} storage={storage} />);
+    renderApp(
+      <AppRoot launch={{ probe: '' }} probe={probe} registry={registry} storage={storage} />,
+    );
     expect(screen.getByRole('heading', { level: 1, name: 'Platform' })).toBeInTheDocument();
     expect(screen.queryByTestId('server-screen')).not.toBeInTheDocument();
   });
 
   it('shows the server screen without a stored server', () => {
-    renderApp(<AppRoot launch={{}} probe={probe} storage={storage} device={testDevice} />);
+    renderApp(
+      <AppRoot
+        launch={{}}
+        probe={probe}
+        registry={registry}
+        storage={storage}
+        device={testDevice}
+      />,
+    );
     expect(screen.getByTestId('server-screen')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Platform' })).not.toBeInTheDocument();
   });
@@ -62,29 +73,29 @@ describe('AppRoot routing', () => {
     renderApp(
       <AppRoot
         launch={{ server: 'silo.example.test' }}
+        registry={registry}
         storage={storage}
         device={testDevice}
-        session={new Session(memoryStorage())}
       />,
     );
     expect(screen.getByLabelText('Server address')).toHaveValue('silo.example.test');
   });
 
   it('shows the server screen first when a server is given at launch, even with a stored one', () => {
-    saveServer(BASE_URL, storage);
+    saveSignedIn('p1');
     renderApp(
       <AppRoot
         launch={{ server: 'other.example.test' }}
+        registry={registry}
         storage={storage}
         device={testDevice}
-        session={signedInSession('p1')}
       />,
     );
     expect(screen.getByLabelText('Server address')).toHaveValue('other.example.test');
   });
 
   it('sets the transport mode from the launch parameter before the first request', async () => {
-    saveServer(BASE_URL, storage);
+    registry.add(BASE_URL);
     serviceFetch.mockResolvedValue({
       returnValue: true,
       status: 200,
@@ -96,46 +107,43 @@ describe('AppRoot routing', () => {
     renderApp(
       <AppRoot
         launch={{ transport: 'service' }}
+        registry={registry}
         storage={storage}
         device={testDevice}
-        session={new Session(memoryStorage())}
       />,
     );
     expect(getTransportMode()).toBe('service');
     // The sign-in screen's first request already goes through the JS service (no MSW handler
     // exists, so a direct request would fail the test).
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
-    // The server's branding is asked for through the service as well.
+    await waitFor(() => expect(serviceFetch).toHaveBeenCalled());
     const urls = serviceFetch.mock.calls.map((call) => (call[0] as { url: string }).url);
     expect(urls).toContain(`${BASE_URL}/api/v2/auth/device/capability`);
     expect(urls).toContain(`${BASE_URL}/api/v2/theme/branding`);
   });
 
   it('keeps the direct transport without a transport parameter', () => {
-    renderApp(<AppRoot launch={{}} storage={storage} device={testDevice} />);
+    renderApp(<AppRoot launch={{}} registry={registry} storage={storage} device={testDevice} />);
     expect(getTransportMode()).toBe('direct');
   });
 
-  it('starts at the sign-in screen with a stored server and no session', async () => {
-    saveServer(BASE_URL, storage);
+  it('starts at the sign-in screen with a single saved server and no session', async () => {
+    registry.add(BASE_URL);
     server.use(
       http.get(`${BASE_URL}/api/v2/auth/device/capability`, () =>
         json({ ...capability, state: 'disabled' }),
       ),
+      http.get(`${BASE_URL}/api/v2/auth/providers`, () =>
+        json({ items: [], password_login: false }),
+      ),
+      http.get(`${BASE_URL}/api/v2/theme/branding`, () => json({ server_name: 'S' })),
     );
-    renderApp(
-      <AppRoot
-        launch={{}}
-        storage={storage}
-        device={testDevice}
-        session={new Session(memoryStorage())}
-      />,
-    );
+    renderApp(<AppRoot launch={{}} registry={registry} storage={storage} device={testDevice} />);
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
   });
 
   it('starts at the profile list with a session without a profile', async () => {
-    saveServer(BASE_URL, storage);
+    saveSignedIn();
     server.use(
       http.get(`${BASE_URL}/api/v2/profiles`, () =>
         json(
@@ -146,21 +154,17 @@ describe('AppRoot routing', () => {
         ),
       ),
     );
-    renderApp(
-      <AppRoot launch={{}} storage={storage} device={testDevice} session={signedInSession()} />,
-    );
+    renderApp(<AppRoot launch={{}} registry={registry} storage={storage} device={testDevice} />);
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
   });
 
   it('starts at the library with a session that has a profile', async () => {
-    saveServer(BASE_URL, storage);
+    saveSignedIn('p1');
     server.use(
       http.get(`${BASE_URL}/api/v2/user/libraries`, () => json({ items: [library()] })),
       http.get(`${BASE_URL}/api/v2/catalog`, () => json(catalogPage([]))),
     );
-    renderApp(
-      <AppRoot launch={{}} storage={storage} device={testDevice} session={signedInSession('p1')} />,
-    );
+    renderApp(<AppRoot launch={{}} registry={registry} storage={storage} device={testDevice} />);
     expect(await screen.findByText('This library is empty.')).toBeInTheDocument();
   });
 });

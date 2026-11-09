@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toApiError } from '../../api/client';
+import { toApiError, type SiloClient } from '../../api/client';
 import type { components } from '../../api/generated/schema';
 import { useSilo } from '../../app/SiloContext';
 import { hostOf, resolveAssetUrl, usableAccent } from './branding';
@@ -33,11 +33,11 @@ export function brandingView(baseUrl: string, document?: BrandingDocument): Bran
 const ONE_HOUR = 60 * 60 * 1000;
 
 /**
- * The server's branding. It is decoration: a failed request is not retried and the screens fall
- * back to the host and a neutral badge without saying anything.
+ * The branding of one server, and whether the server's own answer has arrived (the fallback must
+ * not be mistaken for a name the server gave). It is decoration: a failed request is not retried
+ * and the screens fall back to the host and a neutral badge without saying anything.
  */
-export function useBranding(): Branding {
-  const { client, baseUrl } = useSilo();
+export function useBrandingOf(client: SiloClient, baseUrl: string) {
   const query = useQuery({
     queryKey: ['branding', baseUrl],
     staleTime: ONE_HOUR,
@@ -49,5 +49,12 @@ export function useBranding(): Branding {
     },
   });
   const document = query.data;
-  return useMemo(() => brandingView(baseUrl, document), [baseUrl, document]);
+  const branding = useMemo(() => brandingView(baseUrl, document), [baseUrl, document]);
+  return { branding, loaded: query.isSuccess };
+}
+
+/** The branding of the server the app is connected to. */
+export function useBranding(): Branding {
+  const { client, baseUrl } = useSilo();
+  return useBrandingOf(client, baseUrl).branding;
 }

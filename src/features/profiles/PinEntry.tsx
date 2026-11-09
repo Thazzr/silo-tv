@@ -2,17 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
+import { formatWait } from '../auth/format';
 import { useVerifyPin, type Profile } from './queries';
 
 // Silo accepts up to 72 bytes; a TV PIN is a handful of digits, so cap it well below that.
 const MAX_DIGITS = 12;
 
 const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'delete', '0', 'confirm'] as const;
-
-/** "5 min" or "30 s": the wait Silo reports in Retry-After. */
-function waitText(seconds: number): string {
-  return seconds < 60 ? `${Math.max(1, seconds)} s` : `${Math.ceil(seconds / 60)} min`;
-}
 
 function digitFromKey(e: KeyboardEvent): string | null {
   if (/^[0-9]$/.test(e.key)) return e.key;
@@ -61,7 +57,7 @@ export function PinEntry({
             setMessage(
               error.retryAfter === undefined
                 ? t('pin.lockedGeneric')
-                : t('pin.locked', { time: waitText(error.retryAfter) }),
+                : t('pin.locked', { time: formatWait(error.retryAfter) }),
             );
           } else {
             setMessage(t('pin.error'));

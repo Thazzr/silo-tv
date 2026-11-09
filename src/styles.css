@@ -734,3 +734,81 @@ html {
   inset: 0;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.82));
 }
+
+/* Server list: a row opens the server, a compact button to its right removes it. */
+.server-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1200px;
+}
+
+.server-row .row {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.btn.server {
+  min-height: 96px;
+}
+
+.btn.compact {
+  flex: none;
+  padding: 12px 24px;
+}
+
+.server-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.server-name {
+  overflow: hidden;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-host {
+  overflow: hidden;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  flex: none;
+  padding: 4px 16px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-secondary);
+  border: 2px solid var(--chrome-border);
+  border-radius: 999px;
+}
+
+.btn:focus .server-host,
+.btn:focus .pill {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.btn:focus .pill {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Provider choices on the password screen: the mark in the text says which one is chosen. */
+.btn.choice {
+  display: block;
+  margin-right: 12px;
+}
+
+.btn.choice.selected {
+  background: var(--chrome-selected);
+}
+
+.btn.choice.selected:focus {
+  background: var(--focus-fill);
+}
