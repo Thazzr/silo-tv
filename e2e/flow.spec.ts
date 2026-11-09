@@ -9,7 +9,7 @@ import { distIndexUrl } from './paths.ts';
 // approved on the second poll (or, per option, password sign-in only), one profile without a PIN,
 // the Home sections (Continue Watching, and Recently Added with more titles than its row shows),
 // one library with two titles, the detail pages of a movie (half way through) and a series with
-// two seasons, and the playback protocol up to a plan whose media never answers (the loading cue
+// two seasons, the person page of a cast member, and the playback protocol up to a plan whose media never answers (the loading cue
 // stays). Every instance has its own origin (its own port), which is what the
 // app keys servers and sessions by.
 
@@ -45,6 +45,8 @@ interface FakeOptions {
    * taller than 760 px), the movie gets a cast and a "More like this" row.
    */
   tall?: boolean;
+  /** A biography of about 4,000 characters on the person pages (the last line says THE END). */
+  longBio?: boolean;
   /** How many seasons the series has (2 when omitted). */
   seasons?: number;
   /** Extra genres ("Genre 01", ...) after Action and Drama: a facet list longer than its panel. */
@@ -121,6 +123,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
   const seasonCount = options.seasons ?? 2;
+  const longBio =
+    Array.from({ length: 80 }, (_, i) => `Sentence ${i + 1} of the long biography.`).join(' ') +
+    ' THE END';
   const genreNames = [
     'Action',
     'Drama',
@@ -296,6 +301,17 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 year: 2020,
               }))
             : [],
+        });
+      }
+      // The person page of a cast member (the tall movie's cast has the ids p0 to p3).
+      const person = /^\/api\/v2\/catalog\/people\/p(\d)$/.exec(url.pathname);
+      if (req.method === 'GET' && person) {
+        return send(200, {
+          id: `p${person[1]}`,
+          name: ['Ann Actor', 'Bo Actor', 'Cy Actor', 'Di Actor'][Number(person[1])],
+          birth_date: '1940-04-25',
+          birthplace: 'Springfield, USA',
+          bio: options.longBio ? longBio : 'An actor from the fake server.',
         });
       }
       const watch = /^\/api\/v2\/watch\/(.+)$/.exec(url.pathname);
@@ -523,6 +539,29 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             ],
           });
         case 'GET /api/v2/catalog':
+          // A person's credits: newest first; "video" is movies and series together.
+          if (url.searchParams.get('source') === 'person') {
+            const credit = (id: string, title: string, type: string, year: number) => ({
+              content_id: id,
+              title,
+              type,
+              year,
+            });
+            const movies = [
+              credit('m1', 'First Title', 'movie', 2022),
+              credit('m2', 'Second Title', 'movie', 2021),
+            ];
+            const series = [credit('s1', 'A Show', 'series', 2020)];
+            const kind = url.searchParams.get('type');
+            const items =
+              kind === 'movie' ? movies : kind === 'series' ? series : [...movies, ...series];
+            return send(200, {
+              items: items.slice(0, Number(url.searchParams.get('limit') ?? 50)),
+              total: items.length,
+              total_exact: true,
+              page: { has_more: false },
+            });
+          }
           // A row's full list (Explore all) comes through the catalog with source=section.
           if (url.searchParams.get('source') === 'section') {
             return send(200, {
@@ -1662,6 +1701,146 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
   await expect.poll(() => opacity('[data-zone="cast"]')).toBe('0');
   await expect.poll(() => opacity('.detail-text')).toBe('0');
   expect(await opacity('[data-zone="similar"]')).toBe('1');
+});
+
+test('detail page: a cast card opens the person page; Movies, a title, and Back return to the same card and filter, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  // Down to the cast, Right to the second person, OK opens the page; the name is there at once.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Bo Actor/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('person-name')).toHaveText('Bo Actor');
+  await expect(page.getByTestId('person-facts')).toContainText('Geboren am 25. April 1940');
+  await expect(page.getByTestId('person-bio')).toHaveText('An actor from the fake server.');
+
+  // The pills hold All, Movies and Series; All is selected and has the focus, its count shows.
+  await expect(page.getByRole('tab')).toHaveText(['Alle', 'Filme', 'Serien']);
+  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Alle' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('person-count')).toHaveText('3 Titel');
+  await expect(page.getByTestId('card-title')).toHaveText([
+    'First Title',
+    'Second Title',
+    'A Show',
+  ]);
+  expect(seen.some((e) => e.path === '/api/v2/catalog/people/p1' && e.search === '')).toBe(true);
+  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('person_id=p1'))).toBe(
+    true,
+  );
+
+  // Resting on Movies shows nothing; OK reads the movies.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Filme' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Alle' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('card-title')).toHaveCount(3);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('tab', { name: 'Filme' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('card-title')).toHaveText(['First Title', 'Second Title']);
+  await expect(page.getByTestId('person-count')).toHaveText('2 Titel');
+
+  // Down enters the grid: the page scrolls so the pills sit on the top safe line.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await expect
+    .poll(async () => Math.abs((await page.getByTestId('person-pills').boundingBox())!.y - 54))
+    .toBeLessThanOrEqual(2);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  // Back: the person page with Movies selected and the same card focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('person-name')).toHaveText('Bo Actor');
+  await expect(page.getByRole('tab', { name: 'Filme' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('card-title')).toHaveText(['First Title', 'Second Title']);
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+
+  // Back once more: the detail page with the same cast card focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByRole('button', { name: /Bo Actor/ })).toBeFocused();
+});
+
+test('person page: a 4,000-character biography opens in full; Down scrolls it to its last line, Back closes onto More', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ tall: true, longBio: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');
+
+  // Up from the pills reaches More; OK opens the biography.
+  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByTestId('synopsis-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();
+
+  // The dialog stays inside the safe area, the text is cut at the bottom, and the fade says so.
+  const geometry = async () => {
+    const box = (await page.getByTestId('synopsis-scroll').boundingBox())!;
+    const text = (await page.getByTestId('synopsis-full').boundingBox())!;
+    const dlg = (await dialog.boundingBox())!;
+    return {
+      boxBottom: box.y + box.height,
+      textBottom: text.y + text.height,
+      dlgTop: dlg.y,
+      dlgBottom: dlg.y + dlg.height,
+    };
+  };
+  const before = await geometry();
+  expect(before.textBottom).toBeGreaterThan(before.boxBottom + 100);
+  expect(before.dlgTop).toBeGreaterThanOrEqual(54 - 1);
+  expect(before.dlgBottom).toBeLessThanOrEqual(1080 - 54 + 1);
+  const scroll = page.getByTestId('synopsis-scroll');
+  await expect(scroll).toHaveAttribute('data-more-below', 'true');
+  await expect(scroll).toHaveAttribute('data-more-above', 'false');
+
+  // Down moves the text; after enough presses the last line is inside the box.
+  await page.keyboard.press('ArrowDown');
+  await expect(scroll).toHaveAttribute('data-more-above', 'true');
+  for (let i = 0; i < 40; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(scroll).toHaveAttribute('data-more-below', 'false');
+  await expect
+    .poll(async () => {
+      const g = await geometry();
+      return g.textBottom <= g.boxBottom + 1;
+    })
+    .toBe(true);
+  await expect(page.getByTestId('synopsis-full')).toContainText('THE END');
+  // The focus never left Close.
+  await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
 });
 
 test('detail page: going up animates the transform and never scrolls the clipping box natively', async ({

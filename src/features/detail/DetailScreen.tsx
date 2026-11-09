@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
 import { useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
@@ -6,6 +6,7 @@ import { useT } from '../../i18n';
 import { PersonCard, PosterCard, Row, keepAtOrigin, type CatalogItem } from '../../ui/media';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
+import type { PersonTarget } from '../person/personMemory';
 import { ActionRow, type EpisodeRef } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
@@ -26,9 +27,6 @@ import { CAST_LIMIT, useItemDetail, useSeasonEpisodes, useSeasons, useSimilar } 
 import { SeasonPills } from './SeasonPills';
 import { SynopsisDialog } from './SynopsisDialog';
 
-/** How long "Person pages come soon" stays on screen. */
-const NOTE_MS = 4000;
-
 /** What the player needs to start a title; an intent other than `ask` skips its resume prompt. */
 export interface PlayRequest {
   contentId: string;
@@ -43,6 +41,8 @@ export interface DetailScreenProps {
   onPlay: (request: PlayRequest) => void;
   /** Opens another title's page over this one ("More like this"). */
   onOpenDetail: (target: DetailTarget) => void;
+  /** Opens a cast member's page over this one. */
+  onOpenPerson: (target: PersonTarget) => void;
   onBack: () => void;
 }
 
@@ -99,6 +99,7 @@ function DetailBody({
   memory,
   onPlay,
   onOpenDetail,
+  onOpenPerson,
 }: DetailScreenProps & { detail: ItemDetail }) {
   const t = useT();
   const series = isSeries(detail);
@@ -180,21 +181,6 @@ function DetailBody({
     () => [...detail.cast].sort((a, b) => a.order - b.order).slice(0, CAST_LIMIT),
     [detail.cast],
   );
-  const [personNote, setPersonNote] = useState(false);
-  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (noteTimer.current !== null) clearTimeout(noteTimer.current);
-    },
-    [],
-  );
-  // The person page comes with P2.4; until then OK on a person says so.
-  const openPerson = () => {
-    setPersonNote(true);
-    if (noteTimer.current !== null) clearTimeout(noteTimer.current);
-    noteTimer.current = setTimeout(() => setPersonNote(false), NOTE_MS);
-  };
-
   // --- Vertical scroll: the page moves to the section that holds the focus ----------------------
   const [zone, setZone] = useState<DetailZone>('hero');
   // The tops of the blocks below the hero are measured, not assumed: a tall hero (logo, four lines
@@ -379,7 +365,12 @@ function DetailBody({
                     initials={initials(person.name)}
                     focusKey={ctx.focusKey}
                     onFocused={ctx.onFocused}
-                    onOpen={openPerson}
+                    onOpen={() => {
+                      // A credit without a person id has no page to open.
+                      if (person.person_id) {
+                        onOpenPerson({ personId: person.person_id, personName: person.name });
+                      }
+                    }}
                   />
                 )}
               />
@@ -408,11 +399,6 @@ function DetailBody({
             </div>
           ) : null}
         </div>
-        {personNote ? (
-          <p role="status" className="note toast" data-testid="person-note">
-            {t('detail.personSoon')}
-          </p>
-        ) : null}
         {synopsisOpen && detail.overview ? (
           <SynopsisDialog
             title={detail.title}

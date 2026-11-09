@@ -20,6 +20,7 @@ import {
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
+import type { PersonTarget } from '../person/personMemory';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
 
@@ -44,11 +45,15 @@ const focusKeyIs = (focusKey: string) => waitFor(() => expect(getCurrentFocusKey
 /** Far longer than the old rest delay: focus alone must not switch a season in this time. */
 const LONG_REST = 5000;
 
-type Screen = { name: 'detail'; target: DetailTarget } | { name: 'player'; request: PlayRequest };
+type Screen =
+  | { name: 'detail'; target: DetailTarget }
+  | { name: 'player'; request: PlayRequest }
+  | { name: 'person'; target: PersonTarget };
 
 /**
  * The detail page on a screen stack with a stub player: Play and OK on an episode push the stub,
- * "More like this" pushes another detail page, and Back pops, like the flow does.
+ * "More like this" pushes another detail page, a cast card pushes a stub person page, and Back
+ * pops, like the flow does.
  */
 function setup(
   target: DetailTarget,
@@ -66,7 +71,11 @@ function setup(
   const onPlay = vi.fn<(request: PlayRequest) => void>();
   const onBack = options.onBack ?? vi.fn();
   const renderScreen = (current: Screen, nav: NavApi<Screen>) =>
-    current.name === 'detail' ? (
+    current.name === 'person' ? (
+      <div data-testid="person-stub">
+        {current.target.personId}|{current.target.personName}
+      </div>
+    ) : current.name === 'detail' ? (
       <DetailScreen
         target={current.target}
         memory={memory.of(current)}
@@ -75,6 +84,7 @@ function setup(
           nav.push({ name: 'player', request });
         }}
         onOpenDetail={(next) => nav.push({ name: 'detail', target: next })}
+        onOpenPerson={(next) => nav.push({ name: 'person', target: next })}
         onBack={() => {
           onBack();
           nav.pop();
@@ -282,7 +292,7 @@ describe('DetailScreen: a movie', () => {
     expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
   });
 
-  it('shows the cast in billing order, and OK on a person says person pages come soon', async () => {
+  it('shows the cast in billing order, and OK on a person with an id opens the person page', async () => {
     serveDetail(server, {
       item: () =>
         itemDetail({
@@ -298,8 +308,48 @@ describe('DetailScreen: a movie', () => {
     expect(names).toEqual(['First Actor', 'Second Actor']);
     expect(screen.getByRole('button', { name: 'First Actor, Fay' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'First Actor, Fay' }));
-    expect(await screen.findByTestId('person-note')).toHaveTextContent('Person pages come soon');
+    // The person's id and name go to the person page, which paints the name at once.
+    expect(await screen.findByTestId('person-stub')).toHaveTextContent('p-1|First Actor');
     expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('does nothing on OK on a cast card without a person id, and shows no note either', async () => {
+    serveDetail(server, {
+      item: () => itemDetail({ cast: [{ name: 'No Id', character: 'Nell', order: 0 }] }),
+    });
+    const { onPlay } = setup({ itemId: 'm1' });
+    await ready();
+    const card = screen.getByRole('button', { name: 'No Id, Nell' });
+    fireEvent.click(card);
+    await sleep(50);
+    expect(screen.queryByTestId('person-stub')).toBeNull();
+    expect(screen.getByTestId('detail-hero')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('comes back from the person page onto the same cast card', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          cast: [
+            { name: 'First Actor', character: 'Fay', order: 0, person_id: 'p-1' },
+            { name: 'Second Actor', character: 'Sam', order: 1, person_id: 'p-2' },
+          ],
+        }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:cast:p-1');
+    await pressKey(KEY.right);
+    await focusKeyIs('card:cast:p-2');
+    await pressKey(KEY.enter);
+    await screen.findByTestId('person-stub');
+    await pressKey(KEY.back);
+    await ready();
+    await focusKeyIs('card:cast:p-2');
   });
 
   it('puts the initials on a cast card without a photo', async () => {

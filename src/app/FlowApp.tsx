@@ -8,6 +8,8 @@ import { SignInScreen } from '../features/auth/SignInScreen';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
 import { DetailMemory, type DetailTarget } from '../features/detail/detailMemory';
 import { DetailScreen } from '../features/detail/DetailScreen';
+import { PersonMemory, type PersonTarget } from '../features/person/personMemory';
+import { PersonScreen } from '../features/person/PersonScreen';
 import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
@@ -47,6 +49,8 @@ type FlowScreen =
   | ({ name: 'collection' } & CollectionTarget)
   /** A movie or series; the season and episode are set when an episode card opened it. */
   | ({ name: 'detail' } & DetailTarget)
+  /** A person (a cast member): portrait, biography and filmography. */
+  | ({ name: 'person' } & PersonTarget)
   /** The intent says how it starts; without one the player asks when there is something to resume. */
   | { name: 'player'; contentId: string; title: string; intent?: StartIntent }
   /** The device settings. */
@@ -149,6 +153,8 @@ export function FlowApp({
   const [gridMemory] = useState(() => new FocusIndexMemory());
   /** What each open detail page remembers (season, focused cards) while the player covers it. */
   const [detailMemory] = useState(() => new DetailMemory());
+  /** What each open person page remembers (filter, focused card) while a title covers it. */
+  const [personMemory] = useState(() => new PersonMemory());
   const session = origin ? registry.session(origin) : null;
   const launchRecord = useSyncExternalStore(prefs.subscribe, () => prefs.get(origin ?? ''));
 
@@ -316,6 +322,7 @@ export function FlowApp({
               queryClient.removeQueries({ queryKey: ['home'] });
               queryClient.removeQueries({ queryKey: ['library'] });
               queryClient.removeQueries({ queryKey: ['detail'] });
+              queryClient.removeQueries({ queryKey: ['person'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.
@@ -361,6 +368,19 @@ export function FlowApp({
                 title: request.title,
                 intent: request.intent,
               })
+            }
+            onOpenDetail={openDetail}
+            onOpenPerson={(target) => nav.push({ name: 'person', ...target })}
+            onBack={nav.pop}
+          />,
+        );
+      case 'person':
+        return provide(
+          <PersonScreen
+            target={screen}
+            memory={personMemory.of(screen)}
+            onPlay={(item, intent) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
             }
             onOpenDetail={openDetail}
             onBack={nav.pop}

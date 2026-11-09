@@ -13,6 +13,11 @@ export function I18nProvider({ children, lang }: { children: ReactNode; lang?: L
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
+/** The language the app is shown in (for formatting dates and numbers the way the text reads). */
+export function useLanguage(): Language {
+  return useContext(I18nContext);
+}
+
 export function useT(): TFunction {
   const lang = useContext(I18nContext);
   return useCallback((key, params) => translate(lang, key, params), [lang]);

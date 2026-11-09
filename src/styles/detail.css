@@ -364,16 +364,70 @@
   border-radius: 38px;
 }
 
-/* ---- The full synopsis ---- */
+/* ---- The full text (a synopsis or a biography) ---- */
+/* Up to the whole safe area (1080 - 2 x 54 px): title, the scrolling text, Close. */
 .dialog-synopsis {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   min-width: 960px;
   max-width: 1280px;
+  max-height: calc(100vh - 108px);
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.dialog-synopsis h2 {
+  flex: none;
+  margin-bottom: 24px;
+}
+
+/* The box clips the text; the text moves inside it with a transform (3 lines of 36 px a press). */
+.synopsis-scroll {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+  margin-bottom: 24px;
+  overflow: hidden;
 }
 
 .synopsis-full {
-  max-height: 640px;
-  margin: 0 0 32px;
-  overflow: hidden;
+  margin: 0;
   font-size: 26px;
   line-height: 36px;
+  white-space: pre-line;
+  transition: transform 150ms ease-out;
+  will-change: transform;
+}
+
+/* A soft fade says that more text follows below, and that some has scrolled away above. */
+.synopsis-scroll::before,
+.synopsis-scroll::after {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 56px;
+  pointer-events: none;
+  content: '';
+  opacity: 0;
+}
+
+.synopsis-scroll::before {
+  top: 0;
+  background: linear-gradient(180deg, var(--surface-raised), rgba(21, 23, 28, 0));
+}
+
+.synopsis-scroll::after {
+  bottom: 0;
+  background: linear-gradient(0deg, var(--surface-raised), rgba(21, 23, 28, 0));
+}
+
+.synopsis-scroll[data-more-above='true']::before,
+.synopsis-scroll[data-more-below='true']::after {
+  opacity: 1;
+}
+
+.dialog-synopsis .dialog-actions {
+  flex: none;
 }

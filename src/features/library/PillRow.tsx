@@ -16,6 +16,8 @@ export function PillRow({
   items,
   selected,
   onPick,
+  onFocused,
+  autoFocus = false,
   testId,
 }: {
   focusKey: string;
@@ -25,6 +27,10 @@ export function PillRow({
   items: readonly PillItem[];
   selected: string | undefined;
   onPick: (id: string) => void;
+  /** Any pill got the focus (for a screen that scrolls with it). */
+  onFocused?: () => void;
+  /** The selected pill takes the focus when the row appears. */
+  autoFocus?: boolean;
   testId: string;
 }) {
   return (
@@ -45,6 +51,8 @@ export function PillRow({
           className={`btn lib-pill${item.id === selected ? ' selected' : ''}`}
           role="tab"
           aria-selected={item.id === selected}
+          autoFocus={autoFocus && item.id === selected}
+          onFocused={onFocused}
           onClick={() => onPick(item.id)}
         >
           {item.label}
