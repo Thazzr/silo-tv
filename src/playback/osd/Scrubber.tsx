@@ -12,6 +12,10 @@ export interface ScrubberProps {
   label: string;
   /** The Magic Remote pointer is over the scrubber. */
   onHover(): void;
+  /** The pointer's fraction (0-1) of the track while it is over the scrubber; null when it leaves. */
+  onHoverMove(fraction: number | null): void;
+  /** Where chapters start, as fractions (0-1) of the track; the first second is not among them. */
+  chapterTicks: readonly number[];
   /** A click: the fraction (0-1) of the track where it landed. */
   onSeek(fraction: number): void;
 }
@@ -28,16 +32,23 @@ export function Scrubber({
   scrubbing,
   label,
   onHover,
+  onHoverMove,
+  chapterTicks,
   onSeek,
 }: ScrubberProps) {
   const track = useRef<HTMLDivElement>(null);
   const ratio = ratioOf(position, duration);
 
-  const click = (e: MouseEvent) => {
+  const fractionAt = (e: MouseEvent): number | null => {
     const box = track.current?.getBoundingClientRect();
-    if (!box || box.width <= 0) return;
-    onSeek(Math.max(0, Math.min(1, (e.clientX - box.left) / box.width)));
+    if (!box || box.width <= 0) return null;
+    return Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
   };
+  const click = (e: MouseEvent) => {
+    const fraction = fractionAt(e);
+    if (fraction !== null) onSeek(fraction);
+  };
+  const move = (e: MouseEvent) => onHoverMove(fractionAt(e));
 
   return (
     <div
@@ -55,6 +66,8 @@ export function Scrubber({
       data-testid="player-scrubber"
       onMouseEnter={onHover}
       onClick={click}
+      onMouseMove={move}
+      onMouseLeave={() => onHoverMove(null)}
     >
       <div className="player-scrubber-track" ref={track}>
         <div
@@ -63,6 +76,15 @@ export function Scrubber({
         />
         <div className="player-scrubber-fill" style={{ transform: `scaleX(${ratio})` }} />
       </div>
+      {/* Outside the track (which clips) so the ticks can stand a little taller than it. */}
+      {chapterTicks.map((fraction) => (
+        <div
+          key={fraction}
+          className="player-scrubber-tick"
+          data-testid="player-chapter-tick"
+          style={{ left: `${fraction * 100}%` }}
+        />
+      ))}
       <div className="player-scrubber-thumb" style={{ left: `${ratio * 100}%` }} />
     </div>
   );

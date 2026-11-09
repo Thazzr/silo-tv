@@ -463,22 +463,71 @@ h3 {
   color: var(--text);
 }
 
-.player-osd-scrub-row {
-  min-height: 40px;
-  margin-top: 12px;
+.player-osd-scrubwrap {
+  position: relative;
+  margin-top: 24px;
 }
 
-.player-osd-scrub {
+/* The preview card stands above the scrubber; only its transform moves, set from the script. */
+.player-osd-series,
+.player-osd-title {
+  transition: opacity var(--transition);
+}
+
+.player-osd-series[data-covered='true'],
+.player-osd-title[data-covered='true'] {
+  opacity: 0;
+}
+
+.player-preview {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  box-sizing: border-box;
+  padding: 16px;
+  margin-bottom: 12px;
+  text-align: center;
+  background: rgba(21, 23, 28, 0.97);
+  border-radius: 20px;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.player-preview-image {
+  margin: 0 auto;
+  background-color: #000;
+  background-repeat: no-repeat;
+  border-radius: 14px;
+  outline: 1px solid rgba(255, 255, 255, 0.18);
+  outline-offset: -1px;
+}
+
+.player-preview-time {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0;
-  font-size: 28px;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-size: 24px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.player-osd-scrub-time {
+.player-preview-time:first-child {
+  margin-top: 0;
+}
+
+.player-preview-rate {
   color: var(--text-secondary);
+}
+
+.player-preview-chapter {
+  margin: 4px 0 0;
+  overflow: hidden;
+  font-size: 20px;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The hit area is tall enough for the pointer; the visible bar inside it is thin. */
@@ -520,6 +569,17 @@ h3 {
 
 .player-scrubber-fill {
   background: var(--progress);
+}
+
+.player-scrubber-tick {
+  position: absolute;
+  top: 12px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .player-scrubber-thumb {

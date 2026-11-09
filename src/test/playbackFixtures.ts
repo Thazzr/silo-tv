@@ -236,3 +236,53 @@ export async function until(condition: () => boolean, timeoutMs = 3000): Promise
 }
 
 export const LOWER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** A manifest for 5400 s at one thumbnail per 10 s: 540 thumbnails on six 10x10 sheets. */
+export function trickplayManifest(
+  overrides: Partial<S['WatchTrickplay']> = {},
+): S['WatchTrickplay'] {
+  return {
+    expires_at: '2030-01-01T00:00:00.000Z',
+    file_id: 'file-1',
+    interval_ms: 10_000,
+    sheets: [0, 1, 2, 3, 4, 5].map((index) => ({
+      index,
+      url: `/api/v2/artwork/trickplay/file-1/rev1/${index}.rev1.jpg?exp=1893456000&sig=sig${index}`,
+    })),
+    thumbnail_count: 540,
+    thumbnail_height: 126,
+    thumbnail_width: 300,
+    tile_columns: 10,
+    tile_rows: 10,
+    ...overrides,
+  };
+}
+
+export interface TrickplayCall {
+  url: URL;
+  headers: Headers;
+}
+
+/** Serves the trickplay manifest (or a status) and records every read. */
+export function serveTrickplay(
+  server: SetupServer,
+  answer: S['WatchTrickplay'] | number | (() => S['WatchTrickplay']) = trickplayManifest(),
+): TrickplayCall[] {
+  const calls: TrickplayCall[] = [];
+  server.use(
+    http.get(`${BASE_URL}/api/v2/watch/:id/trickplay`, ({ request }) => {
+      calls.push({ url: new URL(request.url), headers: request.headers });
+      if (typeof answer === 'number') {
+        return HttpResponse.json(
+          { type: 'about:blank', title: 'Error', status: answer, code: 'internal_error' },
+          { status: answer, headers: { 'content-type': 'application/problem+json' } },
+        );
+      }
+      return HttpResponse.json(typeof answer === 'function' ? answer() : answer);
+    }),
+  );
+  return calls;
+}
+
+/** Capabilities that offer scrub previews. */
+export const TRICKPLAY_FEATURES = ['playback_plan_v3', 'sequenced_progress_v1', 'trickplay_v1'];

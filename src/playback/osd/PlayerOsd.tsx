@@ -1,8 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { formatClock } from '../format';
-import { CloseIcon, PauseIcon, PlayIcon, ScrubIcon, SkipIcon } from './icons';
+import { CloseIcon, PauseIcon, PlayIcon, SkipIcon } from './icons';
+import { PreviewCard } from './PreviewCard';
+import { chapterTickFractions, type Chapter } from './previewMath';
 import { Scrubber } from './Scrubber';
+import type { TrickplayImages } from './useTrickplay';
 
 export type OsdFocus = 'video' | 'scrubber' | 'skipBack' | 'playPause' | 'skipForward' | 'close';
 /** The round buttons, left to right as the 5-way keys walk them. */
@@ -22,6 +25,12 @@ export interface PlayerOsdProps {
   skipBackSeconds: number;
   skipForwardSeconds: number;
   scrub: { rate: number; target: number } | null;
+  /** A skip is pending: `position` is its target, not where the video is. */
+  skipPending: boolean;
+  /** The playing file's chapters (ticks on the track, a title on the preview card). */
+  chapters: readonly Chapter[];
+  /** The scrub previews, when the file has them and they have loaded. */
+  previews: TrickplayImages | undefined;
   onFocus(focus: OsdFocus): void;
   onSeekFraction(fraction: number): void;
   onAction(button: OsdButton): void;
@@ -49,7 +58,23 @@ export function PlayerOsd(props: PlayerOsdProps) {
   }, [visible, focus]);
 
   const remaining = Math.max(0, duration - position);
-  const rateLabel = scrub ? `${Math.abs(scrub.rate)}×` : '';
+  const ticks = useMemo(
+    () => chapterTickFractions(props.chapters, duration),
+    [props.chapters, duration],
+  );
+
+  // The pointer's position on the scrubber. A hidden overlay forgets it: the pointer may still
+  // rest there when the overlay comes back, and a card at a stale spot would be wrong.
+  const [hover, setHover] = useState<number | null>(null);
+  if (!visible && hover !== null) setHover(null);
+  const hoverTime = hover !== null ? hover * duration : null;
+  const cardTime = hoverTime ?? (scrub ? scrub.target : props.skipPending ? position : null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const cardShown = cardTime !== null && duration > 0;
+  useLayoutEffect(() => {
+    if (cardShown && wrap.current) setTrackWidth(wrap.current.offsetWidth);
+  }, [cardShown]);
 
   const button = (name: OsdButton, label: string, icon: ReactNode) => (
     <button
@@ -80,32 +105,39 @@ export function PlayerOsd(props: PlayerOsdProps) {
       data-testid="player-osd"
     >
       <div className="player-osd-body">
-        {props.series ? <p className="player-osd-series">{props.series}</p> : null}
-        <h1 className="player-osd-title">{props.title}</h1>
-        <div className="player-osd-scrub-row">
-          {scrub ? (
-            <p
-              className="player-osd-scrub"
-              data-testid="player-scrub"
-              data-rate={scrub.rate}
-              aria-label={t('player.osd.scrubbing', { rate: rateLabel })}
-            >
-              <ScrubIcon forward={scrub.rate > 0} />
-              <span>{rateLabel}</span>
-              <span className="player-osd-scrub-time">{formatClock(scrub.target)}</span>
-            </p>
+        {/* The card stands where the heading is: the heading gives way while it shows. */}
+        {props.series ? (
+          <p className="player-osd-series" data-covered={cardShown}>
+            {props.series}
+          </p>
+        ) : null}
+        <h1 className="player-osd-title" data-covered={cardShown}>
+          {props.title}
+        </h1>
+        <div className="player-osd-scrubwrap" ref={wrap}>
+          {cardShown ? (
+            <PreviewCard
+              time={cardTime}
+              centerX={(Math.max(0, Math.min(duration, cardTime)) / duration) * trackWidth}
+              trackWidth={trackWidth}
+              images={props.previews}
+              chapters={props.chapters}
+              scrub={scrub}
+            />
           ) : null}
+          <Scrubber
+            position={position}
+            duration={duration}
+            bufferedEnd={props.bufferedEnd}
+            focused={focus === 'scrubber'}
+            scrubbing={scrub !== null}
+            label={t('player.osd.position')}
+            chapterTicks={ticks}
+            onHover={() => props.onFocus('scrubber')}
+            onHoverMove={setHover}
+            onSeek={props.onSeekFraction}
+          />
         </div>
-        <Scrubber
-          position={position}
-          duration={duration}
-          bufferedEnd={props.bufferedEnd}
-          focused={focus === 'scrubber'}
-          scrubbing={scrub !== null}
-          label={t('player.osd.position')}
-          onHover={() => props.onFocus('scrubber')}
-          onSeek={props.onSeekFraction}
-        />
         <div className="player-osd-times">
           <span data-testid="player-time">{formatClock(position)}</span>
           <span data-testid="player-remaining">−{formatClock(remaining)}</span>

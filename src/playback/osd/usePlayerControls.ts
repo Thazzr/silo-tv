@@ -32,6 +32,8 @@ export interface PlayerControls {
   /** The playhead as the overlay shows it. */
   shownPosition: number;
   scrub: ScrubState | null;
+  /** A skip is waiting for its commit: `shownPosition` is its target. */
+  skipPending: boolean;
   setFocus(focus: OsdFocus): void;
   action(button: OsdButton): void;
   seekToFraction(fraction: number): void;
@@ -319,6 +321,7 @@ export function usePlayerControls(args: Args): PlayerControls {
     focus,
     shownPosition: scrub.state?.target ?? skip.pending ?? position,
     scrub: scrub.state,
+    skipPending: skip.pending !== null,
     setFocus: setFocusState,
     action,
     seekToFraction,

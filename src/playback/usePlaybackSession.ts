@@ -16,6 +16,7 @@ import {
 } from './deviceProfile';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { mediaUrlWithToken } from './mediaUrl';
+import { toChapters, type Chapter } from './osd/previewMath';
 import { collectProfileProbe } from './probe';
 import { resumePoint, rewound, type StartIntent, type TrackChoice } from './resume';
 import { getResumeRewind } from './resumeRewind';
@@ -64,6 +65,7 @@ export type SessionState =
       /** False when the viewer had paused before a reload that should not start by itself. */
       autoplay: boolean;
       heading: Heading | null;
+      previews: PreviewFacts;
     }
   | {
       kind: 'error';
@@ -73,6 +75,15 @@ export type SessionState =
       sessionId?: string;
       mediaUrl?: string;
     };
+
+/** What the overlay needs for the file that plays: its chapters and whether it has scrub previews. */
+export interface PreviewFacts {
+  /** The file the plan plays (the plan's effective file), which the previews are read for. */
+  fileId: string;
+  /** The server offers trickplay AND this file's version has it published. */
+  trickplay: boolean;
+  chapters: Chapter[];
+}
 
 /** What the player reports: the position on the source's timeline, in seconds. */
 export interface PlayerReading {
@@ -92,7 +103,7 @@ class SessionError extends Error {
 }
 
 // The server's installation id, per server, for the whole app run. Every mutation carries it.
-const installations = new Map<string, string>();
+const installations = new Map<string, { id: string; trickplay: boolean }>();
 
 /** Test hook. */
 export function clearInstallationCache(): void {
@@ -179,6 +190,9 @@ export class PlaybackController {
   private profileId = '';
   private installationId = '';
   private fileId = '';
+  /** The server lists `trickplay_v1` among its playback features. */
+  private trickplayServer = false;
+  private versions: { fileId: string; trickplay: boolean; chapters: Chapter[] }[] = [];
   private attemptId = '';
   private sessionId = '';
   private plan: Plan | null = null;
@@ -255,7 +269,9 @@ export class PlaybackController {
     try {
       const [installationId, watch] = await Promise.all([this.installation(), this.watch()]);
       if (this.disposed) return;
-      this.installationId = installationId;
+      this.installationId = installationId.id;
+      this.trickplayServer = installationId.trickplay;
+      this.versions = watch.versions;
       this.fileId = watch.fileId;
       this.resumeAt = watch.resume;
       this.heading = watch.heading;
@@ -274,7 +290,7 @@ export class PlaybackController {
     }
   }
 
-  private async installation(): Promise<string> {
+  private async installation(): Promise<{ id: string; trickplay: boolean }> {
     const cached = installations.get(this.deps.baseUrl);
     if (cached) return cached;
     const { data, response } = await this.deps.client.GET('/api/v2/playback/capabilities', {
@@ -288,11 +304,17 @@ export class PlaybackController {
       data.features.includes('sequenced_progress_v1') &&
       Boolean(data.installation_id);
     if (!supported || !data.installation_id) throw new SessionError('unsupported');
-    installations.set(this.deps.baseUrl, data.installation_id);
-    return data.installation_id;
+    const known = { id: data.installation_id, trickplay: data.features.includes('trickplay_v1') };
+    installations.set(this.deps.baseUrl, known);
+    return known;
   }
 
-  private async watch(): Promise<{ fileId: string; resume: number | null; heading: Heading }> {
+  private async watch(): Promise<{
+    fileId: string;
+    resume: number | null;
+    heading: Heading;
+    versions: { fileId: string; trickplay: boolean; chapters: Chapter[] }[];
+  }> {
     const { data, error, response } = await this.deps.client.GET('/api/v2/watch/{id}', {
       params: { path: { id: this.deps.contentId }, header: this.header() },
     });
@@ -309,7 +331,12 @@ export class PlaybackController {
       ...(data.season_number !== undefined ? { seasonNumber: data.season_number } : {}),
       ...(data.episode_number !== undefined ? { episodeNumber: data.episode_number } : {}),
     };
-    return { fileId: version.file_id, resume, heading };
+    const versions = data.versions.map((v) => ({
+      fileId: v.file_id,
+      trickplay: v.trickplay_available,
+      chapters: toChapters(v.chapters),
+    }));
+    return { fileId: version.file_id, resume, heading, versions };
   }
 
   // --- Start ---------------------------------------------------------------------------------
@@ -361,7 +388,9 @@ export class PlaybackController {
         if (problem.code === 'installation_changed' && retryInstallation) {
           // The server was replaced or restored: read its capabilities again, new attempt.
           installations.delete(this.deps.baseUrl);
-          this.installationId = await this.installation();
+          const refreshed = await this.installation();
+          this.installationId = refreshed.id;
+          this.trickplayServer = refreshed.trickplay;
           await this.start(position, false);
           return;
         }
@@ -425,7 +454,20 @@ export class PlaybackController {
       loadId: this.loadId,
       autoplay: options.autoplay ?? !this.viewerPaused,
       heading: this.heading,
+      previews: this.previewFacts(plan),
     });
+  }
+
+  /** Chapters and previews of the file the plan plays (an alternate version may differ from the picked one). */
+  private previewFacts(plan: Plan): PreviewFacts {
+    const fileId = plan.effective_media_file_id;
+    // Only the exact file: another version's chapters and previews would not match its timeline.
+    const version = this.versions.find((v) => v.fileId === fileId);
+    return {
+      fileId,
+      trickplay: this.trickplayServer && version?.trickplay === true,
+      chapters: version?.chapters ?? [],
+    };
   }
 
   // --- Player ---------------------------------------------------------------------------------

@@ -11,12 +11,14 @@ import { PlayerOsd } from './osd/PlayerOsd';
 import { bufferedUntil, headingLines, SPINNER_DELAY_MS, SPINNER_MIN_MS } from './osd/timing';
 import { useDelayedFlag } from './osd/useDelayedFlag';
 import { usePlayerControls } from './osd/usePlayerControls';
+import { useTrickplay } from './osd/useTrickplay';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
 import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
   type PlaybackSession,
   type Heading,
+  type PreviewFacts,
   type Plan,
   type SessionFailure,
 } from './usePlaybackSession';
@@ -104,6 +106,8 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       mediaUrl={state.mediaUrl}
       autoplay={state.autoplay}
       heading={state.heading}
+      previews={state.previews}
+      contentId={contentId}
       title={title}
       token={token}
       playback={playback}
@@ -118,6 +122,8 @@ function PlayingView({
   mediaUrl,
   autoplay,
   heading,
+  previews,
+  contentId,
   title,
   token,
   playback,
@@ -128,6 +134,8 @@ function PlayingView({
   mediaUrl: string;
   autoplay: boolean;
   heading: Heading | null;
+  previews: PreviewFacts;
+  contentId: string;
   title: string;
   token: string | undefined;
   playback: PlaybackSession;
@@ -239,6 +247,8 @@ function PlayingView({
     return () => off.forEach((unsubscribe) => unsubscribe());
   }, [engine, mediaUrl, reading, onLoadedMetadata, onPlaying, onPause, onEnded, onMediaError]);
 
+  // Read once per file, only when the server and this file's version both offer previews.
+  const trickplay = useTrickplay(contentId, previews.fileId, previews.trickplay);
   const cue = useDelayedFlag(buffering, SPINNER_DELAY_MS, SPINNER_MIN_MS);
   const lines = headingLines(heading, title);
 
@@ -268,6 +278,9 @@ function PlayingView({
         skipBackSeconds={skipBack}
         skipForwardSeconds={skipForward}
         scrub={controls.scrub}
+        skipPending={controls.skipPending}
+        chapters={previews.chapters}
+        previews={trickplay}
         onFocus={controls.setFocus}
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
