@@ -1831,10 +1831,6 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   expect(box!.y).toBeGreaterThanOrEqual(viewport.height * 0.05 - 1);
   expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width * 0.95 + 1);
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height * 0.95 + 1);
-
-  await page.screenshot({
-    path: 'test-results/shots/overlay-fixed.png',
-  });
 });
 
 async function openSeriesDetail(
@@ -1892,8 +1888,6 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   page,
 }) => {
   await openSeriesDetail(page);
-  const shots =
-    'test-results/shots';
   const layer = page.getByTestId('detail-backdrop-layer');
   const before = await layer.boundingBox();
   expect(before).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
@@ -1903,7 +1897,6 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   expect(column!.x + column!.width).toBeLessThanOrEqual(1000);
   const synopsis = await page.getByTestId('detail-synopsis').boundingBox();
   expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1000);
-  await page.screenshot({ path: `${shots}/series-resume.png` });
 
   // Down to the season pills and into the episodes: the actions are out of view, and no pill
   // reaches into the top safe-area band (54 px).
@@ -1927,7 +1920,6 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(2);
   expect(await layer.boundingBox()).toEqual(before);
   await expect(page.getByTestId('detail-dim')).toHaveAttribute('data-scrolled', 'true');
-  await page.screenshot({ path: `${shots}/series-episodes.png` });
 });
 
 test('detail page: a tall hero holds its content, the page scrolls smoothly to measured tops and the hero fades', async ({
