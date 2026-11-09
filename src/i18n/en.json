@@ -304,6 +304,7 @@
   "detail.specials": "Specials",
   "detail.episodeTitle": "E{number} · {title}",
   "detail.watched": "Watched",
+  "detail.descriptionHidden": "Description hidden",
   "detail.seasonsError": "The seasons could not be loaded.",
   "detail.episodesError": "The episodes could not be loaded.",
   "detail.episodesEmpty": "This season has no episodes.",

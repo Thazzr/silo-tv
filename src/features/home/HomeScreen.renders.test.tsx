@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { Profiler } from 'react';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -53,7 +53,7 @@ describe('HomeScreen: focus moves', () => {
     serveHome(server, {
       sections: [homeSection('a', 5), homeSection('b', 5), homeSection('c', 5)],
     });
-    renderWithSilo(
+    const view = renderWithSilo(
       <HomeScreen
         rowMemory={new FocusIndexMemory()}
         onPlay={() => {}}
@@ -63,6 +63,9 @@ describe('HomeScreen: focus moves', () => {
       { session: signedIn() },
     );
     await screen.findByTestId('row-c');
+    // The profile's settings arrive after the rows and redraw them once (spoiler protection reads
+    // them); the focus moves below are measured after that.
+    await waitFor(() => expect(view.queryClient.isFetching()).toBe(0));
     await act(async () => {
       await setFocus(cardFocusKey('a', 'a-1'));
     });

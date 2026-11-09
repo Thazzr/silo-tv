@@ -36,5 +36,16 @@ export { cardFocusKey, EXPLORE_KEY, Row, rowFocusKey } from './Row';
 export type { CardContext, RowProps } from './Row';
 export { FocusIndexMemory, keepAtOrigin, mountedIndices, nextScrollIndex } from './scroll';
 export { CardSkeleton, GridSkeleton, RowSkeleton } from './Skeletons';
+export {
+  cardUnwatched,
+  episodeRowUnwatched,
+  heroProtection,
+  protectsCardArt,
+  protectsEpisodeOverview,
+  protectsEpisodeStill,
+  useArtUrl,
+  useSpoilerSettings,
+} from './spoilers';
+export type { SpoilerSettings } from './spoilers';
 export { thumbhashColor } from './thumbhash';
 export { useMediaUrl } from './useMediaUrl';

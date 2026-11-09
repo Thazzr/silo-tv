@@ -8,9 +8,8 @@ import {
   GridSkeleton,
   type GridCardContext,
   keepAtOrigin,
-  posterArt,
   PosterCard,
-  useMediaUrl,
+  useArtUrl,
   type CatalogItem,
 } from '../../ui/media';
 import type { StartIntent } from '../../playback/resume';
@@ -89,8 +88,7 @@ export function PersonScreen({ target, memory, onPlay, onOpenDetail, onBack }: P
   const total = titles.data?.pages[0]?.total ?? 0;
 
   const { open } = useItemOpener({ onPlay, onOpenDetail });
-  const mediaUrl = useMediaUrl();
-  const artUrl = useCallback((item: CatalogItem) => mediaUrl(posterArt(item).url), [mediaUrl]);
+  const artUrl = useArtUrl('poster');
 
   // --- The biography in full ---------------------------------------------------------------------
   const [bioOpen, setBioOpen] = useState(false);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup, Focusable, setFocus } from '../../app/nav';
@@ -7,9 +7,8 @@ import {
   Grid,
   GridSkeleton,
   gridCardKey,
-  posterArt,
   PosterCard,
-  useMediaUrl,
+  useArtUrl,
   type CatalogItem,
 } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
@@ -67,8 +66,7 @@ export function BrowseView({
 }) {
   const t = useT();
   const { open } = useItemOpener({ onPlay, onOpenDetail });
-  const mediaUrl = useMediaUrl();
-  const artUrl = useCallback((item: CatalogItem) => mediaUrl(posterArt(item).url), [mediaUrl]);
+  const artUrl = useArtUrl('poster');
   const gridId = `browse:${library.id}:${kind}`;
   const [selection, setSelection] = useState<BrowseSelection>(() =>
     memory.browseOf(kind, library.id),

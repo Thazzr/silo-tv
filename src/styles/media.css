@@ -507,3 +507,19 @@
 .home-rows-inner {
   transition: transform var(--transition);
 }
+
+/* Spoiler protection: the decoded thumbhash is a few pixels large and is scaled up to the card;
+   the browser's smoothing makes the blur, so there is no CSS filter. Without a usable hash the
+   card shows its colour and a small "eye off" mark. */
+.art-protected {
+  background: var(--chrome-selected);
+}
+
+.art-hidden-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  color: var(--text-secondary);
+  transform: translate(-50%, -50%);
+}

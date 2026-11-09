@@ -7,8 +7,8 @@ import {
   Grid,
   GridSkeleton,
   keepAtOrigin,
-  posterArt,
   PosterCard,
+  useArtUrl,
   useMediaUrl,
   type CatalogItem,
   type GridCardContext,
@@ -135,7 +135,7 @@ function BoxSetBody({
     (item: CatalogItem) => onOpenDetail({ itemId: item.content_id }),
     [onOpenDetail],
   );
-  const artUrl = useCallback((item: CatalogItem) => url(posterArt(item).url), [url]);
+  const artUrl = useArtUrl('poster');
 
   // --- Vertical scroll: the page moves once, from the hero to the films --------------------------
   const [zone, setZone] = useState<BoxSetZone>('top');

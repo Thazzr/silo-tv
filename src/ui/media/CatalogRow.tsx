@@ -1,10 +1,10 @@
 import { memo, useCallback, useMemo } from 'react';
 import { LandscapeCard, PosterCard } from './Cards';
-import { landscapeArt, posterArt, type CatalogItem } from './cardInfo';
+import type { CatalogItem } from './cardInfo';
 import type { CardShape } from './layout';
 import { Row, type CardContext } from './Row';
 import type { FocusIndexMemory } from './scroll';
-import { useMediaUrl } from './useMediaUrl';
+import { useArtUrl } from './spoilers';
 
 const contentId = (item: CatalogItem) => item.content_id;
 
@@ -48,16 +48,12 @@ export const CatalogRow = memo(function CatalogRow({
   onRowFocused,
   onCardFocused,
 }: CatalogRowProps) {
-  const url = useMediaUrl();
+  const artUrl = useArtUrl(shape === 'landscape' ? 'landscape' : 'poster');
   const exploreAll = useMemo(
     () => (hasMore ? () => onExploreAll(rowId, title) : undefined),
     [hasMore, onExploreAll, rowId, title],
   );
   const rowFocused = useCallback(() => onRowFocused(rowIndex), [onRowFocused, rowIndex]);
-  const artUrl = useCallback(
-    (item: CatalogItem) => url((shape === 'landscape' ? landscapeArt(item) : posterArt(item)).url),
-    [shape, url],
-  );
   const renderCard = useCallback(
     (item: CatalogItem, ctx: CardContext) =>
       shape === 'landscape' ? (

@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { useProfileSetting } from '../settings/profileSettings';
-import { cardTitle, episodeLabel, useMediaUrl, type CatalogItem } from '../../ui/media';
+import {
+  cardTitle,
+  episodeLabel,
+  heroProtection,
+  useMediaUrl,
+  useSpoilerSettings,
+  type CatalogItem,
+} from '../../ui/media';
 
 /** How long the focus must rest on a card before the hero follows it. */
 export const HERO_REST_MS = 250;
@@ -55,13 +62,19 @@ export function Hero({
   const url = useMediaUrl();
   const shown = useRestedValue(item, restMs);
   const titleArt = useProfileSetting('ui.title_art');
+  const spoilers = useSpoilerSettings();
   const [failed, setFailed] = useState<string | null>(null);
   if (!shown) return <div className="hero" data-testid="hero" />;
 
   const episode = shown.type.trim().toLowerCase() === 'episode';
-  const backdrop = url(
-    (episode ? (shown.series_backdrop_url ?? shown.backdrop_url) : shown.backdrop_url) ?? undefined,
-  );
+  // An unwatched episode's own still would give the story away: the backdrop is then left out.
+  const hidden = heroProtection(shown, spoilers);
+  const backdrop = hidden.hideBackdrop
+    ? null
+    : url(
+        (episode ? (shown.series_backdrop_url ?? shown.backdrop_url) : shown.backdrop_url) ??
+          undefined,
+      );
   const logo = url(shown.logo_url);
   const title = cardTitle(shown);
   const hasLogo = logo !== null && failed !== logo;
@@ -105,7 +118,7 @@ export function Hero({
             {meta}
           </p>
         ) : null}
-        {shown.overview ? (
+        {shown.overview && !hidden.hideOverview ? (
           <p className="hero-synopsis" data-testid="hero-synopsis">
             {shown.overview}
           </p>

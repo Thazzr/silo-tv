@@ -304,6 +304,7 @@
   "detail.specials": "Specials",
   "detail.episodeTitle": "E{number} · {title}",
   "detail.watched": "Gesehen",
+  "detail.descriptionHidden": "Beschreibung ausgeblendet",
   "detail.seasonsError": "Die Staffeln konnten nicht geladen werden.",
   "detail.episodesError": "Die Folgen konnten nicht geladen werden.",
   "detail.episodesEmpty": "Diese Staffel hat keine Folgen.",

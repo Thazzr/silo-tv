@@ -10,10 +10,9 @@ import {
   GridSkeleton,
   keepAtOrigin,
   PersonCard,
-  posterArt,
   PosterCard,
   Row,
-  useMediaUrl,
+  useArtUrl,
   type CatalogBoxSet,
   type CatalogItem,
 } from '../../ui/media';
@@ -97,7 +96,6 @@ export function SearchScreen({
   const t = useT();
   const branding = useBranding();
   const capabilities = useSearchCapabilities();
-  const mediaUrl = useMediaUrl();
   const { open } = useItemOpener({ onPlay, onOpenDetail });
 
   const [text, setText] = useState(() => memory.query);
@@ -216,7 +214,7 @@ export function SearchScreen({
       latest.current.onOpenPerson({ personId: person.id, personName: person.name }),
     [],
   );
-  const artUrl = useCallback((item: CatalogItem) => mediaUrl(posterArt(item).url), [mediaUrl]);
+  const artUrl = useArtUrl('poster');
   const renderBoxSet = useCallback(
     (boxSet: CatalogBoxSet, ctx: CardContext) => (
       <BoxSetCard

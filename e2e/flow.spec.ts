@@ -63,6 +63,11 @@ interface FakeOptions {
    * older server (the default) does not know the contract and answers 404.
    */
   titleArt?: boolean;
+  /**
+   * The server speaks the settings contract and both spoiler settings are this value. The series'
+   * first episode is unwatched and the second one is played; every episode has a still.
+   */
+  spoilers?: boolean;
 }
 
 interface FakeProfile {
@@ -74,6 +79,9 @@ interface FakeProfile {
 }
 
 const servers: Server[] = [];
+
+/** A small portrait ThumbHash for the stills of the spoiler flow. */
+const STILL_THUMBHASH = 'KAhS8zzDGU8oXWtw6pMcVZjSZHc7jOEppvRQfTg=';
 
 // The titles of the Movies library, for the Browse view: the fake server sorts, filters by genre
 // and by title prefix, and lists the letters the way Silo does.
@@ -162,6 +170,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const tall = options.tall === true;
   const seasonCount = options.seasons ?? 2;
   const withBoxSet = options.boxSet === true;
+  const settingsUnknown = options.titleArt === undefined && options.spoilers === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -249,7 +258,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         ratings: [],
         subtitles: [],
       };
-      if (req.method === 'GET' && url.pathname === '/img/logo.png') {
+      if (req.method === 'GET' && /^\/img\/(logo|still-\w+)\.png$/.test(url.pathname)) {
         // A 1x1 transparent PNG; the logo box gives it its size.
         res.writeHead(200, { ...cors, 'Content-Type': 'image/png' });
         return res.end(
@@ -358,6 +367,23 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             title: `Episode ${season}.${n}`,
             runtime: 45,
             overview: `Synopsis of ${season}.${n}.`,
+            ...(options.spoilers === undefined
+              ? {}
+              : {
+                  still_url: `/img/still-${season}${n}.png`,
+                  still_thumbhash: STILL_THUMBHASH,
+                  still_is_episode_still: true,
+                  ...(n === 2
+                    ? {
+                        user_data: {
+                          played: true,
+                          in_progress_count: 0,
+                          unplayed_count: 0,
+                          watched_count: 1,
+                        },
+                      }
+                    : {}),
+                }),
           })),
         });
       }
@@ -460,14 +486,19 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         case 'GET /api/v2/system/info':
           return send(200, { api_major: 2, server_version: 'fake' });
         case 'GET /api/v2/settings/contract/capabilities':
-          if (options.titleArt === undefined) return send(404, { title: 'not found', status: 404 });
+          if (settingsUnknown) return send(404, { title: 'not found', status: 404 });
           return send(200, { state: 'available', allowed: true, manifest_revision: 40 });
         case 'GET /api/v2/settings/values/effective':
-          if (options.titleArt === undefined) return send(404, { title: 'not found', status: 404 });
+          if (settingsUnknown) return send(404, { title: 'not found', status: 404 });
           return send(200, {
             items: url.searchParams.getAll('keys').map((key) => ({
               key,
-              value: key === 'ui.title_art' ? options.titleArt : false,
+              value:
+                key === 'ui.title_art'
+                  ? (options.titleArt ?? true)
+                  : key.startsWith('catalog.hide_unwatched')
+                    ? (options.spoilers ?? false)
+                    : false,
               source: 'profile',
               definition_revision: 1,
             })),
@@ -1778,8 +1809,14 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   });
 });
 
-async function openSeriesDetail(page: Page, tall = false, seasons?: number, titleArt?: boolean) {
-  const { origin, seen } = await startFakeSilo({ series: true, tall, seasons, titleArt });
+async function openSeriesDetail(
+  page: Page,
+  tall = false,
+  seasons?: number,
+  titleArt?: boolean,
+  spoilers?: boolean,
+) {
+  const { origin, seen } = await startFakeSilo({ series: true, tall, seasons, titleArt, spoilers });
   await page.goto(`${distIndexUrl}?server=${origin}`);
   await expect(page.getByLabel('Serveradresse')).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -1945,6 +1982,30 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
   await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
   await expect.poll(() => opacity('.detail-text')).toBe('1');
   await expect.poll(pageOffset).toBe(0);
+});
+
+test('detail page: spoiler protection blurs an unwatched episode without requesting its still, a watched one shows it', async ({
+  page,
+}) => {
+  const { seen } = await openSeriesDetail(page, false, undefined, undefined, true);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+
+  const first = page.getByRole('button', { name: /Episode 1.1/ });
+  const second = page.getByRole('button', { name: /Episode 1.2/ });
+  // The unwatched episode: its decoded preview, the notice instead of the description.
+  await expect(first.getByTestId('art-protected')).toBeVisible();
+  await expect(first.getByTestId('episode-synopsis-hidden')).toHaveText(
+    'Beschreibung ausgeblendet',
+  );
+  await expect(first.getByTestId('episode-synopsis')).toHaveCount(0);
+  // The watched one shows its still and its description.
+  await expect(second.locator('img[src$="/img/still-12.png"]')).toBeVisible();
+  await expect(second.getByTestId('episode-synopsis')).toHaveText('Synopsis of 1.2.');
+  // The server saw a request for the watched still and never one for the unwatched still.
+  expect(seen.some((entry) => entry.path === '/img/still-12.png')).toBe(true);
+  expect(seen.some((entry) => entry.path === '/img/still-11.png')).toBe(false);
 });
 
 test('detail page: the profile setting ui.title_art decides between the logo and the text title', async ({

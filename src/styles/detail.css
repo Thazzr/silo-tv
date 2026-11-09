@@ -294,6 +294,12 @@
   color: var(--text);
 }
 
+/* A description that is left out of an unwatched episode's card. */
+.card-episode .episode-synopsis-hidden {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 /* A watched episode is dimmed and carries a check; the progress bar shows a resume point. */
 .episode-dim {
   position: absolute;

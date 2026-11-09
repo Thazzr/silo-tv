@@ -8,7 +8,10 @@ import {
   FocusIndexMemory,
   mountedIndices,
   nextScrollIndex,
+  protectsEpisodeOverview,
+  protectsEpisodeStill,
   useMediaUrl,
+  useSpoilerSettings,
 } from '../../ui/media';
 import { DETAIL_INSET, EPISODE_STEP, EPISODE_STRIP_HEIGHT, episodesVisible } from './layout';
 import { episodeProgress, episodeWatched, runtimeLabel, type Episode } from './info';
@@ -32,6 +35,7 @@ function EpisodeCard({
 }) {
   const t = useT();
   const url = useMediaUrl();
+  const spoilers = useSpoilerSettings();
   const progress = episodeProgress(episode);
   const watched = episodeWatched(episode);
   const runtime = runtimeLabel(episode.runtime, t);
@@ -46,7 +50,12 @@ function EpisodeCard({
       onFocused={onFocused}
       art={
         <>
-          <Artwork src={url(episode.still_url)} thumbhash={episode.still_thumbhash} title={title} />
+          <Artwork
+            src={url(episode.still_url)}
+            thumbhash={episode.still_thumbhash}
+            title={title}
+            protect={protectsEpisodeStill(episode, spoilers)}
+          />
           {watched ? (
             <>
               <span className="episode-dim" aria-hidden="true" />
@@ -88,9 +97,18 @@ function EpisodeCard({
           <span className="card-sub" data-testid="episode-runtime">
             {runtime ?? ''}
           </span>
-          <span className="episode-synopsis" data-testid="episode-synopsis">
-            {episode.overview ?? ''}
-          </span>
+          {protectsEpisodeOverview(episode, spoilers) ? (
+            <span
+              className="episode-synopsis episode-synopsis-hidden"
+              data-testid="episode-synopsis-hidden"
+            >
+              {t('detail.descriptionHidden')}
+            </span>
+          ) : (
+            <span className="episode-synopsis" data-testid="episode-synopsis">
+              {episode.overview ?? ''}
+            </span>
+          )}
         </>
       }
     />

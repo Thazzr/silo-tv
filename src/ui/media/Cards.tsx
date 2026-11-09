@@ -14,6 +14,7 @@ import {
   type CatalogItem,
 } from './cardInfo';
 import type { CardShape } from './layout';
+import { protectsCardArt, useSpoilerSettings } from './spoilers';
 import { useMediaUrl } from './useMediaUrl';
 
 export interface CardProps {
@@ -107,6 +108,7 @@ export const PosterCard = memo(function PosterCard({
   subtitle,
 }: CardProps & { grid?: boolean; badge?: string; subtitle?: string }) {
   const url = useMediaUrl();
+  const spoilers = useSpoilerSettings();
   const art = posterArt(item);
   return (
     <CardFrame
@@ -117,7 +119,12 @@ export const PosterCard = memo(function PosterCard({
       autoFocus={autoFocus}
       art={
         <>
-          <Artwork src={url(art.url)} thumbhash={art.thumbhash} title={cardTitle(item)} />
+          <Artwork
+            src={url(art.url)}
+            thumbhash={art.thumbhash}
+            title={cardTitle(item)}
+            protect={protectsCardArt(item, 'poster', spoilers)}
+          />
           {badge ? <CardPill place="start" text={badge} /> : null}
         </>
       }
@@ -202,6 +209,7 @@ export const LandscapeCard = memo(function LandscapeCard({
   autoFocus,
 }: CardProps) {
   const url = useMediaUrl();
+  const spoilers = useSpoilerSettings();
   const art = landscapeArt(item);
   const fraction = watchedFraction(item);
   return (
@@ -213,7 +221,12 @@ export const LandscapeCard = memo(function LandscapeCard({
       autoFocus={autoFocus}
       art={
         <>
-          <Artwork src={url(art.url)} thumbhash={art.thumbhash} title={cardTitle(item)} />
+          <Artwork
+            src={url(art.url)}
+            thumbhash={art.thumbhash}
+            title={cardTitle(item)}
+            protect={protectsCardArt(item, 'landscape', spoilers)}
+          />
           {fraction !== null ? (
             <span className="card-progress" aria-hidden="true">
               <span
