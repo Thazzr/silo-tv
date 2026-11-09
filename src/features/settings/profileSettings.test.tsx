@@ -2,17 +2,21 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { useState } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { HttpResponse, http } from 'msw';
 import { Session } from '../../api/session';
 import { getPlatform, setPlatformForTests } from '../../platform';
-import { account } from '../../test/apiFixtures';
+import { account, BASE_URL } from '../../test/apiFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import {
+  DEFAULT_SUBTITLE_APPEARANCE,
+  defaultSettings,
   keysKnownAt,
   ProfileSettingsSync,
   settingValuesFrom,
   useProfileSetting,
   useProfileSettings,
+  useSetProfileDeviceSetting,
 } from './profileSettings';
 
 const server = setupServer();
@@ -55,11 +59,153 @@ const shows = (name: string, text: string) =>
 
 describe('keysKnownAt', () => {
   it('lists only the keys a manifest revision knows', () => {
-    expect(keysKnownAt(10)).toEqual([]);
-    expect(keysKnownAt(11)).toEqual(['ui.theme_music_enabled', 'ui.theme_music_loop']);
+    expect(keysKnownAt(0)).toEqual(['playback.auto_skip_intro']);
+    expect(keysKnownAt(10)).toContain('playback.intro_skip_mode');
+    expect(keysKnownAt(10)).not.toContain('ui.theme_music_enabled');
+    expect(keysKnownAt(10)).not.toContain('ui.title_art');
+    expect(keysKnownAt(11)).toContain('ui.theme_music_enabled');
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(17)).toHaveLength(5);
+    expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
+    expect(keysKnownAt(40)).toHaveLength(16);
+  });
+
+  it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
+    const at6 = keysKnownAt(6);
+    expect(at6).toContain('playback.auto_skip_intro');
+    expect(at6).not.toContain('playback.intro_skip_mode');
+    expect(at6).toContain('playback.subtitle_appearance');
+    expect(at6).not.toContain('player.video_skip_back_seconds');
+    const at7 = keysKnownAt(7);
+    expect(at7).toContain('playback.intro_skip_mode');
+    expect(at7).not.toContain('playback.auto_skip_intro');
+    expect(keysKnownAt(8)).not.toContain('player.video_skip_forward_seconds');
+    expect(keysKnownAt(9)).toContain('player.video_skip_forward_seconds');
+  });
+
+  it('has the contract defaults for every key', () => {
+    expect(defaultSettings()).toMatchObject({
+      'playback.intro_skip_mode': 'ask',
+      'playback.auto_skip_recap': false,
+      'playback.auto_skip_credits': false,
+      'playback.auto_play_next': true,
+      'playback.next_up_prompt_seconds': 30,
+      'playback.auto_play_next_preview': false,
+      'playback.preferred_quality': 'auto',
+      'player.video_skip_back_seconds': 10,
+      'player.video_skip_forward_seconds': 30,
+      'player.sleep_timer_default_minutes': 30,
+      'playback.subtitle_appearance': DEFAULT_SUBTITLE_APPEARANCE,
+    });
+  });
+
+  it.each([
+    ['playback.next_up_prompt_seconds', 45, 45],
+    ['playback.next_up_prompt_seconds', 0, 0],
+    ['playback.next_up_prompt_seconds', 121, 30],
+    ['playback.next_up_prompt_seconds', -1, 30],
+    ['playback.next_up_prompt_seconds', 12.5, 30],
+    ['playback.next_up_prompt_seconds', '45', 30],
+    ['player.sleep_timer_default_minutes', 240, 240],
+    ['player.sleep_timer_default_minutes', 241, 30],
+    ['playback.intro_skip_mode', 'never', 'never'],
+    ['playback.intro_skip_mode', 'sometimes', 'ask'],
+    ['playback.intro_skip_mode', true, 'ask'],
+    ['playback.preferred_quality', '1080p', '1080p'],
+    ['playback.preferred_quality', '4k', 'auto'],
+    ['player.video_skip_back_seconds', 15, 15],
+    ['player.video_skip_back_seconds', 12, 10],
+    ['player.video_skip_forward_seconds', '30', 30],
+    ['player.video_skip_forward_seconds', 61, 30],
+    ['playback.auto_play_next', false, false],
+    ['playback.auto_play_next', 'false', true],
+    ['playback.auto_skip_credits', 1, false],
+    ['playback.auto_skip_credits', 'true', false],
+    ['playback.auto_skip_credits', 0, false],
+    ['playback.auto_skip_credits', null, false],
+  ])('parses %s = %j to %j', (key, raw, expected) => {
+    expect(settingValuesFrom([{ key, value: raw }])).toMatchObject({ [key]: expected });
+  });
+
+  it('falls back to the deprecated intro boolean when the enum is not answered', () => {
+    const mode = (items: { key: string; value: unknown }[]) =>
+      settingValuesFrom(items)['playback.intro_skip_mode'];
+    expect(mode([{ key: 'playback.auto_skip_intro', value: true }])).toBe('always');
+    expect(mode([{ key: 'playback.auto_skip_intro', value: false }])).toBe('ask');
+    // A usable enum wins over the boolean.
+    expect(
+      mode([
+        { key: 'playback.auto_skip_intro', value: true },
+        { key: 'playback.intro_skip_mode', value: 'never' },
+      ]),
+    ).toBe('never');
+    // An unusable enum lets the boolean speak; an unusable boolean leaves the default.
+    expect(
+      mode([
+        { key: 'playback.auto_skip_intro', value: true },
+        { key: 'playback.intro_skip_mode', value: 'bogus' },
+      ]),
+    ).toBe('always');
+    expect(mode([{ key: 'playback.auto_skip_intro', value: 'yes' }])).toBe('ask');
+  });
+
+  it('merges a sparse subtitle appearance over the default', () => {
+    const merged = settingValuesFrom([
+      { key: 'playback.subtitle_appearance', value: { fontSize: 'xxlarge', position: 'top' } },
+    ])['playback.subtitle_appearance'];
+    expect(merged).toEqual({
+      ...DEFAULT_SUBTITLE_APPEARANCE,
+      fontSize: 'xxlarge',
+      position: 'top',
+    });
+  });
+
+  it('falls back per field for invalid or unknown subtitle appearance fields', () => {
+    const merged = settingValuesFrom([
+      {
+        key: 'playback.subtitle_appearance',
+        value: {
+          fontSize: 'huge',
+          fontColor: 'red',
+          backgroundColor: '#12ab9F',
+          backgroundStyle: 'shadow',
+          backgroundOpacity: 101,
+          textOpacity: 0,
+          textOutline: 'yes',
+          textOutlineColor: '#fff',
+          position: 'lower-third',
+          fontFamily: 'Roboto',
+          extra: 1,
+        },
+      },
+    ])['playback.subtitle_appearance'];
+    expect(merged).toEqual({
+      ...DEFAULT_SUBTITLE_APPEARANCE,
+      backgroundColor: '#12ab9F',
+      backgroundStyle: 'shadow',
+      position: 'lower-third',
+      fontFamily: 'Roboto',
+    });
+    expect(merged).not.toHaveProperty('extra');
+  });
+
+  it.each([null, 'large', 7, ['x']])('uses the default appearance for the value %j', (raw) => {
+    expect(
+      settingValuesFrom([{ key: 'playback.subtitle_appearance', value: raw }])[
+        'playback.subtitle_appearance'
+      ],
+    ).toEqual(DEFAULT_SUBTITLE_APPEARANCE);
+  });
+
+  it('rejects a font family that is not safe to put into CSS', () => {
+    const family = (value: string) =>
+      settingValuesFrom([{ key: 'playback.subtitle_appearance', value: { fontFamily: value } }])[
+        'playback.subtitle_appearance'
+      ].fontFamily;
+    expect(family('a;b')).toBe('sans-serif');
+    expect(family('')).toBe('sans-serif');
+    expect(family('x'.repeat(65))).toBe('sans-serif');
+    expect(family('Noto Sans')).toBe('Noto Sans');
   });
 
   it('settingValuesFrom ignores unknown keys and values of the wrong type', () => {
@@ -89,16 +235,11 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Silo-Device-Id')).toBeTruthy();
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
-    expect(url.searchParams.getAll('keys')).toEqual([
-      'ui.title_art',
-      'catalog.hide_unwatched_episode_images',
-      'catalog.hide_unwatched_episode_overviews',
-      'ui.theme_music_enabled',
-      'ui.theme_music_loop',
-    ]);
+    expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
+    expect(url.searchParams.getAll('keys')).toHaveLength(16);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(5);
+    expect(url.search.match(/keys=/g)).toHaveLength(16);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {
@@ -135,18 +276,71 @@ describe('useProfileSetting', () => {
     const calls = serveSettings(server, { manifestRevision: 16 });
     renderWithSilo(<AllValues />, { session: sessionOf() });
     await shows('all', 'ui.title_art');
-    expect(new URL(calls.effective[0]!.url).searchParams.getAll('keys')).toEqual([
-      'ui.title_art',
-      'ui.theme_music_enabled',
-      'ui.theme_music_loop',
-    ]);
+    const asked = new URL(calls.effective[0]!.url).searchParams.getAll('keys');
+    expect(asked).toEqual(keysKnownAt(16));
+    expect(asked).toContain('ui.title_art');
+    expect(asked).not.toContain('catalog.hide_unwatched_episode_images');
+    expect(asked).toContain('playback.intro_skip_mode');
   });
 
-  it('on a server older than every key reads no values and uses the defaults', async () => {
-    const calls = serveSettings(server, { manifestRevision: 10 });
+  it('on a server older than revision 7 asks for the legacy intro key and derives the mode', async () => {
+    const calls = serveSettings(server, {
+      manifestRevision: 6,
+      values: { 'playback.auto_skip_intro': true },
+    });
+    function Mode() {
+      const { value, known } = useProfileSetting('playback.intro_skip_mode');
+      return <div data-testid="mode">{known ? value : 'unknown'}</div>;
+    }
+    renderWithSilo(<Mode />, { session: sessionOf() });
+    await shows('mode', 'always');
+    const asked = new URL(calls.effective[0]!.url).searchParams.getAll('keys');
+    expect(asked).toContain('playback.auto_skip_intro');
+    expect(asked).not.toContain('playback.intro_skip_mode');
+  });
+
+  it('returns typed values: numbers, enums and objects, not only booleans', async () => {
+    serveSettings(server, {
+      values: {
+        'playback.next_up_prompt_seconds': 60,
+        'playback.intro_skip_mode': 'never',
+        'playback.subtitle_appearance': { position: 'top' },
+        'playback.auto_play_next': false,
+      },
+    });
+    function Typed() {
+      const seconds = useProfileSetting('playback.next_up_prompt_seconds').value;
+      const mode = useProfileSetting('playback.intro_skip_mode').value;
+      const look = useProfileSetting('playback.subtitle_appearance').value;
+      const next = useProfileSetting('playback.auto_play_next').value;
+      // Compile-time proof of the inference: a number, a literal union, an object, a boolean.
+      const sum: number = seconds + 1;
+      return (
+        <div data-testid="typed">
+          {sum}|{mode}|{look.position}|{look.fontSize}|{String(next)}
+        </div>
+      );
+    }
+    renderWithSilo(<Typed />, { session: sessionOf() });
+    await shows('typed', '61|never|top|large|false');
+  });
+
+  it('keeps a bad server value out of the screens', async () => {
+    serveSettings(server, {
+      values: { 'playback.next_up_prompt_seconds': 999, 'ui.title_art': 'maybe' },
+    });
+    renderWithSilo(<AllValues />, { session: sessionOf() });
+    await shows('all', '"playback.next_up_prompt_seconds":30');
+    expect(screen.getByTestId('all')).toHaveTextContent('"ui.title_art":true');
+  });
+
+  it('on a server older than every key asks only for the legacy intro key', async () => {
+    const calls = serveSettings(server, { manifestRevision: 0 });
     renderWithSilo(<Consumer />, { session: sessionOf() });
     await shows('consumer', 'true|known');
-    expect(calls.effective).toHaveLength(0);
+    expect(new URL(calls.effective[0]!.url).searchParams.getAll('keys')).toEqual([
+      'playback.auto_skip_intro',
+    ]);
   });
 
   it.each([
@@ -266,5 +460,167 @@ describe('ProfileSettingsSync', () => {
     await shows('consumer', 'true|known');
     act(() => relaunch());
     await waitFor(() => expect(calls.effective).toHaveLength(2));
+  });
+});
+
+describe('useSetProfileDeviceSetting', () => {
+  interface Put {
+    key: string;
+    scope: string | null;
+    profile: string | null;
+    body: unknown;
+  }
+
+  function serveWrite(puts: Put[], answer?: (value: unknown) => unknown) {
+    server.use(
+      http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
+        const body = (await request.json()) as { value: unknown };
+        puts.push({
+          key: String(params.key),
+          scope: new URL(request.url).searchParams.get('scope'),
+          profile: request.headers.get('X-Profile-Id'),
+          body,
+        });
+        return HttpResponse.json({
+          key: params.key,
+          scope: 'profile_device',
+          value: answer ? answer(body.value) : body.value,
+          revision: 1,
+        });
+      }),
+    );
+  }
+
+  function Toggle() {
+    const { value } = useProfileSetting('playback.auto_play_next');
+    const set = useSetProfileDeviceSetting();
+    return (
+      <div>
+        <div data-testid="next">{String(value)}</div>
+        <button onClick={() => void set('playback.auto_play_next', !value)}>toggle</button>
+      </div>
+    );
+  }
+
+  it('writes one key at the profile_device scope and updates the shared values', async () => {
+    serveSettings(server);
+    const puts: Put[] = [];
+    serveWrite(puts);
+    renderWithSilo(
+      <>
+        <Toggle />
+        <Consumer />
+      </>,
+      { session: sessionOf() },
+    );
+    await shows('next', 'true');
+    await shows('consumer', 'true|known');
+    fireEvent.click(screen.getByText('toggle'));
+    await shows('next', 'false');
+    expect(puts).toEqual([
+      {
+        key: 'playback.auto_play_next',
+        scope: 'profile_device',
+        profile: 'p1',
+        body: { value: false },
+      },
+    ]);
+  });
+
+  it('follows the value the server stored, not the one that was sent', async () => {
+    serveSettings(server);
+    // The server answers true although the toggle sent false.
+    serveWrite([], () => true);
+    renderWithSilo(<Toggle />, { session: sessionOf() });
+    await shows('next', 'true');
+    fireEvent.click(screen.getByText('toggle'));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId('next')).toHaveTextContent('true');
+  });
+
+  it('rejects and leaves the cache alone when the write fails', async () => {
+    serveSettings(server);
+    server.use(
+      http.put(
+        `${BASE_URL}/api/v2/settings/values/:key`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    let failure: unknown = null;
+    function Failing() {
+      const { value } = useProfileSetting('playback.auto_play_next');
+      const set = useSetProfileDeviceSetting();
+      return (
+        <div>
+          <div data-testid="next">{String(value)}</div>
+          <button onClick={() => set('playback.auto_play_next', false).catch((e) => (failure = e))}>
+            go
+          </button>
+        </div>
+      );
+    }
+    renderWithSilo(<Failing />, { session: sessionOf() });
+    await shows('next', 'true');
+    fireEvent.click(screen.getByText('go'));
+    await waitFor(() => expect(failure).not.toBeNull());
+    // Let a (wrong) cache update render before looking.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId('next')).toHaveTextContent('true');
+  });
+
+  /** `onWrite` hands the write's promise to a test that expects it to reject. */
+  function Seconds({ onWrite }: { onWrite?: (write: Promise<void>) => void }) {
+    const { value } = useProfileSetting('playback.next_up_prompt_seconds');
+    const set = useSetProfileDeviceSetting();
+    return (
+      <div>
+        <div data-testid="seconds">{value}</div>
+        <button
+          onClick={() => {
+            const write = set('playback.next_up_prompt_seconds', 45);
+            if (onWrite) onWrite(write);
+            else void write;
+          }}
+        >
+          set
+        </button>
+      </div>
+    );
+  }
+
+  it('keeps a seeded non-default value in the cache when the write fails', async () => {
+    serveSettings(server, { values: { 'playback.next_up_prompt_seconds': 60 } });
+    server.use(
+      http.put(
+        `${BASE_URL}/api/v2/settings/values/:key`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    let write: Promise<void> | undefined;
+    renderWithSilo(<Seconds onWrite={(p) => (write = p)} />, { session: sessionOf() });
+    await shows('seconds', '60');
+    fireEvent.click(screen.getByText('set'));
+    await expect(write).rejects.toThrow(/500/);
+    // Let a (wrong) cache update render before looking.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(screen.getByTestId('seconds')).toHaveTextContent('60');
+  });
+
+  it('stores the value the server answered, not the one sent', async () => {
+    serveSettings(server, { values: { 'playback.next_up_prompt_seconds': 60 } });
+    serveWrite([], () => 30);
+    renderWithSilo(<Seconds />, { session: sessionOf() });
+    await shows('seconds', '60');
+    fireEvent.click(screen.getByText('set'));
+    await shows('seconds', '30');
+  });
+
+  it('keeps the sent value when the answered one is of the wrong type', async () => {
+    serveSettings(server, { values: { 'playback.next_up_prompt_seconds': 60 } });
+    serveWrite([], () => 'soon');
+    renderWithSilo(<Seconds />, { session: sessionOf() });
+    await shows('seconds', '60');
+    fireEvent.click(screen.getByText('set'));
+    await shows('seconds', '45');
   });
 });

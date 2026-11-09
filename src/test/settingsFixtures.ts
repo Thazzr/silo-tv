@@ -8,12 +8,35 @@ import { BASE_URL } from './apiFixtures';
 type S = components['schemas'];
 
 /** The contract defaults of the keys the app reads (what a server answers when nothing is stored). */
-const SERVER_DEFAULTS: Record<string, boolean> = {
+const SERVER_DEFAULTS: Record<string, unknown> = {
   'ui.title_art': true,
   'catalog.hide_unwatched_episode_images': false,
   'catalog.hide_unwatched_episode_overviews': false,
   'ui.theme_music_enabled': false,
   'ui.theme_music_loop': false,
+  'playback.auto_skip_intro': false,
+  'playback.intro_skip_mode': 'ask',
+  'playback.auto_skip_recap': false,
+  'playback.auto_skip_credits': false,
+  'playback.auto_play_next': true,
+  'playback.next_up_prompt_seconds': 30,
+  'playback.auto_play_next_preview': false,
+  'playback.preferred_quality': 'auto',
+  'playback.subtitle_appearance': {
+    fontSize: 'large',
+    fontFamily: 'sans-serif',
+    fontColor: '#ffffff',
+    backgroundColor: '#000000',
+    backgroundStyle: 'box',
+    backgroundOpacity: 75,
+    textOpacity: 100,
+    textOutline: false,
+    textOutlineColor: '#000000',
+    position: 'bottom',
+  },
+  'player.video_skip_back_seconds': 10,
+  'player.video_skip_forward_seconds': 30,
+  'player.sleep_timer_default_minutes': 30,
 };
 
 export interface SettingsServe {
@@ -42,6 +65,18 @@ const INTRODUCED_IN: Record<string, number> = {
   'catalog.hide_unwatched_episode_overviews': 17,
   'ui.theme_music_enabled': 11,
   'ui.theme_music_loop': 11,
+  'playback.auto_skip_intro': 1,
+  'playback.intro_skip_mode': 7,
+  'playback.auto_skip_recap': 1,
+  'playback.auto_skip_credits': 1,
+  'playback.auto_play_next': 1,
+  'playback.next_up_prompt_seconds': 1,
+  'playback.auto_play_next_preview': 1,
+  'playback.preferred_quality': 1,
+  'playback.subtitle_appearance': 1,
+  'player.video_skip_back_seconds': 9,
+  'player.video_skip_forward_seconds': 9,
+  'player.sleep_timer_default_minutes': 1,
 };
 
 /** Registers the two settings reads; the returned object records the requests. */
