@@ -440,30 +440,45 @@ h3 {
   transform-origin: left center;
 }
 
+/* The global dl is a two-column grid (label | value) whose break-all values collapse to one
+   character when a row is a single grid item; the overlay lays out its own rows instead. */
 .player-diag {
   position: absolute;
   top: var(--safe-y);
   left: var(--safe-x);
+  display: block;
+  box-sizing: border-box;
+  width: 960px;
+  max-width: calc(100vw - 2 * var(--safe-x));
+  /* Stays above the progress bar and inside the safe area. */
+  max-height: calc(100vh - 2 * var(--safe-y) - 200px);
+  overflow: hidden;
   margin: 0;
   padding: 16px 24px;
   font-family: monospace;
   font-size: 22px;
-  background: rgba(10, 10, 10, 0.85);
+  line-height: 1.3;
+  background: rgba(21, 23, 28, 0.85);
   border-radius: var(--radius-control);
 }
 
 .player-diag-row {
-  display: flex;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 0 24px;
+  padding: 3px 0;
 }
 
 .player-diag dt {
-  min-width: 260px;
   color: var(--text-secondary);
 }
 
 .player-diag dd {
   margin: 0;
+  color: var(--text);
+  /* Values wrap at word boundaries only; the global dd rule would break anywhere. */
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the

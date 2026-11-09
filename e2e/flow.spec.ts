@@ -1162,3 +1162,66 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('server-name')).toHaveText('Silo A');
 });
+
+test('player diagnostics (blue key): a two-column list of readable rows inside the screen', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+
+  // Blue is key code 406 on the remote; Playwright has no key name for it.
+  await page.evaluate(
+    "document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 406, bubbles: true }))",
+  );
+  const panel = page.getByTestId('player-diagnostics');
+  await expect(panel).toBeVisible();
+
+  const rows = await panel.locator('.player-diag-row').evaluateAll((els) =>
+    els.map((el) => {
+      const dt = el.querySelector('dt')!.getBoundingClientRect();
+      const dd = el.querySelector('dd')!.getBoundingClientRect();
+      return {
+        label: el.querySelector('dt')!.textContent ?? '',
+        text: el.querySelector('dd')!.textContent ?? '',
+        dtLeft: dt.left,
+        dtTop: dt.top,
+        ddLeft: dd.left,
+        ddTop: dd.top,
+        ddWidth: dd.width,
+        ddHeight: dd.height,
+      };
+    }),
+  );
+  expect(rows).toHaveLength(12);
+  const oneLine = rows[0]?.ddHeight ?? 0;
+  for (const row of rows) {
+    // Label and value sit side by side, in this order, and the value has room to read.
+    expect(row.ddLeft, row.label).toBeGreaterThan(row.dtLeft + 100);
+    expect(Math.abs(row.ddTop - row.dtTop), row.label).toBeLessThan(oneLine);
+    expect(row.ddWidth, row.label).toBeGreaterThanOrEqual(200);
+    // A short value never wraps: it is as high as the route value.
+    if (row.text.length <= 20) expect(row.ddHeight, row.label).toBeLessThanOrEqual(oneLine + 1);
+  }
+
+  // The panel lies inside the screen (and its 5 % safe area).
+  const box = await panel.boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(box!.x).toBeGreaterThanOrEqual(viewport.width * 0.05 - 1);
+  expect(box!.y).toBeGreaterThanOrEqual(viewport.height * 0.05 - 1);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width * 0.95 + 1);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height * 0.95 + 1);
+
+  await page.screenshot({
+    path: 'test-results/shots/overlay-fixed.png',
+  });
+});
