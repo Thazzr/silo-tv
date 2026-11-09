@@ -68,10 +68,13 @@ export function DetailHero({
   detail,
   actions,
   onMore,
+  faded = false,
 }: {
   detail: ItemDetail;
   actions: ReactNode;
   onMore: () => void;
+  /** The focus is further down: the text column fades out so nothing is half cut at the top. */
+  faded?: boolean;
 }) {
   const t = useT();
   const url = useMediaUrl();
@@ -85,7 +88,7 @@ export function DetailHero({
 
   return (
     <div className="detail-hero" data-testid="detail-hero">
-      <div className="detail-text">
+      <div className="detail-text" data-faded={faded}>
         {showLogo ? (
           <img
             className="detail-logo"

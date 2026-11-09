@@ -12,13 +12,29 @@
 /* The page scrolls in steps, from the hero to the block that holds the focus. */
 .detail-page {
   position: relative;
-  transition: transform var(--transition);
+  transition: transform var(--scroll-transition);
 }
 
+/* At least HERO_HEIGHT; the text column is in the flow, so a tall one (logo, four lines of
+   synopsis, credits) makes the hero grow instead of running into the block below. The bottom
+   padding keeps 40 px between the action pills and that block. */
 .detail-hero {
   position: relative;
+  box-sizing: border-box;
   /* HERO_HEIGHT */
-  height: 760px;
+  min-height: 760px;
+  padding: 100px 0 40px 100px;
+}
+
+/* Blocks above the one that holds the focus fade out, so nothing is half cut at the top edge. */
+.detail-text,
+[data-zone] {
+  transition: opacity var(--scroll-transition);
+}
+
+.detail-text[data-faded='true'],
+[data-zone][data-faded='true'] {
+  opacity: 0;
 }
 
 /* The picture and its darkening sit behind the page and do not scroll with it. */
@@ -62,13 +78,15 @@
     );
 }
 
-/* Once the page has left the hero the picture dims further; only opacity animates. */
+/* Once the page has left the hero the whole picture is at least DETAIL_SCROLLED_DIM_ALPHA black
+   (this layer alone), so episode titles and synopses stay readable on any backdrop. Only opacity
+   animates. */
 .detail-dim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.85);
   opacity: 0;
-  transition: opacity var(--transition);
+  transition: opacity var(--scroll-transition);
 }
 
 .detail-dim[data-scrolled='true'] {
@@ -76,9 +94,6 @@
 }
 
 .detail-text {
-  position: absolute;
-  top: 100px;
-  left: 100px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -204,6 +219,10 @@
 .detail-section {
   position: relative;
   box-sizing: border-box;
+}
+
+.detail-episodes {
+  padding-bottom: 30px;
 }
 
 .detail-pills-box {

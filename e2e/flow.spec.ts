@@ -40,6 +40,11 @@ interface FakeOptions {
   seriesLibrary?: boolean;
   /** Adds a watched episode that is being watched again (position 600 s of 2700 s) to Continue Watching. */
   rewatch?: boolean;
+  /**
+   * Tall detail pages: the series gets a logo, a long synopsis, ratings and a credit line (a hero
+   * taller than 760 px), the movie gets a cast and a "More like this" row.
+   */
+  tall?: boolean;
 }
 
 interface FakeProfile {
@@ -110,6 +115,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withSeries = options.series === true;
   const withSeriesLibrary = options.seriesLibrary === true;
   const withRewatch = options.rewatch === true;
+  const tall = options.tall === true;
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -167,6 +173,43 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         ratings: [],
         subtitles: [],
       };
+      if (req.method === 'GET' && url.pathname === '/img/logo.png') {
+        // A 1x1 transparent PNG; the logo box gives it its size.
+        res.writeHead(200, { ...cors, 'Content-Type': 'image/png' });
+        return res.end(
+          Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+            'base64',
+          ),
+        );
+      }
+      const tallMovie = tall
+        ? {
+            cast: ['Ann Actor', 'Bo Actor', 'Cy Actor', 'Di Actor'].map((name, order) => ({
+              person_id: `p${order}`,
+              name,
+              character: `Role ${order}`,
+              order,
+            })),
+          }
+        : {};
+      const tallSeries = tall
+        ? {
+            logo_url: '/img/logo.png',
+            overview:
+              'A long synopsis that runs over four lines on the hero of the detail page: it tells of a school, its playground, a great many children and the one teacher who has to keep them all busy until the bell rings and the next lesson begins, which is exactly why it needs the full text under the button.',
+            ratings: [
+              { source: 'imdb', name: 'IMDb', display: '7.4' },
+              { source: 'tmdb', name: 'TMDb', display: '7.9' },
+            ],
+            cast: ['Ann Actor', 'Bo Actor', 'Cy Actor'].map((name, order) => ({
+              person_id: `p${order}`,
+              name,
+              character: '',
+              order,
+            })),
+          }
+        : {};
       const detail = /^\/api\/v2\/catalog\/items\/(m2|s1)$/.exec(url.pathname);
       if (req.method === 'GET' && detail) {
         return send(
@@ -188,6 +231,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   unplayed_count: 1,
                   in_progress_count: 1,
                 },
+                ...tallMovie,
               }
             : {
                 ...baseItem,
@@ -199,6 +243,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 overview: 'A show with two seasons.',
                 play_content_id: 'e11',
                 play_season_number: 1,
+                ...tallSeries,
               },
         );
       }
@@ -229,7 +274,16 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         });
       }
       if (req.method === 'GET' && url.pathname.startsWith('/api/v2/recommendations/similar/')) {
-        return send(200, { items: [] });
+        return send(200, {
+          items: tall
+            ? [1, 2, 3, 4].map((n) => ({
+                content_id: `sim${n}`,
+                title: `Similar ${n}`,
+                type: 'movie',
+                year: 2020,
+              }))
+            : [],
+        });
       }
       const watch = /^\/api\/v2\/watch\/(.+)$/.exec(url.pathname);
       if (req.method === 'GET' && watch) {
@@ -1394,8 +1448,8 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   });
 });
 
-async function openSeriesDetail(page: Page) {
-  const { origin } = await startFakeSilo({ series: true });
+async function openSeriesDetail(page: Page, tall = false) {
+  const { origin } = await startFakeSilo({ series: true, tall });
   await page.goto(`${distIndexUrl}?server=${origin}`);
   await expect(page.getByLabel('Serveradresse')).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -1461,7 +1515,9 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
-  await page.waitForTimeout(400);
+  // The page has scrolled (300 ms) when the season pills sit on the safe line.
+  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
+  await expect.poll(async () => Math.round((await seasonTab.boundingBox())!.y)).toBe(54);
   const pills = await page
     .locator('.detail-actions .detail-pill')
     .evaluateAll((els) =>
@@ -1471,9 +1527,114 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   for (const [top, bottom] of pills) {
     expect(bottom <= 0 || top >= 54).toBe(true);
   }
-  const seasons = await page.getByRole('tab', { name: 'Staffel 1' }).boundingBox();
-  expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(4);
+  const seasons = await seasonTab.boundingBox();
+  expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(2);
   expect(await layer.boundingBox()).toEqual(before);
   await expect(page.getByTestId('detail-dim')).toHaveAttribute('data-scrolled', 'true');
   await page.screenshot({ path: `${shots}/series-episodes.png` });
+});
+
+test('detail page: a tall hero holds its content, the page scrolls smoothly to measured tops and the hero fades', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, true);
+  await expect(page.getByTestId('detail-logo')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
+  await expect(page.getByTestId('detail-credits')).toBeVisible();
+  const box = (selector: string) => page.locator(selector).first().boundingBox();
+  const opacity = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
+  const pageOffset = () =>
+    page.locator('.detail-page').evaluate((el) => {
+      const w = el.ownerDocument.defaultView!;
+      return new w.DOMMatrix(w.getComputedStyle(el).transform).f;
+    });
+
+  // (a) On the hero the action pills end at least 40 px above the season pills, and the hero is
+  // taller than its 760 px minimum, so an absolutely placed column would have overflowed it.
+  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
+  const actions = (await box('.detail-actions'))!;
+  const seasonsOnHero = (await seasonTab.boundingBox())!;
+  expect(actions.y + actions.height + 40).toBeLessThanOrEqual(seasonsOnHero.y);
+  expect((await box('.detail-hero'))!.height).toBeGreaterThan(760);
+  expect(await opacity('.detail-text')).toBe('1');
+
+  // (e) The page scrolls over 300 ms, not the 150 ms of a focus effect.
+  expect(
+    await page
+      .locator('.detail-page')
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).transitionDuration),
+  ).toBe('0.3s');
+
+  // (b) Down to the season pills: they end on the top safe line, and the hero text is gone.
+  await page.keyboard.press('ArrowDown');
+  await expect(seasonTab).toBeFocused();
+  await expect
+    .poll(async () => Math.abs((await seasonTab.boundingBox())!.y - 54))
+    .toBeLessThanOrEqual(2);
+  await expect.poll(() => opacity('.detail-text')).toBe('0');
+  // The dim over the backdrop is at least 0.85 black once the focus has left the hero.
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('detail-dim')
+        .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity),
+    )
+    .toBe('1');
+  expect(
+    await page
+      .getByTestId('detail-dim')
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundColor),
+  ).toBe('rgba(0, 0, 0, 0.85)');
+
+  // (c) Down to the episodes: the block stays where it is, the hero stays faded.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  expect(Math.abs((await seasonTab.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
+  expect(await opacity('.detail-text')).toBe('0');
+
+  // (d) Up to the action pills: the hero text is back and the page is at its origin.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
+  await expect.poll(() => opacity('.detail-text')).toBe('1');
+  await expect.poll(pageOffset).toBe(0);
+});
+
+test('detail page: a movie scrolls to the similar row, whose top meets the safe line, and the cast row fades', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByTestId('row-cast')).toBeVisible();
+  await expect(page.getByTestId('row-similar')).toBeVisible();
+
+  const top = async (testId: string) => (await page.getByTestId(testId).boundingBox())!.y;
+  const opacity = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
+
+  // Down from the action pills to the cast row, then to the similar row.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await expect.poll(async () => Math.abs((await top('row-cast')) - 54)).toBeLessThanOrEqual(2);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Similar 1/ })).toBeFocused();
+  await expect.poll(async () => Math.abs((await top('row-similar')) - 54)).toBeLessThanOrEqual(2);
+  await expect.poll(() => opacity('[data-zone="cast"]')).toBe('0');
+  await expect.poll(() => opacity('.detail-text')).toBe('0');
+  expect(await opacity('[data-zone="similar"]')).toBe('1');
 });

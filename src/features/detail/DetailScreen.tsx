@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
 import { useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
-import {
-  PersonCard,
-  PosterCard,
-  Row,
-  keepAtOrigin,
-  rowHeight,
-  type CatalogItem,
-} from '../../ui/media';
+import { PersonCard, PosterCard, Row, keepAtOrigin, type CatalogItem } from '../../ui/media';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import { ActionRow, type EpisodeRef } from './ActionRow';
@@ -22,9 +15,10 @@ import { defaultSeason, initials, orderSeasons, type Episode, type ItemDetail } 
 import {
   DETAIL_INSET,
   detailScrollOffset,
-  type DetailSection,
+  isAbove,
+  type DetailBlockTops,
+  type DetailBlockZone,
   type DetailZone,
-  EPISODES_SECTION_HEIGHT,
   SEASON_PILLS_GAP,
   SEASON_PILLS_HEIGHT,
 } from './layout';
@@ -51,6 +45,8 @@ export interface DetailScreenProps {
   onOpenDetail: (target: DetailTarget) => void;
   onBack: () => void;
 }
+
+const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'similar'];
 
 const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
@@ -201,11 +197,32 @@ function DetailBody({
 
   // --- Vertical scroll: the page moves to the section that holds the focus ----------------------
   const [zone, setZone] = useState<DetailZone>('hero');
-  const sections: DetailSection[] = [];
-  if (series) sections.push({ zone: 'episodes', height: EPISODES_SECTION_HEIGHT });
-  else if (cast.length > 0) sections.push({ zone: 'cast', height: rowHeight('poster') });
-  if (similarItems.length > 0) sections.push({ zone: 'similar', height: rowHeight('poster') });
-  const offset = detailScrollOffset(zone, sections);
+  // The tops of the blocks below the hero are measured, not assumed: a tall hero (logo, four lines
+  // of synopsis, credits) pushes them down, and fonts or a longer synopsis change them later.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [tops, setTops] = useState<DetailBlockTops>({});
+  const measure = useCallback(() => {
+    const page = pageRef.current;
+    if (!page) return;
+    const next: DetailBlockTops = {};
+    for (const block of BLOCK_ZONES) {
+      const el = page.querySelector<HTMLElement>(`[data-zone="${block}"]`);
+      if (el) next[block] = el.offsetTop;
+    }
+    setTops((old) => (BLOCK_ZONES.every((block) => old[block] === next[block]) ? old : next));
+  }, []);
+  // After every render (blocks appear as their data arrives) and whenever a box changes size.
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(page);
+    page.querySelectorAll('[data-zone], .detail-hero').forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  });
+  const offset = detailScrollOffset(zone, tops);
+  const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
   const inHero = useCallback(() => setZone('hero'), []);
   const inEpisodes = useCallback(() => setZone('episodes'), []);
   const inCast = useCallback(() => setZone('cast'), []);
@@ -288,7 +305,8 @@ function DetailBody({
       <section
         className="detail-section detail-episodes"
         data-testid="detail-episodes"
-        style={{ height: EPISODES_SECTION_HEIGHT }}
+        data-zone="episodes"
+        data-faded={fade('episodes')}
       >
         <div
           className="detail-pills-box"
@@ -305,9 +323,14 @@ function DetailBody({
     <>
       <main className="detail" data-testid="detail" data-type={detail.type} onScroll={keepAtOrigin}>
         <DetailBackdrop detail={detail} scrolled={zone !== 'hero'} />
-        <div className="detail-page" style={{ transform: `translateY(${-offset}px)` }}>
+        <div
+          ref={pageRef}
+          className="detail-page"
+          style={{ transform: `translateY(${-offset}px)` }}
+        >
           <DetailHero
             detail={detail}
+            faded={fade('hero') === 'true'}
             onMore={() => setSynopsisOpen(true)}
             actions={
               playId ? (
@@ -325,48 +348,52 @@ function DetailBody({
           />
           {episodeBlock}
           {!series && cast.length > 0 ? (
-            <Row
-              rowId="cast"
-              title={t('detail.cast')}
-              shape="poster"
-              items={cast}
-              getKey={(person) => person.person_id ?? `${person.order}-${person.name}`}
-              memory={memory.rows}
-              inset={DETAIL_INSET}
-              onRowFocused={inCast}
-              renderCard={(person, ctx) => (
-                <PersonCard
-                  name={person.name}
-                  role={person.character}
-                  photo={person.photo_url}
-                  thumbhash={person.photo_thumbhash}
-                  initials={initials(person.name)}
-                  focusKey={ctx.focusKey}
-                  onFocused={ctx.onFocused}
-                  onOpen={openPerson}
-                />
-              )}
-            />
+            <div data-zone="cast" data-faded={fade('cast')}>
+              <Row
+                rowId="cast"
+                title={t('detail.cast')}
+                shape="poster"
+                items={cast}
+                getKey={(person) => person.person_id ?? `${person.order}-${person.name}`}
+                memory={memory.rows}
+                inset={DETAIL_INSET}
+                onRowFocused={inCast}
+                renderCard={(person, ctx) => (
+                  <PersonCard
+                    name={person.name}
+                    role={person.character}
+                    photo={person.photo_url}
+                    thumbhash={person.photo_thumbhash}
+                    initials={initials(person.name)}
+                    focusKey={ctx.focusKey}
+                    onFocused={ctx.onFocused}
+                    onOpen={openPerson}
+                  />
+                )}
+              />
+            </div>
           ) : null}
           {similarItems.length > 0 ? (
-            <Row
-              rowId="similar"
-              title={t('detail.similar')}
-              shape="poster"
-              items={similarItems}
-              getKey={(item) => item.content_id}
-              memory={memory.rows}
-              inset={DETAIL_INSET}
-              onRowFocused={inSimilar}
-              renderCard={(item, ctx) => (
-                <PosterCard
-                  item={item}
-                  focusKey={ctx.focusKey}
-                  onFocused={ctx.onFocused}
-                  onOpen={openSimilar}
-                />
-              )}
-            />
+            <div data-zone="similar" data-faded={fade('similar')}>
+              <Row
+                rowId="similar"
+                title={t('detail.similar')}
+                shape="poster"
+                items={similarItems}
+                getKey={(item) => item.content_id}
+                memory={memory.rows}
+                inset={DETAIL_INSET}
+                onRowFocused={inSimilar}
+                renderCard={(item, ctx) => (
+                  <PosterCard
+                    item={item}
+                    focusKey={ctx.focusKey}
+                    onFocused={ctx.onFocused}
+                    onOpen={openSimilar}
+                  />
+                )}
+              />
+            </div>
           ) : null}
         </div>
         {personNote ? (
