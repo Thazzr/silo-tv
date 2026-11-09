@@ -374,7 +374,7 @@ describe('progress', () => {
     expect(calls.progress[1]?.body.position).toBe(52);
   });
 
-  it('reports at once on pause and on resume, and stays quiet while paused', async () => {
+  it('reports at once on pause and on resume, and every 10 s while paused', async () => {
     const calls = servePlayback(server);
     const hook = setup();
     await ready(hook);
@@ -385,17 +385,23 @@ describe('progress', () => {
     expect(calls.progress).toHaveLength(0);
 
     p.reading.position = 31;
+    p.reading.paused = true;
     act(() => hook.result.current.onPause());
     await until(() => calls.progress.length === 1);
     expect(calls.progress[0]?.body).toMatchObject({ position: 31, is_paused: true, sequence: 1 });
 
-    vi.advanceTimersByTime(PROGRESS_INTERVAL_MS * 3);
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(calls.progress).toHaveLength(1);
-
-    act(() => hook.result.current.onPlaying());
+    // The server ends a quiet session: a paused one keeps reporting, still paused.
+    vi.advanceTimersByTime(PROGRESS_INTERVAL_MS);
     await until(() => calls.progress.length === 2);
-    expect(calls.progress[1]?.body).toMatchObject({ is_paused: false, sequence: 2 });
+    vi.advanceTimersByTime(PROGRESS_INTERVAL_MS);
+    await until(() => calls.progress.length === 3);
+    expect(calls.progress.map((c) => c.body.sequence)).toEqual([1, 2, 3]);
+    expect(calls.progress[2]?.body).toMatchObject({ position: 31, is_paused: true });
+
+    p.reading.paused = false;
+    act(() => hook.result.current.onPlaying());
+    await until(() => calls.progress.length === 4);
+    expect(calls.progress[3]?.body).toMatchObject({ is_paused: false, sequence: 4 });
   });
 });
 
@@ -453,6 +459,7 @@ describe('stop', () => {
     const hook = setup();
     await ready(hook);
     hook.result.current.bindPlayer(player(61).read);
+    act(() => hook.result.current.onPlaying());
     hook.unmount();
     await until(() => calls.stop.length === 1);
     expect(calls.stop[0]?.body).toMatchObject({ position: 61, sequence: 1 });
@@ -535,7 +542,7 @@ describe('failure-driven replan', () => {
     expect(next.kind === 'ready' && next.mediaUrl).toContain('/master.m3u8');
   });
 
-  it('ends in the error state on the second failure and sends no second replan', async () => {
+  it('ends in the error state when the second recovery brings back a plan already tried', async () => {
     const calls = servePlayback(server);
     const hook = setup();
     await ready(hook);
@@ -547,7 +554,11 @@ describe('failure-driven replan', () => {
     act(() => hook.result.current.onMediaError({ code: 4, message: 'again' }));
     await waitFor(() => expect(hook.result.current.state.kind).toBe('error'));
     expect(hook.result.current.state).toMatchObject({ reason: 'failed' });
-    expect(calls.replan).toHaveLength(1);
+    expect(calls.replan).toHaveLength(2);
+    expect(calls.replan[1]?.body).toMatchObject({
+      attempt_count: 2,
+      attempted_plan_keys: ['v3:key-1', 'v3:key-2'],
+    });
   });
 
   it('counts one failure once, even when the engine reports it twice in a row', async () => {

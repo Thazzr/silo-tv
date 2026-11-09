@@ -1,23 +1,17 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type SyntheticEvent,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBackHandler, useWheelSuspended } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
 import { getPlatform } from '../platform';
+import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
+import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
 import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
   type PlaybackSession,
-  type PlayerReading,
   type Plan,
   type SessionFailure,
 } from './usePlaybackSession';
@@ -38,15 +32,17 @@ export interface PlayerScreenProps {
   /** How to start; the default asks when there is something to resume. */
   intent?: StartIntent;
   onExit: () => void;
+  /** The stream played to its end and the session is stopped. Defaults to leaving the player. */
+  onEnded?: () => void;
 }
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
-export function PlayerScreen({ contentId, title, intent, onExit }: PlayerScreenProps) {
+export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: PlayerScreenProps) {
   // The player has its own keys; the wheel would only press Up and Down there.
   useWheelSuspended();
   const t = useT();
   const { session: auth } = useSilo();
-  const playback = usePlaybackSession(contentId, intent);
+  const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit);
   const { state } = playback;
   const token = auth.get()?.accessToken;
 
@@ -103,6 +99,7 @@ export function PlayerScreen({ contentId, title, intent, onExit }: PlayerScreenP
       plan={state.plan}
       sessionId={state.sessionId}
       mediaUrl={state.mediaUrl}
+      autoplay={state.autoplay}
       token={token}
       playback={playback}
       onExit={onExit}
@@ -110,26 +107,11 @@ export function PlayerScreen({ contentId, title, intent, onExit }: PlayerScreenP
   );
 }
 
-/** The target moved to the nearest seekable position; unchanged when it is already inside one. */
-function withinSeekable(el: HTMLVideoElement, target: number): number {
-  const ranges = el.seekable;
-  let best = el.currentTime;
-  let distance = Infinity;
-  for (let i = 0; i < ranges.length; i += 1) {
-    const clamped = Math.min(ranges.end(i), Math.max(ranges.start(i), target));
-    const d = Math.abs(clamped - target);
-    if (d < distance) {
-      distance = d;
-      best = clamped;
-    }
-  }
-  return best;
-}
-
 function PlayingView({
   plan,
   sessionId,
   mediaUrl,
+  autoplay,
   token,
   playback,
   onExit,
@@ -137,53 +119,51 @@ function PlayingView({
   plan: Plan;
   sessionId: string;
   mediaUrl: string;
+  autoplay: boolean;
   token: string | undefined;
   playback: PlaybackSession;
   onExit: () => void;
 }) {
   const t = useT();
-  const { bindPlayer, onPlaying, onPause, onMediaError, stop, mediaError } = playback;
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const {
+    attachEngine,
+    reading,
+    onLoadedMetadata,
+    onPlaying,
+    onPause,
+    onEnded,
+    onMediaError,
+    seekTo,
+    stop,
+    mediaError,
+  } = playback;
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
-  // The container's own first timestamp: Chromium keeps it for Matroska.
-  const originRef = useRef(0);
-  const latestRef = useRef<PlayerReading | null>(null);
+  const [engine, setEngine] = useState<PlayerEngine | null>(null);
+  const engineRef = useRef<PlayerEngine | null>(null);
   const [showing, setShowing] = useState(false);
-  const [paused, setPaused] = useState(false);
+  const [paused, setPaused] = useState(!autoplay);
   const [position, setPosition] = useState(0);
   const [diagnostics, setDiagnostics] = useState(false);
-  const offset = plan.timeline.timeline_offset_seconds;
   const total = plan.source.duration_seconds;
 
-  const setRef = useCallback((element: HTMLVideoElement | null) => {
-    videoRef.current = element;
-    setVideo(element);
-  }, []);
-
-  // The source-timeline position the server wants in progress and stop calls. After the element
-  // is gone the last reading stands in, so a stop on unmount still carries a position.
-  const read = useCallback((): PlayerReading | null => {
-    const el = videoRef.current;
-    if (!el) return latestRef.current;
-    const reading = {
-      position: Math.max(0, el.currentTime - originRef.current) + offset,
-      paused: el.paused,
-    };
-    latestRef.current = reading;
-    return reading;
-  }, [offset]);
-
-  useEffect(() => {
-    bindPlayer(read);
-    return () => bindPlayer(null);
-  }, [bindPlayer, read]);
-
-  // Layout cleanups run before React detaches the video, so the last position is still readable.
-  useLayoutEffect(
-    () => () => {
-      read();
+  // The element is rendered here; everything that controls playback goes through its engine.
+  const setRef = useCallback(
+    (element: HTMLVideoElement | null) => {
+      setVideo(element);
+      if (element) {
+        const created = new HtmlVideoEngine(element);
+        engineRef.current = created;
+        attachEngine(created);
+        setEngine(created);
+      } else {
+        // The controller takes the last position first, then the decoder is freed.
+        attachEngine(null);
+        engineRef.current?.release();
+        engineRef.current = null;
+        setEngine(null);
+      }
     },
-    [read],
+    [attachEngine],
   );
 
   const leave = useCallback(() => {
@@ -195,28 +175,17 @@ function PlayingView({
   useBackHandler(leave);
 
   const toggle = useCallback(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (el.paused) void Promise.resolve(el.play()).catch(() => undefined);
-    else el.pause();
-  }, []);
+    if (!engine) return;
+    if (engine.paused) void engine.play();
+    else engine.pause();
+  }, [engine]);
 
   const seek = useCallback(
     (delta: number) => {
-      const el = videoRef.current;
-      if (!el) return;
-      // Never past the ends: the engine's duration, else the source's own runtime.
-      const end = Number.isFinite(el.duration)
-        ? el.duration
-        : total !== undefined
-          ? originRef.current + total - offset
-          : Infinity;
-      const target = Math.min(end, Math.max(originRef.current, el.currentTime + delta));
-      // A plan the server cannot seek (copy remux over HLS) only has the ranges the player
-      // holds. Moving the server-side timeline (a seek_reanchor replan) comes in Phase 3.
-      el.currentTime = plan.timeline.can_seek_anywhere ? target : withinSeekable(el, target);
+      const current = reading();
+      if (current) void seekTo(current.position + delta);
     },
-    [total, offset, plan.timeline.can_seek_anywhere],
+    [reading, seekTo],
   );
 
   useEffect(() => {
@@ -232,12 +201,12 @@ function PlayingView({
           break;
         case 'play': {
           handled();
-          if (videoRef.current?.paused) toggle();
+          if (engine?.paused) toggle();
           break;
         }
         case 'pause': {
           handled();
-          if (videoRef.current && !videoRef.current.paused) toggle();
+          if (engine && !engine.paused) toggle();
           break;
         }
         case 'left':
@@ -264,14 +233,36 @@ function PlayingView({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [toggle, seek, leave]);
+  }, [engine, toggle, seek, leave]);
 
-  const onLoadedMetadata = (e: SyntheticEvent<HTMLVideoElement>) => {
-    const el = e.currentTarget;
-    originRef.current = el.currentTime;
-    const start = plan.timeline.player_start_seconds;
-    if (start > 0) el.currentTime = originRef.current + start;
-  };
+  // Subscribed before the source is set, so no early event is missed.
+  useLayoutEffect(() => {
+    if (!engine) return;
+    const off = [
+      engine.on('loadedmetadata', onLoadedMetadata),
+      engine.on('playing', () => {
+        setShowing(true);
+        setPaused(false);
+        onPlaying();
+      }),
+      engine.on('waiting', () => setShowing(false)),
+      engine.on('pause', () => {
+        // The pause that comes with the end of the stream is not the viewer's.
+        if (engine.ended) return;
+        setPaused(true);
+        onPause();
+      }),
+      engine.on('ended', onEnded),
+      engine.on('timeupdate', () => setPosition(reading()?.position ?? 0)),
+      engine.on('error', () => {
+        setShowing(false);
+        const error = engine.error;
+        onMediaError({ code: error?.code ?? 0, message: error?.message ?? '' });
+      }),
+    ];
+    engine.setSource(mediaUrl);
+    return () => off.forEach((unsubscribe) => unsubscribe());
+  }, [engine, mediaUrl, reading, onLoadedMetadata, onPlaying, onPause, onEnded, onMediaError]);
 
   const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
   const ratio = duration > 0 ? Math.min(1, position / duration) : 0;
@@ -279,33 +270,7 @@ function PlayingView({
 
   return (
     <div className="player" data-testid="player">
-      <video
-        ref={setRef}
-        className="player-video"
-        src={mediaUrl}
-        autoPlay
-        onLoadedMetadata={onLoadedMetadata}
-        onPlaying={() => {
-          setShowing(true);
-          setPaused(false);
-          onPlaying();
-        }}
-        onWaiting={() => setShowing(false)}
-        onPause={(e) => {
-          // The pause that comes with the end of the stream is not the viewer's.
-          if (e.currentTarget.ended) return;
-          setPaused(true);
-          onPause();
-        }}
-        onEnded={leave}
-        onTimeUpdate={() => setPosition(read()?.position ?? 0)}
-        onError={(e) => {
-          setShowing(false);
-          const error = e.currentTarget.error;
-          onMediaError({ code: error?.code ?? 0, message: error?.message ?? '' });
-        }}
-        onClick={toggle}
-      />
+      <video ref={setRef} className="player-video" autoPlay={autoplay} onClick={toggle} />
       {cue ? (
         <p className="player-cue loading" role="status" data-testid="player-cue">
           <span className="spinner" aria-hidden="true" />

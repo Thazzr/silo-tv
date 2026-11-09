@@ -11,6 +11,10 @@ configure({ asyncUtilTimeout: 8000 });
 // Some suites run in the node environment (the service tests); they have no DOM to navigate.
 const hasDom = typeof window !== 'undefined';
 
+// jsdom has no media pipeline: load() only logs "not implemented", and the player's engine calls it
+// when it releases a video.
+if (hasDom) HTMLMediaElement.prototype.load = () => undefined;
+
 // The spatial navigation service is a singleton; each test starts it fresh, with a fake layout.
 beforeEach(() => {
   if (hasDom) initNavigation(fakeLayout);

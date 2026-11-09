@@ -29,10 +29,29 @@ export function rewound(point: number, rewindSeconds: number): number {
   return Math.max(0, point - rewindSeconds);
 }
 
+/** A track as the start request names it: the contract takes the id, the index, or both. */
+export interface TrackChoice {
+  id?: string;
+  index?: number;
+}
+
+/** What the viewer picked before the playback starts; without a field the server decides. */
+export interface StartChoices {
+  /** A specific file (version). The server then keeps to it and plans no alternate version. */
+  fileId?: string;
+  audio?: TrackChoice;
+  subtitle?: TrackChoice;
+  /** A quality label from the plan's `available_qualities`; `auto` when absent. */
+  quality?: string;
+}
+
 /**
  * How a playback starts, decided by whoever opens the player:
  * - `resume`: at the resume point of the fresh watch state, rewound; from 0 without one. No prompt.
  * - `beginning`: from 0, explicitly. No prompt.
  * - `ask` (the default): with a resume point the player asks, else from 0.
+ * The optional choices ride along with any of them.
  */
-export type StartIntent = { kind: 'resume' } | { kind: 'beginning' } | { kind: 'ask' };
+export interface StartIntent extends StartChoices {
+  kind: 'resume' | 'beginning' | 'ask';
+}

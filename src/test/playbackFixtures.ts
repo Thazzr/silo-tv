@@ -178,7 +178,10 @@ export function servePlayback(
     replan: [],
   };
   const starts = options.start ?? [playableDecision()];
-  const replans = options.replan ?? [playableDecision(playbackPlan({ plan_id: 'plan:2' }))];
+  // A recovery plan has a key of its own: a plan already tried is a loop to the client.
+  const replans = options.replan ?? [
+    playableDecision(playbackPlan({ plan_id: 'plan:2', plan_attempt_key: 'v3:key-2' })),
+  ];
   const next = <T>(list: T[], seen: number): T => list[Math.min(seen, list.length - 1)]!;
 
   server.use(

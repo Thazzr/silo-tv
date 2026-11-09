@@ -78,16 +78,18 @@ function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, inten
   return { calls, onExit, view, currentVideo };
 }
 
-async function playing(options: PlaybackServerOptions = {}) {
+async function playing(options: PlaybackServerOptions = {}, firstFrame = true) {
   const ctx = render(options);
   await screen.findByTestId('player');
   const video = ctx.currentVideo()!;
+  // Progress and stop report the element's position only after a frame has played.
+  if (firstFrame) fireEvent.playing(video);
   return { ...ctx, video, state: fakeVideo(video) };
 }
 
 describe('PlayerScreen playback', () => {
   it('shows a loading cue until the video plays', async () => {
-    const { video } = await playing();
+    const { video } = await playing({}, false);
     expect(screen.getByTestId('player-cue')).toBeInTheDocument();
     expect(video).toHaveAttribute('autoplay');
     fireEvent.playing(video);
@@ -235,6 +237,27 @@ describe('PlayerScreen leaving', () => {
     expect(calls.progress).toHaveLength(0);
   });
 
+  it('hands the end of the stream to onEnded instead of leaving when the screen has one', async () => {
+    const calls = servePlayback(server);
+    const onExit = vi.fn();
+    const onEnded = vi.fn();
+    const view = renderWithSilo(
+      <PlayerScreen contentId="m1" title="First Title" onExit={onExit} onEnded={onEnded} />,
+      { session: signedIn() },
+    );
+    await screen.findByTestId('player');
+    const video = view.container.querySelector('video')!;
+    const state = fakeVideo(video);
+    fireEvent.playing(video);
+    state.currentTime = 5400;
+    state.ended = true;
+    fireEvent.ended(video);
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(onExit).not.toHaveBeenCalled();
+    await until(() => calls.stop.length === 1);
+    expect(calls.stop[0]?.body).toMatchObject({ position: 5400 });
+  });
+
   it('reports a pause the viewer made at once', async () => {
     const { calls, video, state } = await playing();
     fireEvent.playing(video);
@@ -297,22 +320,38 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
     ],
   };
 
-  it('seeks inside the seekable ranges and clamps to the nearest end', async () => {
-    const { state } = await playing(stuck);
+  it('seeks by itself inside the seekable ranges', async () => {
+    const { calls, state } = await playing(stuck);
+    state.duration = 5400;
+    state.seekable = [[0, 30]];
+    state.currentTime = 25;
+    key(LEFT);
+    expect(state.currentTime).toBe(15);
+    state.seekable = [[100, 200]];
+    state.currentTime = 185;
+    key(RIGHT);
+    expect(state.currentTime).toBe(195);
+    key(LEFT);
+    expect(state.currentTime).toBe(185);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(calls.replan).toHaveLength(0);
+  });
+
+  it('asks the server to move the timeline when the target is outside the seekable ranges', async () => {
+    const { calls, state, video, currentVideo } = await playing(stuck);
     state.duration = 5400;
     state.seekable = [[0, 30]];
     state.currentTime = 25;
     key(RIGHT);
-    expect(state.currentTime).toBe(30);
-    key(LEFT);
-    expect(state.currentTime).toBe(20);
-    state.seekable = [[100, 200]];
-    state.currentTime = 105;
-    key(LEFT);
-    expect(state.currentTime).toBe(100);
-    state.currentTime = 195;
-    key(RIGHT);
-    expect(state.currentTime).toBe(200);
+    await until(() => calls.replan.length === 1);
+    expect(calls.replan[0]?.body).toMatchObject({
+      operation: 'seek_reanchor',
+      position_seconds: 35,
+    });
+    // The player did not seek on its own, and the new plan on the same stream keeps the video.
+    expect(state.currentTime).toBe(25);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(currentVideo()).toBe(video);
   });
 
   it('does not move without a seekable range', async () => {
@@ -376,7 +415,7 @@ describe('PlayerScreen diagnostics', () => {
 });
 
 describe('PlayerScreen failure', () => {
-  it('replans once and loads the new plan; a second failure shows the error with Back', async () => {
+  it('replans and loads the new plan; a plan already tried shows the error with Back', async () => {
     const { calls, onExit, view, video, currentVideo } = await playing();
     const first = video.getAttribute('src');
     fakeVideo(video).error = { code: 3, message: 'decode' };
@@ -392,7 +431,12 @@ describe('PlayerScreen failure', () => {
     fireEvent.error(second);
     const error = await screen.findByTestId('player-error');
     expect(error).toHaveTextContent('Playback failed.');
-    expect(calls.replan).toHaveLength(1);
+    // The second recovery came back with the plan already tried: a loop, so it ends here.
+    expect(calls.replan).toHaveLength(2);
+    expect(calls.replan[1]?.body).toMatchObject({
+      attempt_count: 2,
+      attempted_plan_keys: ['v3:key-1', 'v3:key-2'],
+    });
     expect(currentVideo()).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
