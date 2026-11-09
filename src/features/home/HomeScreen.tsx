@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { useContentBack } from '../../app/shell/ShellBack';
 import { Button } from '../../app/ui';
-import { FocusGroup, getCurrentFocusKey } from '../../app/nav';
+import { FocusGroup, getCurrentFocusKey, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
 import {
@@ -312,6 +312,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
           className="home-rows"
           // Focus can scroll an overflow-hidden box on its own; the transform is the only scroll.
           onScroll={keepAtOrigin}
+          data-transform-scrolled="page"
         >
           <FocusGroup
             focusKey="home-rows"
@@ -319,6 +320,10 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
             saveLastFocusedChild
             preferredChildFocusKey={rows[activeRow] ? rowFocusKey(rows[activeRow].id) : undefined}
             className="home-rows-inner"
+            // Up and Down go from row to row by index (a failed row stops at its Try again button).
+            onArrow={stackArrows(
+              rows.map((row) => (row.failed ? `home-retry:${row.id}` : rowFocusKey(row.id))),
+            )}
             style={{ transform: `translateY(${-offset}px)` }}
           >
             {rows.map((row, index) => {

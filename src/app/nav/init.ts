@@ -8,6 +8,7 @@ import {
   setKeyMap,
   type SpatialNavigationServiceOptions,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { NavAdapter } from './adapter';
 
 /** Options of the service (key handling, layout measuring); tests pass a fake layout. */
 export type NavigationOptions = Partial<SpatialNavigationServiceOptions>;
@@ -34,7 +35,26 @@ let teardown: (() => void) | null = null;
 export function initNavigation(options: NavigationOptions = {}): void {
   destroyNavigation();
   // shouldFocusDOMNode: the focused element also gets DOM focus, which text fields need for typing.
-  init({ shouldFocusDOMNode: true, ...options });
+  // preventScroll: DOM focus must not scroll anything; the boxes that scroll by transform would
+  // fight it, and the adapter brings the focused element into view where a box really scrolls.
+  // The adapter is ours; a test's fake layout (an object) is laid over it, so only the measuring
+  // is faked.
+  const given = options.layoutAdapter;
+  const layoutAdapter =
+    typeof given === 'function'
+      ? given
+      : class extends NavAdapter {
+          constructor(...args: ConstructorParameters<typeof NavAdapter>) {
+            super(...args);
+            if (given) Object.assign(this, given);
+          }
+        };
+  init({
+    shouldFocusDOMNode: true,
+    domNodeFocusOptions: { preventScroll: true },
+    ...options,
+    layoutAdapter,
+  });
   setKeyMap(NAV_KEYS);
   window.addEventListener('keydown', guardTextField, true);
   teardown = () => {

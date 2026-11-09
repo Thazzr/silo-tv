@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FocusGroup } from '../../app/nav';
+import { FocusGroup, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { CardSkeleton } from './Skeletons';
 import { CARD_GAP, GRID_CARD_SIZE, GRID_COLUMNS, GRID_ROW_PITCH, ROW_INSET } from './layout';
 import { prefetchImage } from './prefetch';
@@ -99,6 +99,43 @@ export function Grid<T>({
     MOUNT_ROWS_AFTER,
   );
   const step = GRID_CARD_SIZE.width + CARD_GAP;
+  // Arrow keys move by index (the cards sit at known places; the library's spatial search would
+  // measure every card of the mounted rows on each press). The edges are left to it: Up from the
+  // first row (pills above), Right from the last column (alphabet rail), the end of the list.
+  const latest = useRef({
+    items,
+    getKey,
+    byKey: new Map<string, number>(),
+    mapped: null as unknown,
+  });
+  useEffect(() => {
+    latest.current.items = items;
+    latest.current.getKey = getKey;
+  });
+  const arrow = useCallback(
+    (direction: ArrowDirection, fromKey: string) => {
+      const now = latest.current;
+      if (now.mapped !== now.items) {
+        now.byKey = new Map(now.items.map((item, i) => [gridCardKey(gridId, now.getKey(item)), i]));
+        now.mapped = now.items;
+      }
+      const from = now.byKey.get(fromKey);
+      if (from === undefined) return false;
+      const total = now.items.length;
+      const col = from % GRID_COLUMNS;
+      let to = -1;
+      if (direction === 'left') to = col > 0 ? from - 1 : -1;
+      else if (direction === 'right')
+        to = col < GRID_COLUMNS - 1 && from + 1 < total ? from + 1 : -1;
+      else if (direction === 'up') to = from - GRID_COLUMNS;
+      // Below a short last row there may be fewer cards than columns: land on the last one.
+      else if (from + GRID_COLUMNS < total) to = from + GRID_COLUMNS;
+      else if (Math.floor(from / GRID_COLUMNS) < Math.floor((total - 1) / GRID_COLUMNS))
+        to = total - 1;
+      return to < 0 ? false : moveFocusTo(gridCardKey(gridId, now.getKey(now.items[to]!)));
+    },
+    [gridId],
+  );
   const focusedItem = items[focused];
 
   // Pictures of the rows past the window, on the side the focus travels to.
@@ -119,7 +156,12 @@ export function Grid<T>({
   }, [artUrl, firstRow, focusedRow, items, lastRow, totalRows]);
 
   return (
-    <div className="grid-viewport" data-testid="grid-viewport" onScroll={keepAtOrigin}>
+    <div
+      className="grid-viewport"
+      data-testid="grid-viewport"
+      data-transform-scrolled="box"
+      onScroll={keepAtOrigin}
+    >
       <FocusGroup
         focusKey={gridFocusKey(gridId)}
         enterable
@@ -130,6 +172,7 @@ export function Grid<T>({
         className="grid-track"
         data-columns={GRID_COLUMNS}
         data-testid="grid-track"
+        onArrow={arrow}
         style={{
           transform: `translateY(${-effectiveScroll * GRID_ROW_PITCH}px)`,
           height: totalRows * GRID_ROW_PITCH,
@@ -157,7 +200,12 @@ export function Grid<T>({
             }
             const key = getKey(item);
             cells.push(
-              <div className="grid-slot" key={key} style={style}>
+              <div
+                className="grid-slot"
+                key={key}
+                style={style}
+                data-nav-rect={`${style.left},${style.top},${GRID_CARD_SIZE.width},${GRID_CARD_SIZE.height}`}
+              >
                 <GridCell
                   item={item}
                   index={index}

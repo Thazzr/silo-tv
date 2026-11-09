@@ -2,6 +2,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
+import { spySpatialSearch } from '../../app/nav/testing';
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { renderWithSilo } from '../../test/renderFlow';
@@ -81,6 +82,49 @@ const focusAt = async (focusKey: string) => {
 };
 
 describe('Grid', () => {
+  it('lands on the last card when Down leaves a short last row, without the library searching', async () => {
+    // 8 cards: a full row and a last row of two.
+    renderWithSilo(<TestGrid items={makeItems(0, 8)} />);
+    await act(async () => {});
+    await focusAt(key('g5'));
+    const search = spySpatialSearch();
+    try {
+      await pressKey(KEY.down);
+      expect(getCurrentFocusKey()).toBe(key('g8'));
+      expect(search.count).toBe(0);
+    } finally {
+      search.restore();
+    }
+  });
+
+  it('decides arrows by index, without the library searching, except at the edges', async () => {
+    // 15 cards: two full rows and a last row of three.
+    renderWithSilo(<TestGrid items={makeItems(0, 15)} />);
+    await act(async () => {});
+    const search = spySpatialSearch();
+    try {
+      await pressKey(KEY.right);
+      await pressKey(KEY.down);
+      await pressKey(KEY.left);
+      await pressKey(KEY.up);
+      expect(getCurrentFocusKey()).toBe(key('g1'));
+      expect(search.count).toBe(0);
+      // Down from the last column of the second row lands on the last card of the short row.
+      await focusAt(key('g12'));
+      await pressKey(KEY.down);
+      expect(getCurrentFocusKey()).toBe(key('g15'));
+      // Right from the last card, and Up from the first row: the library decides.
+      await pressKey(KEY.right);
+      expect(search.count).toBeGreaterThan(0);
+      const before = search.count;
+      await focusAt(key('g3'));
+      await pressKey(KEY.up);
+      expect(search.count).toBeGreaterThan(before);
+    } finally {
+      search.restore();
+    }
+  });
+
   it('focuses the first card and moves in six columns', async () => {
     renderWithSilo(<TestGrid items={makeItems(0, 30)} />);
     await act(async () => {});

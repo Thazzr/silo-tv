@@ -317,6 +317,16 @@ describe('sub-view pills', () => {
     expect(memory.viewOf('movie')).toBe('browse');
   });
 
+  it('marks the Recommended rows box as scrolled by transform', async () => {
+    serveLibrary(server, LIBRARIES);
+    setup();
+    await screen.findByText('Row a-rec');
+    expect(document.querySelector('.library-rows')).toHaveAttribute(
+      'data-transform-scrolled',
+      'page',
+    );
+  });
+
   it('switch to Collections on OK', async () => {
     serveLibrary(server, LIBRARIES);
     setup();

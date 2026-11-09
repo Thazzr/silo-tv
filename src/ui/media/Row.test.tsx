@@ -1,6 +1,7 @@
 import { act, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { setFocus, getCurrentFocusKey } from '../../app/nav';
+import { spySpatialSearch } from '../../app/nav/testing';
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { renderWithSilo } from '../../test/renderFlow';
@@ -59,6 +60,30 @@ const focusAt = async (focusKey: string) => {
 };
 
 describe('Row', () => {
+  it('decides Left and Right by index, without the library searching; its ends still go to the library', async () => {
+    renderWithSilo(<TestRow data={items(4)} onExploreAll={() => {}} />);
+    await act(async () => {});
+    const search = spySpatialSearch();
+    try {
+      await pressKey(KEY.right);
+      await pressKey(KEY.right);
+      await pressKey(KEY.left);
+      expect(getCurrentFocusKey()).toBe(key('r', 'i2'));
+      // Through to the Explore all card at the end.
+      await pressKey(KEY.right);
+      await pressKey(KEY.right);
+      await pressKey(KEY.right);
+      expect(getCurrentFocusKey()).toBe(cardFocusKey('r', EXPLORE_KEY));
+      expect(search.count).toBe(0);
+      // The last card has no right neighbour: the library is asked (and finds none).
+      await pressKey(KEY.right);
+      expect(search.count).toBeGreaterThan(0);
+      expect(getCurrentFocusKey()).toBe(cardFocusKey('r', EXPLORE_KEY));
+    } finally {
+      search.restore();
+    }
+  });
+
   it('shows its title and moves the focus card by card with Left and Right', async () => {
     renderWithSilo(<TestRow />);
     expect(screen.getByRole('heading', { name: 'Row r' })).toBeInTheDocument();

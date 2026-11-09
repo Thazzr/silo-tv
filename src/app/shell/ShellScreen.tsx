@@ -231,6 +231,7 @@ export function ShellScreen({
             saveLastFocusedChild
             // Home clips its content; focus must not scroll that box (the rows scroll by transform).
             onScroll={keepAtOrigin}
+            data-transform-scrolled={CONTENT_CLASS[selected] ? 'page' : undefined}
             preferredChildFocusKey={memory.focusOf(selected)}
             data-testid={`tab-${selected}`}
           >

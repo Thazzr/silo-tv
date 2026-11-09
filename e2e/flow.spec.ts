@@ -47,6 +47,8 @@ interface FakeOptions {
   tall?: boolean;
   /** How many seasons the series has (2 when omitted). */
   seasons?: number;
+  /** Extra genres ("Genre 01", ...) after Action and Drama: a facet list longer than its panel. */
+  genres?: number;
 }
 
 interface FakeProfile {
@@ -119,6 +121,14 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
   const seasonCount = options.seasons ?? 2;
+  const genreNames = [
+    'Action',
+    'Drama',
+    ...Array.from(
+      { length: options.genres ?? 0 },
+      (_, i) => `Genre ${String(i + 1).padStart(2, '0')}`,
+    ),
+  ];
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -572,7 +582,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           });
         case 'GET /api/v2/catalog/filters':
           return send(200, {
-            genres: ['Action', 'Drama'],
+            genres: genreNames,
             studios: [],
             networks: [],
             countries: [],
@@ -1737,4 +1747,88 @@ test('detail page: with many seasons the focused pill stays fully on screen at b
       return box.x >= 0 && box.x + box.width <= 1920;
     })
     .toBe(true);
+});
+
+// Native focus scrolling is off (preventScroll); the navigation scrolls what really scrolls.
+test('a long filter list scrolls so the focused genre is visible, Down and Up', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ seriesLibrary: true, genres: 40 });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByTestId('card-title').first()).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Sortierung · Titel' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Filter', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Action' })).toBeFocused();
+
+  const inList = async (name: string) => {
+    const item = page.getByRole('menuitemcheckbox', { name, exact: true });
+    await expect(item).toBeFocused();
+    await expect
+      .poll(async () => {
+        const box = (await item.boundingBox())!;
+        const list = (await page.locator('.lib-panel-list').boundingBox())!;
+        return box.y >= list.y - 1 && box.y + box.height <= list.y + list.height + 1;
+      })
+      .toBe(true);
+  };
+  for (let i = 0; i < 41; i += 1) await page.keyboard.press('ArrowDown');
+  await inList('Genre 40');
+  expect(await page.locator('.lib-panel-list').evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  for (let i = 0; i < 41; i += 1) await page.keyboard.press('ArrowUp');
+  await inList('Action');
+  expect(await page.locator('.lib-panel-list').evaluate((el) => el.scrollTop)).toBe(0);
+});
+
+test('a screen taller than the window scrolls the document to the focused element', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+  // A window much shorter than the settings: moving the focus brings its pill into view.
+  await page.setViewportSize({ width: 1920, height: 300 });
+  const inWindow = () =>
+    page.evaluate(
+      `(() => { const box = document.activeElement.getBoundingClientRect(); return box.top >= 0 && box.bottom <= window.innerHeight; })()`,
+    );
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
+  await expect.poll(inWindow).toBe(true);
+  expect(await page.evaluate<number>('window.scrollY')).toBeGreaterThan(0);
+  // Back at the top of the window the element is above the scrolled page: it scrolls up again.
+  await page.evaluate('window.scrollTo(0, 0)');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
+  await expect.poll(inWindow).toBe(true);
 });

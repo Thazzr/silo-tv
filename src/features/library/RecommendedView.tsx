@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
-import { FocusGroup } from '../../app/nav';
+import { FocusGroup, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
 import {
   CatalogRow,
@@ -162,13 +162,19 @@ export function RecommendedView({
   }
 
   return (
-    <div className="library-rows" data-testid="recommended" onScroll={keepAtOrigin}>
+    <div
+      className="library-rows"
+      data-testid="recommended"
+      data-transform-scrolled="page"
+      onScroll={keepAtOrigin}
+    >
       <FocusGroup
         focusKey="library-rows"
         enterable
         saveLastFocusedChild
         preferredChildFocusKey={rows[activeRow] ? rowFocusKey(rows[activeRow].id) : undefined}
         className="library-rows-inner"
+        onArrow={stackArrows(rows.map((row) => rowFocusKey(row.id)))}
         style={{ transform: `translateY(${-offset}px)` }}
       >
         {rows.map((row, index) => (

@@ -1,5 +1,6 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useRef, type HTMLAttributes, type ReactNode } from 'react';
 import { FocusContext, useFocusable } from '@noriginmedia/norigin-spatial-navigation';
+import { ArrowContext, type ArrowHandler } from './arrows';
 import { getCurrentFocusKey } from './init';
 
 export interface FocusGroupProps extends HTMLAttributes<HTMLDivElement> {
@@ -19,6 +20,11 @@ export interface FocusGroupProps extends HTMLAttributes<HTMLDivElement> {
   saveLastFocusedChild?: boolean;
   /** Where entering the group lands when nothing was focused inside it yet. */
   preferredChildFocusKey?: string;
+  /**
+   * Decides the arrow presses of everything inside the group (see ArrowHandler); presses it
+   * declines go to the group above, then to the library's spatial search.
+   */
+  onArrow?: ArrowHandler;
   children: ReactNode;
 }
 
@@ -31,9 +37,25 @@ export function FocusGroup({
   autoRestoreFocus = true,
   saveLastFocusedChild,
   preferredChildFocusKey,
+  onArrow,
   children,
   ...rest
 }: FocusGroupProps) {
+  const parentArrow = useContext(ArrowContext);
+  const handler = useRef(onArrow);
+  useEffect(() => {
+    handler.current = onArrow;
+  });
+  const hasHandler = onArrow !== undefined;
+  const arrow = useMemo<ArrowHandler | null>(
+    () =>
+      hasHandler
+        ? (direction, fromKey) =>
+            handler.current?.(direction, fromKey) === true ||
+            parentArrow?.(direction, fromKey) === true
+        : parentArrow,
+    [hasHandler, parentArrow],
+  );
   const { ref, focusKey: key } = useFocusable<unknown, HTMLDivElement>({
     focusKey,
     focusable: enterable,
@@ -50,9 +72,11 @@ export function FocusGroup({
   });
   return (
     <FocusContext.Provider value={key}>
-      <div ref={ref} {...rest}>
-        {children}
-      </div>
+      <ArrowContext.Provider value={arrow}>
+        <div ref={ref} {...rest}>
+          {children}
+        </div>
+      </ArrowContext.Provider>
     </FocusContext.Provider>
   );
 }

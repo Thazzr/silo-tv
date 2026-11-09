@@ -10,6 +10,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { FocusIndexMemory, cardFocusKey, type CatalogItem } from '../../ui/media';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
+import { spySpatialSearch } from '../../app/nav/testing';
 import type { DetailTarget } from '../detail/detailMemory';
 import { HERO_REST_MS } from './Hero';
 import { HomeScreen, LONG_PRESS_MS } from './HomeScreen';
@@ -182,6 +183,32 @@ describe('HomeScreen: rows', () => {
     await pressKey(KEY.right);
     await pressKey(KEY.up);
     expect(getCurrentFocusKey()).toBe(key('a', 'a-3'));
+  });
+
+  it('marks its rows box as scrolled by transform, so focus never scrolls it natively', async () => {
+    serveHome(server, { sections: [homeSection('a', 3)] });
+    setup();
+    await focusKeyIs(key('a', 'a-1'));
+    expect(document.querySelector('.home-rows')).toHaveAttribute('data-transform-scrolled', 'page');
+  });
+
+  it('moves between rows by index, without the library searching', async () => {
+    serveHome(server, {
+      sections: [homeSection('a', 4), homeSection('b', 4), homeSection('c', 4)],
+    });
+    setup();
+    await focusKeyIs(key('a', 'a-1'));
+    const search = spySpatialSearch();
+    try {
+      await pressKey(KEY.right);
+      await pressKey(KEY.down);
+      await pressKey(KEY.down);
+      await pressKey(KEY.up);
+      expect(getCurrentFocusKey()).toBe(key('b', 'b-1'));
+      expect(search.count).toBe(0);
+    } finally {
+      search.restore();
+    }
   });
 
   it('scrolls the rows up with a transform so the focused row sits below the hero', async () => {

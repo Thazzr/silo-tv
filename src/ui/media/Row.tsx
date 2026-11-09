@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FocusGroup } from '../../app/nav';
+import { FocusGroup, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { ExploreAllCard } from './Cards';
 import {
+  CARD_SIZE,
   cardBlockHeight,
   rowHeight,
   rowStep,
@@ -90,9 +91,9 @@ function RowImpl<T>({
 
   // The callbacks of a card must not change when the focus moves, or no card could be skipped
   // while the row re-renders: the latest ones are read when the focus arrives.
-  const latest = useRef({ items, onCardFocused, onExploreFocused, onRowFocused });
+  const latest = useRef({ items, getKey, onCardFocused, onExploreFocused, onRowFocused });
   useEffect(() => {
-    latest.current = { items, onCardFocused, onExploreFocused, onRowFocused };
+    latest.current = { items, getKey, onCardFocused, onExploreFocused, onRowFocused };
   });
   const focusIndex = useCallback(
     (index: number) => {
@@ -106,6 +107,27 @@ function RowImpl<T>({
       else now.onCardFocused?.(item, index);
     },
     [count, memory, rowId, visible],
+  );
+
+  // Left and Right move by index: the cards sit at known places, so the library's spatial search
+  // (which measures every card of the row on every press) is not needed. The ends are left to it.
+  const arrow = useCallback(
+    (direction: ArrowDirection, fromKey: string) => {
+      if (direction !== 'left' && direction !== 'right') return false;
+      const now = latest.current;
+      const keyAt = (i: number) =>
+        cardFocusKey(rowId, i < now.items.length ? now.getKey(now.items[i]!) : EXPLORE_KEY);
+      let from = -1;
+      for (let i = 0; i < count; i += 1) {
+        if (keyAt(i) === fromKey) {
+          from = i;
+          break;
+        }
+      }
+      const to = from + (direction === 'right' ? 1 : -1);
+      return from < 0 || to < 0 || to >= count ? false : moveFocusTo(keyAt(to));
+    },
+    [count, rowId],
   );
 
   const focusedItem = items[focused];
@@ -156,6 +178,8 @@ function RowImpl<T>({
           className="row-strip"
           style={{ height: stripHeight }}
           data-shape={shape}
+          onArrow={arrow}
+          data-transform-scrolled="box"
         >
           <div
             className="row-track"
@@ -166,7 +190,12 @@ function RowImpl<T>({
               const item = items[index];
               const key = item === undefined ? EXPLORE_KEY : getKey(item);
               return (
-                <div className="row-slot" key={key} style={{ left: index * step }}>
+                <div
+                  className="row-slot"
+                  key={key}
+                  style={{ left: index * step }}
+                  data-nav-rect={slotRect(index * step, shape)}
+                >
                   <RowCard
                     rowId={rowId}
                     title={title}
@@ -189,6 +218,10 @@ function RowImpl<T>({
     </section>
   );
 }
+
+/** Where a slot sits in its track and how big its card is, for the navigation (data-nav-rect, see src/app/nav/adapter.ts). */
+const slotRect = (left: number, shape: CardShape) =>
+  `${left},0,${CARD_SIZE[shape].width},${CARD_SIZE[shape].height}`;
 
 interface RowCardProps<T> {
   rowId: string;

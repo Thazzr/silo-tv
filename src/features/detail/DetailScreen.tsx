@@ -327,7 +327,13 @@ function DetailBody({
 
   return (
     <>
-      <main className="detail" data-testid="detail" data-type={detail.type} onScroll={keepAtOrigin}>
+      <main
+        className="detail"
+        data-testid="detail"
+        data-type={detail.type}
+        data-transform-scrolled="page"
+        onScroll={keepAtOrigin}
+      >
         <DetailBackdrop detail={detail} scrolled={zone !== 'hero'} />
         <div
           ref={pageRef}

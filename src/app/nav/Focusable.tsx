@@ -7,6 +7,7 @@ import {
   type InputHTMLAttributes,
 } from 'react';
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation';
+import { ArrowContext, type ArrowDirection } from './arrows';
 import { FrameContext } from './ScreenFrame';
 import { getCurrentFocusKey, setFocus } from './init';
 
@@ -37,16 +38,21 @@ function useNavItem<E extends HTMLElement>({
 }: ItemOptions) {
   const frame = useContext(FrameContext);
   const tracker = useContext(FocusTrackerContext);
+  const arrow = useContext(ArrowContext);
+  const arrowRef = useRef(arrow);
   const click = useRef<() => void>(() => undefined);
   const focused = useRef<() => void>(() => undefined);
   const { ref } = useFocusable<unknown, E>({
     focusKey,
     focusable: !disabled,
     onEnterPress: () => click.current(),
+    // False keeps the library from searching when a group above decided the press (arrows.ts).
+    onArrowPress: (direction) => arrowRef.current?.(direction as ArrowDirection, focusKey) !== true,
     onFocus: () => focused.current(),
   });
 
   useEffect(() => {
+    arrowRef.current = arrow;
     click.current = () => ref.current?.click();
     focused.current = () => {
       tracker?.(focusKey);

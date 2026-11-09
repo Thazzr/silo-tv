@@ -128,6 +128,7 @@ describe('DetailScreen: a movie', () => {
     );
     expect(button('Play')).toBeInTheDocument();
     await focusKeyIs('detail-play');
+    expect(screen.getByTestId('detail')).toHaveAttribute('data-transform-scrolled', 'page');
   });
 
   it('asks for the images at the sizes of the page', async () => {
