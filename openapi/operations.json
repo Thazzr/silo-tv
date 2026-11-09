@@ -38,5 +38,10 @@
   { "path": "/api/v2/catalog/letters", "method": "post" },
   { "path": "/api/v2/library/{id}/collections", "method": "get" },
   { "path": "/api/v2/library/{id}/collections/{collection_id}/items", "method": "get" },
-  { "path": "/api/v2/catalog/search/capabilities", "method": "get" }
+  { "path": "/api/v2/catalog/search/capabilities", "method": "get" },
+  { "path": "/api/v2/catalog/people/{id}", "method": "get" },
+  { "path": "/api/v2/catalog/people", "method": "get" },
+  { "path": "/api/v2/catalog/box-sets", "method": "get" },
+  { "path": "/api/v2/catalog/box-sets/{id}", "method": "get" },
+  { "path": "/api/v2/catalog/items/{id}/box-set", "method": "get" }
 ]

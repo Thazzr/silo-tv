@@ -177,6 +177,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/catalog/box-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search the box sets of libraries with box sets in search, for listing ahead of their movies. */
+        get: operations["searchCatalogBoxSets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/box-sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One box set of a library with its movies the viewer can see there, in collection order. 404 when the library has box sets off or the viewer can see too few of its movies. */
+        get: operations["getCatalogBoxSet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/catalog/filters": {
         parameters: {
             query?: never;
@@ -211,6 +245,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/catalog/items/{id}/box-set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The box set a movie's page shows: the movie's box set with its movies the viewer can see, from library_id or the first of the movie's libraries with box sets on. box_set is absent when there is none; 404 when the ID is missing, hidden, or not a catalog title (an episode or season). */
+        get: operations["getCatalogItemBoxSet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/catalog/letters": {
         parameters: {
             query?: never;
@@ -222,6 +273,40 @@ export interface paths {
         put?: never;
         /** Count a title-ordered catalog query by initial letter, with each letter's list position, for an alphabetical jump bar. */
         post: operations["queryCatalogLetters"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search people by name, with exact matches first and optional media scope. */
+        get: operations["listPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One person; viewing queues a provider refresh when one is due, unless the read is a prefetch. */
+        get: operations["getPerson"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -930,6 +1015,120 @@ export interface components {
             tmdb_id?: string;
             tvdb_id?: string;
         };
+        CatalogBoxSet: {
+            backdrop_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description The collection's backdrop, cached like item artwork (presigned, short-lived), or TMDB's URL while it is not cached; absent when TMDB has none
+             */
+            backdrop_url?: string;
+            /**
+             * Format: int64
+             * @description Release year of the earliest of those movies
+             * @example 2001
+             */
+            first_year?: number;
+            /**
+             * @description The TMDB collection ID
+             * @example 1241
+             */
+            id: string;
+            /**
+             * Format: int64
+             * @description Release year of the latest of those movies
+             * @example 2011
+             */
+            last_year?: number;
+            /**
+             * @description The library whose movies make up the box set; pass it to getCatalogBoxSet
+             * @example 1
+             */
+            library_id: string;
+            /**
+             * Format: int64
+             * @description The collection's movies in the library that the viewer can see
+             * @example 8
+             */
+            movie_count: number;
+            overview?: string;
+            /**
+             * Format: int64
+             * @description How many of those movies the profile has played
+             * @example 5
+             */
+            played_count: number;
+            poster_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description The collection's poster, cached like item artwork (presigned, short-lived), or TMDB's URL while it is not cached; absent when TMDB has none
+             */
+            poster_url?: string;
+            /**
+             * @description The collection's TMDB name, with a trailing "Collection" shown as "Box Set"
+             * @example Harry Potter Box Set
+             */
+            title: string;
+        };
+        CatalogBoxSetDetail: {
+            backdrop_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description The collection's backdrop, cached like item artwork (presigned, short-lived), or TMDB's URL while it is not cached; absent when TMDB has none
+             */
+            backdrop_url?: string;
+            /**
+             * Format: int64
+             * @description Release year of the earliest of those movies
+             * @example 2001
+             */
+            first_year?: number;
+            /**
+             * @description The TMDB collection ID
+             * @example 1241
+             */
+            id: string;
+            /** @description The box set's movies in the library that the viewer can see, in collection (release) order */
+            items: components["schemas"]["CatalogItem"][];
+            /**
+             * Format: int64
+             * @description Release year of the latest of those movies
+             * @example 2011
+             */
+            last_year?: number;
+            /**
+             * @description The library whose movies make up the box set; pass it to getCatalogBoxSet
+             * @example 1
+             */
+            library_id: string;
+            /**
+             * Format: int64
+             * @description The collection's movies in the library that the viewer can see
+             * @example 8
+             */
+            movie_count: number;
+            overview?: string;
+            /**
+             * Format: int64
+             * @description How many of those movies the profile has played
+             * @example 5
+             */
+            played_count: number;
+            poster_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description The collection's poster, cached like item artwork (presigned, short-lived), or TMDB's URL while it is not cached; absent when TMDB has none
+             */
+            poster_url?: string;
+            /**
+             * @description The collection's TMDB name, with a trailing "Collection" shown as "Box Set"
+             * @example Harry Potter Box Set
+             */
+            title: string;
+        };
+        CatalogBoxSetList: {
+            /** @description Matching box sets, best match first; empty, never null */
+            items: components["schemas"]["CatalogBoxSet"][];
+        };
         CatalogBrowseCollection: {
             /** @description The saved or default order a collection or personal list resolved to */
             effective_sort?: components["schemas"]["CatalogEffectiveSort"];
@@ -1162,6 +1361,10 @@ export interface components {
              * @example 1995
              */
             year?: number;
+        };
+        CatalogItemBoxSet: {
+            /** @description The movie's box set with its movies, as getCatalogBoxSet answers it; absent when the movie is in no box set the viewer sees */
+            box_set?: components["schemas"]["CatalogBoxSetDetail"];
         };
         CatalogItemCollection: {
             /** @description The page's items; empty, never null */
@@ -2516,6 +2719,45 @@ export interface components {
              * @example eyJvZmZzZXQiOjUwfQ
              */
             next_cursor?: string;
+        };
+        Person: {
+            bio?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             * @example 1940-04-25
+             */
+            birth_date?: string;
+            birthplace?: string;
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            death_date?: string;
+            homepage?: string;
+            /**
+             * @description Opaque identifier
+             * @example 7
+             */
+            id: string;
+            imdb_id?: string;
+            /** @example Al Pacino */
+            name: string;
+            photo_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned photo URL; absent when the person has no photo
+             */
+            photo_url?: string;
+            plex_guid?: string;
+            tmdb_id?: string;
+            tvdb_id?: string;
+        };
+        PersonCollection: {
+            /** @description The page's items; empty, never null */
+            items: components["schemas"]["Person"][];
+            /** @description Cursor state; absent for bounded unpaginated collections */
+            page?: components["schemas"]["PageInfo"];
         };
         PlaybackAccepted: {
             is_paused: boolean;
@@ -5073,6 +5315,243 @@ export interface operations {
             };
         };
     };
+    searchCatalogBoxSets: {
+        parameters: {
+            query: {
+                /** @description Search text; a box set matches when its name contains every word, or when two or more of its movies' titles do */
+                q: string;
+                /** @description Only box sets of this library; absent searches every library with box sets in search */
+                library_id?: string;
+                /** @description Most box sets to return; default 5, maximum 20 */
+                limit?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBoxSetList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCatalogBoxSet: {
+        parameters: {
+            query: {
+                /** @description The library whose movies make up the box set */
+                library_id: string;
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The TMDB collection ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBoxSetDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCatalogFilters: {
         parameters: {
             query?: {
@@ -5323,6 +5802,130 @@ export interface operations {
             };
         };
     };
+    getCatalogItemBoxSet: {
+        parameters: {
+            query?: {
+                /** @description The library the movie is being viewed in; only its box set is returned. Absent uses the first of the movie's libraries with box sets on */
+                library_id?: string;
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Content id of the movie */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItemBoxSet"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     queryCatalogLetters: {
         parameters: {
             query?: never;
@@ -5451,6 +6054,231 @@ export interface operations {
             };
             /** @description Not Implemented */
             501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPeople: {
+        parameters: {
+            query?: {
+                /** @description Name to match: each word must start a word of the name, case-insensitively, and only the first eight distinct words count; empty lists the first people */
+                q?: string;
+                /** @description Most people to answer */
+                limit?: number;
+                /** @description Restrict people to accessible credits in this media scope; omitted searches all media scopes. video covers movies and series; video_with_episodes adds episodes (check getCatalogSearchCapabilities.video_with_episodes_scope first) */
+                media_scope?: "video" | "video_with_episodes" | "movie" | "series" | "episode" | "audiobook" | "ebook" | "manga";
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPerson: {
+        parameters: {
+            query?: {
+                /** @description Marks a speculative read, such as warming a cache for a cast list. The read does not queue a provider refresh. */
+                prefetch?: boolean;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Person identifier */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Person"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
