@@ -179,6 +179,7 @@
   "library.filter.heading": "Filtern nach",
   "library.filter.genre": "Genre",
   "library.filter.decade": "Jahrzehnt",
+  "library.filter.contentRating": "Altersfreigabe",
   "library.filter.any": "Alle",
   "library.filter.selected": "{count} gewählt",
   "library.filter.clear": "Filter zurücksetzen",

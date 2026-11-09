@@ -75,14 +75,15 @@ interface FakeTitle {
   title: string;
   year: number;
   genre: string;
+  rating: string;
 }
 const MOVIES: FakeTitle[] = [
-  { id: 'm1', title: 'First Title', year: 2019, genre: 'Drama' },
-  { id: 'm2', title: 'Second Title', year: 2021, genre: 'Action' },
-  { id: 'm3', title: 'Third Title', year: 2020, genre: 'Drama' },
-  { id: 'm4', title: 'Fourth Title', year: 2018, genre: 'Action' },
-  { id: 'm5', title: 'Seventh Title', year: 2017, genre: 'Action' },
-  { id: 'm6', title: 'Alpha Title', year: 2015, genre: 'Drama' },
+  { id: 'm1', title: 'First Title', year: 2019, genre: 'Drama', rating: 'FSK 12' },
+  { id: 'm2', title: 'Second Title', year: 2021, genre: 'Action', rating: 'FSK 16' },
+  { id: 'm3', title: 'Third Title', year: 2020, genre: 'Drama', rating: 'FSK 12' },
+  { id: 'm4', title: 'Fourth Title', year: 2018, genre: 'Action', rating: 'FSK 18' },
+  { id: 'm5', title: 'Seventh Title', year: 2017, genre: 'Action', rating: 'FSK 16' },
+  { id: 'm6', title: 'Alpha Title', year: 2015, genre: 'Drama', rating: 'FSK 12' },
 ];
 
 interface FakeRule {
@@ -107,7 +108,9 @@ function browseTitles(params: URLSearchParams): FakeTitle[] {
   const sort = params.get('sort') ?? 'title';
   const field = sort.replace(/^-/, '') === 'year' ? 'year' : 'title';
   const direction = sort.startsWith('-') ? -1 : 1;
+  const ratings = params.getAll('content_rating');
   return filterTitles(groups)
+    .filter((movie) => ratings.length === 0 || ratings.includes(movie.rating))
     .filter((movie) => movie.title.toLowerCase().startsWith(prefix))
     .sort((a, b) =>
       field === 'year' ? (a.year - b.year) * direction : a.title.localeCompare(b.title) * direction,
@@ -704,7 +707,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             networks: [],
             countries: [],
             original_languages: [],
-            content_ratings: [],
+            content_ratings: ['FSK 12', 'FSK 16', 'FSK 18'],
             authors: [],
             narrators: [],
             series: [],
@@ -1062,6 +1065,69 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+});
+
+test('Movies: Browse filtered by two content ratings with the remote, then Back to the grid', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo();
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  const posters = page.getByTestId('card-title');
+  await expect(posters).toHaveCount(6);
+
+  // Filter, then Altersfreigabe (the third facet): two values; Back leaves the values, Back applies.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Filter', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /^Altersfreigabe/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'FSK 12' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'FSK 16' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(page.getByRole('menuitemcheckbox', { name: 'FSK 18' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /^Altersfreigabe/ })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('filter-panel')).toHaveCount(0);
+  await expect(page.getByTestId('filter-count')).toHaveText('1');
+  // The grid shows the server's answer: the titles rated FSK 16 or FSK 18.
+  await expect(posters).toHaveText(['Fourth Title', 'Second Title', 'Seventh Title']);
+  const rated = seen.filter(
+    (e) => e.path === '/api/v2/catalog' && e.search.includes('content_rating='),
+  );
+  const params = new URLSearchParams(rated[rated.length - 1]?.search ?? '');
+  expect(params.getAll('content_rating')).toEqual(['FSK 16', 'FSK 18']);
+  // Back closed the panel onto the Filter pill; the grid is one Down away.
+  await expect(page.getByRole('button', { name: /^Filter/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Fourth Title/ })).toBeFocused();
 });
 
 test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail and Back to the same poster; Series: Collections', async ({

@@ -34,6 +34,8 @@ export function facetValues(facet: Facet, filters: CatalogFilters | undefined): 
       return filters?.genres ?? [];
     case 'decade':
       return [...DECADES];
+    case 'content_rating':
+      return filters?.content_ratings ?? [];
   }
 }
 

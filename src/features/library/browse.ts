@@ -37,16 +37,24 @@ export function sortParam(sort: SortKey, descending: boolean): string {
 }
 
 /**
- * The filter facets of the panel, in the order they are listed. Only rules that Silo documents
- * are used (catalog-api.md, "Rule fields and operators", and the `genre` / `contains` example of
- * the rule schema); the watch state, content rating and resolution have no documented rule field.
+ * The facets that are rule groups. Only rules that Silo documents are used (catalog-api.md,
+ * "Rule fields and operators", and the `genre` / `contains` example of the rule schema); the
+ * watch state and resolution have no documented rule field.
  */
-export const FACETS = ['genre', 'decade'] as const;
+export const RULE_FACETS = ['genre', 'decade'] as const;
+export type RuleFacet = (typeof RULE_FACETS)[number];
+
+/**
+ * The filter facets of the panel, in the order they are listed. The content rating is not a rule
+ * group but the plain `content_rating` query parameter of `GET /catalog` (repeated per value).
+ */
+export const FACETS = [...RULE_FACETS, 'content_rating'] as const;
 export type Facet = (typeof FACETS)[number];
 
 export const FACET_LABELS: Record<Facet, MessageKey> = {
   genre: 'library.filter.genre',
   decade: 'library.filter.decade',
+  content_rating: 'library.filter.contentRating',
 };
 
 /** Facets and letters that need the server's extended rule vocabulary (`extended_query_rules`). */
@@ -66,7 +74,7 @@ export function isSingleChoice(facet: Facet): boolean {
   return false;
 }
 
-function ruleFor(facet: Facet, value: string): Rule {
+function ruleFor(facet: RuleFacet, value: string): Rule {
   switch (facet) {
     case 'genre':
       return { field: 'genre', op: 'contains', value };
@@ -79,7 +87,7 @@ function ruleFor(facet: Facet, value: string): Rule {
 /** One group per facet with a value, any of its values matching; the groups all have to match. */
 export function filterGroups(filters: FilterSelection): Group[] {
   const groups: Group[] = [];
-  for (const facet of FACETS) {
+  for (const facet of RULE_FACETS) {
     const values = filters[facet];
     if (!values || values.length === 0) continue;
     groups.push({ match: 'any', rules: values.map((value) => ruleFor(facet, value)) });
@@ -96,6 +104,12 @@ const NUMBER_GROUP: Group = {
     value: String(digit),
   })),
 };
+
+/** The ratings for the `content_rating` query parameter; undefined sends no parameter. */
+export function contentRatings(filters: FilterSelection): string[] | undefined {
+  const values = filters.content_rating;
+  return values && values.length > 0 ? values : undefined;
+}
 
 /** The rule groups of a Browse read: the filters, and "#" as the group of numbered titles. */
 export function browseGroups(filters: FilterSelection, letter: string | null): Group[] {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   browseGroups,
   browseSignature,
+  contentRatings,
   DEFAULT_BROWSE,
   FACETS,
   facetNeedsExtendedRules,
@@ -59,8 +60,16 @@ describe('filterGroups', () => {
     ]);
   });
 
-  it('offers only the facets that have a documented rule', () => {
-    expect([...FACETS]).toEqual(['genre', 'decade']);
+  it('offers the two rule facets and the content rating, which is a parameter and no rule', () => {
+    expect([...FACETS]).toEqual(['genre', 'decade', 'content_rating']);
+    expect(filterGroups({ content_rating: ['PG'] })).toEqual([]);
+    expect(browseGroups({ content_rating: ['PG'] }, 'A')).toEqual([]);
+  });
+
+  it('reads the content ratings for the query parameter, none when empty', () => {
+    expect(contentRatings({})).toBeUndefined();
+    expect(contentRatings({ content_rating: [] })).toBeUndefined();
+    expect(contentRatings({ content_rating: ['PG', 'R'] })).toEqual(['PG', 'R']);
   });
 
   it('marks the decade as needing the extended rules, and the genre as not', () => {
@@ -99,6 +108,7 @@ describe('filterCount', () => {
     expect(filterCount({})).toBe(0);
     expect(filterCount({ genre: ['A', 'B', 'C'] })).toBe(1);
     expect(filterCount({ genre: ['A', 'B'], decade: ['1990'] })).toBe(2);
+    expect(filterCount({ genre: ['A'], decade: ['1990'], content_rating: ['PG', 'R'] })).toBe(3);
   });
 });
 
@@ -116,6 +126,9 @@ describe('letters and the signature', () => {
     expect(browseSignature({ ...DEFAULT_BROWSE, descending: true })).not.toBe(base);
     expect(browseSignature({ ...DEFAULT_BROWSE, filters: { genre: ['A'] } })).not.toBe(base);
     expect(browseSignature({ ...DEFAULT_BROWSE, letter: 'B' })).not.toBe(base);
+    expect(browseSignature({ ...DEFAULT_BROWSE, filters: { content_rating: ['PG'] } })).not.toBe(
+      base,
+    );
   });
 });
 

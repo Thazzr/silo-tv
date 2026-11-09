@@ -4,7 +4,13 @@ import type { components } from '../../api/generated/schema';
 import { useSilo } from '../../app/SiloContext';
 import { GRID_IMAGE_QUERY, ROW_IMAGE_QUERY } from '../../ui/media';
 import { GRID_PAGE_SIZE, itemLimitFor, useHomeCapabilities } from '../home/queries';
-import { browseGroups, filterGroups, sortParam, type BrowseSelection } from './browse';
+import {
+  browseGroups,
+  contentRatings,
+  filterGroups,
+  sortParam,
+  type BrowseSelection,
+} from './browse';
 import type { TabKind } from './libraryMemory';
 
 export type UserLibrary = components['schemas']['UserLibrary'];
@@ -88,6 +94,7 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
   const { letter } = selection;
   const groupsJson = groups.length > 0 ? JSON.stringify(groups) : undefined;
   const sort = sortParam(selection.sort, selection.descending);
+  const ratings = contentRatings(selection.filters);
   return useInfiniteQuery({
     queryKey: [
       'library',
@@ -98,6 +105,7 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
       kind,
       sort,
       groupsJson ?? '',
+      ratings ?? [],
       letter ?? '',
     ],
     initialPageParam: undefined as string | undefined,
@@ -111,6 +119,7 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
             sort,
             match: 'all',
             groups: groupsJson,
+            content_rating: ratings,
             // "#" is a rule group above; a real letter is the server's own title prefix.
             name_prefix: letter && letter !== '#' ? letter : undefined,
             limit: GRID_PAGE_SIZE,
@@ -183,7 +192,8 @@ export function useCatalogFilters(libraryId: string, kind: LibraryKind) {
 
 /**
  * The letters that have titles under the current filters, for the rail. The answer does not
- * depend on the letter or the sort. A server that cannot answer leaves every letter usable.
+ * depend on the letter or the sort. It takes rule groups only, so it does not reflect the content
+ * rating (a plain `content_rating` parameter): a letter can be lit with no title left under it. A server that cannot answer leaves every letter usable.
  */
 export function useLetters(libraryId: string, kind: LibraryKind, selection: BrowseSelection) {
   const { client, baseUrl, session } = useSilo();

@@ -98,7 +98,12 @@ describe('Browse', () => {
     serveLibrary(server, {
       browse: async () => {
         await new Promise((resolve) => setTimeout(resolve, 150));
-        return { items: titles('Title', 3), total: 3, total_exact: true, window_cursor: 'c' };
+        return {
+          items: titles('Title', 3),
+          total: 3,
+          total_exact: true,
+          window_cursor: 'c',
+        };
       },
     });
     setup();
@@ -162,7 +167,12 @@ describe('Browse', () => {
       browse: () =>
         fail
           ? new HttpResponse(null, { status: 500 })
-          : { items: titles('Title', 3), total: 3, total_exact: true, window_cursor: 'c' },
+          : {
+              items: titles('Title', 3),
+              total: 3,
+              total_exact: true,
+              window_cursor: 'c',
+            },
     });
     setup();
     expect(await screen.findByTestId('browse-error')).toBeInTheDocument();
@@ -298,10 +308,10 @@ describe('Browse filter', () => {
       within(panel)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['DecadeAny ›', 'Clear filters', 'Done']);
+    ).toEqual(['DecadeAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
   });
 
-  it('lists genre and decade, and nothing else, when the server has extended rules', async () => {
+  it('lists genre, decade and content rating, and nothing else, when the server has extended rules', async () => {
     const calls = serveLibrary(server);
     setup();
     const panel = await openFilter(calls);
@@ -311,7 +321,7 @@ describe('Browse filter', () => {
         within(panel)
           .getAllByRole('button')
           .map((b) => b.textContent),
-      ).toEqual(['GenreAny ›', 'DecadeAny ›', 'Clear filters', 'Done']),
+      ).toEqual(['GenreAny ›', 'DecadeAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']),
     );
     // Nothing is set, so there is nothing to clear.
     expect(row(panel, /Clear filters/)).toBeDisabled();
@@ -328,7 +338,7 @@ describe('Browse filter', () => {
       within(panel)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['GenreAny ›', 'Clear filters', 'Done']);
+    ).toEqual(['GenreAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
   });
 
   it('leaves the decade out when the capabilities cannot be read', async () => {
@@ -446,6 +456,155 @@ describe('Browse filter', () => {
     expect(memory.browseOf('movie', 'lib-1').filters).toEqual({});
   });
 
+  /** Opens the content-rating section, checks the given values and returns to the list. */
+  async function pickRatings(panel: HTMLElement, values: string[]) {
+    await within(panel).findByRole('button', { name: /Content rating/ });
+    await focus('lib-dialog-facet-content_rating');
+    await pressKey(KEY.enter);
+    await within(panel).findByTestId('facet-values');
+    for (const value of values) {
+      await focus(`lib-dialog-value-content_rating-${value}`);
+      await pressKey(KEY.enter);
+    }
+    await focus('lib-dialog-all');
+    await pressKey(KEY.enter);
+  }
+  async function applyPanel() {
+    await focus('lib-dialog-done');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.queryByTestId('filter-panel')).toBeNull());
+  }
+
+  it('offers the content ratings the server reports for the library', async () => {
+    const calls = serveLibrary(server, {
+      filters: facets({ content_ratings: ['FSK 12', 'FSK 16'] }),
+    });
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /Content rating/ });
+    await focus('lib-dialog-facet-content_rating');
+    await pressKey(KEY.enter);
+    const values = await within(panel).findByTestId('facet-values');
+    expect(
+      within(values)
+        .getAllByRole('menuitemcheckbox')
+        .map((b) => b.textContent),
+    ).toEqual(['FSK 12', 'FSK 16']);
+  });
+
+  it('leaves the content rating out when the server reports none', async () => {
+    const calls = serveLibrary(server, { filters: facets({ content_ratings: [] }) });
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /Genre/ });
+    expect(within(panel).queryByRole('button', { name: /Content rating/ })).toBeNull();
+  });
+
+  it('sends the chosen content ratings as repeated content_rating parameters, not as rules', async () => {
+    const calls = serveLibrary(server);
+    setup();
+    const panel = await openFilter(calls);
+    await pickRatings(panel, ['PG', 'R']);
+    await waitFor(() =>
+      expect(within(panel).getByTestId('facet-summary-content_rating')).toHaveTextContent(
+        '2 selected ›',
+      ),
+    );
+    expect(calls.browse).toHaveLength(1);
+    await applyPanel();
+    await waitFor(() => expect(calls.browse).toHaveLength(2));
+    const query = lastRead(calls);
+    expect(query.getAll('content_rating')).toEqual(['PG', 'R']);
+    expect(query.has('groups')).toBe(false);
+    expect(screen.getByTestId('filter-count')).toHaveTextContent('1');
+  });
+
+  it('combines the content rating with sort, genre, decade and a letter, and with paging', async () => {
+    const calls = serveLibrary(server, {
+      letters: ['A', 'B'],
+      browse: (query) => ({
+        items: titles('Title', 3, 'movie', query.get('cursor') ? 3 : 0),
+        total: 3,
+        total_exact: true,
+        window_cursor: 'w',
+        page: query.get('cursor') ? { has_more: false } : { has_more: true, next_cursor: 'c2' },
+      }),
+    });
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', {
+      sort: 'year',
+      descending: true,
+      filters: { genre: ['Action'], decade: ['1990'], content_rating: ['PG'] },
+      letter: 'A',
+    });
+    setup(memory);
+    const query = await firstRead(calls);
+    expect(query.get('sort')).toBe('-year');
+    expect(query.get('name_prefix')).toBe('A');
+    expect(query.getAll('content_rating')).toEqual(['PG']);
+    expect(groupsOf(query)!.map((g) => g.rules[0]!.field)).toEqual(['genre', 'decade']);
+    await screen.findByRole('button', { name: /Title 2/ });
+    // The next page keeps every one of them.
+    await focus(card('Title2'));
+    await waitFor(() => expect(calls.browse.length).toBeGreaterThan(1));
+    const next = lastRead(calls);
+    expect(next.get('cursor')).toBe('c2');
+    expect(next.getAll('content_rating')).toEqual(['PG']);
+    expect(next.get('name_prefix')).toBe('A');
+    expect(next.get('sort')).toBe('-year');
+    expect(screen.getByTestId('filter-count')).toHaveTextContent('3');
+  });
+
+  it('keeps the content rating when a letter is chosen, and clears it with the other filters', async () => {
+    const calls = serveLibrary(server, { letters: ['A', 'B'] });
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', {
+      sort: 'title',
+      descending: false,
+      filters: { content_rating: ['R'] },
+      letter: null,
+    });
+    setup(memory);
+    await firstRead(calls);
+    await screen.findByRole('button', { name: /Title 3/ });
+    await waitFor(() => expect(letter('B')).not.toBeDisabled());
+    await focus('alpha:B');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(calls.browse).toHaveLength(2));
+    expect(lastRead(calls).getAll('content_rating')).toEqual(['R']);
+    expect(lastRead(calls).get('name_prefix')).toBe('B');
+    await screen.findByRole('button', { name: /Title 3/ });
+    await focus('browse-filter');
+    await pressKey(KEY.enter);
+    const panel = await screen.findByTestId('filter-panel');
+    await waitFor(() =>
+      expect(within(panel).getByTestId('facet-summary-content_rating')).toHaveTextContent('R ›'),
+    );
+    await focus('lib-dialog-clear');
+    await pressKey(KEY.enter);
+    await applyPanel();
+    await waitFor(() => expect(calls.browse).toHaveLength(3));
+    expect(lastRead(calls).has('content_rating')).toBe(false);
+    expect(memory.browseOf('movie', 'lib-1').filters).toEqual({});
+    await waitFor(() => expect(screen.queryByTestId('filter-count')).toBeNull());
+  });
+
+  it('is restored with the next visit of the library, like the other filters', async () => {
+    const calls = serveLibrary(server);
+    const memory = new LibraryMemory();
+    const first = setup(memory);
+    const panel = await openFilter(calls);
+    await pickRatings(panel, ['PG']);
+    await applyPanel();
+    await waitFor(() => expect(calls.browse).toHaveLength(2));
+    first.unmount();
+    calls.browse.length = 0;
+    setup(memory);
+    const query = await firstRead(calls);
+    expect(query.getAll('content_rating')).toEqual(['PG']);
+    await waitFor(() => expect(screen.getByTestId('filter-count')).toHaveTextContent('1'));
+  });
+
   it('sends nothing when the panel is closed without a change', async () => {
     const calls = serveLibrary(server);
     setup();
@@ -517,7 +676,7 @@ describe('Browse alphabet rail', () => {
   });
 
   it('is reached with Right from the last poster of a row, and Left returns to the grid', async () => {
-    const calls = serveLibrary(server, letters(['A', 'B']));
+    const calls = serveLibrary(server, { letters: ['A', 'B'] });
     setup();
     await firstRead(calls);
     await screen.findByRole('button', { name: /Title 6/ });
@@ -597,7 +756,7 @@ describe('Browse alphabet rail', () => {
   });
 
   it('keeps the sort and the filters when a letter is chosen, and the letter when they change', async () => {
-    const calls = serveLibrary(server, letters(['A', 'B']));
+    const calls = serveLibrary(server, { letters: ['A', 'B'] });
     const memory = new LibraryMemory();
     memory.setBrowse('movie', 'lib-1', {
       sort: 'rating',

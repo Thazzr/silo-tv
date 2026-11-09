@@ -179,6 +179,7 @@
   "library.filter.heading": "Filter by",
   "library.filter.genre": "Genre",
   "library.filter.decade": "Decade",
+  "library.filter.contentRating": "Content rating",
   "library.filter.any": "Any",
   "library.filter.selected": "{count} selected",
   "library.filter.clear": "Clear filters",
