@@ -1,5 +1,6 @@
 // Typed fixtures and an MSW harness for the Home screen and the row grids, typed against the
 // generated schema like the other fixtures.
+import type { QueryClient } from '@tanstack/react-query';
 import { HttpResponse, http } from 'msw';
 import type { SetupServer } from 'msw/node';
 import type { components } from '../api/generated/schema';
@@ -143,4 +144,18 @@ export function serveHome(server: SetupServer, options: HomeServe = {}): HomeCal
     );
   }
   return calls;
+}
+
+/**
+ * Puts the home capabilities into the cache, as if an earlier screen had read them: only then
+ * does a sections request carry `item_limit` (rows never wait for the capabilities).
+ */
+export function primeHomeCapabilities(
+  queryClient: QueryClient,
+  capabilities: S['HomeCapabilities'] = homeCapabilities(),
+): void {
+  // The app keeps them for the session; the test client's zero cache time would drop them again
+  // before the screen that reads them mounts.
+  queryClient.setQueryDefaults(['home', 'capabilities', BASE_URL], { gcTime: Infinity });
+  queryClient.setQueryData(['home', 'capabilities', BASE_URL], capabilities);
 }

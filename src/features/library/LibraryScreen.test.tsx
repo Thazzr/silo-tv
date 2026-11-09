@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
@@ -6,10 +7,10 @@ import { Session } from '../../api/session';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { catalogItem, library } from '../../test/flowFixtures';
-import { homeSection } from '../../test/homeFixtures';
+import { homeSection, primeHomeCapabilities } from '../../test/homeFixtures';
 import { serveLibrary, titles, type LibraryServe } from '../../test/libraryFixtures';
 import { KEY, pressKey } from '../../test/keys';
-import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { memoryStorage, newQueryClient, renderWithSilo } from '../../test/renderFlow';
 import { cardFocusKey, gridCardKey } from '../../ui/media';
 import { LibraryScreen, type LibraryScreenProps } from './LibraryScreen';
 import { LibraryMemory } from './libraryMemory';
@@ -39,6 +40,7 @@ function setup(
   options: {
     kind?: LibraryScreenProps['kind'];
     memory?: LibraryMemory;
+    queryClient?: QueryClient;
   } = {},
 ) {
   const memory = options.memory ?? new LibraryMemory();
@@ -55,7 +57,7 @@ function setup(
       onExploreSection={onExploreSection}
       onOpenCollection={onOpenCollection}
     />,
-    { session: signedIn() },
+    { session: signedIn(), queryClient: options.queryClient },
   );
   return { memory, onPlay, onOpenDetail, onExploreSection, onOpenCollection, ...view };
 }
@@ -413,7 +415,9 @@ describe('Recommended', () => {
         ],
       },
     });
-    setup();
+    const queryClient = newQueryClient();
+    primeHomeCapabilities(queryClient);
+    setup({ queryClient });
     await screen.findByText('First');
     expect(rowTitles()).toEqual(['First', 'Second']);
     expect(calls.sections).toHaveLength(1);

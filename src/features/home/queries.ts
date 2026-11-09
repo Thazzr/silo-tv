@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toApiError } from '../../api/client';
 import type { components } from '../../api/generated/schema';
 import { useSilo } from '../../app/SiloContext';
@@ -22,14 +22,37 @@ export function itemLimitFor(serverMax: number | undefined): number | undefined 
   return Math.min(ROW_ITEM_LIMIT, serverMax);
 }
 
+type HomeCapabilities = components['schemas']['HomeCapabilities'];
+
+const homeCapabilitiesKey = (baseUrl: string) => ['home', 'capabilities', baseUrl];
+
+/**
+ * The `item_limit` a sections request carries, read from the capabilities only if they are
+ * already in the cache when the request goes out. The rows never wait for them (the read can take
+ * long or never answer), so the limit is not part of any row's query key either.
+ */
+export function useSectionLimits(): () => { sectionLimit?: number; rowLimit?: number } {
+  const queryClient = useQueryClient();
+  const { baseUrl } = useSilo();
+  return () => {
+    const capabilities = queryClient.getQueryData<HomeCapabilities>(homeCapabilitiesKey(baseUrl));
+    return {
+      sectionLimit: itemLimitFor(capabilities?.section_item_limit_max),
+      rowLimit: itemLimitFor(capabilities?.row_item_limit_max),
+    };
+  };
+}
+
 /** What the server accepts as `item_limit`, for the list of sections and for one section. */
 export function useHomeCapabilities() {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   return useQuery({
-    queryKey: ['home', 'capabilities', baseUrl],
-    // Read once per server and session: the answer only changes with a server update.
+    queryKey: homeCapabilitiesKey(baseUrl),
+    // Read once per server and session: the answer only changes with a server update. It is kept
+    // for the whole session, so coming back from playback does not wait for a second read.
     staleTime: Infinity,
+    gcTime: Infinity,
     retry: false,
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/home/capabilities', {
@@ -41,19 +64,22 @@ export function useHomeCapabilities() {
   });
 }
 
-/** The home sections in server order, each with its first cards, once the capabilities settled. */
+/**
+ * The home sections in server order, each with its first cards. They load at once; the capabilities
+ * are read alongside (so later requests can use their limit) but never waited for.
+ */
 export function useHomeSections() {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   const capabilities = useHomeCapabilities();
-  // A failed capabilities read means "no limit": the rows are cut to 20 cards on the client.
-  const sectionLimit = itemLimitFor(capabilities.data?.section_item_limit_max);
+  const limits = useSectionLimits();
+  // No limit known (yet, or the read failed) means the rows are cut to 20 cards on the client.
   const rowLimit = itemLimitFor(capabilities.data?.row_item_limit_max);
 
   const query = useQuery({
-    queryKey: ['home', 'sections', baseUrl, profileId, sectionLimit ?? 0],
-    enabled: !capabilities.isPending,
+    queryKey: ['home', 'sections', baseUrl, profileId],
     queryFn: async () => {
+      const { sectionLimit } = limits();
       const { data, error, response } = await client.GET('/api/v2/home/sections', {
         params: {
           header: { 'X-Profile-Id': profileId },

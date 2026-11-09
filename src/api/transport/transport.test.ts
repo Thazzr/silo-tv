@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSiloClient } from '../client';
+import { Session } from '../session';
+import { memoryStorage } from '../../test/renderFlow';
 import { fake, installFakeBridge, lunaUri } from '../../test/fakeBridge';
 import { getPlatform, setPlatformForTests } from '../../platform';
 import {
@@ -30,7 +33,117 @@ describe('directTransport', () => {
     vi.stubGlobal('fetch', spy);
     const request = new Request(URL_);
     await directTransport(request);
-    expect(spy).toHaveBeenCalledWith(request, { credentials: 'omit' });
+    expect(spy).toHaveBeenCalledWith(request, {
+      credentials: 'omit',
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  describe('timeout', () => {
+    afterEach(() => vi.useRealTimers());
+
+    // A fetch that never answers but honours its signal, like the browser's.
+    const hangingFetch = () =>
+      vi.fn(
+        (_input: Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      );
+
+    it('rejects a request nobody answers after 30 s with a network-failure TypeError', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('fetch', hangingFetch());
+      const result = directTransport(new Request(URL_)).then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      const error = await result;
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toMatch(/no answer within 30 s/);
+    });
+
+    it('still aborts when the caller aborts, and leaves no timer behind', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('fetch', hangingFetch());
+      const caller = new AbortController();
+      const result = directTransport(new Request(URL_, { signal: caller.signal })).then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
+      caller.abort();
+      const error = await result;
+      expect((error as Error).name).toBe('AbortError');
+      expect(error).not.toBeInstanceOf(TypeError);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('clears its timer when the request answers in time', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response('ok')),
+      );
+      await directTransport(new Request(URL_));
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('does not call the refresh endpoint or sign out when a request times out', async () => {
+      vi.useFakeTimers();
+      const urls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: Request, init?: RequestInit) => {
+          urls.push(input.url);
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          });
+        }),
+      );
+      const session = new Session(memoryStorage());
+      session.set({
+        accessToken: 'a',
+        refreshToken: 'r',
+        expiresAt: Date.now() + 3600_000,
+      });
+      const signOut = vi.spyOn(session, 'signOut');
+      const client = createSiloClient({
+        baseUrl: 'https://silo.example.test',
+        transport: directTransport,
+        session,
+        device: { id: 'd'.repeat(32), name: 'tv' },
+      });
+      const result = client
+        .GET('/api/v2/home/capabilities', { params: { header: { 'X-Profile-Id': 'p' } } })
+        .then(
+          () => 'resolved',
+          (error: unknown) => error,
+        );
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await result).toBeInstanceOf(TypeError);
+      expect(urls.some((u) => u.includes('/auth/refresh'))).toBe(false);
+      expect(signOut).not.toHaveBeenCalled();
+    });
+
+    it('times out the service transport too', async () => {
+      vi.useFakeTimers();
+      const platform = { proxyFetch: () => new Promise<never>(() => {}) };
+      setPlatformForTests(platform as never);
+      const result = serviceTransport(new Request(URL_)).then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await result).toBeInstanceOf(TypeError);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });
 

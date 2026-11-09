@@ -31,9 +31,12 @@ export function newQueryClient(): QueryClient {
  * Renders a screen with i18n (English), React Query and a Silo client for the test server, as the
  * only (root) entry of a screen stack: Back on it opens the exit popup unless the screen handles it.
  */
-export function renderWithSilo(ui: ReactNode, options: { session?: Session } = {}) {
+export function renderWithSilo(
+  ui: ReactNode,
+  options: { session?: Session; queryClient?: QueryClient } = {},
+) {
   const session = options.session ?? new Session(memoryStorage());
-  const queryClient = newQueryClient();
+  const queryClient = options.queryClient ?? newQueryClient();
   const result = render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider lang="en">

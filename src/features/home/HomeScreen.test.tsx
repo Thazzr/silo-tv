@@ -2,12 +2,19 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
 import { Session } from '../../api/session';
 import { account } from '../../test/apiFixtures';
 import { catalogItem } from '../../test/flowFixtures';
-import { homeCapabilities, homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
+import {
+  homeCapabilities,
+  homeSection,
+  primeHomeCapabilities,
+  resumeEpisode,
+  serveHome,
+} from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
-import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { memoryStorage, newQueryClient, renderWithSilo } from '../../test/renderFlow';
 import { FocusIndexMemory, cardFocusKey, type CatalogItem } from '../../ui/media';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
@@ -34,7 +41,7 @@ function signedIn() {
   return session;
 }
 
-function setup(memory = new FocusIndexMemory()) {
+function setup(memory = new FocusIndexMemory(), queryClient?: QueryClient) {
   const onPlay = vi.fn<(item: CatalogItem) => void>();
   const onOpenDetail = vi.fn<(target: DetailTarget) => void>();
   const onExploreSection = vi.fn();
@@ -45,7 +52,7 @@ function setup(memory = new FocusIndexMemory()) {
       onOpenDetail={onOpenDetail}
       onExploreSection={onExploreSection}
     />,
-    { session: signedIn() },
+    { session: signedIn(), queryClient },
   );
   return { onPlay, onOpenDetail, onExploreSection, memory, ...view };
 }
@@ -75,12 +82,11 @@ describe('HomeScreen: rows', () => {
   });
 
   it('asks for at most 20 cards per row (item_limit from the capabilities) at fitting image widths', async () => {
-    const calls = serveHome(server, {
-      capabilities: homeCapabilities({ section_item_limit_max: 100 }),
-    });
-    setup();
+    const calls = serveHome(server);
+    const queryClient = newQueryClient();
+    primeHomeCapabilities(queryClient, homeCapabilities({ section_item_limit_max: 100 }));
+    setup(undefined, queryClient);
     await screen.findByTestId('row-recent');
-    expect(calls.capabilities).toBe(1);
     const query = calls.lists[0]!;
     expect(query.get('item_limit')).toBe('20');
     expect(query.get('poster_width')).toBe('352');
@@ -90,19 +96,19 @@ describe('HomeScreen: rows', () => {
   });
 
   it('cuts item_limit to what the server accepts', async () => {
-    const calls = serveHome(server, {
-      capabilities: homeCapabilities({ section_item_limit_max: 12 }),
-    });
-    setup();
+    const calls = serveHome(server);
+    const queryClient = newQueryClient();
+    primeHomeCapabilities(queryClient, homeCapabilities({ section_item_limit_max: 12 }));
+    setup(undefined, queryClient);
     await screen.findByTestId('row-recent');
     expect(calls.lists[0]!.get('item_limit')).toBe('12');
   });
 
   it('sends no item_limit when the server does not report a maximum', async () => {
-    const calls = serveHome(server, {
-      capabilities: homeCapabilities({ section_item_limit_max: undefined }),
-    });
-    setup();
+    const calls = serveHome(server);
+    const queryClient = newQueryClient();
+    primeHomeCapabilities(queryClient, homeCapabilities({ section_item_limit_max: undefined }));
+    setup(undefined, queryClient);
     await screen.findByTestId('row-recent');
     expect(calls.lists[0]!.has('item_limit')).toBe(false);
   });

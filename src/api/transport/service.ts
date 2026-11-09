@@ -1,4 +1,5 @@
 import { getPlatform } from '../../platform';
+import { withTimeout } from './timeout';
 import type { Transport } from './types';
 
 // A response with these statuses must not carry a body (the Response constructor throws).
@@ -9,7 +10,11 @@ const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
  * The service returns text only. It does not follow redirects, so a 3xx comes back unchanged and
  * the credentials never travel to another origin.
  */
-export const serviceTransport: Transport = async (request) => {
+export const serviceTransport: Transport = (request) =>
+  // The luna call cannot be cancelled; the timeout only stops waiting for it.
+  withTimeout(request.signal, () => sendThroughService(request));
+
+async function sendThroughService(request: Request): Promise<Response> {
   const headers: Record<string, string> = {};
   request.headers.forEach((value, key) => {
     headers[key] = value;
@@ -44,4 +49,4 @@ export const serviceTransport: Transport = async (request) => {
     statusText: result.statusText,
     headers: result.headers,
   });
-};
+}

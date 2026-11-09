@@ -38,6 +38,8 @@ interface FakeOptions {
   series?: boolean;
   /** Adds a series library with a collection to the library list (the Series tab then has content). */
   seriesLibrary?: boolean;
+  /** The home capabilities request never gets an answer (the real server sometimes takes minutes). */
+  homeCapabilitiesNeverAnswer?: boolean;
   /** Adds a watched episode that is being watched again (position 600 s of 2700 s) to Continue Watching. */
   rewatch?: boolean;
   /**
@@ -699,6 +701,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           // The media never answers: the player keeps its loading cue.
           return;
         case 'GET /api/v2/home/capabilities':
+          // The request just hangs, like the media stream below.
+          if (options.homeCapabilitiesNeverAnswer) return;
           return send(200, {
             state: 'available',
             allowed: true,
@@ -1069,8 +1073,9 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   const home = seen.find((entry) => entry.path === '/api/v2/home/sections');
   expect(home?.authorization).toBe('Bearer fake-access');
   expect(home?.profileId).toBe('profile-1');
-  // The rows were asked for at 20 cards and at widths that fit the cards.
-  expect(home?.search).toContain('item_limit=20');
+  // The rows do not wait for the capabilities, so the first request has no item_limit; the rows
+  // were asked for at widths that fit the cards.
+  expect(home?.search).not.toContain('item_limit');
   expect(home?.search).toContain('poster_width=352');
   // Playback went through protocol v3 with the same credentials.
   const start = seen.find((entry) => entry.path === '/api/v2/playback/start');
@@ -3046,4 +3051,35 @@ test('the Magic Remote pointer focuses a card of a lower block on the detail pag
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Similar 1/ })).toBeFocused();
   await expect.poll(async () => Math.abs((await top('row-similar')) - 54)).toBeLessThanOrEqual(2);
+});
+
+test('rows do not wait for the home capabilities: Home and the Series tab show their rows while that request never answers', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    seriesLibrary: true,
+    homeCapabilitiesNeverAnswer: true,
+  });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 5000 });
+  expect(seen.some((e) => e.path === '/api/v2/home/capabilities')).toBe(true);
+  const sections = seen.find((e) => e.path === '/api/v2/home/sections');
+  expect(sections?.search ?? '').not.toContain('item_limit');
+
+  // Movies tab: its Recommended row shows although the capabilities are still pending.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich'], {
+    timeout: 5000,
+  });
+
+  // Series tab: no skeleton is left waiting (the fake series library has no sections to show).
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-series')).toBeVisible();
+  await expect(page.getByTestId('row-skeleton')).toHaveCount(0, { timeout: 5000 });
 });

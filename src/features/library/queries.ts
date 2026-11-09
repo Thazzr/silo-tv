@@ -3,7 +3,7 @@ import { toApiError } from '../../api/client';
 import type { components } from '../../api/generated/schema';
 import { useSilo } from '../../app/SiloContext';
 import { GRID_IMAGE_QUERY, ROW_IMAGE_QUERY } from '../../ui/media';
-import { GRID_PAGE_SIZE, itemLimitFor, useHomeCapabilities } from '../home/queries';
+import { GRID_PAGE_SIZE, useHomeCapabilities, useSectionLimits } from '../home/queries';
 import {
   browseGroups,
   contentRatings,
@@ -67,13 +67,13 @@ export function useLibraries() {
 export function useLibrarySections(libraryId: string) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
-  const capabilities = useHomeCapabilities();
-  // A failed capabilities read means "no limit": the rows are cut to 20 cards on the client.
-  const limit = itemLimitFor(capabilities.data?.section_item_limit_max);
+  // Started here so a later request can use the limit; the rows never wait for it.
+  useHomeCapabilities();
+  const limits = useSectionLimits();
   return useQuery({
-    queryKey: ['library', 'sections', baseUrl, profileId, libraryId, limit ?? 0],
-    enabled: !capabilities.isPending,
+    queryKey: ['library', 'sections', baseUrl, profileId, libraryId],
     queryFn: async () => {
+      const limit = limits().sectionLimit;
       const { data, error, response } = await client.GET('/api/v2/library/{id}/sections', {
         params: {
           header: { 'X-Profile-Id': profileId },
