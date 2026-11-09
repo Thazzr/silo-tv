@@ -45,6 +45,8 @@ interface FakeOptions {
    * taller than 760 px), the movie gets a cast and a "More like this" row.
    */
   tall?: boolean;
+  /** How many seasons the series has (2 when omitted). */
+  seasons?: number;
 }
 
 interface FakeProfile {
@@ -116,6 +118,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withSeriesLibrary = options.seriesLibrary === true;
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
+  const seasonCount = options.seasons ?? 2;
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -239,7 +242,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 type: 'series',
                 title: 'A Show',
                 year: 2020,
-                season_count: 2,
+                season_count: seasonCount,
                 overview: 'A show with two seasons.',
                 play_content_id: 'e11',
                 play_season_number: 1,
@@ -249,7 +252,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       }
       if (req.method === 'GET' && url.pathname === '/api/v2/catalog/series/s1/seasons') {
         return send(200, {
-          items: [1, 2].map((n) => ({
+          items: Array.from({ length: seasonCount }, (_, i) => i + 1).map((n) => ({
             content_id: `season-${n}`,
             season_number: n,
             title: `Season ${n}`,
@@ -1448,8 +1451,8 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   });
 });
 
-async function openSeriesDetail(page: Page, tall = false) {
-  const { origin } = await startFakeSilo({ series: true, tall });
+async function openSeriesDetail(page: Page, tall = false, seasons?: number) {
+  const { origin } = await startFakeSilo({ series: true, tall, seasons });
   await page.goto(`${distIndexUrl}?server=${origin}`);
   await expect(page.getByLabel('Serveradresse')).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -1637,4 +1640,89 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
   await expect.poll(() => opacity('[data-zone="cast"]')).toBe('0');
   await expect.poll(() => opacity('.detail-text')).toBe('0');
   expect(await opacity('[data-zone="similar"]')).toBe('1');
+});
+
+test('detail page: going up animates the transform and never scrolls the clipping box natively', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, true);
+  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
+  await page.keyboard.press('ArrowDown');
+  await expect(seasonTab).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await expect.poll(async () => Math.round((await seasonTab.boundingBox())!.y)).toBe(54);
+
+  // Capture phase on the window, so the record is taken before the page's own scroll handler
+  // resets the box. A sampler records the page transform on every frame.
+  await page.evaluate(`
+    window.__scrolls = [];
+    window.__offsets = [];
+    window.addEventListener('scroll', (e) => {
+      if (e.target.classList && e.target.classList.contains('detail')) {
+        window.__scrolls.push(e.target.scrollTop);
+      }
+    }, true);
+    const pageEl = document.querySelector('.detail-page');
+    const sample = () => {
+      window.__offsets.push(new DOMMatrix(getComputedStyle(pageEl).transform).f);
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  `);
+  const start = await page
+    .locator('.detail-page')
+    .evaluate(
+      (el) =>
+        new el.ownerDocument.defaultView!.DOMMatrix(
+          el.ownerDocument.defaultView!.getComputedStyle(el).transform,
+        ).f,
+    );
+  expect(start).toBeLessThan(-100);
+
+  await page.keyboard.press('ArrowUp');
+  await expect(seasonTab).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
+  await expect
+    .poll(() =>
+      page
+        .locator('.detail-page')
+        .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).transform),
+    )
+    .toMatch(/^matrix\(1, 0, 0, 1, 0, -?0\)$|^none$/);
+
+  const scrolls = (await page.evaluate('window.__scrolls')) as number[];
+  const offsets = (await page.evaluate('window.__offsets')) as number[];
+  // The box was never scrolled (a native scroll would have fired an event with a non-zero top).
+  expect(scrolls.filter((top) => top !== 0)).toEqual([]);
+  // The transform passed through values between the start and the origin: it animated.
+  expect(offsets.some((f) => f < -1 && f > start + 1)).toBe(true);
+});
+
+test('detail page: with many seasons the focused pill stays fully on screen at both ends', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, false, 12);
+  await page.keyboard.press('ArrowDown');
+  const first = page.getByRole('tab', { name: 'Staffel 1', exact: true });
+  await expect(first).toBeFocused();
+  for (let n = 2; n <= 12; n += 1) await page.keyboard.press('ArrowRight');
+  const last = page.getByRole('tab', { name: 'Staffel 12' });
+  await expect(last).toBeFocused();
+  // Fully inside the screen.
+  await expect
+    .poll(async () => {
+      const box = (await last.boundingBox())!;
+      return box.x >= 0 && box.x + box.width <= 1920;
+    })
+    .toBe(true);
+  for (let n = 2; n <= 12; n += 1) await page.keyboard.press('ArrowLeft');
+  await expect(first).toBeFocused();
+  await expect
+    .poll(async () => {
+      const box = (await first.boundingBox())!;
+      return box.x >= 0 && box.x + box.width <= 1920;
+    })
+    .toBe(true);
 });
