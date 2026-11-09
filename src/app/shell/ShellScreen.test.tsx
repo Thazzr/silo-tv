@@ -12,6 +12,7 @@ import {
   profile,
   profileCollection,
 } from '../../test/flowFixtures';
+import { homeSection, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import type { LaunchMode } from '../../features/profiles/launchPrefs';
@@ -54,6 +55,12 @@ function serve(
     'lib-film': homeTitles,
     'lib-show': seriesTitles,
   };
+  // Home shows one title per row, so Up and Down walk the titles like a list.
+  serveHome(server, {
+    sections: homeTitles.map((item, i) =>
+      homeSection(`r${i + 1}`, 0, { items: [item], total_count: 1 }),
+    ),
+  });
   server.use(
     http.get(`${BASE_URL}/api/v2/profiles`, () =>
       HttpResponse.json(profileCollection(extra.profiles ?? [profile({ id: 'p1', name: 'Alex' })])),
@@ -136,7 +143,7 @@ const shown = () =>
 
 async function ready() {
   await waitFor(() => expect(tab('Home')).toHaveFocus());
-  await screen.findByTestId('title-list');
+  await screen.findByTestId('row-r1');
 }
 
 /** Moves to a tab with Right/Left and waits until its content replaced the old one. */
@@ -385,11 +392,15 @@ describe('ShellScreen tab switch delay', () => {
 });
 
 describe('ShellScreen tab content', () => {
-  it('Home and Movies list the first movie library, Series the first series library', async () => {
+  it('Home shows the home rows, Movies the first movie library, Series the first series library', async () => {
     const calls = serve();
     setup();
     await ready();
-    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Films');
+    expect(screen.getAllByTestId('row-title').map((el) => el.textContent)).toEqual([
+      'Row r1',
+      'Row r2',
+      'Row r3',
+    ]);
     await goToTab(KEY.right, 1, 'movies');
     expect(await screen.findByRole('heading', { level: 2, name: 'Films' })).toBeInTheDocument();
     await goToTab(KEY.right, 1, 'series');

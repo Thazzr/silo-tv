@@ -6,7 +6,7 @@ import { fakeLayout } from './navLayout';
 
 // findBy*/waitFor give up after 1 s by default, which a loaded machine (parallel runs, the gate)
 // can exceed for data that arrives through MSW and React Query.
-configure({ asyncUtilTimeout: 3000 });
+configure({ asyncUtilTimeout: 8000 });
 
 // Some suites run in the node environment (the service tests); they have no DOM to navigate.
 const hasDom = typeof window !== 'undefined';

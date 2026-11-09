@@ -1,4 +1,5 @@
 import type { MessageKey } from '../../i18n';
+import { FocusIndexMemory } from '../../ui/media/scroll';
 
 export const TAB_IDS = ['home', 'movies', 'series', 'forYou', 'calendar', 'search'] as const;
 export type TabId = (typeof TAB_IDS)[number];
@@ -36,6 +37,8 @@ export const TAB_SWITCH_DELAY_MS = 300;
 export class ShellMemory {
   tab: TabId = 'home';
   private focus: Partial<Record<TabId, string>> = {};
+  /** The focused card of every Home row; the rows read it when they are shown again. */
+  readonly rows = new FocusIndexMemory();
 
   selectTab(tab: TabId): void {
     this.tab = tab;
@@ -53,5 +56,6 @@ export class ShellMemory {
   reset(): void {
     this.tab = 'home';
     this.focus = {};
+    this.rows.clear();
   }
 }

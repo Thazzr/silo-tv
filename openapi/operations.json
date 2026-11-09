@@ -24,6 +24,9 @@
   { "path": "/api/v2/playback/{session_id}/replan", "method": "post" },
   { "path": "/api/v2/playback/route-events", "method": "post" },
   { "path": "/api/v2/home/sections", "method": "get" },
+  { "path": "/api/v2/home/capabilities", "method": "get" },
+  { "path": "/api/v2/home/sections/{id}/items", "method": "get" },
+  { "path": "/api/v2/home/dismissals/{surface}/{item_id}", "method": "put" },
   { "path": "/api/v2/theme/branding", "method": "get" },
   { "path": "/api/v2/theme/capabilities", "method": "get" }
 ]

@@ -5,7 +5,8 @@
 //  - the focusable children of an element with data-columns="n" (the PIN pad has 3 columns and the
 //    class "pad") form a grid of n columns inside the slot of the first child;
 //  - the focusables of the shell's top bar (class "topbar") and of a server row (class
-//    "server-row": the server and its Remove button) form one row;
+//    "server-row": the server and its Remove button) and of a media row (class "row-strip": its
+//    cards) form one row;
 //  - a group (no focus key of its own) spans the focusable elements below it, like a real box.
 import type { NavigationOptions } from '../app/nav';
 
@@ -33,7 +34,7 @@ function measure(node: HTMLElement): ReturnType<typeof rect> {
       return rect(left, top, right - left, bottom - top);
     }
   }
-  const row = node.closest<HTMLElement>('.topbar, .server-row');
+  const row = node.closest<HTMLElement>('.topbar, .server-row, .row-strip');
   if (row) {
     const cells = all.filter((el) => row.contains(el));
     return rect(cells.indexOf(node) * 120, all.indexOf(cells[0]!) * 1000, 100, 100);

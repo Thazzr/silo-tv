@@ -8,6 +8,7 @@ import { I18nProvider } from './i18n';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles.css';
+import './styles/media.css';
 
 // Before the first render: focusable elements register with the service as they mount.
 initNavigation();

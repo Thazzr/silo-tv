@@ -194,6 +194,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/home/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The home page features this server supports, such as the cards of the first sections on getHomeLayout. */
+        get: operations["getHomeCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/home/dismissals/{surface}/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Hide a card from Continue Watching or Next Up for the acting profile; repeating it refreshes the dismissal. Dismissing an episode or series drops the whole show: every card of it leaves both rows until the profile watches it again or the dismissal is undone. Watch provider connections with dropped-show sync on, for providers that support it, send the drop to the provider. */
+        put: operations["dismissHomeItem"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/home/sections": {
         parameters: {
             query?: never;
@@ -203,6 +237,23 @@ export interface paths {
         };
         /** The home page's sections with their cards, as the acting profile sees them. */
         get: operations["listHomeSections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/home/sections/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One section of the home page with its cards. */
+        get: operations["getHomeSectionItems"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1749,6 +1800,47 @@ export interface components {
             index?: number;
             mime_type: string;
             name: string;
+        };
+        HomeCapabilities: {
+            /** @description Whether the current principal may use the capability */
+            allowed: boolean;
+            /**
+             * Format: int64
+             * @description The largest include_items getHomeLayout accepts: the layout then also answers that many first sections with their cards in included_sections. Absent when the home sections service is not configured
+             * @example 4
+             */
+            include_items_max?: number;
+            /** @description Opaque revision of this document */
+            revision: string;
+            /**
+             * Format: int64
+             * @description The largest item_limit getHomeSectionItems and getHomeLayout accept: the section, or each section the layout includes, then answers at most that many cards. Absent when the home sections service is not configured, and on a server whose Home row reads take no item_limit
+             * @example 100
+             */
+            row_item_limit_max?: number;
+            /**
+             * Format: int64
+             * @description The largest item_limit listHomeSections and listLibrarySections accept: each section then answers at most that many cards. Absent when the home sections service is not configured
+             * @example 100
+             */
+            section_item_limit_max?: number;
+            /**
+             * @description Support and configuration state, not health
+             * @enum {string}
+             */
+            state: "available" | "disabled" | "not_configured" | "unsupported";
+        };
+        HomeDismissal: {
+            /**
+             * Format: date-time
+             * @description Required for continue_watching: the card's progress_updated_at; the dismissal holds until the item is played again. An episode dismissal drops its whole show instead, which holds until any episode of it is played again.
+             */
+            progress_updated_at?: string;
+            /**
+             * @description Required for next_up: the series the episode card belongs to
+             * @example series:severance
+             */
+            series_id?: string;
         };
         Impersonation: {
             /**
@@ -4529,6 +4621,278 @@ export interface operations {
             };
         };
     };
+    getHomeCapabilities: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+                "If-Match"?: string;
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeCapabilities"];
+                };
+            };
+            /** @description The representation named by If-None-Match is current; no body. */
+            304: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dismissHomeItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The home surface the item is hidden from */
+                surface: "continue_watching" | "next_up";
+                /** @description Content identifier of the card */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HomeDismissal"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listHomeSections: {
         parameters: {
             query?: {
@@ -4567,6 +4931,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SectionCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getHomeSectionItems: {
+        parameters: {
+            query?: {
+                /** @description Answer at most this many cards: the section's item_limit becomes the smaller of its own and this value; total_count keeps its meaning. Absent keeps the section's own limit. Send it only when getHomeCapabilities reports row_item_limit_max; an older server rejects the parameter */
+                item_limit?: number;
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+                "X-Silo-Client-Family"?: string;
+            };
+            path: {
+                /** @description Section identifier from the home layout */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Section"];
                 };
             };
             /** @description Bad Request */

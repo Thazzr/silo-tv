@@ -5,7 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { getTransportMode, setTransportMode } from '../api/transport';
 import { getPlatform, setPlatformForTests, type KeyValueStore } from '../platform';
 import { BASE_URL, account } from '../test/apiFixtures';
-import { capability, catalogPage, library, profile, profileCollection } from '../test/flowFixtures';
+import { capability, profile, profileCollection } from '../test/flowFixtures';
+import { homeCapabilities } from '../test/homeFixtures';
 import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { makeReport } from '../test/probeFixture';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
@@ -159,7 +160,7 @@ describe('AppRoot routing', () => {
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
   });
 
-  it('starts at the library when the last profile reopens automatically', async () => {
+  it('starts at Home when the last profile reopens automatically', async () => {
     saveSignedIn('p1');
     const prefs = new ProfileLaunchPrefs(storage);
     prefs.setMode(BASE_URL, 'automatic');
@@ -168,10 +169,10 @@ describe('AppRoot routing', () => {
       http.get(`${BASE_URL}/api/v2/profiles`, () =>
         json(profileCollection([profile({ id: 'p1' })])),
       ),
-      http.get(`${BASE_URL}/api/v2/user/libraries`, () => json({ items: [library()] })),
-      http.get(`${BASE_URL}/api/v2/catalog`, () => json(catalogPage([]))),
+      http.get(`${BASE_URL}/api/v2/home/capabilities`, () => json(homeCapabilities())),
+      http.get(`${BASE_URL}/api/v2/home/sections`, () => json({ sections: [] })),
     );
     renderApp(<AppRoot launch={{}} registry={registry} storage={storage} device={testDevice} />);
-    expect(await screen.findByText('This library is empty.')).toBeInTheDocument();
+    expect(await screen.findByText('Nothing to watch yet')).toBeInTheDocument();
   });
 });

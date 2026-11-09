@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBranding } from '../../features/branding/queries';
+import { HomeScreen } from '../../features/home/HomeScreen';
+import { keepAtOrigin } from '../../ui/media';
 import { TitleList } from '../../features/library/TitleList';
 import { useSignOut, type CatalogItem } from '../../features/library/queries';
 import { useProfiles } from '../../features/profiles/queries';
@@ -17,6 +19,7 @@ import { AvatarMenu, type MenuView } from './AvatarMenu';
 import { ComingSoon } from './ComingSoon';
 import { SignOutDialog } from '../../features/profiles/SignOutDialog';
 import { LaunchOfferDialog } from './LaunchOfferDialog';
+import { ShellBackContext, type ContentBack } from './ShellBack';
 import { TopBar } from './TopBar';
 import {
   AVATAR_KEY,
@@ -32,6 +35,8 @@ export interface ShellScreenProps {
   memory: ShellMemory;
   /** Opens the player for a title; the screen stack keeps the shell underneath. */
   onPlay: (item: CatalogItem) => void;
+  /** Opens the full list of a Home row ("Explore all") as a screen of its own. */
+  onExploreSection?: (section: { id: string; title: string }) => void;
   onSwitchProfile: () => void;
   onSwitchServer: () => void;
   /** The device setting "Profile at launch" of this server, and its change from the menu. */
@@ -45,16 +50,22 @@ export interface ShellScreenProps {
 
 function TabContent({
   tab,
+  memory,
   onPlay,
+  onExploreSection,
   onHome,
 }: {
   tab: TabId;
+  memory: ShellMemory;
   onPlay: (item: CatalogItem) => void;
+  onExploreSection: (section: { id: string; title: string }) => void;
   onHome: () => void;
 }) {
   switch (tab) {
     case 'home':
-      return <TitleList kind="video" onPlay={onPlay} />;
+      return (
+        <HomeScreen rowMemory={memory.rows} onPlay={onPlay} onExploreSection={onExploreSection} />
+      );
     case 'movies':
       return <TitleList kind="movie" onPlay={onPlay} />;
     case 'series':
@@ -78,6 +89,7 @@ function TabContent({
 export function ShellScreen({
   memory,
   onPlay,
+  onExploreSection = () => undefined,
   onSwitchProfile,
   onSwitchServer,
   launchMode,
@@ -106,6 +118,11 @@ export function ShellScreen({
     return () => clearTimeout(id);
   }, []);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Content with a popup of its own (Home's removal question) takes Back before the shell does.
+  const contentBack = useRef<ContentBack | null>(null);
+  const registerContentBack = useCallback((handler: ContentBack | null) => {
+    contentBack.current = handler;
+  }, []);
 
   const clearPending = useCallback(() => {
     if (pending.current !== null) clearTimeout(pending.current);
@@ -167,6 +184,7 @@ export function ShellScreen({
       setMenu(menu === 'launch' ? 'main' : null);
       return;
     }
+    if (contentBack.current?.()) return;
     const focused = getCurrentFocusKey();
     const onBar = (focused !== null && tabOfKey(focused) !== null) || focused === AVATAR_KEY;
     if (!onBar) {
@@ -184,65 +202,75 @@ export function ShellScreen({
   const restricted = profiles.isPending || profile?.is_child === true;
 
   return (
-    <FocusTrackerContext.Provider value={report}>
-      <main className="shell" data-testid="shell">
-        <TopBar
-          selected={selected}
-          initialTab={initialTab}
-          profileName={profileName}
-          onTabFocused={tabFocused}
-          onTabPick={select}
-          onAvatar={() => setMenu('main')}
-        />
-        {/* Keyed by tab: the content of another tab is a new group that starts at its memory. */}
-        <FocusGroup
-          key={selected}
-          focusKey={`shell-content-${selected}`}
-          enterable
-          className="shell-content"
-          // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
-          onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
-          saveLastFocusedChild
-          preferredChildFocusKey={memory.focusOf(selected)}
-          data-testid={`tab-${selected}`}
-        >
-          <TabContent tab={selected} onPlay={onPlay} onHome={goHome} />
-        </FocusGroup>
-        {menu ? (
-          <AvatarMenu
-            view={menu}
+    <ShellBackContext.Provider value={registerContentBack}>
+      <FocusTrackerContext.Provider value={report}>
+        <main className="shell" data-testid="shell">
+          <TopBar
+            selected={selected}
+            initialTab={initialTab}
             profileName={profileName}
-            serverName={branding.serverName}
-            restricted={restricted}
-            launchMode={launchMode}
-            signingOut={signOut.isPending}
-            onClose={() => setMenu(null)}
-            onSwitchProfile={onSwitchProfile}
-            onSwitchServer={onSwitchServer}
-            onSignOut={() => setSignOutOpen(true)}
-            onOpenLaunch={() => setMenu('launch')}
-            onChooseLaunch={(mode) => {
-              onLaunchMode(mode);
-              setMenu('main');
-            }}
+            onTabFocused={tabFocused}
+            onTabPick={select}
+            onAvatar={() => setMenu('main')}
           />
-        ) : null}
-        {signOutOpen ? (
-          <SignOutDialog
-            server={branding.serverName}
-            busy={signOut.isPending}
-            onCancel={() => setSignOutOpen(false)}
-            onConfirm={() => signOut.mutate()}
-          />
-        ) : null}
-        {offer && rendered ? (
-          <LaunchOfferDialog
-            name={offer.name}
-            fallbackFocusKey={tabKey(selected)}
-            onAnswer={offer.onAnswer}
-          />
-        ) : null}
-      </main>
-    </FocusTrackerContext.Provider>
+          {/* Keyed by tab: the content of another tab is a new group that starts at its memory. */}
+          <FocusGroup
+            key={selected}
+            focusKey={`shell-content-${selected}`}
+            enterable
+            className={selected === 'home' ? 'shell-content shell-content-home' : 'shell-content'}
+            // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
+            onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
+            saveLastFocusedChild
+            // Home clips its content; focus must not scroll that box (the rows scroll by transform).
+            onScroll={keepAtOrigin}
+            preferredChildFocusKey={memory.focusOf(selected)}
+            data-testid={`tab-${selected}`}
+          >
+            <TabContent
+              tab={selected}
+              memory={memory}
+              onPlay={onPlay}
+              onExploreSection={onExploreSection}
+              onHome={goHome}
+            />
+          </FocusGroup>
+          {menu ? (
+            <AvatarMenu
+              view={menu}
+              profileName={profileName}
+              serverName={branding.serverName}
+              restricted={restricted}
+              launchMode={launchMode}
+              signingOut={signOut.isPending}
+              onClose={() => setMenu(null)}
+              onSwitchProfile={onSwitchProfile}
+              onSwitchServer={onSwitchServer}
+              onSignOut={() => setSignOutOpen(true)}
+              onOpenLaunch={() => setMenu('launch')}
+              onChooseLaunch={(mode) => {
+                onLaunchMode(mode);
+                setMenu('main');
+              }}
+            />
+          ) : null}
+          {signOutOpen ? (
+            <SignOutDialog
+              server={branding.serverName}
+              busy={signOut.isPending}
+              onCancel={() => setSignOutOpen(false)}
+              onConfirm={() => signOut.mutate()}
+            />
+          ) : null}
+          {offer && rendered ? (
+            <LaunchOfferDialog
+              name={offer.name}
+              fallbackFocusKey={tabKey(selected)}
+              onAnswer={offer.onAnswer}
+            />
+          ) : null}
+        </main>
+      </FocusTrackerContext.Provider>
+    </ShellBackContext.Provider>
   );
 }

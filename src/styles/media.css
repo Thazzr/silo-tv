@@ -1,0 +1,471 @@
+/* Media cards, rows, grids and the Home hero (docs/design.md). Sizes are CSS pixels on the
+   1920x1080 layout and must match src/ui/media/layout.ts. Only transform and opacity animate. */
+
+/* ---- Cards ---- */
+.card {
+  position: relative;
+  box-sizing: border-box;
+  display: block;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+.card-poster {
+  width: 176px;
+}
+
+.card-landscape {
+  width: 360px;
+}
+
+.card-grid {
+  width: 260px;
+}
+
+.card-art {
+  position: relative;
+  display: block;
+  /* The shadow, the picture and the ring stack inside the card, whatever scales around them. */
+  isolation: isolate;
+  border-radius: var(--radius-card);
+  transition: transform var(--transition);
+}
+
+.card-poster .card-art {
+  height: 264px;
+}
+
+.card-landscape .card-art {
+  height: 200px;
+}
+
+.card-grid .card-art {
+  height: 390px;
+}
+
+/* Focus: the art grows on whole pixels (176 -> 185, 360 -> 378, 260 -> 273 wide). */
+.card-poster:focus .card-art {
+  transform: scale(1.0511);
+}
+
+.card-landscape:focus .card-art,
+.card-grid:focus .card-art {
+  transform: scale(1.05);
+}
+
+.card-shadow,
+.card-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+  opacity: 0;
+  transition: opacity var(--transition);
+  pointer-events: none;
+}
+
+.card-shadow {
+  z-index: 0;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+}
+
+.card-ring {
+  z-index: 3;
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
+.card:focus .card-shadow,
+.card:focus .card-ring {
+  opacity: 1;
+}
+
+/* The picture: the thumbhash colour shows while the image loads, then the image fades in. */
+.art {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border-radius: var(--radius-card);
+}
+
+.art-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.art[data-state='loaded'] .art-img {
+  opacity: 1;
+}
+
+.art-tile {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: hidden;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+  text-align: center;
+  background: var(--chrome-selected);
+  word-break: break-word;
+}
+
+.art-explore {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: var(--text);
+}
+
+.explore-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px;
+  height: 66px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+}
+
+.explore-label {
+  padding: 0 8px;
+  font-size: var(--fs-card-title);
+  font-weight: 500;
+  text-align: center;
+}
+
+.card-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  height: 4px;
+  background: var(--progress-track);
+}
+
+.card-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--progress);
+}
+
+.card-caption {
+  display: block;
+  height: 57px;
+  margin-top: 22px;
+  overflow: hidden;
+}
+
+.card-landscape .card-caption {
+  margin-top: 14px;
+}
+
+.card-grid .card-caption {
+  margin-top: 16px;
+}
+
+.card-title,
+.card-sub {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.card-title {
+  font-size: var(--fs-card-title);
+  font-weight: 500;
+  line-height: 31px;
+}
+
+.card-sub {
+  font-size: var(--fs-small);
+  line-height: 26px;
+}
+
+.card:focus .card-title {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.card:focus .card-sub {
+  color: var(--text);
+}
+
+/* Skeletons: the same boxes as the real cards, in a plain raised colour. */
+.card-skeleton {
+  cursor: default;
+}
+
+.skeleton-block {
+  background: var(--surface-raised);
+}
+
+.skeleton-line {
+  display: block;
+  background: var(--surface-raised);
+  border-radius: 6px;
+}
+
+.skeleton-line-title {
+  width: 70%;
+  height: 22px;
+  margin-top: 4px;
+}
+
+.skeleton-line-sub {
+  width: 40%;
+  height: 16px;
+  margin-top: 8px;
+}
+
+/* ---- Rows ---- */
+.row-section {
+  position: relative;
+  box-sizing: border-box;
+}
+
+.row-title {
+  height: 48px;
+  margin: 0;
+  padding: 0 0 0 80px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+  line-height: 48px;
+}
+
+.row-strip {
+  position: relative;
+}
+
+.row-track {
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  transition: transform var(--transition);
+}
+
+.row-slot {
+  position: absolute;
+  top: 0;
+}
+
+.skeleton-title {
+  width: 320px;
+  height: 36px;
+  margin: 6px 0 0 80px;
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.row-error-body {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 14px 80px;
+}
+
+.row-error-body p {
+  margin: 0;
+}
+
+/* ---- Grids ---- */
+.grid-viewport {
+  position: relative;
+  overflow: hidden;
+}
+
+.grid-track {
+  position: absolute;
+  top: 14px;
+  transition: transform var(--transition);
+}
+
+.grid-slot {
+  position: absolute;
+}
+
+.section-grid.screen {
+  padding: 0;
+}
+
+.section-grid-title {
+  box-sizing: border-box;
+  height: 130px;
+  margin: 0;
+  padding: var(--safe-y) 80px 0;
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.section-grid .grid-viewport {
+  height: calc(100vh - 130px);
+}
+
+.home-message {
+  max-width: 900px;
+  padding: 24px 88px;
+}
+
+/* ---- Home ---- */
+.shell-content.shell-content-home {
+  position: relative;
+  /* The window minus the top bar (54 px safe margin, 75 px bar, 12 px below). */
+  height: calc(100vh - 141px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.home {
+  position: relative;
+  height: 100%;
+}
+
+.hero {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 520px;
+  overflow: hidden;
+}
+
+.hero-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right top;
+  animation: hero-fade 240ms ease-out;
+}
+
+@keyframes hero-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Darkens the picture so the text keeps 4.5:1 even over a white backdrop: the lightest possible
+   picture under 84 % black is darker than #292929, which gives the secondary text above 5:1. */
+.hero-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, #000000 0, rgba(0, 0, 0, 0) 22%, rgba(0, 0, 0, 0) 55%, #000000 100%),
+    linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.95) 0,
+      rgba(0, 0, 0, 0.84) 52%,
+      rgba(0, 0, 0, 0.35) 76%,
+      rgba(0, 0, 0, 0) 100%
+    );
+}
+
+.hero-text {
+  position: absolute;
+  bottom: 36px;
+  left: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 880px;
+}
+
+.hero-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 84px;
+  font-weight: 700;
+  line-height: 1.05;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.hero-logo {
+  display: block;
+  max-width: 880px;
+  max-height: 200px;
+  object-fit: contain;
+  object-position: left bottom;
+}
+
+.hero-meta {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 27px;
+  color: var(--text-secondary);
+}
+
+.hero-synopsis {
+  display: -webkit-box;
+  width: 780px;
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  line-height: 31px;
+  color: var(--text-secondary);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.skeleton-bar {
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.hero-skeleton-title {
+  width: 560px;
+  height: 84px;
+}
+
+.hero-skeleton-meta {
+  width: 300px;
+  height: 27px;
+}
+
+.hero-skeleton-synopsis {
+  width: 780px;
+  height: 62px;
+}
+
+/* The rows sit below the hero; the focused row is scrolled up to the top of this box. */
+.home-rows {
+  position: absolute;
+  top: 520px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+.home-rows-inner {
+  transition: transform var(--transition);
+}

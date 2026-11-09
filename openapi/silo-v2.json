@@ -2994,6 +2994,79 @@
         ],
         "type": "object"
       },
+      "HomeCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "include_items_max": {
+            "description": "The largest include_items getHomeLayout accepts: the layout then also answers that many first sections with their cards in included_sections. Absent when the home sections service is not configured",
+            "examples": [
+              4
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "row_item_limit_max": {
+            "description": "The largest item_limit getHomeSectionItems and getHomeLayout accept: the section, or each section the layout includes, then answers at most that many cards. Absent when the home sections service is not configured, and on a server whose Home row reads take no item_limit",
+            "examples": [
+              100
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "section_item_limit_max": {
+            "description": "The largest item_limit listHomeSections and listLibrarySections accept: each section then answers at most that many cards. Absent when the home sections service is not configured",
+            "examples": [
+              100
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "state",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "HomeDismissal": {
+        "additionalProperties": false,
+        "properties": {
+          "progress_updated_at": {
+            "description": "Required for continue_watching: the card's progress_updated_at; the dismissal holds until the item is played again. An episode dismissal drops its whole show instead, which holds until any episode of it is played again.",
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          },
+          "series_id": {
+            "description": "Required for next_up: the series the episode card belongs to",
+            "examples": [
+              "series:severance"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Impersonation": {
         "additionalProperties": false,
         "properties": {
@@ -8932,6 +9005,415 @@
         "x-silo-service-backed": true
       }
     },
+    "/api/v2/home/capabilities": {
+      "get": {
+        "operationId": "getHomeCapabilities",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeCapabilities"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The home page features this server supports, such as the cards of the first sections on getHomeLayout.",
+        "tags": [
+          "home"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/home/dismissals/{surface}/{item_id}": {
+      "put": {
+        "operationId": "dismissHomeItem",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The home surface the item is hidden from",
+            "in": "path",
+            "name": "surface",
+            "required": true,
+            "schema": {
+              "description": "The home surface the item is hidden from",
+              "enum": [
+                "continue_watching",
+                "next_up"
+              ],
+              "examples": [
+                "continue_watching"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Content identifier of the card",
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "description": "Content identifier of the card",
+              "examples": [
+                "movie:heat-1995"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeDismissal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Hide a card from Continue Watching or Next Up for the acting profile; repeating it refreshes the dismissal. Dismissing an episode or series drops the whole show: every card of it leaves both rows until the profile watches it again or the dismissal is undone. Watch provider connections with dropped-show sync on, for providers that support it, send the drop to the provider.",
+        "tags": [
+          "home"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-retry-safety": "natural_idempotent",
+        "x-silo-service-backed": true
+      }
+    },
     "/api/v2/home/sections": {
       "get": {
         "operationId": "listHomeSections",
@@ -9195,6 +9677,290 @@
           }
         ],
         "summary": "The home page's sections with their cards, as the acting profile sees them.",
+        "tags": [
+          "home"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/home/sections/{id}/items": {
+      "get": {
+        "operationId": "getHomeSectionItems",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Section identifier from the home layout",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Section identifier from the home layout",
+              "examples": [
+                "continue_watching"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Answer at most this many cards: the section's item_limit becomes the smaller of its own and this value; total_count keeps its meaning. Absent keeps the section's own limit. Send it only when getHomeCapabilities reports row_item_limit_max; an older server rejects the parameter",
+            "explode": false,
+            "in": "query",
+            "name": "item_limit",
+            "schema": {
+              "description": "Answer at most this many cards: the section's item_limit becomes the smaller of its own and this value; total_count keeps its meaning. Absent keeps the section's own limit. Send it only when getHomeCapabilities reports row_item_limit_max; an older server rejects the parameter",
+              "examples": [
+                20
+              ],
+              "format": "int64",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Artwork size for every image in the response; absent picks each surface's default",
+            "explode": false,
+            "in": "query",
+            "name": "image_size",
+            "schema": {
+              "description": "Artwork size for every image in the response; absent picks each surface's default",
+              "enum": [
+                "small",
+                "medium",
+                "large",
+                "original"
+              ],
+              "examples": [
+                "medium"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original",
+            "explode": false,
+            "in": "query",
+            "name": "poster_width",
+            "schema": {
+              "description": "Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original",
+              "examples": [
+                352
+              ],
+              "format": "int64",
+              "maximum": 7680,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops",
+            "explode": false,
+            "in": "query",
+            "name": "backdrop_width",
+            "schema": {
+              "description": "Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops",
+              "examples": [
+                2688
+              ],
+              "format": "int64",
+              "maximum": 7680,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Width in device pixels the client draws logo_url at. Overrides image_size for logos",
+            "explode": false,
+            "in": "query",
+            "name": "logo_width",
+            "schema": {
+              "description": "Width in device pixels the client draws logo_url at. Overrides image_size for logos",
+              "examples": [
+                1760
+              ],
+              "format": "int64",
+              "maximum": 7680,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills",
+            "explode": false,
+            "in": "query",
+            "name": "still_width",
+            "schema": {
+              "description": "Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills",
+              "examples": [
+                720
+              ],
+              "format": "int64",
+              "maximum": 7680,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots",
+            "explode": false,
+            "in": "query",
+            "name": "photo_width",
+            "schema": {
+              "description": "Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots",
+              "examples": [
+                400
+              ],
+              "format": "int64",
+              "maximum": 7680,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404",
+            "in": "header",
+            "name": "X-Silo-Client-Family",
+            "schema": {
+              "description": "The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404",
+              "examples": [
+                "tv"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Section"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "One section of the home page with its cards.",
         "tags": [
           "home"
         ],

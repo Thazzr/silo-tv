@@ -104,7 +104,8 @@ describe('create profile', () => {
     setup();
     await openForm();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('New profile');
-    expect(nameField()).toHaveFocus();
+    // The field takes the focus in an effect after the form is on screen.
+    await waitFor(() => expect(nameField()).toHaveFocus());
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
     // The focus returns to the tile that opened the form.

@@ -7,6 +7,7 @@ import { distIndexUrl } from './paths.ts';
 // of page.route(): Playwright does not apply the response-side CORS check to routed requests).
 // It speaks just enough of /api/v2 for the first flow: server check, device-code sign-in that is
 // approved on the second poll (or, per option, password sign-in only), one profile without a PIN,
+// the Home sections (Continue Watching, and Recently Added with more titles than its row shows),
 // one library with two titles, and the playback protocol up to a plan whose media never answers
 // (the loading cue stays). Every instance has its own origin (its own port), which is what the
 // app keys servers and sessions by.
@@ -202,7 +203,60 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         case 'GET /api/v2/stream/e2e-session':
           // The media never answers: the player keeps its loading cue.
           return;
+        case 'GET /api/v2/home/capabilities':
+          return send(200, {
+            state: 'available',
+            allowed: true,
+            revision: 'r',
+            section_item_limit_max: 100,
+            row_item_limit_max: 100,
+          });
+        case 'GET /api/v2/home/sections':
+          return send(200, {
+            sections: [
+              {
+                id: 'continue_watching',
+                section_type: 'continue_watching',
+                title: 'Weiterschauen',
+                items: [
+                  {
+                    content_id: 'm2',
+                    title: 'Second Title',
+                    type: 'movie',
+                    position_seconds: 1350,
+                    duration_seconds: 5400,
+                    item_source: 'in_progress',
+                    overview: 'The second title, half way through.',
+                  },
+                ],
+                total_count: 1,
+              },
+              {
+                id: 'recently_added',
+                section_type: 'recently_added',
+                title: 'Neu hinzugefügt',
+                items: [
+                  { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
+                  { content_id: 'm3', title: 'Third Title', type: 'movie', year: 2020 },
+                ],
+                total_count: 40,
+              },
+            ],
+          });
         case 'GET /api/v2/catalog':
+          // A row's full list (Explore all) comes through the catalog with source=section.
+          if (url.searchParams.get('source') === 'section') {
+            return send(200, {
+              items: [
+                { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
+                { content_id: 'm3', title: 'Third Title', type: 'movie', year: 2020 },
+                { content_id: 'm4', title: 'Fourth Title', type: 'movie', year: 2021 },
+              ],
+              total: 3,
+              total_exact: true,
+              page: { has_more: false },
+            });
+          }
           return send(200, {
             items: [
               { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
@@ -247,9 +301,13 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   );
 
   // Approved on the second poll: the single profile is selected and the shell shows, on Home.
-  await expect(page.getByRole('button', { name: /First Title/ })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText('Movies');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Weiterschauen', 'Neu hinzugefügt']);
+  // The hero shows the first card; the landscape card has a progress bar of a quarter.
+  await expect(page.getByTestId('hero-title')).toHaveText('Second Title');
+  await expect(page.getByTestId('hero-synopsis')).toHaveText('The second title, half way through.');
+  await expect(page.getByTestId('card-progress')).toHaveAttribute('style', /width: 25%/);
   await expect(page.getByTestId('server-name')).toHaveText('E2E Silo');
   // The server's accent is applied: it only colours the underline of the selected tab.
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveAttribute(
@@ -261,19 +319,47 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
       page.evaluate(`getComputedStyle(document.documentElement).getPropertyValue('--accent')`),
     )
     .toBe('#e5a00d');
-  // The Home tab has the focus; Down enters the list, then Down, Enter opens the second title.
+  // The Home tab has the focus; Down enters the first row (Continue Watching).
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  // Down to the next row: its first card has the focus, and the hero follows once it rests.
   await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await expect(page.getByTestId('hero-title')).toHaveText('First Title');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Third Title/ })).toBeFocused();
+  await expect(page.getByTestId('hero-title')).toHaveText('Third Title');
+
+  // The row shows two of 40 titles and ends with Explore all: OK opens the row's grid.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('section-grid-title')).toHaveText('Neu hinzugefügt');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Third Title/ })).toBeFocused();
+  const gridRequest = seen.find(
+    (e) => e.path === '/api/v2/catalog' && e.search.includes('source=section'),
+  );
+  expect(gridRequest?.search).toContain('section_id=recently_added');
+  expect(gridRequest?.search).toContain('scope=home');
+  // Back returns to Home, on the Explore all card it was opened from.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+
+  // Up to Continue Watching: OK on its card starts the playback (tapped, not held).
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
   await expect(page.getByTestId('player-cue')).toBeVisible();
   await expect.poll(() => seen.some((e) => e.path === '/api/v2/playback/start')).toBe(true);
 
-  // Back leaves the player: the session is stopped and the list has its focus on that title.
+  // Back leaves the player: the session is stopped and Home has its focus on that card.
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('title-list')).toBeVisible();
+  await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
   await expect
     .poll(() =>
@@ -282,9 +368,12 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
     .toBe(true);
 
   // The authenticated calls carried the token and the profile.
-  const catalog = seen.find((entry) => entry.path === '/api/v2/catalog');
-  expect(catalog?.authorization).toBe('Bearer fake-access');
-  expect(catalog?.profileId).toBe('profile-1');
+  const home = seen.find((entry) => entry.path === '/api/v2/home/sections');
+  expect(home?.authorization).toBe('Bearer fake-access');
+  expect(home?.profileId).toBe('profile-1');
+  // The rows were asked for at 20 cards and at widths that fit the cards.
+  expect(home?.search).toContain('item_limit=20');
+  expect(home?.search).toContain('poster_width=352');
   // Playback went through protocol v3 with the same credentials.
   const start = seen.find((entry) => entry.path === '/api/v2/playback/start');
   expect(start?.authorization).toBe('Bearer fake-access');
@@ -294,7 +383,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   expect(media?.search).toBe('?st=x&token=fake-access');
   expect(seen.filter((entry) => entry.path === '/api/v2/auth/device/poll')).toHaveLength(2);
 
-  // Shell, keyboard only: Back in the list moves the focus to the Home tab.
+  // Shell, keyboard only: Back in a row moves the focus to the Home tab.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
   // Right moves across the tabs; the content follows after a short delay.
@@ -415,8 +504,8 @@ test('profiles: picker with a PIN profile, create a kids profile, choose it, ope
   await expect(page.getByTestId('server-name')).toHaveText('E2E Silo', { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Profilmenü für Mia' })).toBeVisible();
   await expect(page.getByTestId('profile-list')).toHaveCount(0);
-  const catalogs = seen.filter((e) => e.path === '/api/v2/catalog');
-  expect(catalogs[catalogs.length - 1]?.profileId).toBe('profile-3');
+  const homes = seen.filter((e) => e.path === '/api/v2/home/sections');
+  expect(homes[homes.length - 1]?.profileId).toBe('profile-3');
 });
 
 test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({
@@ -565,7 +654,7 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
   expect(a.seen.some((entry) => entry.path === '/api/v2/auth/login')).toBe(false);
   // B's catalog request carries B's token (the name shows before the titles are asked for).
   await expect
-    .poll(() => b.seen.find((entry) => entry.path === '/api/v2/catalog')?.authorization)
+    .poll(() => b.seen.find((entry) => entry.path === '/api/v2/home/sections')?.authorization)
     .toBe('Bearer token-b');
 
   // Switch back to A through the list: B is current (first), A is the second row; A still has its session.
@@ -575,8 +664,8 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
   await expect(serverRow(page, 'Silo A')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('server-name')).toHaveText('Silo A', { timeout: 10_000 });
-  const catalogsOfA = a.seen.filter((entry) => entry.path === '/api/v2/catalog');
-  expect(catalogsOfA[catalogsOfA.length - 1]?.authorization).toBe('Bearer token-a');
+  const homesOfA = a.seen.filter((entry) => entry.path === '/api/v2/home/sections');
+  expect(homesOfA[homesOfA.length - 1]?.authorization).toBe('Bearer token-a');
   // A was not asked to sign in again: its code flow ran once.
   expect(a.seen.filter((entry) => entry.path === '/api/v2/auth/device/start')).toHaveLength(1);
 

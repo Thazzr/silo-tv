@@ -10,7 +10,9 @@ import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
 import { ServerListScreen } from '../features/servers/ServerListScreen';
+import { SectionGridScreen } from '../features/home/SectionGridScreen';
 import { PlayerScreen } from '../playback/PlayerScreen';
+import { FocusIndexMemory } from '../ui/media';
 import type { Launch } from './launch';
 import { Navigator, useNavigator, type NavApi } from './nav';
 import { ServerRegistry } from './servers';
@@ -28,6 +30,8 @@ type FlowScreen =
   /** `autoSelect` is off after "Switch profile", so a single profile is still shown. */
   | { name: 'profiles'; autoSelect: boolean; resumeId?: string }
   | { name: 'shell' }
+  /** The full list of a Home row ("Explore all"). */
+  | { name: 'sectionGrid'; sectionId: string; title: string }
   | { name: 'player'; contentId: string; title: string };
 
 export interface FlowAppProps {
@@ -123,6 +127,8 @@ export function FlowApp({
   const [offer, setOffer] = useState<{ origin: string; name: string } | null>(null);
   const clearOffer = useCallback(() => setOffer(null), []);
   const [shellMemory] = useState(() => new ShellMemory());
+  /** Where the focus was in each row grid; it survives the player being opened over the grid. */
+  const [gridMemory] = useState(() => new FocusIndexMemory());
   const session = origin ? registry.session(origin) : null;
   const launchRecord = useSyncExternalStore(prefs.subscribe, () => prefs.get(origin ?? ''));
 
@@ -139,9 +145,10 @@ export function FlowApp({
   const openShell = useCallback(
     (nav: NavApi<FlowScreen>) => {
       shellMemory.reset();
+      gridMemory.clear();
       nav.reset({ name: 'shell' });
     },
-    [shellMemory],
+    [shellMemory, gridMemory],
   );
 
   /** Makes a server the active one and goes on at the step its session allows. */
@@ -270,15 +277,31 @@ export function FlowApp({
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })
             }
+            onExploreSection={(section) =>
+              nav.push({ name: 'sectionGrid', sectionId: section.id, title: section.title })
+            }
             onSwitchProfile={() => {
               setOffer(null);
               session.update({ profileId: undefined, profileToken: undefined });
               queryClient.removeQueries({ queryKey: ['libraries'] });
               queryClient.removeQueries({ queryKey: ['catalog'] });
+              queryClient.removeQueries({ queryKey: ['home'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.
             onSwitchServer={() => nav.push({ name: 'servers' })}
+          />,
+        );
+      case 'sectionGrid':
+        return provide(
+          <SectionGridScreen
+            sectionId={screen.sectionId}
+            title={screen.title}
+            memory={gridMemory}
+            onPlay={(item) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title })
+            }
+            onBack={nav.pop}
           />,
         );
       case 'player':

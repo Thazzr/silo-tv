@@ -12,7 +12,6 @@ import {
   branding,
   capability,
   catalogItem,
-  catalogPage,
   deviceStart,
   devicePoll,
   library,
@@ -23,6 +22,7 @@ import {
 import { I18nProvider } from '../i18n';
 import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launchPrefs';
 import { clearInstallationCache } from '../playback/usePlaybackSession';
+import { homeCapabilities, homeSection } from '../test/homeFixtures';
 import { servePlayback } from '../test/playbackFixtures';
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
@@ -96,7 +96,7 @@ async function openSignIn(origin = BASE_URL) {
   return view;
 }
 
-/** What one server answers; the catalog and logout calls are recorded with the token they carried. */
+/** What one server answers; the Home and logout calls are recorded with the token they carried. */
 interface Seen {
   catalog: (string | null)[];
   logout: (string | null)[];
@@ -111,9 +111,17 @@ function serveData(
   server.use(
     http.get(`${origin}/api/v2/profiles`, () => HttpResponse.json(profileCollection(items))),
     http.get(`${origin}/api/v2/user/libraries`, () => HttpResponse.json({ items: [library()] })),
-    http.get(`${origin}/api/v2/catalog`, ({ request }) => {
+    http.get(`${origin}/api/v2/home/capabilities`, () => HttpResponse.json(homeCapabilities())),
+    http.get(`${origin}/api/v2/home/sections`, ({ request }) => {
       seen.catalog.push(request.headers.get('Authorization'));
-      return HttpResponse.json(catalogPage([catalogItem({ title: `Title of ${origin}` })]));
+      return HttpResponse.json({
+        sections: [
+          homeSection('recent', 0, {
+            items: [catalogItem({ title: `Title of ${origin}` })],
+            total_count: 1,
+          }),
+        ],
+      });
     }),
     http.get(`${origin}/api/v2/auth/device/capability`, () =>
       HttpResponse.json({ ...capability, state: 'disabled' }),
@@ -249,13 +257,20 @@ describe('FlowApp', () => {
     expect(registry.list()).toEqual([]);
   });
 
-  it('sends the selected profile id on the catalog request', async () => {
+  it('sends the selected profile id on the Home request', async () => {
     serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
     const ids: (string | null)[] = [];
     server.use(
-      http.get(`${BASE_URL}/api/v2/catalog`, ({ request }) => {
+      http.get(`${BASE_URL}/api/v2/home/sections`, ({ request }) => {
         ids.push(request.headers.get('X-Profile-Id'));
-        return HttpResponse.json(catalogPage([catalogItem({ title: 'First Title' })]));
+        return HttpResponse.json({
+          sections: [
+            homeSection('recent', 0, {
+              items: [catalogItem({ title: 'First Title' })],
+              total_count: 1,
+            }),
+          ],
+        });
       }),
     );
     signedIn();
@@ -302,23 +317,32 @@ describe('FlowApp', () => {
       catalogItem({ content_id: 'm3', title: 'Third Title' }),
     ];
     serveData();
-    server.use(http.get(`${BASE_URL}/api/v2/catalog`, () => HttpResponse.json(catalogPage(items))));
+    // One title per row, so Down walks the titles.
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/sections`, () =>
+        HttpResponse.json({
+          sections: items.map((item, i) =>
+            homeSection(`r${i + 1}`, 0, { items: [item], total_count: 1 }),
+          ),
+        }),
+      ),
+    );
     const calls = servePlayback(server);
     signedIn(BASE_URL, 'p1');
     flow();
     // The shell opens on the Home tab; Down enters the list.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
-    await screen.findByTestId('title-list');
+    await screen.findByTestId('row-r3');
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus();
     await pressKey(KEY.enter);
     expect(await screen.findByTestId('player')).toBeInTheDocument();
-    expect(screen.queryByTestId('title-list')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('home')).not.toBeInTheDocument();
     expect(calls.start).toHaveLength(1);
     fireEvent.keyDown(window, { keyCode: 461 });
-    expect(await screen.findByTestId('title-list')).toBeInTheDocument();
+    expect(await screen.findByTestId('home')).toBeInTheDocument();
     // Back lands on the title that was played, not on the first one.
     await waitFor(() => expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus());
     await waitFor(() => expect(calls.stop).toHaveLength(1));
@@ -327,6 +351,36 @@ describe('FlowApp', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
     fireEvent.keyDown(window, { keyCode: 461 });
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
+  });
+
+  it('drops the Home queries of the old profile when the profile is switched', async () => {
+    serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
+    signedIn(BASE_URL, 'p1');
+    // Default cache times: inactive queries would otherwise be dropped by the test client itself.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider lang="en">
+          <FlowApp
+            launch={{ probe: false, transport: null, server: '' }}
+            registry={registry}
+            device={testDevice}
+            storage={storage}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('button', { name: /Title of/ });
+    const homeQueries = () =>
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((q) => q.queryKey[0] === 'home');
+    expect(homeQueries().length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(homeQueries()).toHaveLength(0);
   });
 
   it('empties the profile, library and catalog caches when the session ends', async () => {
@@ -351,7 +405,9 @@ describe('FlowApp', () => {
       queryClient
         .getQueryCache()
         .getAll()
-        .filter((q) => ['profiles', 'libraries', 'catalog'].includes(String(q.queryKey[0])));
+        .filter((q) =>
+          ['profiles', 'libraries', 'catalog', 'home'].includes(String(q.queryKey[0])),
+        );
     expect(userData().length).toBeGreaterThan(0);
     act(() => session.signOut());
     await screen.findByTestId('signin-unavailable');
