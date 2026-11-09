@@ -12,7 +12,16 @@ import { creditLine, metaLine, qualityBadges, ratingEntries, type ItemDetail } f
 const FOUR_LINES_CHARS = 275;
 
 /** The synopsis, at most four lines, with "More" under it when the text goes on. */
-export function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
+export function Synopsis({
+  text,
+  onMore,
+  dimmed = false,
+}: {
+  text: string;
+  onMore: () => void;
+  /** The text is being translated: it is drawn dimmer (by its colour, not by opacity). */
+  dimmed?: boolean;
+}) {
   const t = useT();
   const ref = useRef<HTMLParagraphElement>(null);
   const [measured, setMeasured] = useState<boolean | null>(null);
@@ -25,7 +34,7 @@ export function Synopsis({ text, onMore }: { text: string; onMore: () => void })
   const clamped = measured ?? text.length > FOUR_LINES_CHARS;
   return (
     <>
-      <p ref={ref} className="detail-synopsis" data-testid="detail-synopsis">
+      <p ref={ref} className="detail-synopsis" data-testid="detail-synopsis" data-dimmed={dimmed}>
         {text}
       </p>
       {clamped ? (
@@ -80,12 +89,15 @@ export function DetailHero({
   actions,
   onMore,
   faded = false,
+  translation = null,
 }: {
   detail: ItemDetail;
   actions: ReactNode;
   onMore: () => void;
   /** The focus is further down: the text column fades out so nothing is half cut at the top. */
   faded?: boolean;
+  /** The line under the synopsis: the description is being translated, or was translated by AI. */
+  translation?: 'translating' | 'ai' | null;
 }) {
   const t = useT();
   const url = useMediaUrl();
@@ -149,7 +161,14 @@ export function DetailHero({
             ) : null}
           </div>
         ) : null}
-        {detail.overview ? <Synopsis text={detail.overview} onMore={onMore} /> : null}
+        {detail.overview ? (
+          <Synopsis text={detail.overview} onMore={onMore} dimmed={translation === 'translating'} />
+        ) : null}
+        {translation ? (
+          <p className="detail-translation" data-testid="detail-translation">
+            {t(translation === 'translating' ? 'detail.translating' : 'detail.translatedByAi')}
+          </p>
+        ) : null}
         {credits ? (
           <p className="detail-credits" data-testid="detail-credits">
             {credits}

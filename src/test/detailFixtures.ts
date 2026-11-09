@@ -5,6 +5,11 @@ import type { SetupServer } from 'msw/node';
 import type { components } from '../api/generated/schema';
 import { BASE_URL } from './apiFixtures';
 import { serveSettings, type SettingsServe } from './settingsFixtures';
+import {
+  serveTranslation,
+  type TranslationCalls,
+  type TranslationServe,
+} from './translationFixtures';
 
 type S = components['schemas'];
 
@@ -97,6 +102,8 @@ export interface DetailCalls {
   capabilities: number;
   /** The reads of a movie's box set: id and query string of each. */
   boxSets: { id: string; query: URLSearchParams }[];
+  /** The metadata-AI capability reads and the translate requests. */
+  translation: TranslationCalls;
 }
 
 export interface DetailServe {
@@ -115,6 +122,8 @@ export interface DetailServe {
   boxSet?: S['CatalogBoxSetDetail'] | 'none' | 'fail';
   /** What the profile's settings say; the contract defaults (title art on) when omitted. */
   settings?: SettingsServe;
+  /** What the server's metadata-AI capability says; translation is off when omitted. */
+  translation?: TranslationServe;
 }
 
 /** Registers the detail endpoints; the returned object records what the app asked for. */
@@ -126,9 +135,11 @@ export function serveDetail(server: SetupServer, options: DetailServe = {}): Det
     similar: [],
     capabilities: 0,
     boxSets: [],
+    translation: { posts: [], capabilities: 0 },
   };
   const fail = () => new HttpResponse(null, { status: 500 });
   serveSettings(server, options.settings);
+  calls.translation = serveTranslation(server, options.translation);
   server.use(
     http.get(`${BASE_URL}/api/v2/catalog/items/:id`, ({ params }) => {
       const id = String(params.id);

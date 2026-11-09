@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
-import { useBackHandler } from '../../app/nav';
+import { getCurrentFocusKey, moveFocusTo, useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
@@ -10,7 +10,7 @@ import { useBoxSetsAvailable } from '../library/queries';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import type { PersonTarget } from '../person/personMemory';
-import { ActionRow, type EpisodeRef } from './ActionRow';
+import { ActionRow, PLAY_KEY, type EpisodeRef } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
@@ -39,6 +39,7 @@ import {
 } from './queries';
 import { SeasonPills } from './SeasonPills';
 import { SynopsisDialog } from './SynopsisDialog';
+import { useDescriptionTranslation } from './useDescriptionTranslation';
 import { useThemeMusic } from './useThemeMusic';
 
 /** What the player needs to start a title; an intent other than `ask` skips its resume prompt. */
@@ -66,6 +67,8 @@ const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'extras', '
 
 /** How long a short notice (YouTube is not available) stays on the page. */
 const NOTICE_MS = 4000;
+
+const TRANSLATE_KEY = 'detail-translate';
 
 const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
@@ -176,6 +179,27 @@ function DetailBody({
   const play = (intent: StartIntent) => {
     if (playId) onPlay({ contentId: playId, title: detail.title, intent });
   };
+
+  // --- AI translation of the descriptions ----------------------------------------------------------
+  const translation = useDescriptionTranslation({
+    itemId: target.itemId,
+    detail,
+    series,
+    seriesId,
+    shownSeason: shown,
+    seasons,
+    episodes,
+  });
+  const translateShown = translation.showPill && playId !== undefined;
+  // The pill goes while a run is under way; the focus never ends up on nothing.
+  useEffect(() => {
+    if (!translateShown && getCurrentFocusKey() === TRANSLATE_KEY) moveFocusTo(PLAY_KEY);
+  }, [translateShown]);
+  const translationLine = translation.itemRunning
+    ? 'translating'
+    : detail.machine_translated_fields?.includes('overview')
+      ? 'ai'
+      : null;
 
   // --- Season switch: a season shows only when its pill is activated (OK or a click) -------------
   const selectSeason = useCallback(
@@ -409,6 +433,7 @@ function DetailBody({
           <DetailHero
             detail={detail}
             faded={fade('hero') === 'true'}
+            translation={translationLine}
             onMore={() => setSynopsisOpen(true)}
             actions={
               playId ? (
@@ -420,6 +445,22 @@ function DetailBody({
                   onResume={() => play({ kind: 'resume' })}
                   onStartOver={() => play({ kind: 'beginning' })}
                   onFocused={inHero}
+                  extras={
+                    translateShown ? (
+                      <Button
+                        focusKey={TRANSLATE_KEY}
+                        className="detail-pill"
+                        onFocused={inHero}
+                        onClick={() => {
+                          // The pill leaves with the run: hand the focus over before it does.
+                          moveFocusTo(PLAY_KEY);
+                          translation.start();
+                        }}
+                      >
+                        {t('detail.translate')}
+                      </Button>
+                    ) : null
+                  }
                 />
               ) : null
             }

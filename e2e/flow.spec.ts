@@ -78,6 +78,12 @@ interface FakeOptions {
    * value; the theme capability is available and "Second Title" (m2) has a theme song.
    */
   themeMusic?: boolean;
+  /**
+   * The server offers viewer-triggered AI translation in this mode. "Second Title" (m2) then
+   * reports its description as pending in German until the translate request came in; afterwards
+   * it carries the translated text, marked as machine-translated.
+   */
+  translation?: 'auto' | 'button';
 }
 
 interface FakeProfile {
@@ -222,6 +228,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   ];
   const seen: Seen[] = [];
   let polls = 0;
+  let translated = false;
   const server = createServer((req: IncomingMessage, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const cors = {
@@ -248,7 +255,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           url.pathname === '/api/v2/auth/login' ||
           url.pathname === '/api/v2/profiles' ||
           url.pathname === '/api/v2/playback/start' ||
-          (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/'))
+          (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/')) ||
+          url.pathname.endsWith('/translate-description')
             ? requestBody
             : '',
       });
@@ -348,6 +356,11 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   in_progress_count: 1,
                 },
                 ...tallMovie,
+                ...(options.translation
+                  ? translated
+                    ? { overview: 'Der übersetzte Text.', machine_translated_fields: ['overview'] }
+                    : { pending_translation_language: 'de' }
+                  : {}),
                 ...(withExtras
                   ? {
                       extras: [
@@ -526,6 +539,17 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       switch (`${req.method} ${url.pathname}`) {
         case 'GET /api/v2/system/info':
           return send(200, { api_major: 2, server_version: 'fake' });
+        case 'GET /api/v2/capabilities/metadata-ai':
+          if (!options.translation) return send(404, { title: 'not found', status: 404 });
+          return send(200, {
+            state: 'available',
+            allowed: true,
+            on_view: options.translation,
+            revision: 'r1',
+          });
+        case 'POST /api/v2/catalog/items/m2/translate-description':
+          translated = true;
+          return send(202, { id: '1', content_id: 'm2', status: 'pending', target_language: 'de' });
         case 'GET /api/v2/settings/contract/capabilities':
           if (settingsUnknown) return send(404, { title: 'not found', status: 404 });
           return send(200, { state: 'available', allowed: true, manifest_revision: 40 });
@@ -2868,4 +2892,57 @@ test('detail page: with theme music off, no capability or grant request is made'
   const { seen } = await openSecondTitleDetail(page, false);
   await page.waitForTimeout(500);
   expect(seen.some((entry) => entry.path.includes('/themes/'))).toBe(false);
+});
+
+async function openSecondTitle(page: Page, origin: string) {
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+}
+
+test('detail page: AI translation in auto mode shows the running state, then the translated text marked as AI', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ translation: 'auto' });
+  await openSecondTitle(page, origin);
+  // The run starts by itself; the first re-read comes a second after the request.
+  await expect(page.getByTestId('detail-translation')).toHaveText('Wird übersetzt …');
+  await expect(page.getByTestId('detail-synopsis')).toHaveText('Der übersetzte Text.', {
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('detail-translation')).toHaveText('Von KI übersetzt');
+  const posts = seen.filter((e) => e.path === '/api/v2/catalog/items/m2/translate-description');
+  expect(posts).toHaveLength(1);
+  expect(JSON.parse(posts[0]!.body)).toEqual({ target_language: 'de' });
+  await expect(page.getByRole('button', { name: 'Beschreibung übersetzen' })).toHaveCount(0);
+});
+
+test('detail page: AI translation in button mode is started with the remote from the pill, and the focus ends on Play', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ translation: 'button' });
+  await openSecondTitle(page, origin);
+  const translate = page.getByRole('button', { name: 'Beschreibung übersetzen' });
+  await expect(translate).toBeVisible();
+  const play = page.getByRole('button', { name: /Fortsetzen/ });
+  await expect(play).toBeFocused();
+  expect(seen.some((e) => e.path.endsWith('/translate-description'))).toBe(false);
+  // Play, Start over, Translate description.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(translate).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(translate).toHaveCount(0);
+  await expect(play).toBeFocused();
+  await expect(page.getByTestId('detail-synopsis')).toHaveText('Der übersetzte Text.', {
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('detail-translation')).toHaveText('Von KI übersetzt');
+  await expect(play).toBeFocused();
 });

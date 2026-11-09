@@ -30,11 +30,21 @@ export function retryUnlessMissing(count: number, error: unknown): boolean {
   return count < 1;
 }
 
+/** The cache keys of the reads a translation run polls (kept here so the run and the page agree). */
+export const itemDetailKey = (baseUrl: string, profileId: string, itemId: string) =>
+  ['detail', 'item', baseUrl, profileId, itemId] as const;
+export const seasonEpisodesKey = (
+  baseUrl: string,
+  profileId: string,
+  seriesId: string,
+  season: number | undefined,
+) => ['detail', 'episodes', baseUrl, profileId, seriesId, season ?? -1] as const;
+
 export function useItemDetail(itemId: string) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   return useQuery({
-    queryKey: ['detail', 'item', baseUrl, profileId, itemId],
+    queryKey: itemDetailKey(baseUrl, profileId, itemId),
     // The page comes back after the player: the watch state must be read again, not reused.
     refetchOnMount: 'always',
     retry: retryUnlessMissing,
@@ -78,7 +88,7 @@ export function useSeasonEpisodes(seriesId: string, season: number | undefined) 
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   return useQuery({
-    queryKey: ['detail', 'episodes', baseUrl, profileId, seriesId, season ?? -1],
+    queryKey: seasonEpisodesKey(baseUrl, profileId, seriesId, season),
     enabled: season !== undefined,
     refetchOnMount: 'always',
     retry: retryUnlessMissing,
