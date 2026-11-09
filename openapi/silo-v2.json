@@ -3540,6 +3540,174 @@
         },
         "type": "object"
       },
+      "EffectiveSettingCollection": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "The page's items; empty, never null",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveSettingValue"
+            },
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo",
+            "description": "Cursor state; absent for bounded unpaginated collections"
+          },
+          "revision": {
+            "description": "The settings contract revision this server serves",
+            "examples": [
+              8
+            ],
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision",
+          "items"
+        ],
+        "type": "object"
+      },
+      "EffectiveSettingValue": {
+        "additionalProperties": false,
+        "properties": {
+          "client_family": {
+            "description": "The client family of the winning row",
+            "examples": [
+              "tv"
+            ],
+            "type": "string"
+          },
+          "constrained": {
+            "description": "Whether policy narrowed the authored value",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "constrained_by": {
+            "$ref": "#/components/schemas/SettingConstraint",
+            "description": "The policy input that narrowed it; absent when unconstrained"
+          },
+          "constraint_kind": {
+            "description": "How policy narrowed it; absent when unconstrained",
+            "examples": [
+              "ceiling"
+            ],
+            "type": "string"
+          },
+          "definition_revision": {
+            "description": "The contract revision that last changed this key's definition",
+            "examples": [
+              3
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "device_id": {
+            "description": "The device of the winning row",
+            "examples": [
+              "iphone-1"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "description": "The setting key",
+            "examples": [
+              "ui.theme"
+            ],
+            "type": "string"
+          },
+          "library_id": {
+            "description": "The library of the winning row",
+            "examples": [
+              "3"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "permitted_values": {
+            "description": "The values policy still allows; absent when unconstrained",
+            "items": {
+              "description": "A JSON value whose shape is the setting's value_schema in the settings contract."
+            },
+            "type": "array"
+          },
+          "profile_id": {
+            "description": "The profile of the winning row",
+            "examples": [
+              "1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "requested_value": {
+            "description": "The value the profile asked for before the constraint; absent when unconstrained"
+          },
+          "scope": {
+            "description": "The scope of the winning row, so a client can reset exactly that scope; absent for a default",
+            "examples": [
+              "profile"
+            ],
+            "type": "string"
+          },
+          "series_id": {
+            "description": "The series of the winning row",
+            "examples": [
+              "tv:12345"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "description": "The scope the value came from, or default for the contract default",
+            "examples": [
+              "profile"
+            ],
+            "type": "string"
+          },
+          "source_context": {
+            "$ref": "#/components/schemas/SettingSourceContext",
+            "description": "The identity of the winning stored row (the members scope through series_id, nested); absent for a default. Not the content context a batched resolve was asked for"
+          },
+          "stored_value": {
+            "description": "The authored value when policy narrowed it; absent otherwise"
+          },
+          "suggested_values": {
+            "description": "Advisory suggestions for an open setting; never a write allowlist",
+            "examples": [
+              [
+                "en",
+                "fr"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "description": "When the winning stored row was last written; absent for a default",
+            "examples": [
+              "2026-01-02T03:04:05.000Z"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value that applies after resolution and policy"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "source",
+          "definition_revision"
+        ],
+        "type": "object"
+      },
       "EmbeddedSubtitleV3": {
         "additionalProperties": false,
         "properties": {
@@ -4041,6 +4209,125 @@
         },
         "type": "object"
       },
+      "ImageCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "delivery": {
+            "enum": [
+              "server",
+              "direct"
+            ],
+            "type": "string"
+          },
+          "episode_parent_artwork": {
+            "description": "Episode cards may carry series_poster_url, series_backdrop_url and season_poster_url with their thumbhashes, sized by the poster and backdrop slots, on Home and library sections (including Continue Watching and Next Up), catalog browse and search, Watch Tonight, and episode detail (getCatalogItem). There is no season backdrop field; in Continue Watching and Next Up rows an episode card's backdrop_url is the season backdrop, else the series backdrop, else the episode still",
+            "type": "boolean"
+          },
+          "episode_still_provenance": {
+            "description": "Responses may carry poster_is_episode_still, backdrop_is_episode_still, and still_is_episode_still where the server knows whether an episode image is the episode's own still; an absent field means unknown",
+            "type": "boolean"
+          },
+          "extended_item_artwork": {
+            "description": "Movie and series detail (getCatalogItem) may carry banner_url, thumb_url, clearart_url, disc_url and backdrop_urls, and widths lists banner, thumb, clearart and disc",
+            "type": "boolean"
+          },
+          "original_max_width_px": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "param": {
+            "type": "string"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "season_list_artwork_param": {
+            "description": "Season-list boolean query parameter; false omits poster URLs and thumbhashes",
+            "type": "string"
+          },
+          "sizes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "slot_width_params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per-slot width query parameters, keyed by slot: poster (poster_url, series_poster_url, season_poster_url), backdrop (backdrop_url, backdrop_urls, series_backdrop_url), logo (logo_url), still (an episode's still_url), photo (cast and crew photo_url). Each takes the width in device pixels the client draws that field at and overrides param for it; the server returns the narrowest cached size at least that wide, else the original. Accepted wherever param is",
+            "type": "object"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "storage_backend": {
+            "enum": [
+              "local",
+              "s3"
+            ],
+            "type": "string"
+          },
+          "widths": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ImageSizeWidths"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "episode_still_provenance",
+          "episode_parent_artwork",
+          "extended_item_artwork",
+          "season_list_artwork_param",
+          "param",
+          "slot_width_params",
+          "sizes",
+          "widths",
+          "original_max_width_px",
+          "storage_backend",
+          "delivery",
+          "revision",
+          "state",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "ImageSizeWidths": {
+        "additionalProperties": false,
+        "properties": {
+          "large": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "medium": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "small": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "small",
+          "medium",
+          "large"
+        ],
+        "type": "object"
+      },
       "Impersonation": {
         "additionalProperties": false,
         "properties": {
@@ -4449,6 +4736,142 @@
           "kind",
           "start_seconds",
           "end_seconds"
+        ],
+        "type": "object"
+      },
+      "MetadataAICapability": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "on_view": {
+            "description": "Viewer-triggered translation mode: off, button (the detail page offers the action), or auto (the client requests the translation itself when it shows an item whose pending_translation_language is set)",
+            "examples": [
+              "button"
+            ],
+            "type": "string"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "on_view",
+          "revision",
+          "state",
+          "allowed"
+        ],
+        "type": "object"
+      },
+      "MetadataTranslationJob": {
+        "additionalProperties": false,
+        "properties": {
+          "content_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "description": "RFC 3339 instant in UTC with millisecond precision",
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "fields_done": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fields_total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "force": {
+            "description": "The job also replaces earlier AI text; provider and manual text is never replaced",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "Opaque identifier",
+            "examples": [
+              "42"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "include_children": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "progress": {
+            "description": "0 to 1",
+            "format": "double",
+            "type": "number"
+          },
+          "progress_message": {
+            "type": "string"
+          },
+          "source_language": {
+            "description": "Language of the base metadata (ISO 639-1); empty until the job reads it",
+            "pattern": "^(?:[a-z]{2,3}(?:-[0-9A-Za-z]{1,8})*|x(?:-[0-9A-Za-z]{1,8})+)?$",
+            "type": "string"
+          },
+          "status": {
+            "description": "pending, running, completed, failed, or canceled",
+            "type": "string"
+          },
+          "target_kind": {
+            "description": "item, season, episode, or library (a prewarm, whose fields_done and fields_total count items)",
+            "type": "string"
+          },
+          "target_language": {
+            "description": "BCP 47 tag of the language being filled in",
+            "pattern": "^(?:[a-z]{2,3}(?:-[0-9A-Za-z]{1,8})*|x(?:-[0-9A-Za-z]{1,8})+)$",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "RFC 3339 instant in UTC with millisecond precision",
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "target_kind",
+          "content_id",
+          "include_children",
+          "source_language",
+          "target_language",
+          "engine",
+          "model",
+          "status",
+          "progress",
+          "progress_message",
+          "fields_done",
+          "fields_total",
+          "force",
+          "created_at",
+          "updated_at"
         ],
         "type": "object"
       },
@@ -6510,6 +6933,301 @@
         ],
         "type": "object"
       },
+      "SettingConstraint": {
+        "additionalProperties": false,
+        "properties": {
+          "constraint": {
+            "description": "How the policy narrows the value; one of the settings contract's constraint kinds",
+            "examples": [
+              "ceiling"
+            ],
+            "type": "string"
+          },
+          "policy_input": {
+            "description": "The access-policy input the constraint reads",
+            "examples": [
+              "max_playback_quality"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_input",
+          "constraint"
+        ],
+        "type": "object"
+      },
+      "SettingSourceContext": {
+        "additionalProperties": false,
+        "properties": {
+          "client_family": {
+            "description": "The client family of the winning row",
+            "examples": [
+              "tv"
+            ],
+            "type": "string"
+          },
+          "device_id": {
+            "description": "The device of the winning row",
+            "examples": [
+              "iphone-1"
+            ],
+            "type": "string"
+          },
+          "library_id": {
+            "description": "The library of the winning row",
+            "examples": [
+              "3"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile_id": {
+            "description": "The profile of the winning row",
+            "examples": [
+              "1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "series_id": {
+            "description": "The series of the winning row",
+            "examples": [
+              "tv:12345"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SettingValue": {
+        "additionalProperties": false,
+        "properties": {
+          "client_family": {
+            "description": "The client family of a profile_client value",
+            "examples": [
+              "tv"
+            ],
+            "type": "string"
+          },
+          "device_id": {
+            "description": "The device of a profile_device value",
+            "examples": [
+              "iphone-1"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "description": "The setting key",
+            "examples": [
+              "ui.theme"
+            ],
+            "type": "string"
+          },
+          "library_id": {
+            "description": "The library of a profile_library value",
+            "examples": [
+              "3"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "profile_id": {
+            "description": "The profile the value belongs to; absent at account scope",
+            "examples": [
+              "1"
+            ],
+            "minLength": 1,
+            "type": "string"
+          },
+          "revision": {
+            "description": "The row's revision, incremented on every write",
+            "examples": [
+              4
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "scope": {
+            "description": "The scope the value is stored at: account, profile, profile_client, profile_device, profile_library or profile_series",
+            "examples": [
+              "profile"
+            ],
+            "type": "string"
+          },
+          "series_id": {
+            "description": "The series of a profile_series value",
+            "examples": [
+              "tv:12345"
+            ],
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "When the value was last written; absent when the store did not record it",
+            "examples": [
+              "2026-01-02T03:04:05.000Z"
+            ],
+            "format": "date-time",
+            "pattern": "^(?:[1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[2-9])-",
+            "patternDescription": "a non-zero RFC 3339 instant",
+            "type": "string"
+          },
+          "value": {
+            "description": "The stored value, normalized to the key's value_schema"
+          }
+        },
+        "required": [
+          "key",
+          "scope",
+          "value",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "SettingValueWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "description": "The value to store; validated and normalized against the key's value_schema"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "SettingsContractCapabilities": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "api_version": {
+            "description": "Settings protocol version; changes only for a change no revision rule can express",
+            "examples": [
+              1
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "client_families": {
+            "description": "Client families a profile_client scope may name",
+            "examples": [
+              [
+                "tv",
+                "mobile"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "contract_etag": {
+            "description": "Entity tag of the public manifest getSettingsContract serves",
+            "examples": [
+              "\"a1b2c3\""
+            ],
+            "type": "string"
+          },
+          "definition_count": {
+            "description": "Number of setting definitions in the manifest",
+            "examples": [
+              40
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "manifest_revision": {
+            "description": "Manifest revision clients filter definitions against",
+            "examples": [
+              12
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Setting scopes this server resolves",
+            "examples": [
+              [
+                "account",
+                "profile"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "supports_atomic_shortcuts": {
+            "description": "Whether navigation shortcut list mutations are atomic",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "supports_batched_effective": {
+            "description": "Whether the effective resolver accepts a batch of keys",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "supports_device_rename": {
+            "description": "Whether updateDevice can give a device a custom name, which listDevices returns as custom_name",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "supports_idempotent_writes": {
+            "description": "Whether repeating a value write converges on the same state",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "supports_overlay_images": {
+            "description": "Whether this server keeps a card overlay image library: getOverlayConfig lists it and card overlay documents may name its images",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "api_version",
+          "manifest_revision",
+          "contract_etag",
+          "definition_count",
+          "scopes",
+          "client_families",
+          "supports_batched_effective",
+          "supports_idempotent_writes",
+          "supports_atomic_shortcuts",
+          "supports_device_rename",
+          "supports_overlay_images",
+          "revision",
+          "state",
+          "allowed"
+        ],
+        "type": "object"
+      },
       "StartDeviceLoginInputBody": {
         "additionalProperties": false,
         "properties": {
@@ -6908,6 +7626,81 @@
         ],
         "type": "object"
       },
+      "ThemeAudioFormat": {
+        "additionalProperties": false,
+        "properties": {
+          "audio_codec": {
+            "description": "Codec, lower case, e.g. mp3, aac, alac, flac, vorbis, opus, pcm. Empty accepts any codec in the container",
+            "examples": [
+              "vorbis"
+            ],
+            "maxLength": 16,
+            "type": "string"
+          },
+          "container": {
+            "description": "File container, lower case, e.g. mp3, mp4, m4a, flac, ogg, opus, wav, aac",
+            "examples": [
+              "ogg"
+            ],
+            "maxLength": 16,
+            "type": "string"
+          }
+        },
+        "required": [
+          "container"
+        ],
+        "type": "object"
+      },
+      "ThemePlayback": {
+        "additionalProperties": false,
+        "properties": {
+          "content_type": {
+            "description": "Media type of the audio at url",
+            "examples": [
+              "audio/mpeg"
+            ],
+            "type": "string"
+          },
+          "delivery": {
+            "description": "converted is progressive AAC in audio-only MP4 with no length and no byte ranges; fetch a new grant to replay it",
+            "enum": [
+              "original",
+              "converted"
+            ],
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "description": "Short-lived credential; do not log, persist, or share. Relative to this server, or an absolute URL on a proxy node's origin",
+            "format": "uri-reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at",
+          "delivery",
+          "content_type"
+        ],
+        "type": "object"
+      },
+      "ThemePlaybackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_formats": {
+            "description": "Container and codec pairs the client decodes. The original is chosen when it matches; otherwise AAC in audio-only MP4 when an mp4 (or m4a) entry accepts aac or any codec. Unknown values are ignored",
+            "items": {
+              "$ref": "#/components/schemas/ThemeAudioFormat"
+            },
+            "maxItems": 32,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ThemeSong": {
         "additionalProperties": false,
         "properties": {
@@ -6949,6 +7742,59 @@
         "required": [
           "owner_id",
           "items"
+        ],
+        "type": "object"
+      },
+      "ThemeSongsCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "cluster_routing": {
+            "description": "Theme audio can be served by worker nodes",
+            "type": "boolean"
+          },
+          "delivery": {
+            "description": "routed: themes follow the playback routing policy, so audio may come from a proxy node on another origin; local_direct_play: audio comes from this API origin only",
+            "enum": [
+              "local_direct_play",
+              "routed"
+            ],
+            "type": "string"
+          },
+          "grant_lifetime_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "transcode": {
+            "description": "A theme the client cannot decode can be converted to AAC in audio-only MP4 when the client accepts it",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "delivery",
+          "transcode",
+          "cluster_routing",
+          "grant_lifetime_seconds",
+          "revision",
+          "state",
+          "allowed"
         ],
         "type": "object"
       },
@@ -7050,6 +7896,60 @@
         ],
         "type": "object"
       },
+      "TrailersCapability": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "description": "Whether the current principal may use the capability",
+            "type": "boolean"
+          },
+          "cooldown_seconds": {
+            "description": "Per-item window between viewer-triggered refreshes, in seconds; 0 when not configured",
+            "examples": [
+              86400
+            ],
+            "format": "int64",
+            "type": "integer"
+          },
+          "revision": {
+            "description": "Opaque revision of this document",
+            "type": "string"
+          },
+          "state": {
+            "description": "Support and configuration state, not health",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unsupported"
+            ],
+            "type": "string"
+          },
+          "statuses": {
+            "description": "Every value refreshCatalogItemTrailers may answer in status; empty when not configured",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supported_types": {
+            "description": "Item types the action applies to; empty when not configured",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "cooldown_seconds",
+          "statuses",
+          "supported_types",
+          "revision",
+          "state",
+          "allowed"
+        ],
+        "type": "object"
+      },
       "TransformationV3": {
         "additionalProperties": false,
         "properties": {
@@ -7074,6 +7974,25 @@
           "executor",
           "recipe_version",
           "validated_claims"
+        ],
+        "type": "object"
+      },
+      "TranslateDescription": {
+        "additionalProperties": false,
+        "properties": {
+          "target_language": {
+            "description": "BCP 47 tag of the wanted language, exactly as this profile's detail document reported it in pending_translation_language. Any other language, or a target with nothing left to translate, is refused with 422 at body.target_language.",
+            "examples": [
+              "de"
+            ],
+            "maxLength": 16,
+            "minLength": 1,
+            "pattern": "^[\\s\\v\\x85\\p{Z}]*(?:[A-Za-z]{2,3}(?:[-_][0-9A-Za-z]{1,8})*|[XxIi](?:[-_][0-9A-Za-z]{1,8})+)[\\s\\v\\x85\\p{Z}]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_language"
         ],
         "type": "object"
       },
@@ -9469,6 +10388,408 @@
         "x-silo-service-backed": true
       }
     },
+    "/api/v2/capabilities/metadata-ai": {
+      "get": {
+        "operationId": "getMetadataAICapability",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataAICapability"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Whether AI metadata translation is configured and how the viewer-facing on-view translation behaves.",
+        "tags": [
+          "catalog"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/capabilities/trailers": {
+      "get": {
+        "operationId": "getTrailersCapability",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailersCapability"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Whether this server offers the viewer-facing trailer fetch, its cooldown, and the statuses the action answers.",
+        "tags": [
+          "catalog"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
     "/api/v2/catalog": {
       "get": {
         "operationId": "listCatalogItems",
@@ -11313,6 +12634,421 @@
         "x-silo-service-backed": true
       }
     },
+    "/api/v2/catalog/items/{id}/themes/{theme_id}/playback": {
+      "post": {
+        "operationId": "createThemeSongPlayback",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "theme_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[1-9][0-9]*$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThemePlaybackRequest",
+                "description": "Absent authorizes the original audio, as for a client that does not describe what it decodes"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemePlayback"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Authorize theme audio for this account and profile, routed like video playback and converted to AAC when the client cannot decode the original.",
+        "tags": [
+          "catalog"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-retry-safety": "natural_idempotent",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/catalog/items/{id}/translate-description": {
+      "post": {
+        "operationId": "translateCatalogItemDescription",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Content id of the item, season, or episode",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Content id of the item, season, or episode",
+              "examples": [
+                "movie:heat-1995"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateDescription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataTranslationJob"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Queue a translation of the descriptions a page shows into the language its detail document reported missing: a movie's or series' own overview and tagline, a season's overview and its episodes' overviews, or one episode. Answers 202 with the job.",
+        "tags": [
+          "catalog"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-retry-safety": "coalescing",
+        "x-silo-service-backed": true
+      }
+    },
     "/api/v2/catalog/letters": {
       "post": {
         "operationId": "queryCatalogLetters",
@@ -12638,6 +14374,206 @@
         "x-silo-service-backed": true
       }
     },
+    "/api/v2/catalog/themes/capabilities": {
+      "get": {
+        "operationId": "getThemeSongsCapability",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThemeSongsCapability"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Local theme audio support and delivery limitations.",
+        "tags": [
+          "catalog"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true
+      }
+    },
     "/api/v2/home/capabilities": {
       "get": {
         "operationId": "getHomeCapabilities",
@@ -13599,6 +15535,205 @@
         ],
         "x-silo-class": "profile_scoped",
         "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/images/capabilities": {
+      "get": {
+        "operationId": "getImageCapabilities",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. When present, it must name a profile of the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageCapabilities"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Available image sizes and their pixel widths.",
+        "tags": [
+          "images"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true
       }
     },
     "/api/v2/library/{id}/collections": {
@@ -17182,6 +19317,1281 @@
           "recommendations"
         ],
         "x-silo-class": "profile_scoped",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/settings/contract": {
+      "get": {
+        "operationId": "getSettingsContract",
+        "parameters": [
+          {
+            "description": "Optional. When present, it must name a profile of the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "A settings manifest. Its members are fixed by the settings contract (contracts/settings/v1), not by this document.",
+                  "type": "object",
+                  "x-silo-extension-bag": "settings-manifest"
+                }
+              }
+            },
+            "description": "The public settings manifest, exactly the canonical bytes of contracts/settings/v1 with maintainer-only fields removed; the same document v1 /settings/manifest serves.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get the public settings manifest this server was built with.",
+        "tags": [
+          "settings"
+        ],
+        "x-silo-class": "profile_scoped"
+      }
+    },
+    "/api/v2/settings/contract/capabilities": {
+      "get": {
+        "operationId": "getSettingsContractCapabilities",
+        "parameters": [
+          {
+            "description": "Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed.",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. When present, it must name a profile of the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsContractCapabilities"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The representation named by If-None-Match is current; no body.",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Precondition Failed",
+            "headers": {
+              "ETag": {
+                "description": "The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get what this server's settings API supports.",
+        "tags": [
+          "settings"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-conditional": true,
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/settings/values/effective": {
+      "get": {
+        "operationId": "listEffectiveSettings",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The setting keys to resolve, one keys parameter per key; absent resolves every server-stored setting",
+            "explode": true,
+            "in": "query",
+            "name": "keys",
+            "schema": {
+              "description": "The setting keys to resolve, one keys parameter per key; absent resolves every server-stored setting",
+              "examples": [
+                [
+                  "ui.theme"
+                ]
+              ],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200,
+              "type": "array"
+            }
+          },
+          {
+            "description": "Another profile on the account to resolve for; only the household parent may name one",
+            "explode": false,
+            "in": "query",
+            "name": "profile_id",
+            "schema": {
+              "description": "Another profile on the account to resolve for; only the household parent may name one",
+              "examples": [
+                "2"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Another registered device of the profile to resolve for; absent means the declared device",
+            "explode": false,
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "description": "Another registered device of the profile to resolve for; absent means the declared device",
+              "examples": [
+                "tv-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Libraries whose profile_library values take part, one library_ids parameter per id",
+            "explode": true,
+            "in": "query",
+            "name": "library_ids",
+            "schema": {
+              "description": "Libraries whose profile_library values take part, one library_ids parameter per id",
+              "examples": [
+                [
+                  "3"
+                ]
+              ],
+              "items": {
+                "description": "Opaque identifier",
+                "examples": [
+                  "1"
+                ],
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 200,
+              "type": "array"
+            }
+          },
+          {
+            "description": "Series whose profile_series values take part, one series_ids parameter per id",
+            "explode": true,
+            "in": "query",
+            "name": "series_ids",
+            "schema": {
+              "description": "Series whose profile_series values take part, one series_ids parameter per id",
+              "examples": [
+                [
+                  "tv:12345"
+                ]
+              ],
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 200,
+              "type": "array"
+            }
+          },
+          {
+            "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
+            "in": "header",
+            "name": "X-Silo-Client-Family",
+            "schema": {
+              "description": "The client family whose profile_client values take part; optional, and absence skips the profile_client layer",
+              "enum": [
+                "tv",
+                "mobile",
+                "tablet",
+                "desktop",
+                "web"
+              ],
+              "examples": [
+                "tv"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client's stable device identifier; its profile_device values take part",
+            "in": "header",
+            "name": "X-Silo-Device-Id",
+            "schema": {
+              "description": "The client's stable device identifier; its profile_device values take part",
+              "examples": [
+                "iphone-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional display name recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Name",
+            "schema": {
+              "description": "Optional display name recorded on the device registry",
+              "examples": [
+                "Living room"
+              ],
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional platform recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Platform",
+            "schema": {
+              "description": "Optional platform recorded on the device registry",
+              "examples": [
+                "iOS"
+              ],
+              "maxLength": 40,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveSettingCollection"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Resolve the effective values of settings for the acting profile.",
+        "tags": [
+          "settings"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-service-backed": true
+      }
+    },
+    "/api/v2/settings/values/{key}": {
+      "delete": {
+        "operationId": "deleteSettingValue",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The setting key, as defined in the settings contract",
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "The setting key, as defined in the settings contract",
+              "examples": [
+                "ui.theme"
+              ],
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The scope the value is stored at",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "description": "The scope the value is stored at",
+              "enum": [
+                "account",
+                "profile",
+                "profile_client",
+                "profile_device",
+                "profile_library",
+                "profile_series"
+              ],
+              "examples": [
+                "profile"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Another profile on the account to act for; only the household parent may name one",
+            "explode": false,
+            "in": "query",
+            "name": "profile_id",
+            "schema": {
+              "description": "Another profile on the account to act for; only the household parent may name one",
+              "examples": [
+                "2"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Another registered device of the profile whose profile_device value to address; absent means the declared device",
+            "explode": false,
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "description": "Another registered device of the profile whose profile_device value to address; absent means the declared device",
+              "examples": [
+                "tv-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The library a profile_library value belongs to",
+            "explode": false,
+            "in": "query",
+            "name": "library_id",
+            "schema": {
+              "description": "The library a profile_library value belongs to",
+              "examples": [
+                "3"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The series a profile_series value belongs to",
+            "explode": false,
+            "in": "query",
+            "name": "series_id",
+            "schema": {
+              "description": "The series a profile_series value belongs to",
+              "examples": [
+                "tv:12345"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client family a profile_client value belongs to",
+            "in": "header",
+            "name": "X-Silo-Client-Family",
+            "schema": {
+              "description": "The client family a profile_client value belongs to",
+              "enum": [
+                "tv",
+                "mobile",
+                "tablet",
+                "desktop",
+                "web"
+              ],
+              "examples": [
+                "tv"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client's stable device identifier; the profile_device scope stores against it when device_id is absent",
+            "in": "header",
+            "name": "X-Silo-Device-Id",
+            "schema": {
+              "description": "The client's stable device identifier; the profile_device scope stores against it when device_id is absent",
+              "examples": [
+                "iphone-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional display name recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Name",
+            "schema": {
+              "description": "Optional display name recorded on the device registry",
+              "examples": [
+                "Living room"
+              ],
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional platform recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Platform",
+            "schema": {
+              "description": "Optional platform recorded on the device registry",
+              "examples": [
+                "iOS"
+              ],
+              "maxLength": 40,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Remove the explicit value of a setting at one scope so it inherits again.",
+        "tags": [
+          "settings"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-demo-restricted": true,
+        "x-silo-retry-safety": "natural_idempotent",
+        "x-silo-service-backed": true
+      },
+      "put": {
+        "operationId": "updateSettingValue",
+        "parameters": [
+          {
+            "description": "The household profile acting for this request; it must belong to the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "required": true,
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The setting key, as defined in the settings contract",
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "The setting key, as defined in the settings contract",
+              "examples": [
+                "ui.theme"
+              ],
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The scope the value is stored at",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "description": "The scope the value is stored at",
+              "enum": [
+                "account",
+                "profile",
+                "profile_client",
+                "profile_device",
+                "profile_library",
+                "profile_series"
+              ],
+              "examples": [
+                "profile"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Another profile on the account to act for; only the household parent may name one",
+            "explode": false,
+            "in": "query",
+            "name": "profile_id",
+            "schema": {
+              "description": "Another profile on the account to act for; only the household parent may name one",
+              "examples": [
+                "2"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Another registered device of the profile whose profile_device value to address; absent means the declared device",
+            "explode": false,
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "description": "Another registered device of the profile whose profile_device value to address; absent means the declared device",
+              "examples": [
+                "tv-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The library a profile_library value belongs to",
+            "explode": false,
+            "in": "query",
+            "name": "library_id",
+            "schema": {
+              "description": "The library a profile_library value belongs to",
+              "examples": [
+                "3"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The series a profile_series value belongs to",
+            "explode": false,
+            "in": "query",
+            "name": "series_id",
+            "schema": {
+              "description": "The series a profile_series value belongs to",
+              "examples": [
+                "tv:12345"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client family a profile_client value belongs to",
+            "in": "header",
+            "name": "X-Silo-Client-Family",
+            "schema": {
+              "description": "The client family a profile_client value belongs to",
+              "enum": [
+                "tv",
+                "mobile",
+                "tablet",
+                "desktop",
+                "web"
+              ],
+              "examples": [
+                "tv"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The client's stable device identifier; the profile_device scope stores against it when device_id is absent",
+            "in": "header",
+            "name": "X-Silo-Device-Id",
+            "schema": {
+              "description": "The client's stable device identifier; the profile_device scope stores against it when device_id is absent",
+              "examples": [
+                "iphone-1"
+              ],
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional display name recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Name",
+            "schema": {
+              "description": "Optional display name recorded on the device registry",
+              "examples": [
+                "Living room"
+              ],
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional platform recorded on the device registry",
+            "in": "header",
+            "name": "X-Silo-Device-Platform",
+            "schema": {
+              "description": "Optional platform recorded on the device registry",
+              "examples": [
+                "iOS"
+              ],
+              "maxLength": 40,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingValueWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingValue"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Replace the explicit value of a setting at one scope.",
+        "tags": [
+          "settings"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-demo-restricted": true,
+        "x-silo-retry-safety": "natural_idempotent",
         "x-silo-service-backed": true
       }
     },
