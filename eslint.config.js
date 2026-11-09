@@ -46,7 +46,7 @@ const NAV_IMPORT = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist/', 'out/', 'coverage/', 'src/api/generated/'] },
+  { ignores: ['dist/', 'dist-perf/', 'out/', 'coverage/', 'src/api/generated/'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,

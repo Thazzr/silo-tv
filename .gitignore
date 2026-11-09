@@ -36,3 +36,7 @@ CLAUDE.local.md
 ## MemPalace per-project files
 mempalace.yaml
 entities.json
+
+## Local profiling output (npm run perf:scroll)
+dist-perf/
+perf-results/

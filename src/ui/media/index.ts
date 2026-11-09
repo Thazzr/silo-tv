@@ -1,5 +1,8 @@
 // The media building blocks every browse screen uses: cards, rows and grids.
 export { Artwork } from './Artwork';
+export { CatalogRow } from './CatalogRow';
+export type { CatalogRowProps } from './CatalogRow';
+export { prefetchImage } from './prefetch';
 export { CardFrame, ExploreAllCard, LandscapeCard, PersonCard, PosterCard } from './Cards';
 export type { CardProps, FrameProps } from './Cards';
 export {
@@ -9,6 +12,8 @@ export {
   GRID_IMAGE_QUERY,
   IMAGE_WIDTHS,
   isLandscapeSection,
+  landscapeArt,
+  posterArt,
   ROW_IMAGE_QUERY,
   watchedFraction,
 } from './cardInfo';

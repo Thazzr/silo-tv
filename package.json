@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "perf:scroll": "vite build --mode perf && playwright test -c playwright.perf.config.ts",
     "verify": "pwsh -NoProfile -File tools/verify.ps1",
     "check:bundle": "node scripts/check-bundle.mjs",
     "icons": "node scripts/generate-icons.mjs",

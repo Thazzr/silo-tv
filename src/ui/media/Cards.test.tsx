@@ -39,20 +39,24 @@ describe('PosterCard', () => {
     expect(screen.getByRole('button', { name: /Heat/ })).toHaveClass('card-grid');
   });
 
-  it('resolves the image against the server and loads it lazily', () => {
+  it('resolves the image against the server and loads it eagerly (the row mounts only near cards)', () => {
     poster();
     const img = document.querySelector('img')!;
     expect(img.getAttribute('src')).toBe(`${BASE_URL}/img/heat.webp`);
-    expect(img.getAttribute('loading')).toBe('lazy');
+    // A lazy image waits until it is near the viewport, so a row that scrolls shows empty cards.
+    expect(img.getAttribute('loading')).toBeNull();
+    expect(img.getAttribute('decoding')).toBe('async');
   });
 
-  it('shows the thumbhash colour while the image loads, then the image', () => {
+  it('shows the thumbhash colour behind the image, which needs no re-render when it loads', () => {
     poster();
     const art = screen.getByTestId('art');
-    expect(art).toHaveAttribute('data-state', 'loading');
     expect(art.style.backgroundColor).toMatch(/^rgb\(/);
-    fireEvent.load(document.querySelector('img')!);
-    expect(art).toHaveAttribute('data-state', 'loaded');
+    const img = document.querySelector('img')!;
+    fireEvent.load(img);
+    // Same element, still there: the picture paints over the colour, nothing swaps or fades.
+    expect(document.querySelector('img')).toBe(img);
+    expect(screen.getByTestId('art')).toBe(art);
   });
 
   it('falls back to a title tile when the image fails', () => {

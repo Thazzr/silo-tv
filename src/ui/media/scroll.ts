@@ -68,3 +68,23 @@ export class FocusIndexMemory {
     this.indices.clear();
   }
 }
+
+/**
+ * The indices just past the mounted window on the side the focus is travelling to: their pictures
+ * are fetched ahead of time, so they come from the cache when the cards are mounted.
+ */
+export function prefetchIndices(
+  mounted: readonly number[],
+  count: number,
+  direction: 1 | -1,
+  ahead: number,
+): number[] {
+  const first = mounted[0];
+  const last = mounted[mounted.length - 1];
+  if (first === undefined || last === undefined) return [];
+  const from = direction === 1 ? last + 1 : Math.max(0, first - ahead);
+  const to = direction === 1 ? Math.min(count, last + 1 + ahead) : first;
+  const indices: number[] = [];
+  for (let i = from; i < to; i += 1) indices.push(i);
+  return indices;
+}

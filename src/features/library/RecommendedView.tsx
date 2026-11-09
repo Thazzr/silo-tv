@@ -1,14 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup } from '../../app/nav';
 import { useT } from '../../i18n';
 import {
+  CatalogRow,
   isLandscapeSection,
   keepAtOrigin,
-  LandscapeCard,
-  PosterCard,
-  Row,
   RowSkeleton,
   rowFocusKey,
   rowHeight,
@@ -113,6 +111,30 @@ export function RecommendedView({
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
   const offset = rows.slice(0, activeRow).reduce((sum, row) => sum + rowHeight(row.shape), 0);
 
+  // The rows are skipped while their props are the same, so what they get must not change when
+  // the focus moves: these handlers are stable and read the latest props when called.
+  const latest = useRef({ open, onExploreSection, library, kind });
+  useEffect(() => {
+    latest.current = { open, onExploreSection, library, kind };
+  });
+  const openCard = useCallback((item: CatalogItem) => latest.current.open(item), []);
+  const exploreRow = useCallback((rowId: string, title: string) => {
+    const now = latest.current;
+    now.onExploreSection({
+      id: rowId.slice(now.library.id.length + 1),
+      title,
+      library: { id: now.library.id, type: isMixed(now.library) ? now.kind : undefined },
+    });
+  }, []);
+  const memoryIndices = memory.indices;
+  const rowFocused = useCallback(
+    (index: number) => {
+      setFocusedRow(index);
+      memoryIndices.set(lastRowKey(latest.current.library, latest.current.kind), index);
+    },
+    [memoryIndices],
+  );
+
   if (query.isPending) {
     return (
       <div role="status" aria-label={t('library.loading')} data-testid="recommended-loading">
@@ -150,48 +172,25 @@ export function RecommendedView({
         style={{ transform: `translateY(${-offset}px)` }}
       >
         {rows.map((row, index) => (
-          <Row
+          <CatalogRow
             key={row.id}
             rowId={row.id}
             title={row.title}
             shape={row.shape}
             items={row.items}
-            getKey={(item) => item.content_id}
+            hasMore={row.hasMore}
             memory={memory.indices}
             mounted={
               index >= activeRow - MOUNT_ROWS_BEFORE && index <= activeRow + MOUNT_ROWS_AFTER
             }
-            onExploreAll={
-              row.hasMore
-                ? () =>
-                    onExploreSection({
-                      id: row.id.slice(library.id.length + 1),
-                      title: row.title,
-                      library: { id: library.id, type: isMixed(library) ? kind : undefined },
-                    })
-                : undefined
+            prefetchRow={
+              index === activeRow - MOUNT_ROWS_BEFORE - 1 ||
+              index === activeRow + MOUNT_ROWS_AFTER + 1
             }
-            onRowFocused={() => {
-              setFocusedRow(index);
-              memory.indices.set(lastRowKey(library, kind), index);
-            }}
-            renderCard={(item, ctx) =>
-              row.shape === 'landscape' ? (
-                <LandscapeCard
-                  item={item}
-                  focusKey={ctx.focusKey}
-                  onFocused={ctx.onFocused}
-                  onOpen={open}
-                />
-              ) : (
-                <PosterCard
-                  item={item}
-                  focusKey={ctx.focusKey}
-                  onFocused={ctx.onFocused}
-                  onOpen={open}
-                />
-              )
-            }
+            rowIndex={index}
+            onOpen={openCard}
+            onExploreAll={exploreRow}
+            onRowFocused={rowFocused}
           />
         ))}
       </FocusGroup>

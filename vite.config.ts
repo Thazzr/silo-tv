@@ -11,7 +11,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 // it. Silo sends no CORS headers, so a browser on localhost could not call it directly.
 const siloServer = process.env.SILO_SERVER;
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [react(), webosHtml()],
   define: {
@@ -22,6 +22,9 @@ export default defineConfig({
     : {},
   build: {
     target: 'chrome79',
+    // `vite build --mode perf` (npm run perf:scroll) is the local profiling build: readable
+    // function names for the CPU profile, written next to dist/ so it never replaces the bundle.
+    ...(mode === 'perf' ? { minify: false, outDir: 'dist-perf' } : {}),
     modulePreload: false,
     // One bundle is intentional on webOS (classic script, no dynamic chunks; check:bundle
     // enforces it), so the default 500 kB chunk warning does not apply.
@@ -44,4 +47,4 @@ export default defineConfig({
       'tests/**/*.test.{js,ts}',
     ],
   },
-});
+}));

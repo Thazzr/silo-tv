@@ -1,4 +1,6 @@
 dist/
+dist-perf/
+perf-results/
 out/
 coverage/
 package-lock.json

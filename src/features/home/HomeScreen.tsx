@@ -8,11 +8,9 @@ import { getPlatform } from '../../platform';
 import {
   cardFocusKey,
   cardTitle,
+  CatalogRow,
   isLandscapeSection,
   keepAtOrigin,
-  LandscapeCard,
-  PosterCard,
-  Row,
   RowSkeleton,
   ROW_ERROR_HEIGHT,
   rowFocusKey,
@@ -202,10 +200,27 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   // opens the card as usual, but on release: until then it could still be a long press.
   const rowsRef = useRef(rows);
   const openRef = useRef(open);
+  const exploreRef = useRef(onExploreSection);
   useEffect(() => {
     rowsRef.current = rows;
     openRef.current = open;
+    exploreRef.current = onExploreSection;
   });
+  // The rows are skipped while their props are the same, so what they get must not change when
+  // the focus moves: these handlers are stable and read the latest screen state when called.
+  const openCard = useCallback((item: CatalogItem) => openRef.current(item), []);
+  const exploreRow = useCallback(
+    (id: string, title: string) => exploreRef.current({ id, title }),
+    [],
+  );
+  const rowFocused = useCallback(
+    (index: number) => {
+      setFocusedRow(index);
+      rowMemory.set(LAST_ROW_KEY, index);
+    },
+    [rowMemory],
+  );
+  const cardFocused = useCallback((item: CatalogItem) => setFocusedItem(item), []);
   useEffect(() => {
     const press: { item: CatalogItem; fired: boolean; timer: ReturnType<typeof setTimeout> }[] = [];
     const findCard = (): PendingRemoval | null => {
@@ -326,10 +341,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
                       </p>
                       <Button
                         focusKey={`home-retry:${row.id}`}
-                        onFocused={() => {
-                          setFocusedRow(index);
-                          rowMemory.set(LAST_ROW_KEY, index);
-                        }}
+                        onFocused={() => rowFocused(index)}
                         onClick={() => void retry(row)}
                       >
                         {t('common.retry')}
@@ -339,42 +351,24 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
                 );
               }
               return (
-                <Row
+                <CatalogRow
                   key={row.id}
                   rowId={row.id}
                   title={row.title}
                   shape={row.shape}
                   items={row.items}
-                  getKey={(item) => item.content_id}
+                  hasMore={row.hasMore}
                   memory={rowMemory}
                   mounted={near}
-                  onExploreAll={
-                    row.hasMore
-                      ? () => onExploreSection({ id: row.id, title: row.title })
-                      : undefined
+                  prefetchRow={
+                    index === activeRow - MOUNT_ROWS_BEFORE - 1 ||
+                    index === activeRow + MOUNT_ROWS_AFTER + 1
                   }
-                  onRowFocused={() => {
-                    setFocusedRow(index);
-                    rowMemory.set(LAST_ROW_KEY, index);
-                  }}
-                  onCardFocused={(item) => setFocusedItem(item)}
-                  renderCard={(item, ctx) =>
-                    row.shape === 'landscape' ? (
-                      <LandscapeCard
-                        item={item}
-                        focusKey={ctx.focusKey}
-                        onFocused={ctx.onFocused}
-                        onOpen={open}
-                      />
-                    ) : (
-                      <PosterCard
-                        item={item}
-                        focusKey={ctx.focusKey}
-                        onFocused={ctx.onFocused}
-                        onOpen={open}
-                      />
-                    )
-                  }
+                  rowIndex={index}
+                  onOpen={openCard}
+                  onExploreAll={exploreRow}
+                  onRowFocused={rowFocused}
+                  onCardFocused={cardFocused}
                 />
               );
             })}

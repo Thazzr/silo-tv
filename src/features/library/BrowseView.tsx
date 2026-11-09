@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup, Focusable, setFocus } from '../../app/nav';
 import { useT } from '../../i18n';
-import { Grid, GridSkeleton, gridCardKey, PosterCard, type CatalogItem } from '../../ui/media';
+import {
+  Grid,
+  GridSkeleton,
+  gridCardKey,
+  posterArt,
+  PosterCard,
+  useMediaUrl,
+  type CatalogItem,
+} from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { useItemOpener } from '../home/useItemOpener';
 import { AlphabetRail } from './AlphabetRail';
@@ -58,6 +66,8 @@ export function BrowseView({
 }) {
   const t = useT();
   const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const mediaUrl = useMediaUrl();
+  const artUrl = useCallback((item: CatalogItem) => mediaUrl(posterArt(item).url), [mediaUrl]);
   const gridId = `browse:${library.id}:${kind}`;
   const [selection, setSelection] = useState<BrowseSelection>(() =>
     memory.browseOf(kind, library.id),
@@ -138,6 +148,7 @@ export function BrowseView({
         loadingMore={pages.isFetchingNextPage}
         onLoadMore={() => void pages.fetchNextPage()}
         memory={memory.indices}
+        artUrl={artUrl}
         renderCard={(item, ctx) => (
           <PosterCard
             grid

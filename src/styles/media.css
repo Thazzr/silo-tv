@@ -85,7 +85,10 @@
   opacity: 1;
 }
 
-/* The picture: the thumbhash colour shows while the image loads, then the image fades in. */
+/* The picture: the thumbhash colour shows while the image loads, then the image is painted over it
+   as soon as it is decoded. No opacity transition: on the TV every one starts and ends a compositor
+   layer for its picture. The images are not lazy: rows and grids mount only the cards near the
+   viewport, and pictures beyond that are fetched ahead (prefetch.ts). */
 .art {
   position: absolute;
   inset: 0;
@@ -101,12 +104,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  opacity: 0;
-  transition: opacity var(--transition);
-}
-
-.art[data-state='loaded'] .art-img {
-  opacity: 1;
 }
 
 .art-tile {

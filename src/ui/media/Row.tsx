@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FocusGroup } from '../../app/nav';
 import { ExploreAllCard } from './Cards';
 import {
@@ -10,11 +10,14 @@ import {
   STRIP_PADDING,
   type CardShape,
 } from './layout';
-import { FocusIndexMemory, mountedIndices, nextScrollIndex } from './scroll';
+import { prefetchImage } from './prefetch';
+import { FocusIndexMemory, mountedIndices, nextScrollIndex, prefetchIndices } from './scroll';
 
 /** Cards mounted left of the first visible one, and right of the last: room for a few key presses. */
 const MOUNT_BEFORE = 2;
 const MOUNT_AFTER = 4;
+/** Cards past the mounted window whose pictures are fetched ahead, on the side the focus travels to. */
+const PREFETCH_AHEAD = 6;
 
 export const rowFocusKey = (rowId: string) => `row:${rowId}`;
 export const cardFocusKey = (rowId: string, key: string) => `card:${rowId}:${key}`;
@@ -46,6 +49,10 @@ export interface RowProps<T> {
   onRowFocused?: () => void;
   /** Left inset of the title and the first card; 80 px on Home, 100 px on the detail pages. */
   inset?: number;
+  /** The picture URL a card of the row shows; the pictures just beyond the window are fetched ahead. Must be stable. */
+  artUrl?: (item: T) => string | null;
+  /** A row that is not mounted yet but is next in line: its first cards' pictures are fetched ahead. */
+  prefetchRow?: boolean;
 }
 
 /**
@@ -54,7 +61,7 @@ export interface RowProps<T> {
  * Each row remembers its own focused card (also when the screen is covered), so Down and Up land
  * on the card you left.
  */
-export function Row<T>({
+function RowImpl<T>({
   rowId,
   title,
   shape,
@@ -68,6 +75,8 @@ export function Row<T>({
   onExploreFocused,
   onRowFocused,
   inset = ROW_INSET,
+  artUrl,
+  prefetchRow = false,
 }: RowProps<T>) {
   const count = items.length + (onExploreAll ? 1 : 0);
   const visible = rowVisibleCards(shape);
@@ -79,15 +88,24 @@ export function Row<T>({
   // The count changes when cards load or are removed; keep the position valid.
   const effectiveScroll = nextScrollIndex(scroll, Math.min(focused, count - 1), visible, count);
 
-  const focus = useCallback(
-    (index: number, notify: () => void) => {
+  // The callbacks of a card must not change when the focus moves, or no card could be skipped
+  // while the row re-renders: the latest ones are read when the focus arrives.
+  const latest = useRef({ items, onCardFocused, onExploreFocused, onRowFocused });
+  useEffect(() => {
+    latest.current = { items, onCardFocused, onExploreFocused, onRowFocused };
+  });
+  const focusIndex = useCallback(
+    (index: number) => {
       setFocused(index);
       setScroll((current) => nextScrollIndex(current, index, visible, count));
       memory?.set(rowId, index);
-      onRowFocused?.();
-      notify();
+      const now = latest.current;
+      now.onRowFocused?.();
+      const item = now.items[index];
+      if (item === undefined) now.onExploreFocused?.();
+      else now.onCardFocused?.(item, index);
     },
-    [count, memory, onRowFocused, rowId, visible],
+    [count, memory, rowId, visible],
   );
 
   const focusedItem = items[focused];
@@ -96,6 +114,27 @@ export function Row<T>({
   const indices = mounted
     ? mountedIndices(effectiveScroll, focused, visible, count, MOUNT_BEFORE, MOUNT_AFTER)
     : [];
+
+  // Pictures ahead of the window, on the side the focus travels to; for a row that is not mounted
+  // yet, the pictures it will show first.
+  const firstMounted = indices[0];
+  const lastMounted = indices[indices.length - 1];
+  const lastFocused = useRef(focused);
+  useEffect(() => {
+    if (!artUrl) return;
+    const direction = focused < lastFocused.current ? -1 : 1;
+    lastFocused.current = focused;
+    let ahead: number[] = [];
+    if (firstMounted !== undefined && lastMounted !== undefined) {
+      ahead = prefetchIndices([firstMounted, lastMounted], count, direction, PREFETCH_AHEAD);
+    } else if (!mounted && prefetchRow) {
+      ahead = Array.from({ length: Math.min(count, visible + MOUNT_AFTER) }, (_, i) => i);
+    }
+    for (const index of ahead) {
+      const item = items[index];
+      if (item !== undefined) prefetchImage(artUrl(item));
+    }
+  }, [artUrl, count, firstMounted, focused, items, lastMounted, mounted, prefetchRow, visible]);
 
   return (
     <section
@@ -125,26 +164,20 @@ export function Row<T>({
           >
             {indices.map((index) => {
               const item = items[index];
-              const exploring = item === undefined;
-              const key = exploring ? EXPLORE_KEY : getKey(item);
-              const focusKey = cardFocusKey(rowId, key);
+              const key = item === undefined ? EXPLORE_KEY : getKey(item);
               return (
                 <div className="row-slot" key={key} style={{ left: index * step }}>
-                  {exploring ? (
-                    <ExploreAllCard
-                      shape={shape}
-                      rowTitle={title}
-                      focusKey={focusKey}
-                      onOpen={() => onExploreAll?.()}
-                      onFocused={() => focus(index, () => onExploreFocused?.())}
-                    />
-                  ) : (
-                    renderCard(item, {
-                      focusKey,
-                      index,
-                      onFocused: () => focus(index, () => onCardFocused?.(item, index)),
-                    })
-                  )}
+                  <RowCard
+                    rowId={rowId}
+                    title={title}
+                    shape={shape}
+                    item={item}
+                    itemKey={key}
+                    index={index}
+                    renderCard={renderCard}
+                    focusIndex={focusIndex}
+                    onExploreAll={onExploreAll}
+                  />
                 </div>
               );
             })}
@@ -156,3 +189,51 @@ export function Row<T>({
     </section>
   );
 }
+
+interface RowCardProps<T> {
+  rowId: string;
+  title: string;
+  shape: CardShape;
+  item: T | undefined;
+  itemKey: string;
+  index: number;
+  renderCard: (item: T, context: CardContext) => ReactNode;
+  focusIndex: (index: number) => void;
+  onExploreAll?: () => void;
+}
+
+const noop = () => undefined;
+
+// One card of the row. It is skipped while the row re-renders for a focus move, as long as the
+// row's own props are the same: the focus ring is CSS (:focus), so a card has nothing to redraw.
+function RowCardImpl<T>({
+  rowId,
+  title,
+  shape,
+  item,
+  itemKey,
+  index,
+  renderCard,
+  focusIndex,
+  onExploreAll,
+}: RowCardProps<T>) {
+  const onFocused = useCallback(() => focusIndex(index), [focusIndex, index]);
+  const focusKey = cardFocusKey(rowId, itemKey);
+  if (item === undefined) {
+    return (
+      <ExploreAllCard
+        shape={shape}
+        rowTitle={title}
+        focusKey={focusKey}
+        onOpen={onExploreAll ?? noop}
+        onFocused={onFocused}
+      />
+    );
+  }
+  return <>{renderCard(item, { focusKey, index, onFocused })}</>;
+}
+const RowCard = memo(RowCardImpl) as typeof RowCardImpl;
+
+// A row re-renders when its own focus moves, not when a screen above it re-renders for another
+// row's focus (the callers hand it stable props).
+export const Row = memo(RowImpl) as typeof RowImpl;

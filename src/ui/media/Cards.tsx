@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Focusable } from '../../app/nav';
 import { useT } from '../../i18n';
 import { Artwork } from './Artwork';
@@ -84,8 +84,11 @@ function Caption({ item }: { item: CatalogItem }) {
   );
 }
 
-/** A poster card: 176x264 in rows, 260x390 in browse grids. */
-export function PosterCard({
+/**
+ * A poster card: 176x264 in rows, 260x390 in browse grids. The cards are memoised: a focus move
+ * redraws nothing in a card (the ring is CSS), so rows and grids skip the ones that did not change.
+ */
+export const PosterCard = memo(function PosterCard({
   item,
   focusKey,
   onOpen,
@@ -106,13 +109,19 @@ export function PosterCard({
       caption={<Caption item={item} />}
     />
   );
-}
+});
 
 /**
  * A landscape card, 360x200, for Continue Watching, Next Up and other rows that are in progress:
  * a progress bar along the bottom edge shows how far the profile got.
  */
-export function LandscapeCard({ item, focusKey, onOpen, onFocused, autoFocus }: CardProps) {
+export const LandscapeCard = memo(function LandscapeCard({
+  item,
+  focusKey,
+  onOpen,
+  onFocused,
+  autoFocus,
+}: CardProps) {
   const url = useMediaUrl();
   const art = landscapeArt(item);
   const fraction = watchedFraction(item);
@@ -140,10 +149,10 @@ export function LandscapeCard({ item, focusKey, onOpen, onFocused, autoFocus }: 
       caption={<Caption item={item} />}
     />
   );
-}
+});
 
 /** The last card of a row: opens the row's full grid. Same shape as its neighbours, no artwork. */
-export function ExploreAllCard({
+export const ExploreAllCard = memo(function ExploreAllCard({
   shape,
   rowTitle,
   focusKey,
@@ -183,13 +192,13 @@ export function ExploreAllCard({
       }
     />
   );
-}
+});
 
 /**
  * A person of the cast: the portrait on a poster-sized card with the name over the character.
  * Without a photo (or when it fails) the card shows the initials on a tile.
  */
-export function PersonCard({
+export const PersonCard = memo(function PersonCard({
   name,
   role,
   photo,
@@ -229,4 +238,4 @@ export function PersonCard({
       }
     />
   );
-}
+});

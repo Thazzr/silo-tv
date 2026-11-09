@@ -10,24 +10,16 @@ function ArtworkImage({
   placeholder: string | null;
   title: string;
 }) {
-  const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading');
-  if (state === 'failed') return <TitleTile title={title} />;
+  // Only a failure is state: a picture that loads needs no re-render (it paints over the colour).
+  const [failed, setFailed] = useState(false);
+  if (failed) return <TitleTile title={title} />;
   return (
     <span
       className="art"
       data-testid="art"
-      data-state={state}
       style={placeholder ? { backgroundColor: placeholder } : undefined}
     >
-      <img
-        className="art-img"
-        src={src}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        onLoad={() => setState('loaded')}
-        onError={() => setState('failed')}
-      />
+      <img className="art-img" src={src} alt="" decoding="async" onError={() => setFailed(true)} />
     </span>
   );
 }
@@ -43,8 +35,10 @@ function TitleTile({ title }: { title: string }) {
 
 /**
  * A card's picture. While the image loads the card shows the picture's average colour (from its
- * ThumbHash) and the image fades in over it; without an image, or when it fails, the card shows its
- * title on a tile so it never stays blank. The failure is remembered per URL: a new URL tries again.
+ * ThumbHash) and the image paints over it as soon as it is decoded. There is no fade: a per-picture
+ * opacity transition promotes and demotes a compositor layer for every card on the TV. Without an
+ * image, or when it fails, the card shows its title on a tile so it never stays blank. The failure
+ * is remembered per URL: a new URL tries again.
  */
 export function Artwork({
   src,
