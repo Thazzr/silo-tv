@@ -1515,7 +1515,7 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
-  // The page has scrolled (300 ms) when the season pills sit on the safe line.
+  // The page has scrolled (400 ms) when the season pills sit on the safe line.
   const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
   await expect.poll(async () => Math.round((await seasonTab.boundingBox())!.y)).toBe(54);
   const pills = await page
@@ -1562,12 +1562,12 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
   expect((await box('.detail-hero'))!.height).toBeGreaterThan(760);
   expect(await opacity('.detail-text')).toBe('1');
 
-  // (e) The page scrolls over 300 ms, not the 150 ms of a focus effect.
+  // (e) The page scrolls over 400 ms, not the 150 ms of a focus effect.
   expect(
     await page
       .locator('.detail-page')
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).transitionDuration),
-  ).toBe('0.3s');
+  ).toBe('0.4s');
 
   // (b) Down to the season pills: they end on the top safe line, and the hero text is gone.
   await page.keyboard.press('ArrowDown');

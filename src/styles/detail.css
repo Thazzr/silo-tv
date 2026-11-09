@@ -13,6 +13,8 @@
 .detail-page {
   position: relative;
   transition: transform var(--scroll-transition);
+  /* Its own compositor layer: the TV moves it without repainting. */
+  will-change: transform;
 }
 
 /* At least HERO_HEIGHT; the text column is in the flow, so a tall one (logo, four lines of

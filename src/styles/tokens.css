@@ -45,5 +45,5 @@
   /* Motion: transform and opacity only. */
   --transition: 150ms ease-out;
   /* The detail page scrolling from block to block (transform), with the fades that go with it. */
-  --scroll-transition: 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --scroll-transition: 400ms cubic-bezier(0.33, 1, 0.68, 1);
 }
