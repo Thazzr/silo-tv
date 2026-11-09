@@ -18,5 +18,6 @@ export {
   setFocus,
 } from './init';
 export type { NavigationOptions } from './init';
+export { suspendWheel, useWheelSuspended } from './wheel';
 export { Navigator, useBackHandler, useNavigator } from './Navigator';
 export type { NavApi, NavigatorProps } from './Navigator';

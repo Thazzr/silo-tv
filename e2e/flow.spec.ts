@@ -2304,3 +2304,127 @@ test('search: a query wider than the field keeps its end and the caret in view',
     })
     .toBe(true);
 });
+
+// The Magic Remote wheel presses Up and Down (one step per 100 px, at most one per 120 ms). The
+// pointer is wherever it is; the wheel works on the window, not on an element.
+const WHEEL_GAP_MS = 200;
+
+test('Magic Remote wheel: on Home it moves the focus between the rows, down and up', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({});
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+
+  await page.mouse.wheel(0, 100);
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await page.waitForTimeout(WHEEL_GAP_MS);
+  await page.mouse.wheel(0, -100);
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+});
+
+test('Magic Remote wheel: a long biography dialog scrolls its text', async ({ page }) => {
+  const { origin } = await startFakeSilo({ tall: true, longBio: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');
+  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const scroll = page.getByTestId('synopsis-scroll');
+  await expect(scroll).toHaveAttribute('data-more-below', 'true');
+  await expect(scroll).toHaveAttribute('data-more-above', 'false');
+
+  await page.mouse.wheel(0, 100);
+  await expect(scroll).toHaveAttribute('data-more-above', 'true');
+  await page.waitForTimeout(WHEEL_GAP_MS);
+  await page.mouse.wheel(0, -100);
+  await expect(scroll).toHaveAttribute('data-more-above', 'false');
+  // The focus stayed on Close; the wheel only moved the text.
+  await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();
+});
+
+test('Magic Remote wheel: in a long filter list it moves the focus and the list follows', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ seriesLibrary: true, genres: 40, rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByTestId('card-title').first()).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Action' })).toBeFocused();
+  for (let i = 0; i < 41; i += 1) {
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(130);
+  }
+  const item = page.getByRole('menuitemcheckbox', { name: 'Genre 40', exact: true });
+  await expect(item).toBeFocused();
+  await expect
+    .poll(async () => {
+      const box = (await item.boundingBox())!;
+      const list = (await page.locator('.lib-panel-list').boundingBox())!;
+      return box.y >= list.y - 1 && box.y + box.height <= list.y + list.height + 1;
+    })
+    .toBe(true);
+  expect(await page.locator('.lib-panel-list').evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});
+
+test('Magic Remote wheel: on the settings screen in a small window nothing scrolls natively', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+  await page.setViewportSize({ width: 1920, height: 300 });
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
+  await page.evaluate('window.scrollTo(0, 0)');
+  // The screen has one row of choices: Up and Down have nowhere to go, so the wheel must not
+  // fall back to scrolling the page by itself.
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(WHEEL_GAP_MS);
+  await page.mouse.wheel(0, 400);
+  await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
+  expect(await page.evaluate<number>('window.scrollY')).toBe(0);
+});

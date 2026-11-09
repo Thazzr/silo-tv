@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Focusable } from '../app/nav';
+import { Focusable, useWheelSuspended } from '../app/nav';
 import { useT } from '../i18n';
 import { getPlatform, type RemoteKey } from '../platform';
 import {
@@ -12,7 +12,7 @@ import {
 import { runProbe, type ProbeReport } from './runProbe';
 
 const MAX_ENTRIES = 10;
-// The page is taller than the TV screen and the remote has no scroll wheel.
+// The page is taller than the TV screen; Up and Down scroll it (the wheel scrolls it natively).
 const SCROLL_STEP = 240;
 
 interface KeyEntry {
@@ -24,6 +24,7 @@ interface KeyEntry {
 
 export function ProbeScreen({ probe = runProbe }: { probe?: () => Promise<ProbeReport> }) {
   const t = useT();
+  useWheelSuspended();
   const [report, setReport] = useState<ProbeReport | null>(null);
   const [running, setRunning] = useState(false);
   const [entries, setEntries] = useState<KeyEntry[]>([]);

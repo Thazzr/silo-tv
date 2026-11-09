@@ -106,6 +106,13 @@ describe('PlayerScreen playback', () => {
     expect(document.body.textContent).not.toContain('signed-1');
   });
 
+  it('leaves the wheel alone: the player has its own keys', async () => {
+    await playing();
+    const wheel = new WheelEvent('wheel', { deltaY: 100, cancelable: true });
+    window.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
+  });
+
   it('toggles play and pause with OK and with the Play/Pause key', async () => {
     const { video, state } = await playing();
     key(OK);

@@ -6,7 +6,7 @@ import {
   useState,
   type SyntheticEvent,
 } from 'react';
-import { useBackHandler } from '../app/nav';
+import { useBackHandler, useWheelSuspended } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
@@ -42,6 +42,8 @@ export interface PlayerScreenProps {
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
 export function PlayerScreen({ contentId, title, intent, onExit }: PlayerScreenProps) {
+  // The player has its own keys; the wheel would only press Up and Down there.
+  useWheelSuspended();
   const t = useT();
   const { session: auth } = useSilo();
   const playback = usePlaybackSession(contentId, intent);

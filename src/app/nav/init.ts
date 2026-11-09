@@ -9,6 +9,7 @@ import {
   type SpatialNavigationServiceOptions,
 } from '@noriginmedia/norigin-spatial-navigation';
 import { NavAdapter } from './adapter';
+import { startWheelNavigation } from './wheel';
 
 /** Options of the service (key handling, layout measuring); tests pass a fake layout. */
 export type NavigationOptions = Partial<SpatialNavigationServiceOptions>;
@@ -57,7 +58,9 @@ export function initNavigation(options: NavigationOptions = {}): void {
   });
   setKeyMap(NAV_KEYS);
   window.addEventListener('keydown', guardTextField, true);
+  const stopWheel = startWheelNavigation();
   teardown = () => {
+    stopWheel();
     window.removeEventListener('keydown', guardTextField, true);
     destroy();
   };

@@ -51,7 +51,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages
 - 🟨 Long synopses and biographies scroll in the text dialog
 - 🟨 Smooth scrolling on TV hardware: memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
-- ⬜ The Magic Remote wheel scrolls lists (LG recommendation)
+- 🟨 The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe
 - ⬜ Trailers & More: local trailers and extras; YouTube trailers through the TV's YouTube app
 - ⬜ Theme music on detail pages when the profile turns it on
 - ⬜ Title art (logo instead of text) following the profile setting

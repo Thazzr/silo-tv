@@ -17,6 +17,16 @@ function renderScreen(probe: () => Promise<ProbeReport>, lang: 'en' | 'de' = 'en
 
 const press = (keyCode: number, key = '') => fireEvent.keyDown(window, { key, keyCode });
 
+describe('ProbeScreen wheel', () => {
+  it('leaves the wheel to native scrolling', async () => {
+    renderScreen(() => Promise.resolve(makeReport()));
+    await screen.findByText('https://silo.example.test');
+    const wheel = new WheelEvent('wheel', { deltaY: 100, cancelable: true });
+    window.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
+  });
+});
+
 describe('ProbeScreen sections', () => {
   it('renders header, server, display, media, device and keys sections', async () => {
     renderScreen(() => Promise.resolve(makeReport()));
