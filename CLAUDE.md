@@ -7,7 +7,7 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
 - **Public project:** The repository is public, and the app should be as usable for every Silo user as Silo itself. It works with any Silo server.
   - **Nothing user-specific goes into the repository:** no server addresses, account names, e-mail addresses or tokens, neither in files nor in commit messages.
   - Such details live in the git-ignored `CLAUDE.local.md`.
-  - Commits use the GitHub noreply address that is set in this repository's local git config.
+  - Commits use the name `Thazzr` and the GitHub noreply address, both set in this repository's local git config (user decision 2026-11-09; the history was rewritten to that name before it spread).
 - **Final goal: publication in the LG Content Store** (user decision 2026-11-08). Every decision is measured against LG's app QA (see *LG Content Store rules*), not just against Developer Mode.
 - **Next platform: Samsung Tizen** (user decision 2026-11-08, Phase 6, after the LG release). From Phase 1 on, platform-specific code lives only behind the `Platform` adapter in `src/platform/` (webOS and browser implementations now, Tizen later). Screens, features, the API layer and the playback protocol logic never call webOS globals, Luna or `ares` specifics directly.
 - **License:** MPL-2.0 (user decision 2026-11-09, before anything was published; it was AGPL-3.0-or-later until then). File-level copyleft: changed files stay open, and it works in app stores without a contributor licence agreement. The Exhibit A notice stands once in `README.md` next to `LICENSE`, not in every file. New dependencies must be compatible with MPL-2.0 (permissive licences and MPL are; GPL-only code is not).

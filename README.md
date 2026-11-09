@@ -1,24 +1,78 @@
 # silo-tv
 
-A native TV client for the self-hosted media server [Silo](https://github.com/Silo-Server/silo-server): first for LG TVs running webOS (model year 2021 and later, webOS 6+), later also for Samsung TVs running Tizen.
+**A native TV app for [Silo](https://github.com/Silo-Server/silo-server) on LG webOS TVs**, made for the remote control and the couch.
 
-> Not an official Silo project. "Silo" is a trademark of Silo Media L.L.C.; this app is an independent client for Silo. `silo-tv` is a working title; the app name will be chosen before the first store release.
+[![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
+![Platform: LG webOS 6+](https://img.shields.io/badge/platform-LG%20webOS%206%2B-a50034.svg)
+![Status: in development](https://img.shields.io/badge/status-in%20development-orange.svg)
+
+![The Home screen: a hero with the title's logo and the Trending row below it](docs/screenshots/home.webp)
+
+> Not an official Silo project. "Silo" is a trademark of Silo Media L.L.C.; this app is an independent client for Silo. `silo-tv` is a working title; the app gets a name of its own before the first store release.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![A series detail page with title art, rating, synopsis, cast line and season pills](docs/screenshots/series-detail.webp) | ![The episode row of a season and the Trailers & More row below it](docs/screenshots/episodes.webp) |
+| **Detail page**: title art, ratings, seasons | **Episodes** and Trailers & More |
+| ![Search with the on-screen keyboard and results while typing](docs/screenshots/search.webp) | ![The browse grid with sort, filter and the letter rail](docs/screenshots/browse.webp) |
+| **Search** with an on-screen keyboard for the remote | **Browse** with sort, filters and a letter rail |
+
+<sub>Taken at 1920×1080 against a test server. Posters, stills and logos belong to their rights holders and are not covered by this project's license.</sub>
+
+## What it does
+
+It works with any Silo server (API v2). You enter the server's address on the TV; nothing is built in.
+
+- **Sign-in from the couch:** a code or QR code you confirm on your phone, or a password with the on-screen keyboard. Several servers, each with its own sign-in.
+- **Profiles:** a picker with avatars, PIN-protected and kids profiles, creating a profile, and a choice of how the app picks the profile at launch.
+- **Home:** the rows your server's home page is built from (Continue Watching, Next Up, Recently Added and the rest), with a hero.
+- **Movies and Series:** recommended rows, collections, and a browse grid with sort, filters (genre, decade, content rating, watch state) and a letter rail.
+- **Detail pages:** title art, ratings, quality badges, seasons and episodes, cast, similar titles, box sets, and person pages with filmography.
+- **Search** while you type, with box sets, people, movies, series and episodes. The keyboard has ä, ö, ü and ß.
+- **Playback** through Silo's playback protocol v3, with direct play and HLS, resume and start over. Continue Watching resumes directly, with an optional rewind on resume.
+- **Extras:**
+  - Trailers & More: local extras play in the app, YouTube trailers open in the TV's YouTube app.
+  - Theme music, spoiler protection for unwatched episodes, and AI translation of descriptions, each when your profile and your server turn it on.
+- **Made for the remote:** arrow keys, OK and Back everywhere, the Magic Remote pointer and wheel, and focus that comes back to where you were.
+- **Your server's look:** its name, logo, sign-in background and accent colour.
+- **German and English**, following the TV's language.
+
+Next up is the full player: audio and subtitle selection, skip intro and credits, trickplay and Up Next. After that come watchlist, For You, calendar and requests. The whole plan is in [`docs/roadmap.md`](docs/roadmap.md), the look in [`docs/design.md`](docs/design.md).
 
 ## Status
 
-Phase 0 (feasibility) and Phase 1 (foundation: servers, sign-in, profiles, app shell, TV navigation) are built and run on the first test TV. Phase 2 (browse) is built: Home, the Movies and Series tabs, the detail pages and resuming are checked on the TV; search, person pages, box sets, the content-rating and watch-state filters, title art, spoiler protection, Trailers & More, theme music and AI translation wait for the device test that closes the phase. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md); the look: [`docs/design.md`](docs/design.md).
+Early development; there is no release yet.
 
-## Tech stack
+- Phase 0 (feasibility) and Phase 1 (servers, sign-in, profiles, app shell, TV navigation) run on the first test TV.
+- Phase 2 (browse) is built and tested in the browser. Home, the library tabs, the detail pages and resuming are already checked on the TV. The remaining features of the phase wait for the device test that closes it.
 
-| Area | Choice |
-|---|---|
-| Language | TypeScript |
-| UI | React with Vite, built for Chromium 79 (webOS 6) as one classic script |
-| Data | TanStack Query; API client generated from Silo's OpenAPI (`/api/v2`) |
-| Playback | the native `<video>` element with the TV's media pipeline; Silo playback protocol v3 |
-| Tests | Vitest, React Testing Library, MSW, Playwright |
-| TV tooling | `@webos-tools/cli` (`ares-package`, `ares-install`, `ares-launch`, `ares-inspect`) |
-| Process tooling | PowerShell (`tools/`), git-cliff for the changelog |
+The goal is a listing in the LG Content Store. Until then, the app can be installed on a TV in Developer Mode.
+
+**Needs:** an LG TV from 2021 or later (webOS 6 and newer) and a Silo server.
+
+## Try it on your TV
+
+The app is not in the LG Content Store yet. To install it from source:
+
+1. Install LG's **Developer Mode** app on the TV, sign in with an LG developer account and turn Developer Mode on. The Developer Mode session expires unless you extend it in that app.
+2. On your computer, install Node.js 24 and PowerShell 7, then run `npm ci` in this repository.
+3. Connect the TV once. The passphrase is shown in the Developer Mode app.
+
+   ```bash
+   npx ares-setup-device --add tv --info "{'host':'<TV-IP>','port':'9922','username':'prisoner'}"
+   ```
+
+   ```bash
+   npx ares-novacom --device tv --getkey
+   ```
+
+4. Build, package, install and launch:
+
+   ```bash
+   npm run tv:deploy
+   ```
 
 ## Development
 
@@ -26,6 +80,9 @@ Requirements: Node.js 24, PowerShell 7 (`pwsh`), and for the TV an LG TV in Deve
 
 ```bash
 npm ci
+```
+
+```bash
 npx playwright install chromium --only-shell
 ```
 
@@ -43,21 +100,40 @@ npx playwright install chromium --only-shell
 | `npm run openapi:update` | refresh the slim Silo API spec from `SILO_SERVER` (no address is stored) |
 | `npm run generate:api` | regenerate the typed API client from `openapi/silo-v2.json` |
 
-`tv:deploy` passes launch parameters from the environment: `SILO_SERVER` pre-fills the server, `PROBE=1` opens the diagnostics probe instead of the app, `TRANSPORT=direct|service` chooses how the app talks to Silo (default `direct`). In the browser the same parameters work as query strings, e.g. `?probe` or `?server=…`.
+`tv:deploy` passes launch parameters from the environment:
 
-For browser development against a real server, start `npm run dev` with `SILO_SERVER` set: the dev server proxies `/api` to it, because Silo sends no CORS headers.
+- `SILO_SERVER` pre-fills the server.
+- `PROBE=1` opens the diagnostics probe instead of the app.
+- `TRANSPORT=direct|service` chooses how the app talks to Silo (default `direct`).
 
-Connect a TV once (the passphrase is shown in the Developer Mode app):
+In the browser the same parameters work as query strings, e.g. `?probe` or `?server=…`.
 
-```bash
-npx ares-setup-device --add tv --info "{'host':'<TV-IP>','port':'9922','username':'prisoner'}"
-```
+**In the browser against a real server:** Silo sends no CORS headers, so start `npm run dev` with `SILO_SERVER` set. The dev server then forwards `/api` to that server. In the app, enter the dev server itself (`http://localhost:5173`) as the server address, not the real one.
 
-```bash
-npx ares-novacom --device tv --getkey
-```
+### Tech stack
 
-Rules and workflow are in [`CLAUDE.md`](CLAUDE.md): Opus plans and reviews, a Sonnet subagent implements, and every phase ends with the gate, a device test, a commit, a tag and a generated changelog.
+| Area | Choice |
+|---|---|
+| Language | TypeScript |
+| UI | React with Vite, built for Chromium 79 (webOS 6) as one classic script |
+| Data | TanStack Query; API client generated from Silo's OpenAPI (`/api/v2`) |
+| Playback | the native `<video>` element with the TV's media pipeline; Silo playback protocol v3 |
+| Tests | Vitest, React Testing Library, MSW, Playwright |
+| TV tooling | `@webos-tools/cli` (`ares-package`, `ares-install`, `ares-launch`, `ares-inspect`) |
+| Process tooling | PowerShell (`tools/`), git-cliff for the changelog |
+
+## How it is built
+
+- The app talks only to Silo's native `/api/v2`, not to the Jellyfin compatibility API.
+- It is written from scratch against Silo's API documentation and OpenAPI specification. No code is taken from Silo's repositories.
+- It is written with heavy AI assistance (Claude Code). One session plans and reviews; a subagent implements each package.
+- Every change passes the full gate (types, lint, unit and component tests, the webOS bundle check, Playwright end-to-end tests, packaging). Every phase ends with a test on a real TV.
+
+The house rules are in [`CLAUDE.md`](CLAUDE.md).
+
+## Contributing
+
+Issues, ideas and pull requests are welcome, and reports from webOS versions other than the test TV's are especially useful. Contributions are made under the MPL-2.0. Please sign off your commits (`git commit -s`, the [Developer Certificate of Origin](https://developercertificate.org/)).
 
 ## License
 
