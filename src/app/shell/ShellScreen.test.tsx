@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -527,15 +527,61 @@ describe('ShellScreen avatar menu', () => {
     expect(calls.logout).toHaveLength(0);
   });
 
-  it('Sign out calls logout with the token and clears the session', async () => {
-    const calls = serve();
-    const { session } = setup();
+  async function askSignOut() {
     await ready();
     await openMenu();
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
+    await screen.findByTestId('signout-dialog');
+  }
+
+  it('Sign out asks first, names the server, and has Cancel focused', async () => {
+    const calls = serve({ branding: branding({ server_name: 'Movie Barn' }) });
+    const { session } = setup();
+    await askSignOut();
+    await waitFor(() =>
+      expect(screen.getByRole('dialog')).toHaveTextContent('Sign out of Movie Barn?'),
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+    expect(session.get()).not.toBeNull();
+    expect(calls.logout).toHaveLength(0);
+  });
+
+  it('Cancel keeps the session and sends no logout; the menu stays open', async () => {
+    const calls = serve();
+    const { session } = setup();
+    await askSignOut();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByTestId('signout-dialog')).not.toBeInTheDocument());
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(screen.getByTestId('avatar-menu')).toBeInTheDocument();
+    expect(session.get()).not.toBeNull();
+    expect(calls.logout).toHaveLength(0);
+  });
+
+  it('Back closes the dialog first, then the menu, and keeps the session', async () => {
+    const calls = serve();
+    const { session } = setup();
+    await askSignOut();
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('signout-dialog')).not.toBeInTheDocument());
+    expect(screen.getByTestId('avatar-menu')).toBeInTheDocument();
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument());
+    expect(session.get()).not.toBeNull();
+    expect(calls.logout).toHaveLength(0);
+  });
+
+  it('confirming calls logout with the token and clears the session', async () => {
+    const calls = serve();
+    const { session } = setup();
+    await askSignOut();
+    fireEvent.click(
+      within(screen.getByTestId('signout-dialog')).getByRole('button', { name: 'Sign out' }),
+    );
     await waitFor(() => expect(session.get()).toBeNull());
     expect(calls.logout).toEqual(['Bearer a']);
   });

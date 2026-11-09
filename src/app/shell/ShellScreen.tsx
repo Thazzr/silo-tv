@@ -15,6 +15,7 @@ import { useSilo } from '../SiloContext';
 import type { LaunchMode } from '../../features/profiles/launchPrefs';
 import { AvatarMenu, type MenuView } from './AvatarMenu';
 import { ComingSoon } from './ComingSoon';
+import { SignOutDialog } from '../../features/profiles/SignOutDialog';
 import { LaunchOfferDialog } from './LaunchOfferDialog';
 import { TopBar } from './TopBar';
 import {
@@ -96,6 +97,8 @@ export function ShellScreen({
   const selectedRef = useRef<TabId>(memory.tab);
   // Which part of the avatar menu is open; null while it is closed.
   const [menu, setMenu] = useState<MenuView | null>(null);
+  // "Sign out of {server}?" over the open menu.
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const [rendered, setRendered] = useState(false);
   // The offer comes once the shell has rendered, so its focus does not fight the screen's own.
   useEffect(() => {
@@ -156,6 +159,10 @@ export function ShellScreen({
       offer.onAnswer(false);
       return;
     }
+    if (signOutOpen) {
+      setSignOutOpen(false);
+      return;
+    }
     if (menu) {
       setMenu(menu === 'launch' ? 'main' : null);
       return;
@@ -212,12 +219,20 @@ export function ShellScreen({
             onClose={() => setMenu(null)}
             onSwitchProfile={onSwitchProfile}
             onSwitchServer={onSwitchServer}
-            onSignOut={() => signOut.mutate()}
+            onSignOut={() => setSignOutOpen(true)}
             onOpenLaunch={() => setMenu('launch')}
             onChooseLaunch={(mode) => {
               onLaunchMode(mode);
               setMenu('main');
             }}
+          />
+        ) : null}
+        {signOutOpen ? (
+          <SignOutDialog
+            server={branding.serverName}
+            busy={signOut.isPending}
+            onCancel={() => setSignOutOpen(false)}
+            onConfirm={() => signOut.mutate()}
           />
         ) : null}
         {offer && rendered ? (

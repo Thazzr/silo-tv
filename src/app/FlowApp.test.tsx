@@ -220,6 +220,9 @@ describe('FlowApp', () => {
     await screen.findByRole('button', { name: /Title of/ });
     fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
+    fireEvent.click(
+      within(await screen.findByTestId('signout-dialog')).getByRole('button', { name: 'Sign out' }),
+    );
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
     expect(session.get()).toBeNull();
     expect(seen.logout).toEqual(['Bearer a']);
@@ -491,6 +494,9 @@ describe('FlowApp several servers', () => {
     // Sign out of A through the avatar menu: only A's session goes.
     fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
+    fireEvent.click(
+      within(await screen.findByTestId('signout-dialog')).getByRole('button', { name: 'Sign out' }),
+    );
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
     expect(sessionA.get()).toBeNull();
     expect(sessionB.get()).not.toBeNull();
