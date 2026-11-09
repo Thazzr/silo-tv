@@ -308,5 +308,19 @@
   "settings.rewind.title": "Beim Fortsetzen zurückspulen",
   "settings.rewind.hint": "Springt beim Fortsetzen ein Stück zurück, damit du wieder in die Szene findest. Gilt für dieses Gerät.",
   "settings.rewind.off": "Aus",
-  "settings.rewind.seconds": "{seconds} s"
+  "settings.rewind.seconds": "{seconds} s",
+  "boxset.badge": "BOX-SET",
+  "boxset.films": "{count} Filme",
+  "boxset.filmOne": "1 Film",
+  "boxset.watched": "{played} / {count} gesehen",
+  "boxset.watchedOf": "{played} von {count} gesehen",
+  "boxset.play": "{film} abspielen",
+  "boxset.continue": "Weiter · {film}",
+  "boxset.movies": "Filme",
+  "boxset.thisFilm": "DIESER FILM",
+  "boxset.loading": "Box-Set wird geladen …",
+  "boxset.gone": "Dieses Box-Set ist nicht verfügbar",
+  "boxset.goneHint": "Box-Sets sind für diese Mediathek eventuell ausgeschaltet, oder zu wenige ihrer Filme sind hier.",
+  "boxset.goneBack": "Zurück",
+  "boxset.error": "Das Box-Set konnte nicht geladen werden."
 }

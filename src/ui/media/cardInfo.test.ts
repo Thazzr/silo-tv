@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { catalogItem } from '../../test/flowFixtures';
+import { boxSetSummary } from '../../test/boxSetFixtures';
+import { translate } from '../../i18n';
 import {
+  boxSetCaption,
   cardSubtitle,
   cardTitle,
+  filmCountText,
   GRID_IMAGE_QUERY,
   isLandscapeSection,
   landscapeArt,
   posterArt,
   ROW_IMAGE_QUERY,
   watchedFraction,
+  yearsText,
 } from './cardInfo';
 
 const episode = catalogItem({
@@ -121,5 +126,49 @@ describe('image widths', () => {
       still_width: 720,
     });
     expect(GRID_IMAGE_QUERY.poster_width).toBe(520);
+  });
+});
+
+describe('box set captions', () => {
+  const en = (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) =>
+    translate('en', key, params);
+
+  it('writes the years as a range, one year when both are equal, none when unknown', () => {
+    expect(yearsText(2001, 2011)).toBe('2001–2011');
+    expect(yearsText(1999, 1999)).toBe('1999');
+    expect(yearsText(2005, undefined)).toBe('2005');
+    expect(yearsText(undefined, 2007)).toBe('2007');
+    expect(yearsText(undefined, undefined)).toBeNull();
+  });
+
+  it('counts films, with the singular for one', () => {
+    expect(filmCountText(8, en)).toBe('8 films');
+    expect(filmCountText(1, en)).toBe('1 film');
+  });
+
+  it('shows the progress once a film is played', () => {
+    const caption = boxSetCaption(boxSetSummary({ movie_count: 8, played_count: 5 }), en);
+    expect(caption).toEqual({ title: 'Great Saga Box Set', sub: '5 / 8 watched' });
+  });
+
+  it('shows the progress as soon as one film is played', () => {
+    expect(boxSetCaption(boxSetSummary({ movie_count: 8, played_count: 1 }), en).sub).toBe(
+      '1 / 8 watched',
+    );
+  });
+
+  it('shows the years while nothing is played, else the film count', () => {
+    expect(boxSetCaption(boxSetSummary({ first_year: 2001, last_year: 2011 }), en).sub).toBe(
+      '2001–2011',
+    );
+    expect(boxSetCaption(boxSetSummary({ first_year: 1999, last_year: 1999 }), en).sub).toBe(
+      '1999',
+    );
+    expect(
+      boxSetCaption(
+        boxSetSummary({ first_year: undefined, last_year: undefined, movie_count: 4 }),
+        en,
+      ).sub,
+    ).toBe('4 films');
   });
 });

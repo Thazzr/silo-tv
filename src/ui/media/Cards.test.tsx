@@ -1,10 +1,11 @@
 import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { BASE_URL } from '../../test/apiFixtures';
+import { boxSetSummary } from '../../test/boxSetFixtures';
 import { catalogItem } from '../../test/flowFixtures';
 import { renderWithSilo } from '../../test/renderFlow';
 import { setFocus } from '../../app/nav';
-import { ExploreAllCard, LandscapeCard, PosterCard } from './Cards';
+import { BoxSetCard, ExploreAllCard, LandscapeCard, PosterCard } from './Cards';
 
 /** A ThumbHash with a mid-grey average, so a placeholder colour is visible. */
 const GREY_HEADER = 32 | (32 << 6) | (32 << 12);
@@ -152,5 +153,73 @@ describe('ExploreAllCard', () => {
     expect(screen.getByText('Explore all')).toBeInTheDocument();
     fireEvent.click(card);
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PosterCard badge', () => {
+  it('shows a pill on the picture when given a badge, and none otherwise', () => {
+    poster({ badge: 'THIS FILM' });
+    expect(screen.getByTestId('card-pill-start')).toHaveTextContent('THIS FILM');
+  });
+
+  it('has no pill without a badge', () => {
+    poster();
+    expect(screen.queryByTestId('card-pill-start')).toBeNull();
+  });
+});
+
+describe('BoxSetCard', () => {
+  const summary = boxSetSummary({
+    poster_url: '/img/saga.webp',
+    movie_count: 8,
+    played_count: 0,
+    first_year: 2001,
+    last_year: 2011,
+  });
+  const box = (boxSet = summary, extra: Partial<Parameters<typeof BoxSetCard>[0]> = {}) =>
+    renderWithSilo(
+      <BoxSetCard boxSet={boxSet} focusKey="bs1" onOpen={() => undefined} {...extra} />,
+    );
+
+  it('is a poster card with a BOX SET pill top left and the film count bottom right', () => {
+    box();
+    expect(screen.getByRole('button', { name: /Great Saga Box Set/ })).toHaveClass('card-poster');
+    expect(screen.getByTestId('card-pill-start')).toHaveTextContent('BOX SET');
+    expect(screen.getByTestId('card-pill-end')).toHaveTextContent('8 films');
+    expect(document.querySelector('img')?.getAttribute('src')).toBe(`${BASE_URL}/img/saga.webp`);
+  });
+
+  it('says "1 film" for one film', () => {
+    box(boxSetSummary({ movie_count: 1 }));
+    expect(screen.getByTestId('card-pill-end')).toHaveTextContent('1 film');
+  });
+
+  it('shows the title and the years while nothing is played', () => {
+    box();
+    expect(screen.getByTestId('card-title')).toHaveTextContent('Great Saga Box Set');
+    expect(screen.getByTestId('card-sub')).toHaveTextContent('2001–2011');
+  });
+
+  it('shows how many films are watched once one is', () => {
+    box(boxSetSummary({ movie_count: 8, played_count: 5 }));
+    expect(screen.getByTestId('card-sub')).toHaveTextContent('5 / 8 watched');
+  });
+
+  it('is a grid card on request, opens on click and reports its focus', async () => {
+    const onOpen = vi.fn();
+    const onFocused = vi.fn();
+    box(summary, { grid: true, onOpen, onFocused });
+    expect(screen.getByRole('button', { name: /Great Saga/ })).toHaveClass('card-grid');
+    await act(async () => {
+      await setFocus('bs1');
+    });
+    expect(onFocused).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Great Saga/ }));
+    expect(onOpen).toHaveBeenCalledWith(summary);
+  });
+
+  it('falls back to a title tile without a poster', () => {
+    box(boxSetSummary({ poster_url: undefined }));
+    expect(screen.getByTestId('art-tile')).toHaveTextContent('Great Saga Box Set');
   });
 });

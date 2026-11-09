@@ -1,0 +1,25 @@
+/* The box set page (docs/design.md). It wears the detail page's classes for the hero, the backdrop
+   and the page scroll; this file holds what is its own. Sizes are CSS pixels on the 1920x1080
+   layout and must match src/features/boxset/layout.ts. Only transform and opacity animate. */
+
+/* The "Movies" heading of the films block: 48 px high, 16 px above the grid. */
+.boxset-films-title {
+  height: 48px;
+  margin: 0 0 16px;
+  padding: 0 80px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+  line-height: 48px;
+}
+
+/* From the heading down to the foot of the screen: the page is scrolled so the heading sits on the
+   safe line (54 px), under it 48 px of heading and 16 px of space (BOXSET_GRID_TOP). */
+.boxset-films .grid-viewport {
+  height: calc(100vh - 118px);
+}
+
+.boxset-gone-title {
+  margin: 0 0 12px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+}

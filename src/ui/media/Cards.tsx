@@ -3,11 +3,14 @@ import { Focusable } from '../../app/nav';
 import { useT } from '../../i18n';
 import { Artwork } from './Artwork';
 import {
+  boxSetCaption,
   cardSubtitle,
   cardTitle,
+  filmCountText,
   landscapeArt,
   posterArt,
   watchedFraction,
+  type CatalogBoxSet,
   type CatalogItem,
 } from './cardInfo';
 import type { CardShape } from './layout';
@@ -95,7 +98,8 @@ export const PosterCard = memo(function PosterCard({
   onFocused,
   autoFocus,
   grid = false,
-}: CardProps & { grid?: boolean }) {
+  badge,
+}: CardProps & { grid?: boolean; badge?: string }) {
   const url = useMediaUrl();
   const art = posterArt(item);
   return (
@@ -105,8 +109,77 @@ export const PosterCard = memo(function PosterCard({
       onClick={() => onOpen(item)}
       onFocused={onFocused}
       autoFocus={autoFocus}
-      art={<Artwork src={url(art.url)} thumbhash={art.thumbhash} title={cardTitle(item)} />}
+      art={
+        <>
+          <Artwork src={url(art.url)} thumbhash={art.thumbhash} title={cardTitle(item)} />
+          {badge ? <CardPill place="start" text={badge} /> : null}
+        </>
+      }
       caption={<Caption item={item} />}
+    />
+  );
+});
+
+/** A small label on the picture of a card: top left ("start") or bottom right ("end"). */
+function CardPill({ place, text }: { place: 'start' | 'end'; text: string }) {
+  return (
+    <span className={`card-pill card-pill-${place}`} data-testid={`card-pill-${place}`}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * A box set: a poster card with a "BOX SET" pill top left and the film count bottom right. The
+ * caption says how far the profile got once a film is played, else the years, else the count.
+ */
+export const BoxSetCard = memo(function BoxSetCard({
+  boxSet,
+  focusKey,
+  onOpen,
+  onFocused,
+  autoFocus,
+  grid = false,
+}: {
+  boxSet: CatalogBoxSet;
+  focusKey: string;
+  onOpen: (boxSet: CatalogBoxSet) => void;
+  onFocused?: () => void;
+  autoFocus?: boolean;
+  grid?: boolean;
+}) {
+  const t = useT();
+  const url = useMediaUrl();
+  const caption = boxSetCaption(boxSet, t);
+  return (
+    <CardFrame
+      focusKey={focusKey}
+      variant={grid ? 'grid' : 'poster'}
+      label={`${caption.title}, ${caption.sub}`}
+      onClick={() => onOpen(boxSet)}
+      onFocused={onFocused}
+      autoFocus={autoFocus}
+      art={
+        <>
+          <Artwork
+            src={url(boxSet.poster_url)}
+            thumbhash={boxSet.poster_thumbhash}
+            title={boxSet.title}
+          />
+          <CardPill place="start" text={t('boxset.badge')} />
+          <CardPill place="end" text={filmCountText(boxSet.movie_count, t)} />
+        </>
+      }
+      caption={
+        <>
+          <span className="card-title" data-testid="card-title">
+            {caption.title}
+          </span>
+          <span className="card-sub" data-testid="card-sub">
+            {caption.sub}
+          </span>
+        </>
+      }
     />
   );
 });

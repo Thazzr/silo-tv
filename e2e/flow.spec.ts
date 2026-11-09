@@ -45,6 +45,11 @@ interface FakeOptions {
    * taller than 760 px), the movie gets a cast and a "More like this" row.
    */
   tall?: boolean;
+  /**
+   * The server has box sets: "Second Title" (m2) is the middle film of the box set "Saga Box Set",
+   * whose first film is played; its page and the movie's row read from the same data.
+   */
+  boxSet?: boolean;
   /** A biography of about 4,000 characters on the person pages (the last line says THE END). */
   longBio?: boolean;
   /** How many seasons the series has (2 when omitted). */
@@ -123,6 +128,26 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
   const seasonCount = options.seasons ?? 2;
+  const withBoxSet = options.boxSet === true;
+  const sagaFilms = [
+    { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
+    { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
+    { content_id: 'f3', title: 'Saga Three', type: 'movie', year: 2023, played: false },
+  ].map(({ played, ...film }) => ({
+    ...film,
+    user_state: { in_watchlist: false, is_favorite: false, not_interested: false, played },
+  }));
+  const saga = {
+    id: 'bs1',
+    library_id: 'lib-1',
+    title: 'Saga Box Set',
+    overview: 'Three films of one saga.',
+    first_year: 2001,
+    last_year: 2023,
+    movie_count: 3,
+    played_count: 1,
+    items: sagaFilms,
+  };
   const longBio =
     Array.from({ length: 80 }, (_, i) => `Sentence ${i + 1} of the long biography.`).join(' ') +
     ' THE END';
@@ -290,6 +315,11 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             overview: `Synopsis of ${season}.${n}.`,
           })),
         });
+      }
+      if (withBoxSet && req.method === 'GET') {
+        if (url.pathname === '/api/v2/catalog/items/m2/box-set')
+          return send(200, { box_set: saga });
+        if (url.pathname === '/api/v2/catalog/box-sets/bs1') return send(200, saga);
       }
       if (req.method === 'GET' && url.pathname.startsWith('/api/v2/recommendations/similar/')) {
         return send(200, {
@@ -618,6 +648,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             revision: 'r',
             state: 'available',
             extended_query_rules: true,
+            ...(withBoxSet ? { box_sets: true } : {}),
           });
         case 'GET /api/v2/catalog/filters':
           return send(200, {
@@ -1774,6 +1805,88 @@ test('detail page: a cast card opens the person page; Movies, a title, and Back 
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await expect(page.getByRole('button', { name: /Bo Actor/ })).toBeFocused();
+});
+
+test('detail page: a movie in a box set shows its row; Explore all opens the box set page, a film opens its page, and Back returns step by step, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ boxSet: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  // The row carries the box set's title; the film on screen is marked and the row ends with Explore all.
+  const row = page.getByTestId('row-boxset');
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('heading', { name: 'Saga Box Set' })).toBeVisible();
+  await expect(row.getByTestId('card-title')).toHaveText([
+    'Saga One',
+    'Second Title',
+    'Saga Three',
+  ]);
+  await expect(row.getByTestId('card-pill-start')).toHaveText('DIESER FILM');
+  expect(
+    seen.some(
+      (e) => e.path === '/api/v2/catalog/items/m2/box-set' && e.search.includes('poster_width=352'),
+    ),
+  ).toBe(true);
+
+  // Down from Play to the row, Right to Explore all (after the three films), OK opens the page.
+  await page.keyboard.press('ArrowDown');
+  await expect(row.getByRole('button', { name: /Saga One/ })).toBeFocused();
+  await expect.poll(async () => Math.abs((await row.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(row.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The box set page: the title at once, then the chip line and the label of a set in progress.
+  await expect(page.getByTestId('boxset-title')).toHaveText('Saga Box Set');
+  await expect(page.getByTestId('boxset-meta')).toHaveText(
+    'BOX-SET · 3 Filme · 2001–2023 · 1 von 3 gesehen',
+  );
+  const play = page.getByRole('button', { name: 'Weiter · Second Title' });
+  await expect(play).toBeFocused();
+  expect(
+    seen.some(
+      (e) => e.path === '/api/v2/catalog/box-sets/bs1' && e.search.includes('library_id=lib-1'),
+    ),
+  ).toBe(true);
+
+  // Down enters the grid; the films block scrolls to the safe line and the hero fades.
+  const films = page.getByTestId('boxset-films');
+  await page.keyboard.press('ArrowDown');
+  await expect(films.getByRole('button', { name: /Saga One/ })).toBeFocused();
+  await expect
+    .poll(async () => Math.abs((await films.getByRole('heading').boundingBox())!.y - 54))
+    .toBeLessThanOrEqual(8);
+  await expect
+    .poll(() =>
+      page
+        .locator('.detail-text')
+        .first()
+        .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity),
+    )
+    .toBe('0');
+  await page.keyboard.press('ArrowRight');
+  await expect(films.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  // Back: the box set page with the same film focused; Back again: the movie's page, Explore all focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('boxset-title')).toHaveText('Saga Box Set');
+  await expect(films.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(
+    page.getByTestId('row-boxset').getByRole('button', { name: /Alle ansehen/ }),
+  ).toBeFocused();
 });
 
 test('person page: a 4,000-character biography opens in full; Down scrolls it to its last line, Back closes onto More', async ({

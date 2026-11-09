@@ -170,6 +170,36 @@
   background: var(--progress);
 }
 
+/* A label on the picture (BOX SET and the film count on a box set card, THIS FILM on the current
+   film of a box set row). Dark and opaque enough to read on bright artwork. */
+.card-pill {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  max-width: calc(100% - 20px);
+  padding: 2px 12px;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 26px;
+  color: #ffffff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+}
+
+.card-pill-start {
+  top: 10px;
+  left: 10px;
+}
+
+.card-pill-end {
+  right: 10px;
+  bottom: 10px;
+}
+
 .card-caption {
   display: block;
   height: 57px;

@@ -17,9 +17,11 @@ import {
   serveDetail,
   type DetailServe,
 } from '../../test/detailFixtures';
+import { boxSetDetail } from '../../test/boxSetFixtures';
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
+import type { BoxSetTarget } from '../boxset/boxSetMemory';
 import type { PersonTarget } from '../person/personMemory';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
@@ -48,7 +50,8 @@ const LONG_REST = 5000;
 type Screen =
   | { name: 'detail'; target: DetailTarget }
   | { name: 'player'; request: PlayRequest }
-  | { name: 'person'; target: PersonTarget };
+  | { name: 'person'; target: PersonTarget }
+  | { name: 'boxSet'; target: BoxSetTarget };
 
 /**
  * The detail page on a screen stack with a stub player: Play and OK on an episode push the stub,
@@ -71,7 +74,11 @@ function setup(
   const onPlay = vi.fn<(request: PlayRequest) => void>();
   const onBack = options.onBack ?? vi.fn();
   const renderScreen = (current: Screen, nav: NavApi<Screen>) =>
-    current.name === 'person' ? (
+    current.name === 'boxSet' ? (
+      <div data-testid="boxset-stub">
+        {current.target.boxSetId}|{current.target.libraryId}|{current.target.boxSetTitle}
+      </div>
+    ) : current.name === 'person' ? (
       <div data-testid="person-stub">
         {current.target.personId}|{current.target.personName}
       </div>
@@ -85,6 +92,7 @@ function setup(
         }}
         onOpenDetail={(next) => nav.push({ name: 'detail', target: next })}
         onOpenPerson={(next) => nav.push({ name: 'person', target: next })}
+        onOpenBoxSet={(next) => nav.push({ name: 'boxSet', target: next })}
         onBack={() => {
           onBack();
           nav.pop();
@@ -436,6 +444,198 @@ describe('DetailScreen: more like this', () => {
       expect(screen.getByTestId('detail-title')).toHaveTextContent('First Title'),
     );
     await focusKeyIs('card:similar:x2');
+  });
+});
+
+describe('DetailScreen: the box set row of a movie', () => {
+  const films = [
+    catalogItem({ content_id: 'f0', title: 'Prequel', year: 1999 }),
+    catalogItem({ content_id: 'm1', title: 'First Title', year: 2001 }),
+    catalogItem({ content_id: 'f2', title: 'Sequel', year: 2003 }),
+  ];
+  const box = boxSetDetail({ items: films, movie_count: 3, backdrop_url: '/img/saga.webp' });
+  const withBox = {
+    capabilities: { box_sets: true },
+    boxSet: box,
+    similar: [catalogItem({ content_id: 'x1', title: 'Similar One' })],
+  } satisfies DetailServe;
+
+  it('shows the films of the box set under its title, before More like this', async () => {
+    const calls = serveDetail(server, withBox);
+    setup({ itemId: 'm1' });
+    await ready();
+    const row = await screen.findByTestId('row-boxset');
+    expect(within(row).getByRole('heading', { name: 'Great Saga Box Set' })).toBeInTheDocument();
+    expect(
+      within(row)
+        .getAllByTestId('card-title')
+        .map((el) => el.textContent),
+    ).toEqual(['Prequel', 'First Title', 'Sequel']);
+    // Before "More like this": the box set's zone comes first in the page.
+    await screen.findByTestId('row-similar');
+    expect(
+      row.compareDocumentPosition(screen.getByTestId('row-similar')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // The movie's page does not say which library; the server picks it.
+    expect(calls.boxSets).toHaveLength(1);
+    expect(calls.boxSets[0]!.id).toBe('m1');
+    expect(calls.boxSets[0]!.query.has('library_id')).toBe(false);
+    expect(calls.boxSets[0]!.query.get('poster_width')).toBe('352');
+  });
+
+  it('marks the film on screen with THIS FILM, and only that one', async () => {
+    serveDetail(server, withBox);
+    setup({ itemId: 'm1' });
+    await ready();
+    const row = await screen.findByTestId('row-boxset');
+    const pills = within(row).getAllByTestId('card-pill-start');
+    expect(pills).toHaveLength(1);
+    expect(pills[0]).toHaveTextContent('THIS FILM');
+    expect(pills[0]!.closest('button')).toHaveAccessibleName(/First Title/);
+  });
+
+  it('ends with Explore all, which opens the box set page with its library, title and backdrop', async () => {
+    serveDetail(server, withBox);
+    setup({ itemId: 'm1' });
+    await ready();
+    await screen.findByTestId('row-boxset');
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:boxset:f0');
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    await focusKeyIs('card:boxset:explore');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('boxset-stub')).toHaveTextContent(
+      'bs-1|lib-1|Great Saga Box Set',
+    );
+
+    // Back: the movie's page with Explore all focused.
+    await pressKey(KEY.back);
+    await ready();
+    await focusKeyIs('card:boxset:explore');
+  });
+
+  it('opens the detail page of another film, and does nothing on OK on the film on screen', async () => {
+    const calls = serveDetail(server, {
+      ...withBox,
+      item: (id) => itemDetail({ content_id: id, title: id === 'm1' ? 'First Title' : id }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    await screen.findByTestId('row-boxset');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:boxset:f0');
+    await pressKey(KEY.right);
+    await focusKeyIs('card:boxset:m1');
+    await pressKey(KEY.enter);
+    await sleep(50);
+    // Still the same page, and no read of another title.
+    expect(screen.getByTestId('detail-title')).toHaveTextContent('First Title');
+    expect(calls.items).toEqual(['m1']);
+    expect(screen.queryByTestId('boxset-stub')).toBeNull();
+
+    await pressKey(KEY.right);
+    await focusKeyIs('card:boxset:f2');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.getByTestId('detail-title')).toHaveTextContent('f2'));
+    expect(calls.items).toEqual(['m1', 'f2']);
+  });
+
+  it('shows at most 20 films before Explore all', async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      catalogItem({ content_id: `g${i}`, title: `Film ${i}` }),
+    );
+    serveDetail(server, { ...withBox, boxSet: boxSetDetail({ items: many, movie_count: 25 }) });
+    setup({ itemId: 'm1' });
+    await ready();
+    await screen.findByTestId('row-boxset');
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:boxset:g0');
+    // Right 20 times from the first film is the Explore all card, and there is nothing beyond it.
+    for (let i = 0; i < 20; i += 1) await pressKey(KEY.right);
+    await focusKeyIs('card:boxset:explore');
+    expect(screen.queryByRole('button', { name: /Film 20/ })).toBeNull();
+  });
+
+  it('is a zone of the page: the cast above it fades while the focus is in the row', async () => {
+    serveDetail(server, {
+      ...withBox,
+      item: () => itemDetail({ cast: [{ name: 'First Actor', character: 'Fay', order: 0 }] }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    await screen.findByTestId('row-boxset');
+    const zone = (name: string) => document.querySelector(`[data-zone="${name}"]`)!;
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:cast:0-First Actor');
+    expect(zone('boxSet')).toHaveAttribute('data-faded', 'false');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:boxset:f0');
+    expect(zone('cast')).toHaveAttribute('data-faded', 'true');
+    expect(zone('boxSet')).toHaveAttribute('data-faded', 'false');
+    expect(zone('similar')).toHaveAttribute('data-faded', 'false');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:similar:x1');
+    expect(zone('boxSet')).toHaveAttribute('data-faded', 'true');
+  });
+
+  it('asks nothing about box sets, and shows no row, when the server has none', async () => {
+    const calls = serveDetail(server, {
+      capabilities: { box_sets: false },
+      boxSet: box,
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    await waitFor(() => expect(calls.capabilities).toBe(1));
+    await sleep(50);
+    expect(calls.boxSets).toHaveLength(0);
+    expect(screen.queryByTestId('row-boxset')).toBeNull();
+  });
+
+  it('asks nothing about box sets when the capabilities cannot be read', async () => {
+    const calls = serveDetail(server, { capabilities: 'fail', boxSet: box });
+    setup({ itemId: 'm1' });
+    await ready();
+    await waitFor(() => expect(calls.capabilities).toBeGreaterThanOrEqual(1));
+    await sleep(50);
+    expect(calls.boxSets).toHaveLength(0);
+    expect(screen.queryByTestId('row-boxset')).toBeNull();
+  });
+
+  it('shows no row for a movie in no box set, or when the read fails', async () => {
+    const calls = serveDetail(server, { capabilities: { box_sets: true }, boxSet: 'none' });
+    const { unmount } = setup({ itemId: 'm1' });
+    await ready();
+    await waitFor(() => expect(calls.boxSets).toHaveLength(1));
+    await sleep(50);
+    expect(screen.queryByTestId('row-boxset')).toBeNull();
+    unmount();
+    serveDetail(server, { capabilities: { box_sets: true }, boxSet: 'fail' });
+    setup({ itemId: 'm1' });
+    await ready();
+    await sleep(50);
+    expect(screen.queryByTestId('row-boxset')).toBeNull();
+  });
+
+  it('asks nothing about a box set for a series', async () => {
+    const calls = serveDetail(server, {
+      capabilities: { box_sets: true },
+      boxSet: box,
+      item: () => itemDetail({ type: 'series', content_id: 's1' }),
+      seasons: [seasonOf(1)],
+      episodes: () => [episodeOf(1, 1)],
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    await waitFor(() => expect(calls.capabilities).toBe(1));
+    await sleep(50);
+    expect(calls.boxSets).toHaveLength(0);
+    expect(screen.queryByTestId('row-boxset')).toBeNull();
   });
 });
 

@@ -92,6 +92,10 @@ export interface DetailCalls {
   episodes: string[];
   /** Ids of the "More like this" reads, with their query strings. */
   similar: { id: string; query: URLSearchParams }[];
+  /** Reads of the search capabilities. */
+  capabilities: number;
+  /** The reads of a movie's box set: id and query string of each. */
+  boxSets: { id: string; query: URLSearchParams }[];
 }
 
 export interface DetailServe {
@@ -104,11 +108,22 @@ export interface DetailServe {
     calls: DetailCalls,
   ) => S['Episode'][] | 'fail' | Promise<S['Episode'][] | 'fail'>;
   similar?: S['CatalogItem'][] | 'fail';
+  /** What the server's search capabilities say; no box sets unless `box_sets` is set. */
+  capabilities?: Partial<S['CatalogSearchCapabilities']> | 'fail';
+  /** The box set a movie page shows; `none` is the plain 200 without one, `fail` a 500. */
+  boxSet?: S['CatalogBoxSetDetail'] | 'none' | 'fail';
 }
 
 /** Registers the detail endpoints; the returned object records what the app asked for. */
 export function serveDetail(server: SetupServer, options: DetailServe = {}): DetailCalls {
-  const calls: DetailCalls = { items: [], seasons: [], episodes: [], similar: [] };
+  const calls: DetailCalls = {
+    items: [],
+    seasons: [],
+    episodes: [],
+    similar: [],
+    capabilities: 0,
+    boxSets: [],
+  };
   const fail = () => new HttpResponse(null, { status: 500 });
   server.use(
     http.get(`${BASE_URL}/api/v2/catalog/items/:id`, ({ params }) => {
@@ -133,6 +148,22 @@ export function serveDetail(server: SetupServer, options: DetailServe = {}): Det
       calls.similar.push({ id: String(params.id), query: new URL(request.url).searchParams });
       const answer = options.similar ?? [];
       return answer === 'fail' ? fail() : HttpResponse.json({ items: answer });
+    }),
+    http.get(`${BASE_URL}/api/v2/catalog/search/capabilities`, () => {
+      calls.capabilities += 1;
+      if (options.capabilities === 'fail') return fail();
+      return HttpResponse.json({
+        allowed: true,
+        revision: 'r1',
+        state: 'available',
+        ...options.capabilities,
+      });
+    }),
+    http.get(`${BASE_URL}/api/v2/catalog/items/:id/box-set`, ({ params, request }) => {
+      calls.boxSets.push({ id: String(params.id), query: new URL(request.url).searchParams });
+      const answer = options.boxSet ?? 'none';
+      if (answer === 'fail') return fail();
+      return HttpResponse.json(answer === 'none' ? {} : { box_set: answer });
     }),
   );
   return calls;

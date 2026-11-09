@@ -3,10 +3,19 @@ export { Artwork } from './Artwork';
 export { CatalogRow } from './CatalogRow';
 export type { CatalogRowProps } from './CatalogRow';
 export { prefetchImage } from './prefetch';
-export { CardFrame, ExploreAllCard, LandscapeCard, PersonCard, PosterCard } from './Cards';
+export {
+  BoxSetCard,
+  CardFrame,
+  ExploreAllCard,
+  LandscapeCard,
+  PersonCard,
+  PosterCard,
+} from './Cards';
 export type { CardProps, FrameProps } from './Cards';
 export {
+  boxSetCaption,
   cardSubtitle,
+  filmCountText,
   episodeLabel,
   cardTitle,
   GRID_IMAGE_QUERY,
@@ -16,8 +25,9 @@ export {
   posterArt,
   ROW_IMAGE_QUERY,
   watchedFraction,
+  yearsText,
 } from './cardInfo';
-export type { CatalogItem } from './cardInfo';
+export type { CatalogBoxSet, CatalogItem } from './cardInfo';
 export { Grid, gridCardKey, gridFocusKey, LOAD_AHEAD_CARDS } from './Grid';
 export type { GridCardContext, GridProps } from './Grid';
 export * from './layout';

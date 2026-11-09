@@ -308,5 +308,19 @@
   "settings.rewind.title": "Rewind on resume",
   "settings.rewind.hint": "Skips back a little when you resume, so you find your way back into the scene. Applies to this device.",
   "settings.rewind.off": "Off",
-  "settings.rewind.seconds": "{seconds} s"
+  "settings.rewind.seconds": "{seconds} s",
+  "boxset.badge": "BOX SET",
+  "boxset.films": "{count} films",
+  "boxset.filmOne": "1 film",
+  "boxset.watched": "{played} / {count} watched",
+  "boxset.watchedOf": "{played} of {count} watched",
+  "boxset.play": "Play {film}",
+  "boxset.continue": "Continue · {film}",
+  "boxset.movies": "Movies",
+  "boxset.thisFilm": "THIS FILM",
+  "boxset.loading": "Loading box set …",
+  "boxset.gone": "This box set isn't available",
+  "boxset.goneHint": "Box sets may be turned off for this library, or too few of its movies are here.",
+  "boxset.goneBack": "Back",
+  "boxset.error": "Can't load this box set."
 }

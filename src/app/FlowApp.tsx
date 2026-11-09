@@ -6,6 +6,8 @@ import { getPlatform, type KeyValueStore } from '../platform';
 import { PasswordScreen } from '../features/auth/PasswordScreen';
 import { SignInScreen } from '../features/auth/SignInScreen';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
+import { BoxSetMemory, type BoxSetTarget } from '../features/boxset/boxSetMemory';
+import { BoxSetScreen } from '../features/boxset/BoxSetScreen';
 import { DetailMemory, type DetailTarget } from '../features/detail/detailMemory';
 import { DetailScreen } from '../features/detail/DetailScreen';
 import { PersonMemory, type PersonTarget } from '../features/person/personMemory';
@@ -51,6 +53,8 @@ type FlowScreen =
   | ({ name: 'detail' } & DetailTarget)
   /** A person (a cast member): portrait, biography and filmography. */
   | ({ name: 'person' } & PersonTarget)
+  /** A box set of movies: the hero with Play, and its films. */
+  | ({ name: 'boxSet' } & BoxSetTarget)
   /** The intent says how it starts; without one the player asks when there is something to resume. */
   | { name: 'player'; contentId: string; title: string; intent?: StartIntent }
   /** The device settings. */
@@ -155,6 +159,8 @@ export function FlowApp({
   const [detailMemory] = useState(() => new DetailMemory());
   /** What each open person page remembers (filter, focused card) while a title covers it. */
   const [personMemory] = useState(() => new PersonMemory());
+  /** What each open box set page remembers (the focused film) while a film covers it. */
+  const [boxSetMemory] = useState(() => new BoxSetMemory());
   const session = origin ? registry.session(origin) : null;
   const launchRecord = useSyncExternalStore(prefs.subscribe, () => prefs.get(origin ?? ''));
 
@@ -323,6 +329,7 @@ export function FlowApp({
               queryClient.removeQueries({ queryKey: ['library'] });
               queryClient.removeQueries({ queryKey: ['detail'] });
               queryClient.removeQueries({ queryKey: ['person'] });
+              queryClient.removeQueries({ queryKey: ['boxset'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.
@@ -371,6 +378,7 @@ export function FlowApp({
             }
             onOpenDetail={openDetail}
             onOpenPerson={(target) => nav.push({ name: 'person', ...target })}
+            onOpenBoxSet={(target) => nav.push({ name: 'boxSet', ...target })}
             onBack={nav.pop}
           />,
         );
@@ -379,6 +387,18 @@ export function FlowApp({
           <PersonScreen
             target={screen}
             memory={personMemory.of(screen)}
+            onPlay={(item, intent) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
+            }
+            onOpenDetail={openDetail}
+            onBack={nav.pop}
+          />,
+        );
+      case 'boxSet':
+        return provide(
+          <BoxSetScreen
+            target={screen}
+            memory={boxSetMemory.of(screen)}
             onPlay={(item, intent) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
             }

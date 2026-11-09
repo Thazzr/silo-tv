@@ -11,7 +11,7 @@ import { creditLine, metaLine, qualityBadges, ratingEntries, type ItemDetail } f
 const FOUR_LINES_CHARS = 275;
 
 /** The synopsis, at most four lines, with "More" under it when the text goes on. */
-function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
+export function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
   const t = useT();
   const ref = useRef<HTMLParagraphElement>(null);
   const [measured, setMeasured] = useState<boolean | null>(null);
@@ -40,9 +40,14 @@ function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
  * The picture behind the whole page. It stays where it is while the content scrolls over it, and
  * it is darkened further once the page has left the hero so cards and rows stay readable.
  */
-export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrolled: boolean }) {
-  const url = useMediaUrl();
-  const backdrop = url(detail.backdrop_url);
+export function BackdropLayer({
+  backdrop,
+  scrolled,
+}: {
+  /** The picture's address (already resolved against the server), or null for none. */
+  backdrop: string | null;
+  scrolled: boolean;
+}) {
   return (
     <div className="detail-backdrop-layer" data-testid="detail-backdrop-layer" aria-hidden="true">
       {backdrop ? (
@@ -58,6 +63,11 @@ export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrol
       <div className="detail-dim" data-scrolled={scrolled} data-testid="detail-dim" />
     </div>
   );
+}
+
+export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrolled: boolean }) {
+  const url = useMediaUrl();
+  return <BackdropLayer backdrop={url(detail.backdrop_url)} scrolled={scrolled} />;
 }
 
 /**

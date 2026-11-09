@@ -127,16 +127,15 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
 }
 
 /**
- * Whether the server accepts the extended rule vocabulary (`extended_query_rules`): the decade
- * rule and the title prefix rules behind "#". A server that cannot say counts as "no": an older
- * one answers those rules with 422.
+ * What the server's search says it can do (`extended_query_rules`, `box_sets`, ...). Read once per
+ * server and session, because the answer only changes with a server update; a read that fails
+ * leaves every capability "off".
  */
-export function useExtendedRules(): boolean {
+export function useSearchCapabilities() {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
-  const query = useQuery({
+  return useQuery({
     queryKey: ['library', 'search-capabilities', baseUrl, profileId],
-    // Read once per server and session: the answer only changes with a server update.
     staleTime: Infinity,
     retry: false,
     queryFn: async () => {
@@ -147,7 +146,20 @@ export function useExtendedRules(): boolean {
       return data;
     },
   });
-  return query.data?.extended_query_rules === true;
+}
+
+/**
+ * Whether the server accepts the extended rule vocabulary (`extended_query_rules`): the decade
+ * rule and the title prefix rules behind "#". A server that cannot say counts as "no": an older
+ * one answers those rules with 422.
+ */
+export function useExtendedRules(): boolean {
+  return useSearchCapabilities().data?.extended_query_rules === true;
+}
+
+/** Whether the server has box sets (`box_sets`); a server that cannot say counts as "no". */
+export function useBoxSetsAvailable(): boolean {
+  return useSearchCapabilities().data?.box_sets === true;
 }
 
 /** The facet values (genres, ratings, …) the library's titles have. */

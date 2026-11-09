@@ -19,6 +19,8 @@ export const DETAIL_IMAGE_QUERY = {
 
 /** "More like this" asks for this many titles. */
 export const SIMILAR_LIMIT = 12;
+/** The box set row of a movie shows at most this many of its films. */
+export const BOXSET_ROW_LIMIT = 20;
 /** The cast row shows at most this many people. */
 export const CAST_LIMIT = 24;
 

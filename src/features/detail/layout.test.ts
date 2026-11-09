@@ -47,6 +47,13 @@ describe('isAbove', () => {
     expect(isAbove('similar', 'cast')).toBe(false);
     expect(isAbove('similar', 'hero')).toBe(false);
   });
+
+  it('puts the box set row between the cast and the similar titles', () => {
+    expect(isAbove('cast', 'boxSet')).toBe(true);
+    expect(isAbove('boxSet', 'similar')).toBe(true);
+    expect(isAbove('similar', 'boxSet')).toBe(false);
+    expect(isAbove('boxSet', 'boxSet')).toBe(false);
+  });
 });
 
 describe('hero text column', () => {

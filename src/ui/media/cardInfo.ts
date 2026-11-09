@@ -1,9 +1,11 @@
 // What a card shows of a catalog item, as pure functions: its caption lines, the picture it uses
 // and how far along it is.
 import type { components } from '../../api/generated/schema';
+import type { MessageKey } from '../../i18n';
 import { resumePoint } from '../../playback/resume';
 
 export type CatalogItem = components['schemas']['CatalogItem'];
+export type CatalogBoxSet = components['schemas']['CatalogBoxSet'];
 
 /**
  * The widths the app asks the server for, in device pixels per image slot. The server answers
@@ -91,4 +93,39 @@ export function watchedFraction(item: CatalogItem): number | null {
 /** Sections that show landscape cards: Continue Watching, anything in progress, any "next" row. */
 export function isLandscapeSection(sectionType: string): boolean {
   return /continue|in_progress|next/i.test(sectionType);
+}
+
+type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
+
+/** "2001–2011", or one year when both are the same; null when the server gave no year. */
+export function yearsText(first: number | undefined, last: number | undefined): string | null {
+  const from = first ?? last;
+  const to = last ?? first;
+  if (from === undefined || to === undefined) return null;
+  return from === to ? String(from) : `${from}–${to}`;
+}
+
+/** "8 films", or "1 film". */
+export function filmCountText(count: number, t: Translate): string {
+  return count === 1 ? t('boxset.filmOne') : t('boxset.films', { count });
+}
+
+/**
+ * The two caption lines of a box set card: its title, then how far the profile got ("5 / 8
+ * watched") once a film is played, else the years the films span, else the film count.
+ */
+export function boxSetCaption(
+  boxSet: Pick<
+    CatalogBoxSet,
+    'title' | 'played_count' | 'movie_count' | 'first_year' | 'last_year'
+  >,
+  t: Translate,
+): { title: string; sub: string } {
+  let sub: string;
+  if (boxSet.played_count > 0) {
+    sub = t('boxset.watched', { played: boxSet.played_count, count: boxSet.movie_count });
+  } else {
+    sub = yearsText(boxSet.first_year, boxSet.last_year) ?? filmCountText(boxSet.movie_count, t);
+  }
+  return { title: boxSet.title, sub };
 }

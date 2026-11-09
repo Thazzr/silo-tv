@@ -4,6 +4,8 @@ import { useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { PersonCard, PosterCard, Row, keepAtOrigin, type CatalogItem } from '../../ui/media';
+import type { BoxSetTarget } from '../boxset/boxSetMemory';
+import { useBoxSetsAvailable } from '../library/queries';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import type { PersonTarget } from '../person/personMemory';
@@ -23,7 +25,15 @@ import {
   SEASON_PILLS_GAP,
   SEASON_PILLS_HEIGHT,
 } from './layout';
-import { CAST_LIMIT, useItemDetail, useSeasonEpisodes, useSeasons, useSimilar } from './queries';
+import { useItemBoxSet } from '../boxset/queries';
+import {
+  BOXSET_ROW_LIMIT,
+  CAST_LIMIT,
+  useItemDetail,
+  useSeasonEpisodes,
+  useSeasons,
+  useSimilar,
+} from './queries';
 import { SeasonPills } from './SeasonPills';
 import { SynopsisDialog } from './SynopsisDialog';
 
@@ -43,10 +53,12 @@ export interface DetailScreenProps {
   onOpenDetail: (target: DetailTarget) => void;
   /** Opens a cast member's page over this one. */
   onOpenPerson: (target: PersonTarget) => void;
+  /** Opens a box set's page over this one (a movie's box set row). */
+  onOpenBoxSet: (target: BoxSetTarget) => void;
   onBack: () => void;
 }
 
-const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'similar'];
+const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'boxSet', 'similar'];
 
 const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
@@ -100,6 +112,7 @@ function DetailBody({
   onPlay,
   onOpenDetail,
   onOpenPerson,
+  onOpenBoxSet,
 }: DetailScreenProps & { detail: ItemDetail }) {
   const t = useT();
   const series = isSeries(detail);
@@ -181,6 +194,30 @@ function DetailBody({
     () => [...detail.cast].sort((a, b) => a.order - b.order).slice(0, CAST_LIMIT),
     [detail.cast],
   );
+  // --- The box set of a movie ---------------------------------------------------------------------
+  // Only a movie, and only on a server that has box sets; a movie in none (or a failed read) has
+  // no row. The detail carries no library, so the server picks the movie's own.
+  const boxSetsAvailable = useBoxSetsAvailable();
+  const boxSetQuery = useItemBoxSet(detail.content_id, undefined, !series && boxSetsAvailable);
+  const boxSet = !series && boxSetsAvailable ? (boxSetQuery.data ?? null) : null;
+  const boxSetFilms = useMemo(() => boxSet?.items.slice(0, BOXSET_ROW_LIMIT) ?? [], [boxSet]);
+  const openBoxSet = useCallback(() => {
+    if (!boxSet) return;
+    onOpenBoxSet({
+      boxSetId: boxSet.id,
+      libraryId: boxSet.library_id,
+      boxSetTitle: boxSet.title,
+      backdropUrl: boxSet.backdrop_url,
+    });
+  }, [boxSet, onOpenBoxSet]);
+  const openBoxSetFilm = useCallback(
+    (item: CatalogItem) => {
+      // The film on screen is the one this page shows: OK on it does nothing.
+      if (item.content_id !== detail.content_id) openSimilar(item);
+    },
+    [detail.content_id, openSimilar],
+  );
+
   // --- Vertical scroll: the page moves to the section that holds the focus ----------------------
   const [zone, setZone] = useState<DetailZone>('hero');
   // The tops of the blocks below the hero are measured, not assumed: a tall hero (logo, four lines
@@ -201,6 +238,7 @@ function DetailBody({
   // are measured when it changes (blocks appear as their data arrives).
   const blockSet = [
     series ? 'episodes' : cast.length > 0 ? 'cast' : '',
+    boxSetFilms.length > 0 ? 'boxSet' : '',
     similarItems.length > 0 ? 'similar' : '',
   ].join('|');
   useLayoutEffect(() => {
@@ -218,6 +256,7 @@ function DetailBody({
   const inHero = useCallback(() => setZone('hero'), []);
   const inEpisodes = useCallback(() => setZone('episodes'), []);
   const inCast = useCallback(() => setZone('cast'), []);
+  const inBoxSet = useCallback(() => setZone('boxSet'), []);
   const inSimilar = useCallback(() => setZone('similar'), []);
 
   const openedIndex = episodes?.findIndex((episode) => episode.content_id === openedOn) ?? -1;
@@ -371,6 +410,30 @@ function DetailBody({
                         onOpenPerson({ personId: person.person_id, personName: person.name });
                       }
                     }}
+                  />
+                )}
+              />
+            </div>
+          ) : null}
+          {boxSet && boxSetFilms.length > 0 ? (
+            <div data-zone="boxSet" data-faded={fade('boxSet')}>
+              <Row
+                rowId="boxset"
+                title={boxSet.title}
+                shape="poster"
+                items={boxSetFilms}
+                getKey={(item) => item.content_id}
+                memory={memory.rows}
+                inset={DETAIL_INSET}
+                onRowFocused={inBoxSet}
+                onExploreAll={openBoxSet}
+                renderCard={(item, ctx) => (
+                  <PosterCard
+                    item={item}
+                    focusKey={ctx.focusKey}
+                    onFocused={ctx.onFocused}
+                    onOpen={openBoxSetFilm}
+                    badge={item.content_id === detail.content_id ? t('boxset.thisFilm') : undefined}
                   />
                 )}
               />
