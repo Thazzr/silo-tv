@@ -25,7 +25,7 @@ export const DETAIL_SCROLLED_DIM_ALPHA = 0.85;
 export const SAFE_TOP = 54;
 
 /** The blocks of the page the view snaps between, in page order. */
-export type DetailZone = 'hero' | 'episodes' | 'cast' | 'boxSet' | 'similar';
+export type DetailZone = 'hero' | 'episodes' | 'cast' | 'extras' | 'boxSet' | 'similar';
 /** The zones below the hero, which have a block of their own to scroll to. */
 export type DetailBlockZone = Exclude<DetailZone, 'hero'>;
 /** The measured top of each block below the hero inside the page (layout position, in px). */
@@ -44,7 +44,14 @@ export function detailScrollOffset(zone: DetailZone, tops: DetailBlockTops): num
   return top === undefined ? 0 : Math.max(0, top - SAFE_TOP);
 }
 
-const ZONE_ORDER: readonly DetailZone[] = ['hero', 'episodes', 'cast', 'boxSet', 'similar'];
+const ZONE_ORDER: readonly DetailZone[] = [
+  'hero',
+  'episodes',
+  'cast',
+  'extras',
+  'boxSet',
+  'similar',
+];
 
 /** Whether the block of `zone` lies above the block that holds the focus (it then fades out). */
 export function isAbove(zone: DetailZone, focused: DetailZone): boolean {

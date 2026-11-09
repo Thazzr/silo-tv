@@ -1,4 +1,5 @@
 import type { RemoteKey } from './shared/keys';
+import type { OpenYouTubeResult } from './shared/youtube';
 import type { DecodingResult, DisplayInfo, ProbeEnv, ProbeRow } from './shared/mediaProbe';
 
 export type { RemoteKey } from './shared/keys';
@@ -15,6 +16,8 @@ export interface ScreenInfo {
   height: number;
   colorDepth: number;
 }
+
+export type { OpenYouTubeResult } from './shared/youtube';
 
 export type Part<T> = T | { error: string };
 
@@ -100,6 +103,13 @@ export interface Platform {
   mapKey(e: KeyboardEvent): RemoteKey | null;
   /** Closes the app. Call it only after the app's own exit confirmation. */
   exitApp(): void;
+
+  /**
+   * Hands a YouTube video (by its id) to the TV's YouTube app; nothing is fetched from Google by
+   * this app. Answers 'unavailable' for an id that is not a plain video id and when the platform
+   * has no YouTube app to hand over to.
+   */
+  openYouTubeVideo(videoId: string): Promise<OpenYouTubeResult>;
 
   readonly storage: KeyValueStore;
 

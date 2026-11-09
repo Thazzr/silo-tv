@@ -50,6 +50,11 @@ interface FakeOptions {
    * whose first film is played; its page and the movie's row read from the same data.
    */
   boxSet?: boolean;
+  /**
+   * "Second Title" (m2) has two local extras (a trailer with a title, a featurette without one)
+   * and one YouTube video; the first extra's file answers the playback calls like any title.
+   */
+  extras?: boolean;
   /** A biography of about 4,000 characters on the person pages (the last line says THE END). */
   longBio?: boolean;
   /** How many seasons the series has (2 when omitted). */
@@ -168,6 +173,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withSeriesLibrary = options.seriesLibrary === true;
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
+  const withExtras = options.extras === true;
   const seasonCount = options.seasons ?? 2;
   const withBoxSet = options.boxSet === true;
   const settingsUnknown = options.titleArt === undefined && options.spoilers === undefined;
@@ -329,6 +335,28 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   in_progress_count: 1,
                 },
                 ...tallMovie,
+                ...(withExtras
+                  ? {
+                      extras: [
+                        {
+                          content_id: 'local-x1',
+                          kind: 'trailer',
+                          title: 'Official Trailer',
+                          duration_seconds: 125,
+                        },
+                        { content_id: 'local-x2', kind: 'featurette', duration_seconds: 600 },
+                      ],
+                      videos: [
+                        {
+                          site: 'youtube',
+                          site_key: 'dQw4w9WgXcQ',
+                          kind: 'teaser',
+                          is_official: true,
+                          name: 'The Teaser',
+                        },
+                      ],
+                    }
+                  : {}),
               }
             : {
                 ...baseItem,
@@ -2060,6 +2088,61 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
   await expect.poll(() => opacity('[data-zone="cast"]')).toBe('0');
   await expect.poll(() => opacity('.detail-text')).toBe('0');
   expect(await opacity('[data-zone="similar"]')).toBe('1');
+});
+
+test('detail page: Trailer & Mehr plays a local extra from its start, and Back returns to the same card, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ extras: true });
+  const requested: string[] = [];
+  page.on('request', (request) => requested.push(request.url()));
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  // The row: the local extras in the server's order (a caption, else the kind), then YouTube.
+  const row = page.getByTestId('row-extras');
+  await expect(row.getByRole('heading', { name: 'Trailer & Mehr' })).toBeVisible();
+  await expect(row.getByTestId('extra-title')).toHaveText([
+    'Official Trailer',
+    'Featurette',
+    'The Teaser',
+  ]);
+  await expect(row.getByTestId('extra-runtime')).toHaveText(['2:05', '10:00', 'Teaser']);
+
+  // Down from Play to the row; the second card, then back to the first, OK plays the extra.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Featurette/ })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  // The playback is the extra's own, from the beginning (no resume prompt, position 0).
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/playback/start')).toBe(true);
+  expect(seen.some((e) => e.path === '/api/v2/watch/local-x1')).toBe(true);
+  const start = JSON.parse(seen.find((e) => e.path === '/api/v2/playback/start')!.body) as {
+    file_id: string;
+    start_position: number;
+  };
+  expect(start.file_id).toBe('file-local-x1');
+  expect(start.start_position).toBe(0);
+
+  // Back: the detail page with the same extra focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
+  // Nothing was ever requested from YouTube or Google.
+  expect(
+    requested.filter((url) => /youtube|youtu\.be|ytimg|google|gstatic|ggpht/i.test(url)),
+  ).toEqual([]);
 });
 
 test('detail page: a cast card opens the person page; Movies, a title, and Back return to the same card and filter, keyboard only', async ({

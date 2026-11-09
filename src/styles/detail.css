@@ -437,3 +437,21 @@
 .dialog-synopsis .dialog-actions {
   flex: none;
 }
+
+/* A short notice at the bottom (inside the safe area), over the page; no animation, and it is
+   removed after a few seconds. */
+.detail-notice {
+  position: absolute;
+  bottom: var(--safe-y);
+  left: 100px;
+  z-index: 5;
+  box-sizing: border-box;
+  max-width: 1000px;
+  padding: 16px 28px;
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}

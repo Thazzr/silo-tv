@@ -1,8 +1,9 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
 import { useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
+import { getPlatform } from '../../platform';
 import { PersonCard, PosterCard, Row, keepAtOrigin, type CatalogItem } from '../../ui/media';
 import type { BoxSetTarget } from '../boxset/boxSetMemory';
 import { useBoxSetsAvailable } from '../library/queries';
@@ -14,6 +15,8 @@ import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeRow, EpisodeStripSkeleton } from './EpisodeRow';
+import { extraEntries } from './extras';
+import { ExtrasRow } from './ExtrasRow';
 import { defaultSeason, initials, orderSeasons, type Episode, type ItemDetail } from './info';
 import {
   DETAIL_INSET,
@@ -58,7 +61,10 @@ export interface DetailScreenProps {
   onBack: () => void;
 }
 
-const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'boxSet', 'similar'];
+const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'extras', 'boxSet', 'similar'];
+
+/** How long a short notice (YouTube is not available) stays on the page. */
+const NOTICE_MS = 4000;
 
 const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
@@ -194,6 +200,36 @@ function DetailBody({
     () => [...detail.cast].sort((a, b) => a.order - b.order).slice(0, CAST_LIMIT),
     [detail.cast],
   );
+  // --- Trailer & More ---------------------------------------------------------------------------
+  // Local extras, then YouTube videos. Only movies and series own any, so the page just reads
+  // what the detail carries.
+  const extras = useMemo(() => extraEntries(detail), [detail]);
+  const extrasBackdrop = useMemo(
+    () => ({ url: detail.backdrop_url, thumbhash: detail.backdrop_thumbhash }),
+    [detail.backdrop_url, detail.backdrop_thumbhash],
+  );
+  const playExtra = useCallback(
+    (contentId: string, caption: string) =>
+      onPlay({ contentId, title: caption, intent: { kind: 'beginning' } }),
+    [onPlay],
+  );
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  const openYouTube = useCallback(
+    (videoId: string) => {
+      void getPlatform()
+        .openYouTubeVideo(videoId)
+        .then((result) => {
+          if (result === 'unavailable') setNotice(t('extras.youtubeUnavailable'));
+        });
+    },
+    [t],
+  );
+
   // --- The box set of a movie ---------------------------------------------------------------------
   // Only a movie, and only on a server that has box sets; a movie in none (or a failed read) has
   // no row. The detail carries no library, so the server picks the movie's own.
@@ -238,6 +274,7 @@ function DetailBody({
   // are measured when it changes (blocks appear as their data arrives).
   const blockSet = [
     series ? 'episodes' : cast.length > 0 ? 'cast' : '',
+    extras.length > 0 ? 'extras' : '',
     boxSetFilms.length > 0 ? 'boxSet' : '',
     similarItems.length > 0 ? 'similar' : '',
   ].join('|');
@@ -256,6 +293,7 @@ function DetailBody({
   const inHero = useCallback(() => setZone('hero'), []);
   const inEpisodes = useCallback(() => setZone('episodes'), []);
   const inCast = useCallback(() => setZone('cast'), []);
+  const inExtras = useCallback(() => setZone('extras'), []);
   const inBoxSet = useCallback(() => setZone('boxSet'), []);
   const inSimilar = useCallback(() => setZone('similar'), []);
 
@@ -415,6 +453,18 @@ function DetailBody({
               />
             </div>
           ) : null}
+          {extras.length > 0 ? (
+            <div data-zone="extras" data-faded={fade('extras')}>
+              <ExtrasRow
+                entries={extras}
+                backdrop={extrasBackdrop}
+                memory={memory.rows}
+                onRowFocused={inExtras}
+                onPlayExtra={playExtra}
+                onOpenYouTube={openYouTube}
+              />
+            </div>
+          ) : null}
           {boxSet && boxSetFilms.length > 0 ? (
             <div data-zone="boxSet" data-faded={fade('boxSet')}>
               <Row
@@ -462,6 +512,11 @@ function DetailBody({
             </div>
           ) : null}
         </div>
+        {notice ? (
+          <p className="detail-notice" role="status" data-testid="detail-notice">
+            {notice}
+          </p>
+        ) : null}
         {synopsisOpen && detail.overview ? (
           <SynopsisDialog
             title={detail.title}

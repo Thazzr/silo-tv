@@ -17,6 +17,7 @@ describe('detailScrollOffset', () => {
     expect(detailScrollOffset('episodes', { episodes: 760 })).toBe(706);
     expect(detailScrollOffset('cast', { cast: 760, similar: 1180 })).toBe(706);
     expect(detailScrollOffset('similar', { cast: 760, similar: 1180 })).toBe(1126);
+    expect(detailScrollOffset('extras', { cast: 760, extras: 1000 })).toBe(946);
     expect(detailScrollOffset('similar', { episodes: 812, similar: 1424 })).toBe(1370);
   });
 
@@ -46,6 +47,15 @@ describe('isAbove', () => {
     expect(isAbove('episodes', 'episodes')).toBe(false);
     expect(isAbove('similar', 'cast')).toBe(false);
     expect(isAbove('similar', 'hero')).toBe(false);
+  });
+
+  it('puts the extras row after the cast and the episodes and before the box set', () => {
+    expect(isAbove('cast', 'extras')).toBe(true);
+    expect(isAbove('episodes', 'extras')).toBe(true);
+    expect(isAbove('extras', 'boxSet')).toBe(true);
+    expect(isAbove('extras', 'similar')).toBe(true);
+    expect(isAbove('boxSet', 'extras')).toBe(false);
+    expect(isAbove('extras', 'extras')).toBe(false);
   });
 
   it('puts the box set row between the cast and the similar titles', () => {

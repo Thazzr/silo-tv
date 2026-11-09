@@ -3,6 +3,7 @@ import { mapKey } from '../shared/keys';
 import { queryParams } from '../shared/launchParams';
 import { probeDecodingInfo, probeDisplay, probeMedia } from '../shared/mediaProbe';
 import { localKeyValueStore } from '../shared/storage';
+import { isValidYouTubeVideoId } from '../shared/youtube';
 import type { HdrConfig, Platform } from '../types';
 
 const NO_HDR: HdrConfig = { known: false, hdr: false, dolbyVision: false, atmos: false };
@@ -22,6 +23,12 @@ export const browserPlatform: Platform = {
   mapKey,
   // The browser has no app to close.
   exitApp: () => undefined,
+  // Dev convenience only: a browser tab has no TV app to hand over to.
+  openYouTubeVideo: (videoId) => {
+    if (!isValidYouTubeVideoId(videoId)) return Promise.resolve('unavailable');
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+    return Promise.resolve('opened');
+  },
   storage: localKeyValueStore,
   probeMedia,
   probeDisplay,

@@ -12,6 +12,7 @@ export type {
   HdrConfig,
   KeyValueStore,
   Candidate,
+  OpenYouTubeResult,
   Part,
   ProbeEnv,
   Platform,
@@ -23,6 +24,7 @@ export type {
   ScreenInfo,
 } from './types';
 export { chromeMajorFromUserAgent } from './shared/deviceBasics';
+export { isValidYouTubeVideoId } from './shared/youtube';
 export { CANDIDATES } from './shared/mediaProbe';
 
 let current: Platform | null = null;

@@ -6,6 +6,7 @@ export { prefetchImage } from './prefetch';
 export {
   BoxSetCard,
   CardFrame,
+  CardPill,
   ExploreAllCard,
   LandscapeCard,
   PersonCard,

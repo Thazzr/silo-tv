@@ -26,6 +26,26 @@ describe('browserPlatform', () => {
     close.mockRestore();
   });
 
+  it('opens a YouTube video in a new tab without an opener', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    await expect(browserPlatform.openYouTubeVideo('dQw4w9WgXcQ')).resolves.toBe('opened');
+    expect(open).toHaveBeenCalledWith(
+      'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      '_blank',
+      'noopener',
+    );
+    open.mockRestore();
+  });
+
+  it('never opens anything for an id that is not a plain video id', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    for (const bad of ['', 'short', 'abc def', 'x'.repeat(21), 'a&b=c-d-e']) {
+      await expect(browserPlatform.openYouTubeVideo(bad)).resolves.toBe('unavailable');
+    }
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
   it('onRelaunch never calls the handler and returns a harmless unsubscribe', () => {
     const handler = vi.fn();
     const off = browserPlatform.onRelaunch(handler);

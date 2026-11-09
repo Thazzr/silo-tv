@@ -134,7 +134,7 @@ export const PosterCard = memo(function PosterCard({
 });
 
 /** A small label on the picture of a card: top left ("start") or bottom right ("end"). */
-function CardPill({ place, text }: { place: 'start' | 'end'; text: string }) {
+export function CardPill({ place, text }: { place: 'start' | 'end'; text: string }) {
   return (
     <span className={`card-pill card-pill-${place}`} data-testid={`card-pill-${place}`}>
       {text}
