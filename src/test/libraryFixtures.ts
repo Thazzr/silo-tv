@@ -116,6 +116,8 @@ export interface LibraryCalls {
   /** The query strings of the Browse (catalog) reads. */
   browse: URLSearchParams[];
   filters: URLSearchParams[];
+  /** The watch-rule probes (a one-title read under `watched is false`), apart from the browse reads. */
+  probes: URLSearchParams[];
   /** Reads of the search capabilities. */
   capabilities: number;
   /** The JSON bodies of the letter index reads. */
@@ -134,6 +136,8 @@ export interface LibraryServe {
     calls: LibraryCalls,
   ) => S['CatalogBrowseCollection'] | Response | Promise<S['CatalogBrowseCollection'] | Response>;
   filters?: S['CatalogFilters'] | 'fail';
+  /** Whether the server accepts the watch-state rules: answers the probe with 200 (default) or 422. */
+  watchRules?: boolean | 'fail';
   /** What the search capabilities say about extended rules (decade, title prefix); on by default. */
   extendedRules?: boolean | 'fail';
   /** The letters that have titles, or a failing letter index. */
@@ -154,6 +158,7 @@ export function serveLibrary(server: SetupServer, options: LibraryServe = {}): L
     sections: [],
     browse: [],
     filters: [],
+    probes: [],
     capabilities: 0,
     letters: [],
     collections: [],
@@ -170,6 +175,17 @@ export function serveLibrary(server: SetupServer, options: LibraryServe = {}): L
     }),
     http.get(`${BASE_URL}/api/v2/catalog`, async ({ request }) => {
       const query = new URL(request.url).searchParams;
+      if (query.get('limit') === '1' && (query.get('groups') ?? '').includes('"watched"')) {
+        calls.probes.push(query);
+        if (options.watchRules === false) {
+          return HttpResponse.json(
+            { type: 'about:blank', title: 'Unprocessable', status: 422 },
+            { status: 422, headers: { 'Content-Type': 'application/problem+json' } },
+          );
+        }
+        if (options.watchRules === 'fail') return new HttpResponse(null, { status: 500 });
+        return HttpResponse.json({ items: [], total: 0, total_exact: true, window_cursor: 'p' });
+      }
       calls.browse.push(query);
       const answer = options.browse
         ? await options.browse(query, calls)

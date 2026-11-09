@@ -37,11 +37,12 @@ export function sortParam(sort: SortKey, descending: boolean): string {
 }
 
 /**
- * The facets that are rule groups. Only rules that Silo documents are used (catalog-api.md,
- * "Rule fields and operators", and the `genre` / `contains` example of the rule schema); the
- * watch state and resolution have no documented rule field.
+ * The facets that are rule groups: genre and decade (catalog-api.md, "Rule fields and
+ * operators", and the `genre` / `contains` example of the rule schema) and the watch state. The
+ * watch rules are in Silo's rule vocabulary but not advertised to clients, so the app probes them
+ * (`useWatchRules`).
  */
-export const RULE_FACETS = ['genre', 'decade'] as const;
+export const RULE_FACETS = ['genre', 'decade', 'status'] as const;
 export type RuleFacet = (typeof RULE_FACETS)[number];
 
 /**
@@ -54,6 +55,7 @@ export type Facet = (typeof FACETS)[number];
 export const FACET_LABELS: Record<Facet, MessageKey> = {
   genre: 'library.filter.genre',
   decade: 'library.filter.decade',
+  status: 'library.filter.status',
   content_rating: 'library.filter.contentRating',
 };
 
@@ -68,10 +70,19 @@ export type FilterSelection = Partial<Record<Facet, string[]>>;
 /** The decades on offer, as their first year; the catalog has nothing worth filtering before 1950. */
 export const DECADES = ['2020', '2010', '2000', '1990', '1980', '1970', '1960', '1950'] as const;
 
-/** Facets whose values exclude each other (none now). */
+/** The watch-state choices, in the order they are listed ("Alle" is the absence of a choice). */
+export const STATUS_VALUES = ['unwatched', 'watched', 'in_progress'] as const;
+export type StatusValue = (typeof STATUS_VALUES)[number];
+
+export const STATUS_LABELS: Record<StatusValue, MessageKey> = {
+  unwatched: 'library.status.unwatched',
+  watched: 'library.status.watched',
+  in_progress: 'library.status.inProgress',
+};
+
+/** Facets whose values exclude each other: the watch state. */
 export function isSingleChoice(facet: Facet): boolean {
-  void facet;
-  return false;
+  return facet === 'status';
 }
 
 function ruleFor(facet: RuleFacet, value: string): Rule {
@@ -81,6 +92,13 @@ function ruleFor(facet: RuleFacet, value: string): Rule {
     case 'decade':
       // The decade's first year, as a number: `1990` matches 1990 to 1999.
       return { field: 'decade', op: 'is', value: Number(value) };
+    case 'status':
+      // Silo's personalized boolean rules, operator `is` only: `watched` false is "not completed",
+      // `in_progress` true is "has a resume position" (silo-server internal/catalog/
+      // query_definition.go:61 and :64, query_builder.go:965 and :1022; its web client builds the
+      // same rules in CollectionGuidedRulesEditor.tsx).
+      if (value === 'in_progress') return { field: 'in_progress', op: 'is', value: true };
+      return { field: 'watched', op: 'is', value: value === 'watched' };
   }
 }
 
@@ -94,6 +112,9 @@ export function filterGroups(filters: FilterSelection): Group[] {
   }
   return groups;
 }
+
+/** The rule groups of the watch-rule probe: `watched is false`, built like a Browse read builds it. */
+export const WATCH_PROBE_GROUPS: Group[] = filterGroups({ status: ['unwatched'] });
 
 /** Titles that start with a digit: the server has no `name_prefix` for "#", so the rules say it. */
 const NUMBER_GROUP: Group = {

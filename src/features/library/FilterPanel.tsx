@@ -14,8 +14,11 @@ import {
   facetNeedsExtendedRules,
   filterCount,
   isSingleChoice,
+  STATUS_LABELS,
+  STATUS_VALUES,
   type Facet,
   type FilterSelection,
+  type StatusValue,
 } from './browse';
 import { useOverlayBack } from './OverlayBack';
 import { DIALOG_KEY_PREFIX } from './SortList';
@@ -26,6 +29,8 @@ const valueKey = (facet: Facet, value: string) => `${DIALOG_KEY_PREFIX}value-${f
 const CLEAR_KEY = `${DIALOG_KEY_PREFIX}clear`;
 const DONE_KEY = `${DIALOG_KEY_PREFIX}done`;
 const ALL_KEY = `${DIALOG_KEY_PREFIX}all`;
+/** The "All" row of a single-choice facet: no choice. */
+const NO_CHOICE_KEY = (facet: Facet) => `${DIALOG_KEY_PREFIX}value-${facet}-none`;
 
 /** The values the server lists for each facet; the decades are the app's own. */
 export function facetValues(facet: Facet, filters: CatalogFilters | undefined): string[] {
@@ -34,6 +39,8 @@ export function facetValues(facet: Facet, filters: CatalogFilters | undefined): 
       return filters?.genres ?? [];
     case 'decade':
       return [...DECADES];
+    case 'status':
+      return [...STATUS_VALUES];
     case 'content_rating':
       return filters?.content_ratings ?? [];
   }
@@ -64,6 +71,7 @@ export function FilterPanel({
   facets,
   loading,
   extended,
+  watchRules,
   onApply,
 }: {
   filters: FilterSelection;
@@ -72,6 +80,8 @@ export function FilterPanel({
   loading: boolean;
   /** The server accepts the extended rules; without them the decade is not offered. */
   extended: boolean;
+  /** The server accepts the watch-state rules; without them the Status section is not offered. */
+  watchRules: boolean;
   onApply: (filters: FilterSelection) => void;
 }) {
   const t = useT();
@@ -84,7 +94,9 @@ export function FilterPanel({
 
   const visible = FACETS.filter(
     (facet) =>
-      (extended || !facetNeedsExtendedRules(facet)) && facetValues(facet, facets).length > 0,
+      (extended || !facetNeedsExtendedRules(facet)) &&
+      (watchRules || facet !== 'status') &&
+      facetValues(facet, facets).length > 0,
   );
 
   useEffect(() => {
@@ -121,12 +133,14 @@ export function FilterPanel({
 
   const labelOf = (facet: Facet, value: string): string => {
     if (facet === 'decade') return t('library.decade', { decade: value });
+    if (facet === 'status') return t(STATUS_LABELS[value as StatusValue]);
     return value;
   };
 
   const summary = (facet: Facet): string => {
     const values = draft[facet] ?? [];
-    if (values.length === 0) return t('library.filter.any');
+    if (values.length === 0)
+      return t(isSingleChoice(facet) ? 'library.filter.statusAll' : 'library.filter.any');
     if (values.length === 1) return labelOf(facet, values[0]!);
     return t('library.filter.selected', { count: values.length });
   };
@@ -156,7 +170,11 @@ export function FilterPanel({
                   className="menu-item menu-item-split"
                   onClick={() => {
                     setOpen(facet);
-                    setLanding(valueKey(facet, facetValues(facet, facets)[0]!));
+                    setLanding(
+                      isSingleChoice(facet)
+                        ? NO_CHOICE_KEY(facet)
+                        : valueKey(facet, facetValues(facet, facets)[0]!),
+                    );
                   }}
                 >
                   <span>{t(FACET_LABELS[facet])}</span>
@@ -188,13 +206,25 @@ export function FilterPanel({
               ‹ {t('library.filter.all')}
             </Focusable>
             <div className="lib-panel-list" data-testid="facet-values">
+              {isSingleChoice(open) ? (
+                <Focusable
+                  focusKey={NO_CHOICE_KEY(open)}
+                  role="menuitemradio"
+                  aria-checked={(draft[open] ?? []).length === 0}
+                  className="menu-item menu-item-split"
+                  onClick={() => setDraft({ ...draft, [open]: [] })}
+                >
+                  <span>{t('library.filter.statusAll')}</span>
+                  <span aria-hidden="true">{(draft[open] ?? []).length === 0 ? '✓' : ''}</span>
+                </Focusable>
+              ) : null}
               {facetValues(open, facets).map((value) => {
                 const checked = draft[open]?.includes(value) === true;
                 return (
                   <Focusable
                     key={value}
                     focusKey={valueKey(open, value)}
-                    role="menuitemcheckbox"
+                    role={isSingleChoice(open) ? 'menuitemradio' : 'menuitemcheckbox'}
                     aria-checked={checked}
                     className="menu-item menu-item-split"
                     onClick={() => toggle(open, value)}

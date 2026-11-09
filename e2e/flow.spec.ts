@@ -56,6 +56,8 @@ interface FakeOptions {
   seasons?: number;
   /** Extra genres ("Genre 01", ...) after Action and Drama: a facet list longer than its panel. */
   genres?: number;
+  /** An older server: the watch-state rules answer 422 (the Status section then stays out). */
+  noWatchRules?: boolean;
 }
 
 interface FakeProfile {
@@ -76,14 +78,36 @@ interface FakeTitle {
   year: number;
   genre: string;
   rating: string;
+  watched: boolean;
 }
 const MOVIES: FakeTitle[] = [
-  { id: 'm1', title: 'First Title', year: 2019, genre: 'Drama', rating: 'FSK 12' },
-  { id: 'm2', title: 'Second Title', year: 2021, genre: 'Action', rating: 'FSK 16' },
-  { id: 'm3', title: 'Third Title', year: 2020, genre: 'Drama', rating: 'FSK 12' },
-  { id: 'm4', title: 'Fourth Title', year: 2018, genre: 'Action', rating: 'FSK 18' },
-  { id: 'm5', title: 'Seventh Title', year: 2017, genre: 'Action', rating: 'FSK 16' },
-  { id: 'm6', title: 'Alpha Title', year: 2015, genre: 'Drama', rating: 'FSK 12' },
+  { id: 'm1', title: 'First Title', year: 2019, genre: 'Drama', rating: 'FSK 12', watched: true },
+  {
+    id: 'm2',
+    title: 'Second Title',
+    year: 2021,
+    genre: 'Action',
+    rating: 'FSK 16',
+    watched: false,
+  },
+  { id: 'm3', title: 'Third Title', year: 2020, genre: 'Drama', rating: 'FSK 12', watched: true },
+  {
+    id: 'm4',
+    title: 'Fourth Title',
+    year: 2018,
+    genre: 'Action',
+    rating: 'FSK 18',
+    watched: false,
+  },
+  {
+    id: 'm5',
+    title: 'Seventh Title',
+    year: 2017,
+    genre: 'Action',
+    rating: 'FSK 16',
+    watched: false,
+  },
+  { id: 'm6', title: 'Alpha Title', year: 2015, genre: 'Drama', rating: 'FSK 12', watched: true },
 ];
 
 interface FakeRule {
@@ -93,12 +117,13 @@ interface FakeRule {
 }
 type FakeGroup = { match: string; rules: FakeRule[] };
 
-/** The titles that satisfy the genre rules of the groups (the only rule these flows send). */
+/** The titles that satisfy the genre and watched rules of the groups (the rules these flows send). */
 function filterTitles(groups: FakeGroup[]): FakeTitle[] {
+  const matches = (rule: FakeRule, movie: FakeTitle) =>
+    (rule.field === 'genre' && rule.value === movie.genre) ||
+    (rule.field === 'watched' && rule.value === movie.watched);
   return MOVIES.filter((movie) =>
-    groups.every((group) =>
-      group.rules.some((rule) => rule.field === 'genre' && rule.value === movie.genre),
-    ),
+    groups.every((group) => group.rules.some((rule) => matches(rule, movie))),
   );
 }
 
@@ -656,6 +681,11 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             });
           }
           if (url.searchParams.get('library_id') === 'lib-1') {
+            if (
+              options.noWatchRules &&
+              (url.searchParams.get('groups') ?? '').includes('"watched"')
+            )
+              return send(422, { type: 'about:blank', title: 'Unprocessable', status: 422 });
             const items = browseTitles(url.searchParams).map(asCard);
             return send(200, {
               items,
@@ -1067,6 +1097,89 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
 });
 
+test('Movies: Browse filtered by watch state with the remote; an older server shows no Status section', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo();
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  const posters = page.getByTestId('card-title');
+  await expect(posters).toHaveCount(6);
+
+  // Filter, then Status (the third facet): "Gesehen" is one choice; Back leaves it, Back applies.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Status/ })).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /^Status/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemradio', { name: 'Alle', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitemradio', { name: 'Gesehen', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemradio', { name: 'Gesehen', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /^Status/ })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('filter-panel')).toHaveCount(0);
+  await expect(page.getByTestId('filter-count')).toHaveText('1');
+  // The grid shows the server's answer: the watched titles.
+  await expect(posters).toHaveText(['Alpha Title', 'First Title', 'Third Title']);
+  const sent = seen.filter((e) => e.path === '/api/v2/catalog' && e.search.includes('watched'));
+  const last = new URLSearchParams(sent[sent.length - 1]?.search ?? '');
+  expect(JSON.parse(last.get('groups') ?? '[]')).toEqual([
+    { match: 'any', rules: [{ field: 'watched', op: 'is', value: true }] },
+  ]);
+});
+
+test('Movies: a server that answers the watch-rule probe with 422 shows no Status section', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ noWatchRules: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByTestId('card-title')).toHaveCount(6);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Altersfreigabe/ })).toBeVisible();
+  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('watched'))).toBe(true);
+  await expect(page.getByRole('button', { name: /^Status/ })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('Movies: Browse filtered by two content ratings with the remote, then Back to the grid', async ({
   page,
 }) => {
@@ -1089,12 +1202,14 @@ test('Movies: Browse filtered by two content ratings with the remote, then Back 
   const posters = page.getByTestId('card-title');
   await expect(posters).toHaveCount(6);
 
-  // Filter, then Altersfreigabe (the third facet): two values; Back leaves the values, Back applies.
+  // Filter, then Altersfreigabe (the fourth facet, after the Status section the probe let in): two values; Back leaves the values, Back applies.
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Filter', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^Status/ })).toBeVisible();
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /^Altersfreigabe/ })).toBeFocused();
@@ -1873,8 +1988,11 @@ test('detail page: a cast card opens the person page; Movies, a title, and Back 
 
   // The pills hold All, Movies and Series; All is selected and has the focus, its count shows.
   await expect(page.getByRole('tab')).toHaveText(['Alle', 'Filme', 'Serien']);
-  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
-  await expect(page.getByRole('tab', { name: 'Alle' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(page.getByTestId('person-count')).toHaveText('3 Titel');
   await expect(page.getByTestId('card-title')).toHaveText([
     'First Title',
@@ -1889,7 +2007,10 @@ test('detail page: a cast card opens the person page; Movies, a title, and Back 
   // Resting on Movies shows nothing; OK reads the movies.
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Filme' })).toBeFocused();
-  await expect(page.getByRole('tab', { name: 'Alle' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(page.getByTestId('card-title')).toHaveCount(3);
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: 'Filme' })).toHaveAttribute('aria-selected', 'true');
@@ -2021,7 +2142,7 @@ test('person page: a 4,000-character biography opens in full; Down scrolls it to
   await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');
 
   // Up from the pills reaches More; OK opens the biography.
-  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -2411,7 +2532,7 @@ test('Magic Remote wheel: a long biography dialog scrolls its text', async ({ pa
   await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');
-  await expect(page.getByRole('tab', { name: 'Alle' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Alle', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
   await page.keyboard.press('Enter');

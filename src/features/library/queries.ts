@@ -9,6 +9,7 @@ import {
   contentRatings,
   filterGroups,
   sortParam,
+  WATCH_PROBE_GROUPS,
   type BrowseSelection,
 } from './browse';
 import type { TabKind } from './libraryMemory';
@@ -188,6 +189,41 @@ export function useCatalogFilters(libraryId: string, kind: LibraryKind) {
       return data;
     },
   });
+}
+
+/**
+ * Whether the server accepts the watch-state rules (`watched`, `in_progress`). Silo does not
+ * advertise them, so the first Browse of a server and profile asks for one title under
+ * `watched is false`: a 2xx means yes, anything else (a 422 from an older server, a failure) means
+ * no, and the Status section stays out without any message. The answer is kept for the session.
+ */
+export function useWatchRules(libraryId: string, kind: LibraryKind): boolean {
+  const { client, baseUrl, session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  const probe = useQuery({
+    queryKey: ['library', 'watch-rules', baseUrl, profileId],
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+    queryFn: async () => {
+      const { data, error, response } = await client.GET('/api/v2/catalog', {
+        params: {
+          header: { 'X-Profile-Id': profileId },
+          query: {
+            library_id: libraryId,
+            type: kind,
+            match: 'all',
+            groups: JSON.stringify(WATCH_PROBE_GROUPS),
+            limit: 1,
+            skip_total: true,
+          },
+        },
+      });
+      if (!data) throw toApiError(error, response);
+      return true;
+    },
+  });
+  return probe.data === true;
 }
 
 /**

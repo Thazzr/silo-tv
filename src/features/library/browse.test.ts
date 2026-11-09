@@ -9,6 +9,8 @@ import {
   defaultDescending,
   filterCount,
   filterGroups,
+  isSingleChoice,
+  WATCH_PROBE_GROUPS,
   LETTERS,
   sortParam,
 } from './browse';
@@ -60,10 +62,35 @@ describe('filterGroups', () => {
     ]);
   });
 
-  it('offers the two rule facets and the content rating, which is a parameter and no rule', () => {
-    expect([...FACETS]).toEqual(['genre', 'decade', 'content_rating']);
+  it('offers the three rule facets and the content rating, which is a parameter and no rule', () => {
+    expect([...FACETS]).toEqual(['genre', 'decade', 'status', 'content_rating']);
     expect(filterGroups({ content_rating: ['PG'] })).toEqual([]);
     expect(browseGroups({ content_rating: ['PG'] }, 'A')).toEqual([]);
+  });
+
+  // Silo's personalized boolean rules (internal/catalog/query_definition.go: `is` only, boolean).
+  it('writes each watch-state choice as exactly its {field, op, value}', () => {
+    expect(filterGroups({ status: ['unwatched'] })).toEqual([
+      { match: 'any', rules: [{ field: 'watched', op: 'is', value: false }] },
+    ]);
+    expect(filterGroups({ status: ['watched'] })).toEqual([
+      { match: 'any', rules: [{ field: 'watched', op: 'is', value: true }] },
+    ]);
+    expect(filterGroups({ status: ['in_progress'] })).toEqual([
+      { match: 'any', rules: [{ field: 'in_progress', op: 'is', value: true }] },
+    ]);
+    expect(WATCH_PROBE_GROUPS).toEqual(filterGroups({ status: ['unwatched'] }));
+  });
+
+  it('lets the watch state choose one value at a time, and nothing else', () => {
+    expect(isSingleChoice('status')).toBe(true);
+    expect(isSingleChoice('genre')).toBe(false);
+    expect(isSingleChoice('content_rating')).toBe(false);
+  });
+
+  it('keeps the watch state in the browse groups next to the other rules and the "#" group', () => {
+    const groups = browseGroups({ genre: ['Action'], status: ['watched'] }, '#');
+    expect(groups.map((g) => g.rules[0]!.field)).toEqual(['genre', 'watched', 'title']);
   });
 
   it('reads the content ratings for the query parameter, none when empty', () => {
@@ -109,6 +136,7 @@ describe('filterCount', () => {
     expect(filterCount({ genre: ['A', 'B', 'C'] })).toBe(1);
     expect(filterCount({ genre: ['A', 'B'], decade: ['1990'] })).toBe(2);
     expect(filterCount({ genre: ['A'], decade: ['1990'], content_rating: ['PG', 'R'] })).toBe(3);
+    expect(filterCount({ status: ['watched'] })).toBe(1);
   });
 });
 

@@ -308,10 +308,10 @@ describe('Browse filter', () => {
       within(panel)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['DecadeAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
+    ).toEqual(['DecadeAny ›', 'StatusAll ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
   });
 
-  it('lists genre, decade and content rating, and nothing else, when the server has extended rules', async () => {
+  it('lists genre, decade, status and content rating, and nothing else, when the server has extended rules', async () => {
     const calls = serveLibrary(server);
     setup();
     const panel = await openFilter(calls);
@@ -321,7 +321,14 @@ describe('Browse filter', () => {
         within(panel)
           .getAllByRole('button')
           .map((b) => b.textContent),
-      ).toEqual(['GenreAny ›', 'DecadeAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']),
+      ).toEqual([
+        'GenreAny ›',
+        'DecadeAny ›',
+        'StatusAll ›',
+        'Content ratingAny ›',
+        'Clear filters',
+        'Done',
+      ]),
     );
     // Nothing is set, so there is nothing to clear.
     expect(row(panel, /Clear filters/)).toBeDisabled();
@@ -338,7 +345,7 @@ describe('Browse filter', () => {
       within(panel)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['GenreAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
+    ).toEqual(['GenreAny ›', 'StatusAll ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
   });
 
   it('leaves the decade out when the capabilities cannot be read', async () => {
@@ -603,6 +610,182 @@ describe('Browse filter', () => {
     const query = await firstRead(calls);
     expect(query.getAll('content_rating')).toEqual(['PG']);
     await waitFor(() => expect(screen.getByTestId('filter-count')).toHaveTextContent('1'));
+  });
+
+  /** Opens the Status section, picks one choice (or "none" for All) and returns to the list. */
+  async function pickStatus(panel: HTMLElement, value: string) {
+    await within(panel).findByRole('button', { name: /^Status/ });
+    await focus('lib-dialog-facet-status');
+    await pressKey(KEY.enter);
+    await within(panel).findByTestId('facet-values');
+    await focus(`lib-dialog-value-status-${value}`);
+    await pressKey(KEY.enter);
+    await focus('lib-dialog-all');
+    await pressKey(KEY.enter);
+  }
+  const ruleOf = (query: URLSearchParams) => groupsOf(query)!.map((g) => g.rules);
+
+  it('probes the watch rules with a one-title read under "watched is false", and then offers Status', async () => {
+    const calls = serveLibrary(server);
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /^Status/ });
+    expect(calls.probes).toHaveLength(1);
+    const probe = calls.probes[0]!;
+    expect(probe.get('library_id')).toBe('lib-1');
+    expect(probe.get('limit')).toBe('1');
+    expect(ruleOf(probe)).toEqual([[{ field: 'watched', op: 'is', value: false }]]);
+    // The probe is no browse read.
+    expect(calls.browse.every((q) => q.get('limit') !== '1')).toBe(true);
+  });
+
+  it('leaves Status out without any message when the server answers the probe with 422', async () => {
+    const calls = serveLibrary(server, { watchRules: false });
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /Genre/ });
+    await waitFor(() => expect(calls.probes).toHaveLength(1));
+    expect(within(panel).queryByRole('button', { name: /^Status/ })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByTestId('browse-error')).toBeNull();
+    expect(
+      within(panel)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['GenreAny ›', 'DecadeAny ›', 'Content ratingAny ›', 'Clear filters', 'Done']);
+  });
+
+  it('leaves Status out when the probe fails for any other reason', async () => {
+    const calls = serveLibrary(server, { watchRules: 'fail' });
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /Genre/ });
+    await waitFor(() => expect(calls.probes).toHaveLength(1));
+    expect(within(panel).queryByRole('button', { name: /^Status/ })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('probes once for the session, not whenever the panel opens', async () => {
+    const calls = serveLibrary(server);
+    setup();
+    const panel = await openFilter(calls);
+    await within(panel).findByRole('button', { name: /^Status/ });
+    await applyPanel();
+    await focus('browse-filter');
+    await pressKey(KEY.enter);
+    const again = await screen.findByTestId('filter-panel');
+    await within(again).findByRole('button', { name: /^Status/ });
+    expect(calls.probes).toHaveLength(1);
+  });
+
+  it('writes each watch-state choice as its rule group, one at a time, and "All" as none', async () => {
+    const calls = serveLibrary(server);
+    setup();
+    let current = await openFilter(calls);
+    const expected: [string, unknown][] = [
+      ['unwatched', { field: 'watched', op: 'is', value: false }],
+      ['watched', { field: 'watched', op: 'is', value: true }],
+      ['in_progress', { field: 'in_progress', op: 'is', value: true }],
+    ];
+    let reads = 1;
+    for (const [value, rule] of expected) {
+      await pickStatus(current, value);
+      await applyPanel();
+      reads += 1;
+      await waitFor(() => expect(calls.browse).toHaveLength(reads));
+      expect(ruleOf(lastRead(calls))).toEqual([[rule]]);
+      await focus('browse-filter');
+      await pressKey(KEY.enter);
+      current = await screen.findByTestId('filter-panel');
+      // One choice at a time: only the picked one is checked.
+      await focus('lib-dialog-facet-status');
+      await pressKey(KEY.enter);
+      const values = await within(current).findByTestId('facet-values');
+      const checked = within(values)
+        .getAllByRole('menuitemradio')
+        .filter((r) => r.getAttribute('aria-checked') === 'true');
+      expect(checked).toHaveLength(1);
+      await focus('lib-dialog-all');
+      await pressKey(KEY.enter);
+    }
+    // "All" takes the choice away again.
+    await pickStatus(current, 'none');
+    await applyPanel();
+    await waitFor(() => expect(lastRead(calls).has('groups')).toBe(false));
+    expect(screen.queryByTestId('filter-count')).toBeNull();
+  });
+
+  it('combines the watch state with sort, genre, decade, rating, letter and paging, and the letter index follows it', async () => {
+    const calls = serveLibrary(server, {
+      letters: ['A', 'B'],
+      browse: (query) => ({
+        items: titles('Title', 3, 'movie', query.get('cursor') ? 3 : 0),
+        total: 6,
+        total_exact: true,
+        window_cursor: 'w',
+        page: query.get('cursor') ? { has_more: false } : { has_more: true, next_cursor: 'c2' },
+      }),
+    });
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', {
+      sort: 'year',
+      descending: true,
+      filters: {
+        genre: ['Action'],
+        decade: ['1990'],
+        status: ['in_progress'],
+        content_rating: ['PG'],
+      },
+      letter: 'A',
+    });
+    setup(memory);
+    const query = await firstRead(calls);
+    expect(query.get('sort')).toBe('-year');
+    expect(query.get('name_prefix')).toBe('A');
+    expect(query.getAll('content_rating')).toEqual(['PG']);
+    expect(groupsOf(query)!.map((g) => g.rules[0]!.field)).toEqual([
+      'genre',
+      'decade',
+      'in_progress',
+    ]);
+    await screen.findByRole('button', { name: /Title 2/ });
+    await focus(card('Title2'));
+    await waitFor(() => expect(calls.browse.length).toBeGreaterThan(1));
+    const next = lastRead(calls);
+    expect(next.get('cursor')).toBe('c2');
+    expect(groupsOf(next)).toEqual(groupsOf(query));
+    expect(screen.getByTestId('filter-count')).toHaveTextContent('4');
+    // The letter rail asks with the same rule groups.
+    await waitFor(() => expect(calls.letters.length).toBeGreaterThan(0));
+    const body = calls.letters[calls.letters.length - 1] as {
+      groups: { rules: { field: string }[] }[];
+    };
+    expect(body.groups.map((g) => g.rules[0]!.field)).toEqual(['genre', 'decade', 'in_progress']);
+  });
+
+  it('clears the watch state with the other filters, and restores it with the next visit', async () => {
+    const calls = serveLibrary(server);
+    const memory = new LibraryMemory();
+    const first = setup(memory);
+    const panel = await openFilter(calls);
+    await pickStatus(panel, 'watched');
+    await applyPanel();
+    await waitFor(() => expect(calls.browse).toHaveLength(2));
+    await waitFor(() => expect(screen.getByTestId('filter-count')).toHaveTextContent('1'));
+    first.unmount();
+    calls.browse.length = 0;
+    setup(memory);
+    const query = await firstRead(calls);
+    expect(ruleOf(query)).toEqual([[{ field: 'watched', op: 'is', value: true }]]);
+    await screen.findByRole('button', { name: /Title 2/ });
+    await focus('browse-filter');
+    await pressKey(KEY.enter);
+    await screen.findByTestId('filter-panel');
+    await focus('lib-dialog-clear');
+    await pressKey(KEY.enter);
+    await applyPanel();
+    await waitFor(() => expect(lastRead(calls).has('groups')).toBe(false));
+    expect(memory.browseOf('movie', 'lib-1').filters).toEqual({});
   });
 
   it('sends nothing when the panel is closed without a change', async () => {

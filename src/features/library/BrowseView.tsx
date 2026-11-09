@@ -31,6 +31,7 @@ import {
   useCatalogFilters,
   useExtendedRules,
   useLetters,
+  useWatchRules,
   type LibraryKind,
   type UserLibrary,
 } from './queries';
@@ -76,6 +77,7 @@ export function BrowseView({
   const letters = useLetters(library.id, kind, selection);
   const filterFacets = useCatalogFilters(library.id, kind);
   const extended = useExtendedRules();
+  const watchRules = useWatchRules(library.id, kind);
   const items = useMemo(() => pages.data?.pages.flatMap((page) => page.items) ?? [], [pages.data]);
   const firstKey = items[0] ? gridCardKey(gridId, items[0].content_id) : undefined;
 
@@ -214,6 +216,7 @@ export function BrowseView({
           facets={filterFacets.data}
           loading={filterFacets.isPending}
           extended={extended}
+          watchRules={watchRules}
           onApply={applyFilters}
         />
       ) : null}
