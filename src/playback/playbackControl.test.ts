@@ -878,3 +878,30 @@ describe('lost connection (reconnect)', () => {
     expect(progress.every(([, init]) => init.body.is_paused === true)).toBe(true);
   });
 });
+
+describe('heading', () => {
+  it('carries the title and, for an episode, the series and its numbers into the ready state', async () => {
+    const { ready } = await playing({
+      serve: {
+        watch: watchDetail({
+          title: 'The Pilot',
+          type: 'episode',
+          series_title: 'Some Show',
+          season_number: 1,
+          episode_number: 2,
+        }),
+      },
+    });
+    expect(ready().heading).toEqual({
+      title: 'The Pilot',
+      seriesTitle: 'Some Show',
+      seasonNumber: 1,
+      episodeNumber: 2,
+    });
+  });
+
+  it('names only the title for a movie', async () => {
+    const { ready } = await playing();
+    expect(ready().heading).toEqual({ title: 'First Title' });
+  });
+});

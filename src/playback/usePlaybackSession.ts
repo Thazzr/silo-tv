@@ -40,6 +40,14 @@ const MAX_RESTARTS = 3;
 /** Waits before the retries of a stop that did not arrive (the stop_id stays the same). */
 export const STOP_RETRY_DELAYS_MS = [500, 1_500];
 
+/** What the player's overlay names: the title and, for an episode, its series and numbers. */
+export interface Heading {
+  title: string;
+  seriesTitle?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+}
+
 export type SessionFailure = 'unsupported' | 'noFile' | 'terminal' | 'failed' | 'sessionEnded';
 
 export type SessionState =
@@ -55,6 +63,7 @@ export type SessionState =
       loadId: number;
       /** False when the viewer had paused before a reload that should not start by itself. */
       autoplay: boolean;
+      heading: Heading | null;
     }
   | {
       kind: 'error';
@@ -180,6 +189,7 @@ export class PlaybackController {
   private context: PlaybackContext | null = null;
   private startPosition = 0;
   private resumeAt: number | null = null;
+  private heading: Heading | null = null;
   private sequence = 0;
   private loadId = 0;
   /** Failure recoveries in this attempt: the `attempt_count` of the loop guard. */
@@ -248,6 +258,7 @@ export class PlaybackController {
       this.installationId = installationId;
       this.fileId = watch.fileId;
       this.resumeAt = watch.resume;
+      this.heading = watch.heading;
       const kind = this.deps.intent?.kind ?? 'ask';
       if (kind === 'beginning') {
         await this.start(0);
@@ -281,7 +292,7 @@ export class PlaybackController {
     return data.installation_id;
   }
 
-  private async watch(): Promise<{ fileId: string; resume: number | null }> {
+  private async watch(): Promise<{ fileId: string; resume: number | null; heading: Heading }> {
     const { data, error, response } = await this.deps.client.GET('/api/v2/watch/{id}', {
       params: { path: { id: this.deps.contentId }, header: this.header() },
     });
@@ -292,7 +303,13 @@ export class PlaybackController {
     if (!version) throw new SessionError('noFile');
     // One rule for every entry: the detail page's. A rewatch that stopped partway resumes too.
     const resume = resumePoint(data.user_data, version.duration_seconds);
-    return { fileId: version.file_id, resume };
+    const heading: Heading = {
+      title: data.title,
+      ...(data.series_title ? { seriesTitle: data.series_title } : {}),
+      ...(data.season_number !== undefined ? { seasonNumber: data.season_number } : {}),
+      ...(data.episode_number !== undefined ? { episodeNumber: data.episode_number } : {}),
+    };
+    return { fileId: version.file_id, resume, heading };
   }
 
   // --- Start ---------------------------------------------------------------------------------
@@ -407,6 +424,7 @@ export class PlaybackController {
       mediaUrl: url,
       loadId: this.loadId,
       autoplay: options.autoplay ?? !this.viewerPaused,
+      heading: this.heading,
     });
   }
 

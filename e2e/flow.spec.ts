@@ -3083,3 +3083,72 @@ test('rows do not wait for the home capabilities: Home and the Series tab show t
   await expect(page.getByTestId('tab-series')).toBeVisible();
   await expect(page.getByTestId('row-skeleton')).toHaveCount(0, { timeout: 5000 });
 });
+
+test('player controls: a key opens the overlay on the scrubber, Down reaches the buttons, Close and Back leave, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  await expect(play).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+
+  const osd = page.getByTestId('player-osd');
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+  // Before the first frame only Back works: a key changes nothing.
+  await page.keyboard.press('ArrowUp');
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+  // Media never plays in this test; the engine is told the first frame is there.
+  await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
+
+  // The first key only opens the overlay, with the focus on the scrubber.
+  await page.keyboard.press('ArrowUp');
+  await expect(osd).toHaveAttribute('data-visible', 'true');
+  await expect(page.getByRole('slider', { name: 'Position' })).toBeFocused();
+  // Down reaches the buttons on Play/Pause (showing what it does now: pause).
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: '30 Sekunden vor' })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: '10 Sekunden zurück' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('slider', { name: 'Position' })).toBeFocused();
+
+  // Back hides the overlay first; the player stays.
+  await page.keyboard.press('Escape');
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+  await expect(page.getByTestId('player')).toBeVisible();
+
+  // Close, reached with the arrow keys, leaves the player and stops the session.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toHaveCount(0);
+  await expect(play).toBeVisible();
+  await expect
+    .poll(() =>
+      seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+    )
+    .toBe(true);
+
+  // Back with the overlay hidden leaves at once.
+  await play.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('player')).toHaveCount(0);
+});

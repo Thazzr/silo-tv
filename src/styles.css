@@ -407,39 +407,186 @@ h3 {
   transform: translate(-50%, -50%);
 }
 
-.player-bar {
+/* The on-screen controls. The overlay sits on a permanent compositor layer and fades with
+   opacity only (design.md, "Animating over large images"); the dark gradient is part of it. */
+.player-osd {
   position: absolute;
-  right: var(--safe-x);
-  bottom: var(--safe-y);
-  left: var(--safe-x);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-end;
+  /* The bottom 45 % is dark enough (at least 0.86 black under every line of text) that the text
+     keeps 4.5:1 even over a white frame; the gradient fades out above it. */
+  min-height: 45vh;
+  padding: 120px var(--safe-x) var(--safe-y);
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.88) 55%,
+    rgba(0, 0, 0, 0.86) 72%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  opacity: 1;
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 0s;
+  will-change: opacity;
+}
+
+.player-osd[data-visible='false'] {
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+
+.player-osd-body {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-osd-series {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.player-osd-title {
+  margin: 4px 0 0;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.player-osd-scrub-row {
+  min-height: 40px;
+  margin-top: 12px;
+}
+
+.player-osd-scrub {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 12px 24px;
-  font-variant-numeric: tabular-nums;
-  background: rgba(10, 10, 10, 0.8);
-  border-radius: var(--radius-control);
+  gap: 12px;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
 }
 
-.player-state {
-  min-width: 140px;
+.player-osd-scrub-time {
+  color: var(--text-secondary);
 }
 
-.player-track {
-  flex: 1;
+/* The hit area is tall enough for the pointer; the visible bar inside it is thin. */
+.player-scrubber {
+  position: relative;
+  box-sizing: border-box;
+  height: 40px;
+  padding: 17px 0;
+  cursor: pointer;
+  outline: none;
+}
+
+.player-scrubber-track {
+  position: relative;
   box-sizing: border-box;
   height: 6px;
   overflow: hidden;
-  background: var(--progress-track);
-  border: 1px solid var(--progress-outline);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 3px;
+  transition: transform var(--transition);
 }
 
-.player-fill {
-  width: 100%;
-  height: 100%;
-  background: var(--progress);
+/* Focus: the track grows from 6 to 10 px (transform only) and the knob to about 28 px. */
+.player-scrubber[data-focused='true'] .player-scrubber-track,
+.player-scrubber:hover .player-scrubber-track {
+  transform: scaleY(1.67);
+}
+
+.player-scrubber-buffered,
+.player-scrubber-fill {
+  position: absolute;
+  inset: 0;
   transform-origin: left center;
+}
+
+.player-scrubber-buffered {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.player-scrubber-fill {
+  background: var(--progress);
+}
+
+.player-scrubber-thumb {
+  position: absolute;
+  top: 12px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  background: var(--focus-fill);
+  border-radius: 50%;
+  transition: transform var(--transition);
+}
+
+.player-scrubber[data-focused='true'] .player-scrubber-thumb,
+.player-scrubber[data-scrubbing='true'] .player-scrubber-thumb,
+.player-scrubber:hover .player-scrubber-thumb {
+  box-shadow: 0 0 0 4px var(--focus-ring);
+  transform: scale(1.75);
+}
+
+.player-osd-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 22px;
+  color: rgba(237, 237, 237, 0.85);
+}
+
+.player-osd-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.player-osd-group {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.player-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 88px;
+  height: 88px;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--chrome-border);
+  border-radius: 50%;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+/* Focus (the pointer moves it too): the light fill with a dark icon, as on every button of the
+   app, and a little larger. The DOM focus and data-focused always agree (PlayerOsd). */
+.player-btn[data-focused='true'],
+.player-btn:hover {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  transform: scale(1.1);
 }
 
 /* The overlay lays out its own rows (label | value); the probe screen's dl styles are scoped to
@@ -451,8 +598,8 @@ h3 {
   box-sizing: border-box;
   width: 960px;
   max-width: calc(100vw - 2 * var(--safe-x));
-  /* Stays above the progress bar and inside the safe area. */
-  max-height: calc(100vh - 2 * var(--safe-y) - 200px);
+  /* Stays above the controls and inside the safe area. */
+  max-height: calc(100vh - 2 * var(--safe-y) - 420px);
   overflow: hidden;
   margin: 0;
   padding: 16px 24px;

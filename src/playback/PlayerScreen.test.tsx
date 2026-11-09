@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../api/session';
@@ -18,6 +18,7 @@ import {
 } from '../test/playbackFixtures';
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderWithSilo } from '../test/renderFlow';
+import { serveSettings, type SettingsServe } from '../test/settingsFixtures';
 import { PlayerScreen } from './PlayerScreen';
 import { setResumeRewind } from './resumeRewind';
 import type { StartIntent } from './resume';
@@ -50,9 +51,29 @@ const LEFT = 37;
 const RIGHT = 39;
 const BACK = 461;
 const BLUE = 406;
+const UP = 38;
 
 function key(keyCode: number) {
   fireEvent.keyDown(window, { keyCode });
+}
+
+/** A press: key down and up (a held key sends no keyup before its repeats). */
+function tap(keyCode: number) {
+  fireEvent.keyDown(window, { keyCode });
+  fireEvent.keyUp(window, { keyCode });
+}
+
+/** Lets real time pass inside act: the skip commit waits 200 ms after the last press. */
+async function wait(ms: number) {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  });
+}
+
+/** Opens the overlay (the first key only shows it) and presses `keyCode` once, then lets the seek commit. */
+async function skipWith(keyCode: number) {
+  tap(keyCode);
+  await wait(260);
 }
 
 function signedIn(token = ACCESS_TOKEN) {
@@ -67,8 +88,14 @@ function signedIn(token = ACCESS_TOKEN) {
   return session;
 }
 
-function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, intent?: StartIntent) {
+function render(
+  options: PlaybackServerOptions = {},
+  token = ACCESS_TOKEN,
+  intent?: StartIntent,
+  settings: SettingsServe = {},
+) {
   const calls = servePlayback(server, options);
+  serveSettings(server, settings);
   const onExit = vi.fn();
   const view = renderWithSilo(
     <PlayerScreen contentId="m1" title="First Title" intent={intent} onExit={onExit} />,
@@ -78,8 +105,12 @@ function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, inten
   return { calls, onExit, view, currentVideo };
 }
 
-async function playing(options: PlaybackServerOptions = {}, firstFrame = true) {
-  const ctx = render(options);
+async function playing(
+  options: PlaybackServerOptions = {},
+  firstFrame = true,
+  settings: SettingsServe = {},
+) {
+  const ctx = render(options, ACCESS_TOKEN, undefined, settings);
   await screen.findByTestId('player');
   const video = ctx.currentVideo()!;
   // Progress and stop report the element's position only after a frame has played.
@@ -90,13 +121,18 @@ async function playing(options: PlaybackServerOptions = {}, firstFrame = true) {
 describe('PlayerScreen playback', () => {
   it('shows a loading cue until the video plays', async () => {
     const { video } = await playing({}, false);
-    expect(screen.getByTestId('player-cue')).toBeInTheDocument();
+    // The spinner waits half a second before it shows.
+    expect(screen.queryByTestId('player-cue')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('player-cue')).toBeInTheDocument();
     expect(video).toHaveAttribute('autoplay');
     fireEvent.playing(video);
-    expect(screen.queryByTestId('player-cue')).not.toBeInTheDocument();
-    // A stall brings the cue back.
-    fireEvent.waiting(video);
+    // It stays at least half a second once shown, then goes.
     expect(screen.getByTestId('player-cue')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('player-cue')).not.toBeInTheDocument());
+    // A stall brings the cue back, again after the delay.
+    fireEvent.waiting(video);
+    expect(screen.queryByTestId('player-cue')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('player-cue')).toBeInTheDocument();
   });
 
   it('loads the media URL with the token for the server origin, and never renders it', async () => {
@@ -117,6 +153,9 @@ describe('PlayerScreen playback', () => {
 
   it('toggles play and pause with OK and with the Play/Pause key', async () => {
     const { video, state } = await playing();
+    // The first key only opens the overlay.
+    key(OK);
+    expect(state.play).not.toHaveBeenCalled();
     key(OK);
     expect(state.play).toHaveBeenCalledTimes(1);
     expect(state.paused).toBe(false);
@@ -140,7 +179,7 @@ describe('PlayerScreen playback', () => {
     expect(state.pause).toHaveBeenCalledTimes(1);
   });
 
-  it('toggles with a pointer click on the video', async () => {
+  it('toggles with a pointer click on the video while the overlay is hidden', async () => {
     const { video, state } = await playing();
     fireEvent.click(video);
     expect(state.play).toHaveBeenCalledTimes(1);
@@ -148,22 +187,50 @@ describe('PlayerScreen playback', () => {
     expect(state.pause).toHaveBeenCalledTimes(1);
   });
 
-  it('seeks 10 seconds with Left and Right and never past the ends', async () => {
+  it('does not toggle with a click on the video while the overlay is open', async () => {
+    const { video, state } = await playing();
+    key(UP);
+    fireEvent.click(video);
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+  });
+
+  it('seeks by the profile defaults (10 s back, 30 s forward) and never past the ends', async () => {
     const { state } = await playing();
     state.duration = 100;
     state.currentTime = 5;
-    key(LEFT);
+    key(UP);
+    await skipWith(LEFT);
     expect(state.currentTime).toBe(0);
-    key(RIGHT);
-    expect(state.currentTime).toBe(10);
-    state.currentTime = 95;
-    key(RIGHT);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(30);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(60);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(90);
+    await skipWith(RIGHT);
     expect(state.currentTime).toBe(100);
-    key(RIGHT);
+    await skipWith(RIGHT);
     expect(state.currentTime).toBe(100);
-    state.currentTime = 50;
-    key(LEFT);
-    expect(state.currentTime).toBe(40);
+  });
+
+  it('skips by the profile setting, not by a fixed amount', async () => {
+    const { state } = await playing({}, true, {
+      values: {
+        'player.video_skip_back_seconds': 15,
+        'player.video_skip_forward_seconds': 45,
+      },
+    });
+    state.duration = 500;
+    state.currentTime = 100;
+    // The overlay names the amounts once the setting is known.
+    await screen.findByLabelText('15 seconds back');
+    await screen.findByLabelText('45 seconds forward');
+    key(UP);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(145);
+    await skipWith(LEFT);
+    expect(state.currentTime).toBe(130);
   });
 
   it('bounds the seek by the source runtime while the engine knows no duration', async () => {
@@ -175,7 +242,8 @@ describe('PlayerScreen playback', () => {
       ],
     });
     state.currentTime = 55;
-    key(RIGHT);
+    key(UP);
+    await skipWith(RIGHT);
     expect(state.currentTime).toBe(60);
   });
 
@@ -202,15 +270,33 @@ describe('PlayerScreen playback', () => {
     expect(state.seeks.at(-1)).toBe(19.5);
     state.duration = 100;
     state.currentTime = 8;
-    key(LEFT);
+    key(UP);
+    await skipWith(LEFT);
     expect(state.currentTime).toBe(7);
   });
 
-  it('shows the position and the runtime', async () => {
+  it('shows the elapsed time and the time remaining', async () => {
     const { video, state } = await playing();
     state.currentTime = 75;
     fireEvent.timeUpdate(video);
-    expect(screen.getByTestId('player-time')).toHaveTextContent('1:15 / 1:30:00');
+    expect(screen.getByTestId('player-time')).toHaveTextContent('1:15');
+    expect(screen.getByTestId('player-remaining')).toHaveTextContent('−1:28:45');
+  });
+
+  it('names an episode with its series and numbers, a movie with its title only', async () => {
+    await playing({
+      watch: watchDetail({
+        title: 'The Pilot',
+        type: 'episode',
+        series_title: 'Some Show',
+        season_number: 1,
+        episode_number: 2,
+      }),
+    });
+    expect(screen.getByText('Some Show')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { hidden: true, name: 'S1 · E2 · The Pilot' }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -266,7 +352,8 @@ describe('PlayerScreen leaving', () => {
     fireEvent.pause(video);
     await until(() => calls.progress.length === 1);
     expect(calls.progress[0]?.body).toMatchObject({ position: 12, is_paused: true });
-    expect(screen.getByText('Paused')).toBeInTheDocument();
+    // A pause opens the overlay, and its play button offers to continue.
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
   });
 
   it('adds the plan timeline offset to every reported position', async () => {
@@ -325,15 +412,23 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
     state.duration = 5400;
     state.seekable = [[0, 30]];
     state.currentTime = 25;
-    key(LEFT);
+    key(UP);
+    await skipWith(LEFT);
     expect(state.currentTime).toBe(15);
-    state.seekable = [[100, 200]];
-    state.currentTime = 185;
-    key(RIGHT);
-    expect(state.currentTime).toBe(195);
-    key(LEFT);
-    expect(state.currentTime).toBe(185);
     await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(calls.replan).toHaveLength(0);
+  });
+
+  it('seeks by itself inside a later seekable range', async () => {
+    const { calls, state } = await playing(stuck);
+    state.duration = 5400;
+    state.seekable = [[100, 200]];
+    state.currentTime = 160;
+    key(UP);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(190);
+    await skipWith(LEFT);
+    expect(state.currentTime).toBe(180);
     expect(calls.replan).toHaveLength(0);
   });
 
@@ -342,11 +437,12 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
     state.duration = 5400;
     state.seekable = [[0, 30]];
     state.currentTime = 25;
-    key(RIGHT);
+    key(UP);
+    tap(RIGHT);
     await until(() => calls.replan.length === 1);
     expect(calls.replan[0]?.body).toMatchObject({
       operation: 'seek_reanchor',
-      position_seconds: 35,
+      position_seconds: 55,
     });
     // The player did not seek on its own, and the new plan on the same stream keeps the video.
     expect(state.currentTime).toBe(25);
@@ -358,7 +454,8 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
     const { state } = await playing(stuck);
     state.duration = 5400;
     state.currentTime = 25;
-    key(RIGHT);
+    key(UP);
+    await skipWith(RIGHT);
     expect(state.currentTime).toBe(25);
   });
 
@@ -367,8 +464,9 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
     state.duration = 5400;
     state.seekable = [[0, 30]];
     state.currentTime = 25;
-    key(RIGHT);
-    expect(state.currentTime).toBe(35);
+    key(UP);
+    await skipWith(RIGHT);
+    expect(state.currentTime).toBe(55);
   });
 });
 

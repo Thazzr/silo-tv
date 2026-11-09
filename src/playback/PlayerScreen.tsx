@@ -1,22 +1,25 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { useBackHandler, useWheelSuspended } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
-import { getPlatform } from '../platform';
+import { useProfileSetting } from '../features/settings/profileSettings';
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
+import { PlayerOsd } from './osd/PlayerOsd';
+import { bufferedUntil, headingLines, SPINNER_DELAY_MS, SPINNER_MIN_MS } from './osd/timing';
+import { useDelayedFlag } from './osd/useDelayedFlag';
+import { usePlayerControls } from './osd/usePlayerControls';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
 import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
   type PlaybackSession,
+  type Heading,
   type Plan,
   type SessionFailure,
 } from './usePlaybackSession';
-
-const SEEK_SECONDS = 10;
 
 const ERROR_TEXT: Record<SessionFailure, MessageKey> = {
   unsupported: 'player.error.unsupported',
@@ -100,6 +103,8 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       sessionId={state.sessionId}
       mediaUrl={state.mediaUrl}
       autoplay={state.autoplay}
+      heading={state.heading}
+      title={title}
       token={token}
       playback={playback}
       onExit={onExit}
@@ -112,6 +117,8 @@ function PlayingView({
   sessionId,
   mediaUrl,
   autoplay,
+  heading,
+  title,
   token,
   playback,
   onExit,
@@ -120,6 +127,8 @@ function PlayingView({
   sessionId: string;
   mediaUrl: string;
   autoplay: boolean;
+  heading: Heading | null;
+  title: string;
   token: string | undefined;
   playback: PlaybackSession;
   onExit: () => void;
@@ -140,10 +149,15 @@ function PlayingView({
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
   const [engine, setEngine] = useState<PlayerEngine | null>(null);
   const engineRef = useRef<PlayerEngine | null>(null);
+  // `showing`: a frame is on screen now; `started`: the first frame has played.
   const [showing, setShowing] = useState(false);
+  const [started, setStarted] = useState(false);
   const [paused, setPaused] = useState(!autoplay);
   const [position, setPosition] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
   const [diagnostics, setDiagnostics] = useState(false);
+  const skipBack = useProfileSetting('player.video_skip_back_seconds').value;
+  const skipForward = useProfileSetting('player.video_skip_forward_seconds').value;
   const total = plan.source.duration_seconds;
 
   // The element is rendered here; everything that controls playback goes through its engine.
@@ -171,69 +185,25 @@ function PlayingView({
     onExit();
   }, [stop, onExit]);
 
-  // Back goes through the screen stack like everywhere else; only the stop key is handled below.
-  useBackHandler(leave);
+  const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
+  const buffering = !showing && !paused;
+  const controls = usePlayerControls({
+    engine,
+    started,
+    paused,
+    buffering,
+    position,
+    duration,
+    read: () => reading()?.position ?? null,
+    seekTo: (sourceSeconds) => void seekTo(sourceSeconds),
+    leave,
+    toggleDiagnostics: () => setDiagnostics((on) => !on),
+    skipBackSeconds: skipBack,
+    skipForwardSeconds: skipForward,
+  });
 
-  const toggle = useCallback(() => {
-    if (!engine) return;
-    if (engine.paused) void engine.play();
-    else engine.pause();
-  }, [engine]);
-
-  const seek = useCallback(
-    (delta: number) => {
-      const current = reading();
-      if (current) void seekTo(current.position + delta);
-    },
-    [reading, seekTo],
-  );
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const key = getPlatform().mapKey(e);
-      if (!key) return;
-      const handled = () => e.preventDefault();
-      switch (key) {
-        case 'enter':
-        case 'playPause':
-          handled();
-          toggle();
-          break;
-        case 'play': {
-          handled();
-          if (engine?.paused) toggle();
-          break;
-        }
-        case 'pause': {
-          handled();
-          if (engine && !engine.paused) toggle();
-          break;
-        }
-        case 'left':
-        case 'rewind':
-          handled();
-          seek(-SEEK_SECONDS);
-          break;
-        case 'right':
-        case 'fastForward':
-          handled();
-          seek(SEEK_SECONDS);
-          break;
-        case 'blue':
-          handled();
-          setDiagnostics((on) => !on);
-          break;
-        case 'stop':
-          handled();
-          leave();
-          break;
-        default:
-          break;
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [engine, toggle, seek, leave]);
+  // Back goes through the screen stack like everywhere else; the controls decide what it does.
+  useBackHandler(controls.back);
 
   // Subscribed before the source is set, so no early event is missed.
   useLayoutEffect(() => {
@@ -242,6 +212,7 @@ function PlayingView({
       engine.on('loadedmetadata', onLoadedMetadata),
       engine.on('playing', () => {
         setShowing(true);
+        setStarted(true);
         setPaused(false);
         onPlaying();
       }),
@@ -253,7 +224,11 @@ function PlayingView({
         onPause();
       }),
       engine.on('ended', onEnded),
-      engine.on('timeupdate', () => setPosition(reading()?.position ?? 0)),
+      engine.on('timeupdate', () => {
+        const now = reading()?.position ?? 0;
+        setPosition(now);
+        setBufferedEnd(bufferedUntil(engine.buffered, engine.currentTime, now));
+      }),
       engine.on('error', () => {
         setShowing(false);
         const error = engine.error;
@@ -264,28 +239,39 @@ function PlayingView({
     return () => off.forEach((unsubscribe) => unsubscribe());
   }, [engine, mediaUrl, reading, onLoadedMetadata, onPlaying, onPause, onEnded, onMediaError]);
 
-  const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
-  const ratio = duration > 0 ? Math.min(1, position / duration) : 0;
-  const cue = !showing && !paused;
+  const cue = useDelayedFlag(buffering, SPINNER_DELAY_MS, SPINNER_MIN_MS);
+  const lines = headingLines(heading, title);
 
   return (
-    <div className="player" data-testid="player">
-      <video ref={setRef} className="player-video" autoPlay={autoplay} onClick={toggle} />
+    <div className="player" data-testid="player" onMouseMove={controls.pointerMoved}>
+      <video
+        ref={setRef}
+        className="player-video"
+        autoPlay={autoplay}
+        onClick={controls.videoClicked}
+      />
       {cue ? (
         <p className="player-cue loading" role="status" data-testid="player-cue">
           <span className="spinner" aria-hidden="true" />
           {t('player.loading')}
         </p>
       ) : null}
-      <div className="player-bar" data-testid="player-bar">
-        <span className="player-state">{paused ? t('player.paused') : ''}</span>
-        <div className="player-track" aria-hidden="true">
-          <div className="player-fill" style={{ transform: `scaleX(${ratio})` }} />
-        </div>
-        <span data-testid="player-time">
-          {formatClock(position)} / {formatClock(duration)}
-        </span>
-      </div>
+      <PlayerOsd
+        visible={controls.visible}
+        series={lines.series}
+        title={lines.title}
+        position={controls.shownPosition}
+        duration={duration}
+        bufferedEnd={bufferedEnd}
+        focus={controls.focus}
+        paused={paused}
+        skipBackSeconds={skipBack}
+        skipForwardSeconds={skipForward}
+        scrub={controls.scrub}
+        onFocus={controls.setFocus}
+        onSeekFraction={controls.seekToFraction}
+        onAction={controls.action}
+      />
       {diagnostics || mediaError ? (
         <PlayerDiagnostics
           plan={plan}
