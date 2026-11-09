@@ -21,6 +21,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/audio-prefs/{series_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the acting profile's remembered audio track for a series. */
+        get: operations["getAudioPreference"];
+        /** Replace the acting profile's remembered audio track for a series. */
+        put: operations["updateAudioPreference"];
+        post?: never;
+        /** Forget the acting profile's remembered audio track for a series. */
+        delete: operations["deleteAudioPreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/auth/device/cancel": {
         parameters: {
             query?: never;
@@ -828,6 +847,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/shuffles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a shuffle: random movies and episodes from a library, series, season, or collection, with no repeats until all of them have played. */
+        post: operations["createShuffle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/shuffles/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the server can shuffle, and the scopes a shuffle can draw from. */
+        get: operations["getShuffleCapability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/shuffles/{shuffle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a shuffle: what plays now and what plays next. */
+        get: operations["getShuffle"];
+        put?: never;
+        post?: never;
+        /** Stop a shuffle. Stopping one that is already gone succeeds. */
+        delete: operations["deleteShuffle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/shuffles/{shuffle_id}/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a shuffle on after its current item: the next item becomes current and another is picked to follow it. */
+        post: operations["advanceShuffle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/shuffles/{shuffle_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace a shuffle's next item with another pick. The skipped item never played, so it can still come up later in the cycle. */
+        post: operations["skipShuffleItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/subtitle-prefs/{series_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the acting profile's remembered subtitle choice for a series. */
+        get: operations["getSubtitlePreference"];
+        /** Replace the acting profile's remembered subtitle choice for a series. */
+        put: operations["updateSubtitlePreference"];
+        post?: never;
+        /** Forget the acting profile's remembered subtitle choice for a series. */
+        delete: operations["deleteSubtitlePreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/subtitles/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download the selected provider result for an accessible file. Send once: content deduplication does not replay an upstream provider request or recover an uncertain response. */
+        post: operations["downloadSubtitle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/subtitles/providers/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read configured subtitle capabilities without starting work. */
+        get: operations["getSubtitleProviderStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/subtitles/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read subtitles for an accessible media file. */
+        post: operations["searchSubtitles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/system/identity": {
         parameters: {
             query?: never;
@@ -930,6 +1105,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/watch/{id}/trickplay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the seek-bar previews of one of an item's files. Versions whose trickplay_available is true have them. */
+        get: operations["getWatchTrickplay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -976,6 +1168,10 @@ export interface components {
              */
             username: string;
         };
+        AdvanceShuffleRequest: {
+            /** @description The content ID of the item that finished. The shuffle advances only while this item is still current, so a retry after a lost response changes nothing */
+            from_content_id: string;
+        };
         AppliedQuirkV3: {
             action: string;
             id: string;
@@ -1001,6 +1197,52 @@ export interface components {
             passthrough_codecs: string[];
             spatializer_enabled: boolean;
         };
+        AudioPreference: {
+            /**
+             * @description Preferred audio language for the series: BCP 47 tag (en, pt-BR) or x-silo-original; empty means no language preference
+             * @example en
+             */
+            audio_language: string;
+            /**
+             * Format: int64
+             * @description Zero-based index of the chosen track, or -1 for no track
+             * @example 1
+             */
+            audio_track_index: number;
+            /**
+             * @description Opaque identifier
+             * @example p-1
+             */
+            profile_id: string;
+            /**
+             * @description The series content id
+             * @example series-8f2c1a
+             */
+            series_id: string;
+            /** @description Absent when the client stored none */
+            track_signature?: components["schemas"]["AudioTrackSignature"];
+            /**
+             * Format: date-time
+             * @description Last update; Unix epoch when an older SQLite track preference has no recorded timestamp
+             * @example 2026-01-02T03:04:05.000Z
+             */
+            updated_at: string;
+        };
+        AudioPreferenceUpdate: {
+            /**
+             * @description Preferred audio language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; x-silo-original picks the original language; empty or omitted means no language preference
+             * @example en
+             */
+            audio_language?: string;
+            /**
+             * Format: int64
+             * @description Zero-based index of the chosen track, or -1 for no track
+             * @example 1
+             */
+            audio_track_index: number;
+            /** @description How playback recognizes the track when indexes shift */
+            track_signature?: components["schemas"]["AudioTrackSignature"];
+        };
         AudioTrack: {
             /** Format: int64 */
             bit_depth?: number;
@@ -1017,6 +1259,40 @@ export interface components {
             profile?: string;
             /** Format: int64 */
             sample_rate?: number;
+            title?: string;
+        };
+        AudioTrackSignature: {
+            /**
+             * Format: int64
+             * @example 6
+             */
+            channels?: number;
+            /** @example eac3 */
+            codec?: string;
+            /**
+             * @description Whether the track carried the default flag
+             * @example true
+             */
+            default?: boolean;
+            /**
+             * @description Title embedded in the container
+             * @example Surround
+             */
+            embedded_title?: string;
+            /**
+             * @description Track language as the client recorded it, normally the track's language (BCP 47); stored as sent
+             * @example en
+             */
+            language?: string;
+            /**
+             * @description Channel layout
+             * @example 5.1
+             */
+            layout?: string;
+            /**
+             * @description Display title the client showed
+             * @example English 5.1
+             */
             title?: string;
         };
         AudiobookDetailExtension: {
@@ -2153,6 +2429,9 @@ export interface components {
             items: components["schemas"]["UserLibrary"][];
             /** @description Cursor state; absent for bounded unpaginated collections */
             page?: components["schemas"]["PageInfo"];
+        };
+        CreateShuffleRequest: {
+            scope: components["schemas"]["ShuffleScopeRequest"];
         };
         CrewCredit: {
             imdb_id?: string;
@@ -4069,6 +4348,73 @@ export interface components {
              */
             supports_overlay_images: boolean;
         };
+        Shuffle: {
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            created_at: string;
+            /** @description The item to play now */
+            current: components["schemas"]["CatalogItem"];
+            /**
+             * @description Shuffle id
+             * @example 1
+             */
+            id: string;
+            /** @description The item that plays after current. It equals current only when the scope has one playable item */
+            next: components["schemas"]["CatalogItem"];
+            scope: components["schemas"]["ShuffleScope"];
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            updated_at: string;
+        };
+        ShuffleCapability: {
+            /** @description Whether the current principal may use the capability */
+            allowed: boolean;
+            /** @description Opaque revision of this document */
+            revision: string;
+            /** @description Scope kinds createShuffle accepts. Empty, never null */
+            scope_kinds: ("library" | "series" | "season" | "library_collection" | "user_collection")[];
+            /**
+             * @description Support and configuration state, not health
+             * @enum {string}
+             */
+            state: "available" | "disabled" | "not_configured" | "unsupported";
+        };
+        ShuffleScope: {
+            /**
+             * @description The library ID, series or season content ID, or collection ID
+             * @example series-tvdb-81189
+             */
+            id: string;
+            /**
+             * @description library plays the movies and episodes of one library; series plays a series' episodes; season plays one season's episodes; library_collection and user_collection play a collection's movies and its series' episodes. Specials play like any other episode
+             * @enum {string}
+             */
+            kind: "library" | "series" | "season" | "library_collection" | "user_collection";
+            /**
+             * @description A season scope's series title; absent for other scopes
+             * @example Breaking Bad
+             */
+            parent_title?: string;
+            /**
+             * @description The scope's name when the shuffle started
+             * @example Breaking Bad
+             */
+            title: string;
+        };
+        ShuffleScopeRequest: {
+            /** @description The library ID, series or season content ID, or collection ID */
+            id: string;
+            /** @enum {string} */
+            kind: "library" | "series" | "season" | "library_collection" | "user_collection";
+        };
+        SkipShuffleItemRequest: {
+            /** @description The content ID of the next item to skip. The shuffle picks another only while this item is still next, so a retry after a lost response changes nothing */
+            next_content_id: string;
+        };
         StartDeviceLoginInputBody: {
             /**
              * @description Session binding: base64url without padding of SHA-256 of a 32-byte secret the device keeps. getDeviceLogin shows it to the approver, and every poll of the request must send the secret as binding_secret. Omit for an unbound request; an empty string is malformed like any other value
@@ -4096,6 +4442,33 @@ export interface components {
              * @example false
              */
             temporary?: boolean;
+        };
+        StoredSubtitle: {
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            created_at: string;
+            format: string;
+            hearing_impaired: boolean;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            id: string;
+            /** @description BCP 47 tag, ISO 639-1 where one exists (en, pt-BR); empty when the stored value is not a recognizable language */
+            language: string;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            media_file_id: string;
+            provider: string;
+            release_name: string;
+            /** Format: double */
+            score: number;
+            sync?: components["schemas"]["SubtitleSyncJob"];
+            timing: components["schemas"]["SubtitleTiming"];
         };
         StreamV3: {
             container?: string;
@@ -4131,6 +4504,28 @@ export interface components {
             inventory: components["schemas"]["SubtitleInventoryItemV3"][];
             mode: string;
             track_id?: string;
+        };
+        SubtitleDownloadBody: {
+            hearing_impaired: boolean;
+            /** @description Language of the chosen result exactly as searchSubtitles returned it (BCP 47) */
+            language: string;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            media_file_id: string;
+            provider: string;
+            release_name: string;
+            /** Format: double */
+            score: number;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            subtitle_id: string;
+        };
+        SubtitleDownloadResult: {
+            subtitle: components["schemas"]["StoredSubtitle"];
         };
         SubtitleInfo: {
             codec?: string;
@@ -4183,6 +4578,202 @@ export interface components {
             unplayable?: boolean;
             /** Format: uri-reference */
             url?: string;
+        };
+        SubtitlePreference: {
+            /**
+             * @description Path of the chosen external subtitle file; absent for an embedded track
+             * @example Show.S01E01.eng.srt
+             */
+            external_subtitle_path?: string;
+            /**
+             * @description Opaque identifier
+             * @example p-1
+             */
+            profile_id: string;
+            /**
+             * @description The series content id
+             * @example series-8f2c1a
+             */
+            series_id: string;
+            /**
+             * @description Forced-subtitle override; absent when the profile has none for the series
+             * @example true
+             */
+            show_forced_subtitles?: boolean;
+            /**
+             * @description Preferred subtitle language for the series: BCP 47 tag (en, pt-BR); empty means no language preference
+             * @example en
+             */
+            subtitle_language: string;
+            /**
+             * @description Subtitle mode. Canonical values: auto, always, off; empty means no mode preference
+             * @example always
+             */
+            subtitle_mode: string;
+            /**
+             * Format: int64
+             * @description Zero-based index of the chosen track, or -1 for subtitles off
+             * @example 0
+             */
+            subtitle_track_index: number;
+            /** @description Absent when the client stored none */
+            track_signature?: components["schemas"]["SubtitleTrackSignature"];
+            /**
+             * Format: date-time
+             * @description Last update; Unix epoch when an older SQLite track preference has no recorded timestamp
+             * @example 2026-01-02T03:04:05.000Z
+             */
+            updated_at: string;
+        };
+        SubtitlePreferenceUpdate: {
+            /**
+             * @description Path of the chosen external subtitle file, when the track is external
+             * @example Show.S01E01.eng.srt
+             */
+            external_subtitle_path?: string;
+            /**
+             * @description Forced-subtitle override for the series; omitted keeps the stored override
+             * @example true
+             */
+            show_forced_subtitles?: boolean;
+            /**
+             * @description Preferred subtitle language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; empty or omitted means no language preference
+             * @example en
+             */
+            subtitle_language?: string;
+            /**
+             * @description Subtitle mode: auto, always or off; empty or omitted means no mode preference
+             * @example always
+             */
+            subtitle_mode?: string;
+            /**
+             * Format: int64
+             * @description Zero-based index of the chosen track, or -1 for subtitles off
+             * @example 0
+             */
+            subtitle_track_index: number;
+            /** @description How playback recognizes the track when indexes shift */
+            track_signature?: components["schemas"]["SubtitleTrackSignature"];
+        };
+        SubtitleProviderStatus: {
+            /** @description Whether the current principal may use the capability */
+            allowed: boolean;
+            enabled: boolean;
+            providers: string[];
+            /** @description Opaque revision of this document */
+            revision: string;
+            /** Format: int64 */
+            schema_version: number;
+            /**
+             * @description Support and configuration state, not health
+             * @enum {string}
+             */
+            state: "available" | "disabled" | "not_configured" | "unsupported";
+        };
+        SubtitleSearchBody: {
+            /** @description BCP 47 tags or ISO 639 codes, any case; recognized English language names are also accepted */
+            languages: string[];
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            media_file_id: string;
+        };
+        SubtitleSearchResult: {
+            /** Format: int64 */
+            downloads: number;
+            format: string;
+            hearing_impaired: boolean;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            id: string;
+            /** @description BCP 47 tag, ISO 639-1 where one exists (en, pt-BR) */
+            language: string;
+            provider: string;
+            release_name: string;
+            /** Format: double */
+            score: number;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            upload_date?: string;
+        };
+        SubtitleSearchResults: {
+            results: components["schemas"]["SubtitleSearchResult"][];
+            warnings: string[];
+        };
+        SubtitleSyncJob: {
+            /** Format: double */
+            confidence: number | null;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            created_at: string;
+            /** @enum {string} */
+            failure?: "subtitle_changed" | "no_audio" | "unavailable" | "error";
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            finished_at: string | null;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            id: string;
+            /** @enum {string} */
+            phase?: "queued" | "analyzing" | "matching";
+            /** Format: double */
+            progress?: number;
+            result?: components["schemas"]["SubtitleTiming"];
+            /** @enum {string} */
+            status: "pending" | "running" | "synced" | "already_synced" | "no_match" | "failed";
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            subtitle_id: string;
+            /** @enum {string} */
+            trigger: "auto" | "manual";
+        };
+        SubtitleTiming: {
+            /** Format: int64 */
+            offset_ms: number;
+            /** Format: double */
+            scale: number;
+        };
+        SubtitleTrackSignature: {
+            /** @example subrip */
+            codec?: string;
+            /**
+             * @description Whether the track carried the forced flag
+             * @example false
+             */
+            forced?: boolean;
+            /**
+             * @description Whether the track carried the hearing-impaired flag
+             * @example true
+             */
+            hearing_impaired?: boolean;
+            /**
+             * @description Display label the client showed
+             * @example English (SDH)
+             */
+            label?: string;
+            /**
+             * @description Track language as the client recorded it, normally the track's language (BCP 47); stored as sent
+             * @example en
+             */
+            language?: string;
+            /**
+             * @description Where the track comes from, e.g. embedded or external
+             * @example embedded
+             */
+            source?: string;
         };
         SystemInfo: {
             /**
@@ -4770,6 +5361,68 @@ export interface components {
             resolution?: string;
             title?: string;
         };
+        WatchTrickplay: {
+            /**
+             * Format: date-time
+             * @description When the sheet URLs stop working; read the previews again for fresh ones
+             * @example 2026-01-02T03:04:05.000Z
+             */
+            expires_at: string;
+            /**
+             * @description Opaque identifier
+             * @example 42
+             */
+            file_id: string;
+            /**
+             * Format: int64
+             * @description Media time each thumbnail covers: thumbnail i shows what plays from i*interval_ms to (i+1)*interval_ms
+             * @example 10000
+             */
+            interval_ms: number;
+            /** @description Every sheet, in order. Sheet s holds thumbnails s*tile_columns*tile_rows onward, left to right and top to bottom; every sheet has the full grid, black after the last thumbnail */
+            sheets: components["schemas"]["WatchTrickplaySheet"][];
+            /**
+             * Format: int64
+             * @example 720
+             */
+            thumbnail_count: number;
+            /**
+             * Format: int64
+             * @description Pixels
+             * @example 126
+             */
+            thumbnail_height: number;
+            /**
+             * Format: int64
+             * @description Pixels
+             * @example 300
+             */
+            thumbnail_width: number;
+            /**
+             * Format: int64
+             * @description Thumbnails across a sheet
+             * @example 10
+             */
+            tile_columns: number;
+            /**
+             * Format: int64
+             * @description Thumbnails down a sheet
+             * @example 10
+             */
+            tile_rows: number;
+        };
+        WatchTrickplaySheet: {
+            /**
+             * Format: int64
+             * @example 0
+             */
+            index: number;
+            /**
+             * Format: uri-reference
+             * @description A JPEG image; the URL carries its own authorization
+             */
+            url: string;
+        };
         WatchUserData: {
             /**
              * Format: double
@@ -4880,6 +5533,360 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAudioPreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioPreference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateAudioPreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AudioPreferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteAudioPreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -11262,6 +12269,1620 @@ export interface operations {
             };
         };
     };
+    createShuffle: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateShuffleRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shuffle"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getShuffleCapability: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+                "If-Match"?: string;
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShuffleCapability"];
+                };
+            };
+            /** @description The representation named by If-None-Match is current; no body. */
+            304: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getShuffle: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Shuffle id */
+                shuffle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shuffle"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteShuffle: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Shuffle id */
+                shuffle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    advanceShuffle: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Shuffle id */
+                shuffle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdvanceShuffleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shuffle"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    skipShuffleItem: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Shuffle id */
+                shuffle_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkipShuffleItemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Shuffle"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSubtitlePreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubtitlePreference"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateSubtitlePreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubtitlePreferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteSubtitlePreference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The series content id */
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    downloadSubtitle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
+                "X-Profile-Id"?: string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubtitleDownloadBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubtitleDownloadResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSubtitleProviderStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+                "If-Match"?: string;
+                /** @description Optional. When present, it must name a profile of the authenticated account. */
+                "X-Profile-Id"?: string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubtitleProviderStatus"];
+                };
+            };
+            /** @description The representation named by If-None-Match is current; no body. */
+            304: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    searchSubtitles: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
+                "X-Profile-Id"?: string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubtitleSearchBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubtitleSearchResults"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getServerIdentity: {
         parameters: {
             query?: never;
@@ -11694,6 +14315,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WatchDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getWatchTrickplay: {
+        parameters: {
+            query: {
+                /** @description The file being played, one of the item's versions */
+                file_id: string;
+            };
+            header?: {
+                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
+                "X-Profile-Id"?: string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                /** @description The stable device identifier used to resolve playback preferences */
+                "X-Silo-Device-Id"?: string;
+            };
+            path: {
+                /** @description A movie or episode */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchTrickplay"];
                 };
             };
             /** @description Bad Request */

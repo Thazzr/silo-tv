@@ -54,5 +54,21 @@
   { "path": "/api/v2/capabilities/metadata-ai", "method": "get" },
   { "path": "/api/v2/catalog/items/{id}/translate-description", "method": "post" },
   { "path": "/api/v2/capabilities/trailers", "method": "get" },
-  { "path": "/api/v2/images/capabilities", "method": "get" }
+  { "path": "/api/v2/images/capabilities", "method": "get" },
+  { "path": "/api/v2/watch/{id}/trickplay", "method": "get" },
+  { "path": "/api/v2/audio-prefs/{series_id}", "method": "get" },
+  { "path": "/api/v2/audio-prefs/{series_id}", "method": "put" },
+  { "path": "/api/v2/audio-prefs/{series_id}", "method": "delete" },
+  { "path": "/api/v2/subtitle-prefs/{series_id}", "method": "get" },
+  { "path": "/api/v2/subtitle-prefs/{series_id}", "method": "put" },
+  { "path": "/api/v2/subtitle-prefs/{series_id}", "method": "delete" },
+  { "path": "/api/v2/subtitles/search", "method": "post" },
+  { "path": "/api/v2/subtitles/download", "method": "post" },
+  { "path": "/api/v2/subtitles/providers/status", "method": "get" },
+  { "path": "/api/v2/shuffles/capabilities", "method": "get" },
+  { "path": "/api/v2/shuffles", "method": "post" },
+  { "path": "/api/v2/shuffles/{shuffle_id}", "method": "get" },
+  { "path": "/api/v2/shuffles/{shuffle_id}/advance", "method": "post" },
+  { "path": "/api/v2/shuffles/{shuffle_id}/skip", "method": "post" },
+  { "path": "/api/v2/shuffles/{shuffle_id}", "method": "delete" }
 ]
