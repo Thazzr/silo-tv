@@ -173,4 +173,35 @@ describe('SectionGridScreen', () => {
     setup(memory);
     await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('trending', 't14')));
   });
+
+  it('reads a row of a library through the library scope, with the kind of a mixed library', async () => {
+    const calls = serveHome(server, { page: () => catalogPage(titles(0, 12)) });
+    const session = new Session(memoryStorage());
+    session.set({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: Date.now() + 3600_000,
+      user: account,
+      profileId: 'p1',
+    });
+    renderWithSilo(
+      <SectionGridScreen
+        sectionId="recent"
+        title="Recently added"
+        library={{ id: 'lib-9', type: 'series' }}
+        memory={new FocusIndexMemory()}
+        onPlay={vi.fn()}
+        onOpenDetail={vi.fn()}
+        onBack={vi.fn()}
+      />,
+      { session },
+    );
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('lib-9:recent', 't1')));
+    const query = calls.pages[0]!;
+    expect(query.get('source')).toBe('section');
+    expect(query.get('scope')).toBe('library');
+    expect(query.get('library_id')).toBe('lib-9');
+    expect(query.get('type')).toBe('series');
+    expect(query.get('section_id')).toBe('recent');
+  });
 });

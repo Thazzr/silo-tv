@@ -181,4 +181,10 @@ describe('Grid', () => {
     fireEvent.scroll(viewport);
     expect(viewport.scrollTop).toBe(0);
   });
+
+  it('gives the track the width of its six columns, so the navigation sees where the grid is', () => {
+    renderWithSilo(<TestGrid items={makeItems(0, 8)} />);
+    // 6 posters of 260 px and 5 gaps of 40 px; without it the track is as wide as nothing.
+    expect(screen.getByTestId('grid-track').style.width).toBe('1760px');
+  });
 });

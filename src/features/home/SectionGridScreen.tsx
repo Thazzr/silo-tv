@@ -16,6 +16,8 @@ import { useItemOpener } from './useItemOpener';
 export interface SectionGridScreenProps {
   sectionId: string;
   title: string;
+  /** Set for a row of a library's Recommended view; Home's rows have none. */
+  library?: { id: string; type?: string };
   /** The grid's focus survives the player being opened over it. */
   memory: FocusIndexMemory;
   onPlay: (item: CatalogItem) => void;
@@ -30,13 +32,14 @@ export interface SectionGridScreenProps {
 export function SectionGridScreen({
   sectionId,
   title,
+  library,
   memory,
   onPlay,
   onOpenDetail,
   onBack,
 }: SectionGridScreenProps) {
   const t = useT();
-  const pages = useSectionPages(sectionId);
+  const pages = useSectionPages(sectionId, library);
   const { open } = useItemOpener({ onPlay, onOpenDetail });
   const items = useMemo(() => pages.data?.pages.flatMap((page) => page.items) ?? [], [pages.data]);
 
@@ -69,7 +72,7 @@ export function SectionGridScreen({
   } else {
     body = (
       <Grid
-        gridId={sectionId}
+        gridId={library ? `${library.id}:${sectionId}` : sectionId}
         items={items}
         getKey={(item) => item.content_id}
         hasMore={pages.hasNextPage}

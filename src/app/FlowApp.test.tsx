@@ -485,6 +485,39 @@ describe('FlowApp', () => {
     expect(homeQueries()).toHaveLength(0);
   });
 
+  it('drops the Movies and Series library queries of the old profile when the profile is switched', async () => {
+    serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
+    signedIn(BASE_URL, 'p1');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider lang="en">
+          <FlowApp
+            launch={{ probe: false, transport: null, server: '' }}
+            registry={registry}
+            device={testDevice}
+            storage={storage}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('button', { name: /Title of/ });
+    // What the library tabs have read for this profile (sections, Browse pages, collections, ...)
+    // is held under the 'library' key; the cache keeps it after the tab is left.
+    queryClient.setQueryData(['library', 'sections', 'base', 'p1', 'lib-1', 20], []);
+    queryClient.setQueryData(['library', 'collections', 'base', 'p1', 'lib-1'], {});
+    const libraryQueries = () =>
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((q) => q.queryKey[0] === 'library');
+    expect(libraryQueries()).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(libraryQueries()).toHaveLength(0);
+  });
+
   it('empties the profile, library and catalog caches when the session ends', async () => {
     serveData();
     const session = signedIn(BASE_URL, 'p1');

@@ -7,12 +7,13 @@ import { BASE_URL, account } from '../../test/apiFixtures';
 import {
   branding,
   catalogItem,
-  catalogPage,
   library,
   profile,
   profileCollection,
 } from '../../test/flowFixtures';
 import { homeSection, serveHome } from '../../test/homeFixtures';
+import { serveLibrary, type LibraryCalls } from '../../test/libraryFixtures';
+import { cardFocusKey } from '../../ui/media';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import type { LaunchMode } from '../../features/profiles/launchPrefs';
@@ -39,9 +40,12 @@ const movieTitles = [
 const seriesTitles = [catalogItem({ content_id: 's1', title: 'Show One', type: 'series' })];
 
 interface Calls {
-  catalogLibraries: string[];
+  library: LibraryCalls;
   logout: string[];
 }
+
+/** The libraries whose sections were read, in order. */
+const sectionReads = (calls: Calls) => calls.library.sections.map((read) => read.id);
 
 /** Home lists the first video library (movies here); Series has a library of its own. */
 function serve(
@@ -50,10 +54,18 @@ function serve(
     profiles?: ReturnType<typeof profile>[];
   } = {},
 ): Calls {
-  const calls: Calls = { catalogLibraries: [], logout: [] };
-  const byLibrary: Record<string, typeof homeTitles> = {
-    'lib-film': homeTitles,
-    'lib-show': seriesTitles,
+  const calls: Calls = {
+    library: serveLibrary(server, {
+      libraries: [
+        library({ id: 'lib-film', name: 'Films', type: 'movies' }),
+        library({ id: 'lib-show', name: 'Shows', type: 'series' }),
+      ],
+      sections: {
+        'lib-film': [homeSection('film-rec', 0, { items: movieTitles, total_count: 2 })],
+        'lib-show': [homeSection('show-rec', 0, { items: seriesTitles, total_count: 1 })],
+      },
+    }),
+    logout: [],
   };
   // Home shows one title per row, so Up and Down walk the titles like a list.
   serveHome(server, {
@@ -65,19 +77,6 @@ function serve(
     http.get(`${BASE_URL}/api/v2/profiles`, () =>
       HttpResponse.json(profileCollection(extra.profiles ?? [profile({ id: 'p1', name: 'Alex' })])),
     ),
-    http.get(`${BASE_URL}/api/v2/user/libraries`, () =>
-      HttpResponse.json({
-        items: [
-          library({ id: 'lib-film', name: 'Films', type: 'movies' }),
-          library({ id: 'lib-show', name: 'Shows', type: 'series' }),
-        ],
-      }),
-    ),
-    http.get(`${BASE_URL}/api/v2/catalog`, ({ request }) => {
-      const id = new URL(request.url).searchParams.get('library_id') ?? '';
-      calls.catalogLibraries.push(id);
-      return HttpResponse.json(catalogPage(byLibrary[id] ?? movieTitles));
-    }),
     http.get(`${BASE_URL}/api/v2/theme/branding`, () =>
       extra.branding === 'fail'
         ? HttpResponse.error()
@@ -284,11 +283,13 @@ describe('ShellScreen keys', () => {
     await move(KEY.down);
     await waitFor(() => expect(screen.getByRole('button', { name: /Home Three/ })).toHaveFocus());
     await move(KEY.back);
-    // Movies shows the same library here; go to the series tab, which has its own list.
+    // The series tab has its own content: Down reaches its pills, and Down again its first card.
     await goToTab(KEY.right, 2, 'series');
     await screen.findByRole('button', { name: /Show One/ });
     await move(KEY.down);
+    await move(KEY.down);
     await waitFor(() => expect(screen.getByRole('button', { name: /Show One/ })).toHaveFocus());
+    await move(KEY.up);
     await move(KEY.up);
     await waitFor(() => expect(tab('Series')).toHaveFocus());
     // Back to Home: Down lands on the third title again, not on the first.
@@ -328,32 +329,46 @@ describe('ShellScreen tab switch delay', () => {
     await waitFor(() => expect(shown()).toBe('series'), { timeout: 3000 });
     expect(tab('Series')).toHaveAttribute('aria-current', 'page');
     await screen.findByRole('button', { name: /Show One/ });
-    expect(calls.catalogLibraries).toContain('lib-show');
+    expect(sectionReads(calls)).toContain('lib-show');
   });
 
   it('mounts only the last tab when the user moves quickly across several', async () => {
     const calls = serve();
     setup({ delay: DELAY });
     await ready();
-    const before = calls.catalogLibraries.length;
+    const before = sectionReads(calls).length;
     // Movies, Series, For You, Calendar: only the one that rests is mounted.
     for (let i = 0; i < 4; i++) await pressKey(KEY.right);
     expect(tab('Calendar')).toHaveFocus();
     await waitFor(() => expect(shown()).toBe('calendar'), { timeout: 3000 });
-    expect(calls.catalogLibraries.length).toBe(before);
+    expect(sectionReads(calls).length).toBe(before);
     expect(screen.queryByTestId('tab-series')).not.toBeInTheDocument();
   });
 
-  it('uses the default delay when none is given: not yet after 100 ms, switched after it', async () => {
+  it('uses the default delay when none is given: not yet at 299 ms, switched at 300', async () => {
     serve();
     setup({ delay: 'default' });
     await ready();
-    await move(KEY.right);
-    expect(tab('Movies')).toHaveFocus();
-    await sleep(100);
-    expect(shown()).toBe('home');
-    await sleep(TAB_SWITCH_DELAY_MS + 100);
-    expect(shown()).toBe('movies');
+    // The timer is faked from here on, so the delay is exact however loaded the machine is.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => {
+        fireEvent.keyDown(window, { keyCode: KEY.right });
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(tab('Movies')).toHaveFocus();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(TAB_SWITCH_DELAY_MS - 1);
+      });
+      expect(TAB_SWITCH_DELAY_MS).toBe(300);
+      expect(shown()).toBe('home');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(shown()).toBe('movies');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('Down during a pending switch cancels it: Home stays shown, selected and focused', async () => {
@@ -404,11 +419,14 @@ describe('ShellScreen tab content', () => {
       'Row r3',
     ]);
     await goToTab(KEY.right, 1, 'movies');
-    expect(await screen.findByRole('heading', { level: 2, name: 'Films' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Film One/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Recommended' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await goToTab(KEY.right, 1, 'series');
-    expect(await screen.findByRole('heading', { level: 2, name: 'Shows' })).toBeInTheDocument();
-    // The heading comes with the libraries; the titles are requested right after.
-    await waitFor(() => expect(calls.catalogLibraries).toContain('lib-show'));
+    expect(await screen.findByRole('button', { name: /Show One/ })).toBeInTheDocument();
+    expect(sectionReads(calls)).toEqual(['lib-film', 'lib-show']);
   });
 
   it('hands a selected title to onOpenDetail', async () => {
@@ -456,10 +474,12 @@ describe('ShellScreen tab content', () => {
     await goToTab(KEY.right, 2, 'series');
     await screen.findByRole('button', { name: /Show One/ });
     await move(KEY.down);
-    await waitFor(() => expect(memory.focusOf('series')).toBe('title-s1'));
+    await move(KEY.down);
+    const card = cardFocusKey('lib-show/show-rec', 's1');
+    await waitFor(() => expect(memory.focusOf('series')).toBe(card));
     first.unmount();
     expect(memory.tab).toBe('series');
-    expect(memory.focusOf('series')).toBe('title-s1');
+    expect(memory.focusOf('series')).toBe(card);
     setup({ memory });
     await waitFor(() => expect(tab('Series')).toHaveFocus());
     expect(tab('Series')).toHaveAttribute('aria-current', 'page');

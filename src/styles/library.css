@@ -1,0 +1,273 @@
+/* ---- Movies and Series tabs: library pills, sub-views, Browse, the alphabet rail ---- */
+
+/* Like Home, the library tabs clip their content and scroll it themselves. */
+.shell-content.shell-content-library {
+  position: relative;
+  /* The window minus the top bar (54 px safe margin, 75 px bar, 12 px below). */
+  height: calc(100vh - 141px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.library {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.library-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Skeletons and grids fill the body; the grid scrolls inside it with a transform. */
+.library-body .grid-viewport,
+.browse-grid .grid-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.library-message {
+  max-width: 900px;
+  padding: 24px 80px;
+}
+
+/* ---- Pills ---- */
+.lib-pills {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  padding: 0 80px 12px;
+  overflow: hidden;
+}
+
+.lib-pills .btn {
+  flex: none;
+  height: 75px;
+  margin: 0;
+  padding: 0 36px;
+  font-size: 26px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 38px;
+}
+
+/* The selected pill is marked like the selected season: a lighter fill, the accent underneath. */
+.lib-pill.selected {
+  font-weight: 700;
+  background: var(--chrome-selected);
+  border-color: rgba(255, 255, 255, 0.1);
+  border-bottom-color: var(--accent, rgba(255, 255, 255, 0.1));
+}
+
+.lib-pill.selected:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+}
+
+/* ---- Recommended ---- */
+.library-rows {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.library-rows-inner {
+  transition: transform var(--transition);
+}
+
+/* ---- Browse ---- */
+.browse {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.browse-toolbar {
+  display: flex;
+  flex: none;
+  gap: 16px;
+  padding: 0 80px 12px;
+}
+
+.browse-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  height: 75px;
+  margin: 0;
+  padding: 0 32px;
+  font-size: 24px;
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 38px;
+}
+
+.lib-tool-sort {
+  transition: transform var(--transition);
+}
+
+.lib-tool-sort:focus {
+  transform: scale(1.04);
+}
+
+/* Filters are set: the pill rests in the selected chrome and carries their number. */
+.lib-tool.active {
+  background: var(--chrome-selected);
+}
+
+.lib-tool.active:focus {
+  background: var(--focus-fill);
+}
+
+.lib-count {
+  min-width: 34px;
+  margin-left: 12px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 34px;
+  text-align: center;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 17px;
+}
+
+.lib-tool:focus .lib-count {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.browse-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.browse-grid {
+  position: absolute;
+  inset: 0;
+}
+
+.collections {
+  position: absolute;
+  inset: 0;
+}
+
+.collections .grid-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+/* The rail runs down the whole right edge of Browse; letters share its height. */
+.alpha-rail {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 52px;
+}
+
+.alpha-letter {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+}
+
+.alpha-letter:hover {
+  background: var(--chrome-selected);
+}
+
+.alpha-letter.selected {
+  font-weight: 700;
+  background: var(--chrome-selected);
+}
+
+.alpha-letter.dim {
+  color: var(--text-secondary);
+  cursor: default;
+  opacity: 0.4;
+}
+
+.alpha-letter:focus,
+.alpha-letter.selected:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+}
+
+/* ---- Sort list and filter panel ---- */
+.lib-panel {
+  box-sizing: border-box;
+  width: 520px;
+  padding: 14px;
+  background: var(--surface-raised);
+  border: 2px solid var(--hairline);
+  border-radius: var(--radius-card);
+}
+
+.lib-panel-wide {
+  width: 720px;
+}
+
+.lib-panel-heading {
+  margin: 0;
+  padding: 8px 16px 12px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.lib-panel .note {
+  padding: 0 16px;
+}
+
+/* A long list of genres scrolls; focus brings the row into view natively. */
+.lib-panel-list {
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+/* ---- A collection's page ---- */
+.collection-head {
+  box-sizing: border-box;
+  height: 190px;
+  padding: var(--safe-y) 80px 0;
+}
+
+.collection-head .section-grid-title {
+  height: auto;
+  padding: 0;
+}
+
+.collection-description {
+  display: -webkit-box;
+  margin: 8px 0 0;
+  overflow: hidden;
+  font-size: var(--fs-card-title);
+  line-height: 32px;
+  color: var(--text-secondary);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.collection-page .grid-viewport {
+  height: calc(100vh - 190px);
+}

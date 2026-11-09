@@ -10,6 +10,7 @@ import './styles/tokens.css';
 import './styles.css';
 import './styles/media.css';
 import './styles/detail.css';
+import './styles/library.css';
 
 // Before the first render: focusable elements register with the service as they mount.
 initNavigation();

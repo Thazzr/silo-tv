@@ -13,6 +13,8 @@ import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
 import { ServerListScreen } from '../features/servers/ServerListScreen';
 import { SectionGridScreen } from '../features/home/SectionGridScreen';
+import { CollectionScreen } from '../features/library/CollectionScreen';
+import type { CollectionTarget } from '../features/library/targets';
 import { PlayerScreen } from '../playback/PlayerScreen';
 import { FocusIndexMemory } from '../ui/media';
 import type { Launch } from './launch';
@@ -32,8 +34,15 @@ type FlowScreen =
   /** `autoSelect` is off after "Switch profile", so a single profile is still shown. */
   | { name: 'profiles'; autoSelect: boolean; resumeId?: string }
   | { name: 'shell' }
-  /** The full list of a Home row ("Explore all"). */
-  | { name: 'sectionGrid'; sectionId: string; title: string }
+  /** The full list of a Home row, or of a row of a library's Recommended view ("Explore all"). */
+  | {
+      name: 'sectionGrid';
+      sectionId: string;
+      title: string;
+      library?: { id: string; type?: string };
+    }
+  /** One collection of a library, read-only. */
+  | ({ name: 'collection' } & CollectionTarget)
   /** A movie or series; the season and episode are set when an episode card opened it. */
   | ({ name: 'detail' } & DetailTarget)
   /** A start position skips the resume prompt: the detail page already asked. */
@@ -287,14 +296,21 @@ export function FlowApp({
             }
             onOpenDetail={openDetail}
             onExploreSection={(section) =>
-              nav.push({ name: 'sectionGrid', sectionId: section.id, title: section.title })
+              nav.push({
+                name: 'sectionGrid',
+                sectionId: section.id,
+                title: section.title,
+                library: section.library,
+              })
             }
+            onOpenCollection={(target) => nav.push({ name: 'collection', ...target })}
             onSwitchProfile={() => {
               setOffer(null);
               session.update({ profileId: undefined, profileToken: undefined });
               queryClient.removeQueries({ queryKey: ['libraries'] });
               queryClient.removeQueries({ queryKey: ['catalog'] });
               queryClient.removeQueries({ queryKey: ['home'] });
+              queryClient.removeQueries({ queryKey: ['library'] });
               queryClient.removeQueries({ queryKey: ['detail'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
@@ -307,6 +323,19 @@ export function FlowApp({
           <SectionGridScreen
             sectionId={screen.sectionId}
             title={screen.title}
+            library={screen.library}
+            memory={gridMemory}
+            onPlay={(item) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title })
+            }
+            onOpenDetail={openDetail}
+            onBack={nav.pop}
+          />,
+        );
+      case 'collection':
+        return provide(
+          <CollectionScreen
+            target={screen}
             memory={gridMemory}
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })

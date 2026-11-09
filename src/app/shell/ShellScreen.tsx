@@ -3,7 +3,8 @@ import { useBranding } from '../../features/branding/queries';
 import type { DetailTarget } from '../../features/detail/detailMemory';
 import { HomeScreen } from '../../features/home/HomeScreen';
 import { keepAtOrigin } from '../../ui/media';
-import { TitleList } from '../../features/library/TitleList';
+import { LibraryScreen } from '../../features/library/LibraryScreen';
+import type { CollectionTarget, ExploreTarget } from '../../features/library/targets';
 import { useSignOut, type CatalogItem } from '../../features/library/queries';
 import { useProfiles } from '../../features/profiles/queries';
 import {
@@ -38,8 +39,10 @@ export interface ShellScreenProps {
   onPlay: (item: CatalogItem) => void;
   /** Opens the detail page of a movie or series; the screen stack keeps the shell underneath. */
   onOpenDetail: (target: DetailTarget) => void;
-  /** Opens the full list of a Home row ("Explore all") as a screen of its own. */
-  onExploreSection?: (section: { id: string; title: string }) => void;
+  /** Opens the full list of a row ("Explore all") as a screen of its own. */
+  onExploreSection?: (section: ExploreTarget) => void;
+  /** Opens a collection of a library as a screen of its own. */
+  onOpenCollection?: (target: CollectionTarget) => void;
   onSwitchProfile: () => void;
   onSwitchServer: () => void;
   /** The device setting "Profile at launch" of this server, and its change from the menu. */
@@ -51,19 +54,30 @@ export interface ShellScreenProps {
   switchDelayMs?: number;
 }
 
+/** Home and the library tabs clip and scroll their own content; the others flow with the page. */
+const CONTENT_CLASS: Partial<Record<TabId, string>> = {
+  home: 'shell-content shell-content-home',
+  movies: 'shell-content shell-content-library',
+  series: 'shell-content shell-content-library',
+};
+
 function TabContent({
   tab,
   memory,
   onPlay,
   onOpenDetail,
   onExploreSection,
+  onOpenCollection,
+  switchDelayMs,
   onHome,
 }: {
   tab: TabId;
   memory: ShellMemory;
   onPlay: (item: CatalogItem) => void;
   onOpenDetail: (target: DetailTarget) => void;
-  onExploreSection: (section: { id: string; title: string }) => void;
+  onExploreSection: (section: ExploreTarget) => void;
+  onOpenCollection: (target: CollectionTarget) => void;
+  switchDelayMs: number;
   onHome: () => void;
 }) {
   switch (tab) {
@@ -77,9 +91,18 @@ function TabContent({
         />
       );
     case 'movies':
-      return <TitleList kind="movie" onPlay={onPlay} onOpenDetail={onOpenDetail} />;
     case 'series':
-      return <TitleList kind="series" onPlay={onPlay} onOpenDetail={onOpenDetail} />;
+      return (
+        <LibraryScreen
+          kind={tab === 'movies' ? 'movie' : 'series'}
+          memory={memory.library}
+          onPlay={onPlay}
+          onOpenDetail={onOpenDetail}
+          onExploreSection={onExploreSection}
+          onOpenCollection={onOpenCollection}
+          switchDelayMs={switchDelayMs}
+        />
+      );
     default:
       // For You, Calendar and Search come with Phase 2.
       return <ComingSoon onHome={onHome} />;
@@ -101,6 +124,7 @@ export function ShellScreen({
   onPlay,
   onOpenDetail,
   onExploreSection = () => undefined,
+  onOpenCollection = () => undefined,
   onSwitchProfile,
   onSwitchServer,
   launchMode,
@@ -229,7 +253,7 @@ export function ShellScreen({
             key={selected}
             focusKey={`shell-content-${selected}`}
             enterable
-            className={selected === 'home' ? 'shell-content shell-content-home' : 'shell-content'}
+            className={CONTENT_CLASS[selected] ?? 'shell-content'}
             // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
             onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
             saveLastFocusedChild
@@ -244,6 +268,8 @@ export function ShellScreen({
               onPlay={onPlay}
               onOpenDetail={onOpenDetail}
               onExploreSection={onExploreSection}
+              onOpenCollection={onOpenCollection}
+              switchDelayMs={switchDelayMs}
               onHome={goHome}
             />
           </FocusGroup>

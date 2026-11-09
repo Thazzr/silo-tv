@@ -1,4 +1,5 @@
 import type { MessageKey } from '../../i18n';
+import { LibraryMemory } from '../../features/library/libraryMemory';
 import { FocusIndexMemory } from '../../ui/media/scroll';
 
 export const TAB_IDS = ['home', 'movies', 'series', 'forYou', 'calendar', 'search'] as const;
@@ -39,6 +40,8 @@ export class ShellMemory {
   private focus: Partial<Record<TabId, string>> = {};
   /** The focused card of every Home row; the rows read it when they are shown again. */
   readonly rows = new FocusIndexMemory();
+  /** The library, sub-view, Browse choices and focus of the Movies and Series tabs. */
+  readonly library = new LibraryMemory();
 
   selectTab(tab: TabId): void {
     this.tab = tab;
@@ -57,5 +60,6 @@ export class ShellMemory {
     this.tab = 'home';
     this.focus = {};
     this.rows.clear();
+    this.library.reset();
   }
 }

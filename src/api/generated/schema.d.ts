@@ -177,6 +177,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/catalog/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The facet values available in a scope, for filter menus. */
+        get: operations["getCatalogFilters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/catalog/items/{id}": {
         parameters: {
             query?: never;
@@ -186,6 +203,40 @@ export interface paths {
         };
         /** The detail page of one item, with the viewer's state. */
         get: operations["getCatalogItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Count a title-ordered catalog query by initial letter, with each letter's list position, for an alphabetical jump bar. */
+        post: operations["queryCatalogLetters"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/search/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search continuation provider, result window, and session lifetime. */
+        get: operations["getCatalogSearchCapabilities"];
         put?: never;
         post?: never;
         delete?: never;
@@ -288,6 +339,74 @@ export interface paths {
         };
         /** One section of the home page with its cards. */
         get: operations["getHomeSectionItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/library/{id}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The library's Collections tab: curated collections, their groups, and the viewer's opted-in personal collections. */
+        get: operations["getLibraryCollections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/library/{id}/collections/{collection_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Page visible library collection items in stable order. Restart after a collection change. */
+        get: operations["getLibraryCollectionItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/library/{id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The library's sections with their cards, as the acting profile sees them. */
+        get: operations["listLibrarySections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/library/{id}/sections/{section_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One section of the library with its cards. */
+        get: operations["getLibrarySectionItems"];
         put?: never;
         post?: never;
         delete?: never;
@@ -836,6 +955,23 @@ export interface components {
             field: string;
             /** @example asc */
             order: string;
+        };
+        CatalogFilters: {
+            /** @description First 1000 alphabetically; searchCatalogFacet pages the rest */
+            authors: string[];
+            content_ratings: string[];
+            /** @description Distinct countries in scope, normally ISO 3166-1 alpha-2 codes; NFO files and manual edits can store country names */
+            countries: string[];
+            /** @description Empty, never null */
+            genres: string[];
+            narrators: string[];
+            networks: string[];
+            /** @description Distinct original languages in scope, normally ISO 639-1 codes (ISO 639-3 when none exists); provider codes such as TMDB's xx pass through */
+            original_languages: string[];
+            series: string[];
+            studios: string[];
+            /** @description File-derived facets; absent when skip_technical=true */
+            technical?: components["schemas"]["CatalogTechnicalFilters"];
         };
         CatalogItem: {
             /**
@@ -1407,6 +1543,88 @@ export interface components {
              */
             watched_count?: number;
         };
+        CatalogLetter: {
+            /**
+             * Format: int64
+             * @description Titles filed under the letter
+             * @example 42
+             */
+            count: number;
+            /**
+             * @description A to Z, or # for titles that start with a digit, a symbol, or a non-Latin letter. Titles file under their sort title, so "The Hobbit" sorted as "Hobbit, The" is under H, and accented Latin initials fold to their base letter
+             * @example H
+             */
+            letter: string;
+            /**
+             * Format: int64
+             * @description Zero-based list position of the letter's first title in the same query sorted by title in the same order; pass it as seek to queryCatalogItems
+             * @example 318
+             */
+            position: number;
+        };
+        CatalogLetterRun: {
+            /**
+             * @description The letter every title in the block files under
+             * @example H
+             */
+            letter: string;
+            /**
+             * Format: int64
+             * @description Zero-based list position of the block's first title; the block ends where the next one starts, or at total
+             * @example 318
+             */
+            position: number;
+        };
+        CatalogLetters: {
+            /** @description Letters with at least one title, in list order; empty, never null */
+            letters: components["schemas"]["CatalogLetter"][];
+            /** @description Blocks of consecutive titles under one letter, in list order, covering the whole result; empty, never null. A letter usually has one block, but the database's collation can sort some of its titles apart from the rest (under C, accented initials sort after Z; most collations put non-Latin scripts after the Latin letters), so use these, not letters, to tell which letter a list position is under */
+            runs: components["schemas"]["CatalogLetterRun"][];
+            /**
+             * Format: int64
+             * @description Titles in the whole result: the sum of the counts
+             * @example 1240
+             */
+            total: number;
+        };
+        CatalogLettersQuery: {
+            /** @description Rule groups, as on queryCatalogItems; empty matches everything */
+            groups?: components["schemas"]["CatalogQueryGroup"][];
+            /**
+             * @description Restrict to one library
+             * @example 1
+             */
+            library_id?: string;
+            /**
+             * @description How the groups combine; default all
+             * @enum {string}
+             */
+            match?: "all" | "any";
+            /**
+             * @description Title order the positions count in; default asc
+             * @enum {string}
+             */
+            order?: "asc" | "desc";
+            /**
+             * @description Media scope, as the listCatalogItems type parameter
+             * @example movie
+             */
+            type?: string;
+        };
+        CatalogQueryGroup: {
+            /** @enum {string} */
+            match: "all" | "any";
+            /** @description Empty, never null */
+            rules: components["schemas"]["CatalogQueryRule"][];
+        };
+        CatalogQueryRule: {
+            /** @example genre */
+            field: string;
+            /** @example contains */
+            op: string;
+            /** @description Scalar or array, as the operator requires */
+            value: unknown;
+        };
         CatalogRating: {
             /**
              * @description The score on the source's own scale, formatted for display
@@ -1443,6 +1661,50 @@ export interface components {
              */
             votes?: number;
         };
+        CatalogSearchCapabilities: {
+            /** @description Whether the current principal may use the capability */
+            allowed: boolean;
+            /** @description searchCatalogBoxSets, getCatalogBoxSet and getCatalogItemBoxSet answer; listUserLibraries reports which libraries have box sets on */
+            box_sets?: boolean;
+            /** @description Rule groups in catalog queries, sections, and Smart collections accept the title, decade, runtime, rating_tmdb, rating_rt_critic, rating_rt_audience, latest_episode_added, and last_air_date fields, the not_contains, begins_with, and ends_with operators on title, and not_in_last on date fields */
+            extended_query_rules?: boolean;
+            /** @description searchCatalogFacet accepts library_ids and answers values and values_has_more: ranked values with title counts that match word starts, and the most common values for an empty q */
+            facet_value_search?: boolean;
+            /** @description queryCatalogLetters answers how many titles of a title-ordered query-source browse file under each letter and where each letter's first title sits, for an alphabetical jump bar */
+            letter_index?: boolean;
+            /**
+             * Format: int64
+             * @description Oldest ranking sessions expire when this retention bound is exceeded
+             */
+            max_sessions_per_account?: number;
+            /** @description People search accepts media_scope and filters credits by viewer access */
+            people_media_scope?: boolean;
+            /** @description Person reads accept prefetch=true for speculative reads that do not queue a provider refresh */
+            person_prefetch?: boolean;
+            /** @enum {string} */
+            provider?: "postgres" | "meilisearch";
+            /**
+             * Format: int64
+             * @description Maximum candidates in a Meilisearch ranked window; absent for PostgreSQL live queries
+             */
+            result_window_limit?: number;
+            /** @description Opaque revision of this document */
+            revision: string;
+            /**
+             * Format: int64
+             * @description Fixed Meilisearch ranking-session lifetime; requests do not extend it
+             */
+            session_ttl_seconds?: number;
+            /** @description Rule groups accept show_title to compare an episode parent show title using the text operators; non-episode rows do not match */
+            show_title_rules?: boolean;
+            /**
+             * @description Support and configuration state, not health
+             * @enum {string}
+             */
+            state: "available" | "disabled" | "not_configured" | "unsupported";
+            /** @description listCatalogItems and queryCatalogItems accept type=video_with_episodes on the query source (text search over movies, series, and episodes), and listPeople accepts it as media_scope */
+            video_with_episodes_scope?: boolean;
+        };
         CatalogSearchDiagnostics: {
             fallback_reason?: string;
             /** Format: int64 */
@@ -1466,6 +1728,14 @@ export interface components {
              * @description Fixed expiry of the retained search ranking
              */
             session_expires_at?: string;
+        };
+        CatalogTechnicalFilters: {
+            /** @description Distinct audio track languages in scope as lowercase BCP 47 tags (en, pt-br); older scans may carry an ISO 639-2 code or the raw tag */
+            audio_languages: string[];
+            /** @description Empty, never null */
+            resolutions: string[];
+            /** @description Distinct subtitle languages in scope as BCP 47 tags; a stored value that is not a recognizable language passes through */
+            subtitle_languages: string[];
         };
         CatalogWorkFormat: {
             /** @example audiobook:dune */
@@ -1521,6 +1791,97 @@ export interface components {
             plex_guid?: string;
             tmdb_id?: string;
             tvdb_id?: string;
+        };
+        CuratedCollection: {
+            backdrop_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned, short-lived; empty when none
+             */
+            backdrop_url: string;
+            /**
+             * @description manual, smart, or an import type
+             * @example manual
+             */
+            collection_type: string;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             * @example 2026-01-02T03:04:05.678Z
+             */
+            created_at: string;
+            description: string;
+            /** @example false */
+            featured: boolean;
+            /** @description null when ungrouped */
+            group_id: string | null;
+            /** @example 01J9Z8C3W4R5T6Y7U8I9O0P1Q2 */
+            id: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            item_count: number;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            last_sync_at?: string;
+            last_sync_message: string;
+            last_sync_status: string;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            library_id: string;
+            /** @description Every library the collection spans; empty, never null */
+            library_ids: string[];
+            management_key: string;
+            /** @example manual */
+            management_mode: string;
+            management_source: string;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             */
+            next_sync_at?: string;
+            /**
+             * @description poster_url is the acting profile's collage of the collection's first titles it can see, composed by the server because the collection has no uploaded, template or imported poster. False for an uploaded, template or imported poster and whenever poster_url is empty. See getCollectionCapabilities poster_collages
+             * @example false
+             */
+            poster_is_collage: boolean;
+            poster_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned, short-lived; empty when none
+             */
+            poster_url: string;
+            /** @description Smart collection query; null when not a smart collection */
+            query_definition: unknown;
+            /** @example oscar-winners */
+            slug: string;
+            /** @description Sort configuration document; null when default */
+            sort_config: unknown;
+            /**
+             * Format: int64
+             * @example 0
+             */
+            sort_order: number;
+            /** @description Import source configuration; null when not imported */
+            source_config: unknown;
+            /** @description Where an imported collection came from (a list URL or a tmdb:// source); empty when not imported; not validated as a URI */
+            source_url: string;
+            sync_schedule?: string;
+            /** @example Oscar Winners */
+            title: string;
+            /**
+             * Format: date-time
+             * @description RFC 3339 instant in UTC with millisecond precision
+             * @example 2026-01-02T03:04:05.678Z
+             */
+            updated_at: string;
+            /** @example visible */
+            visibility: string;
         };
         DegradationWarningV3: {
             code: string;
@@ -2002,6 +2363,71 @@ export interface components {
             name?: string;
             site: string;
             site_key: string;
+        };
+        LibraryCollectionCard: {
+            /** @description Present on a personal collection: the profile that made it */
+            creator_profile_id?: string;
+            featured?: boolean;
+            /** @example 01J9Z8C3W4R5T6Y7U8I9O0P1Q2 */
+            id: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            item_count: number;
+            /**
+             * @description poster_url is the acting profile's collage of the collection's first titles it can see, composed by the server because the collection has no uploaded, template or imported poster. False for an uploaded, template or imported poster and whenever poster_url is empty. See getCollectionCapabilities poster_collages
+             * @example false
+             */
+            poster_is_collage: boolean;
+            poster_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned, short-lived; empty when none
+             */
+            poster_url: string;
+            /** @example Oscar Winners */
+            title: string;
+        };
+        LibraryCollectionGroup: {
+            collections: components["schemas"]["LibraryCollectionCard"][];
+            /** @example 01J9Z8C3W4R5T6Y7U8I9O0P1Q3 */
+            id: string;
+            /**
+             * @description admin or user_collections
+             * @example admin
+             */
+            kind: string;
+            /** @example Franchises */
+            name: string;
+            /** @example name_asc */
+            sort_mode: string;
+            /**
+             * Format: int64
+             * @example 0
+             */
+            sort_order: number;
+        };
+        LibraryCollectionTab: {
+            /** @description Every visible curated collection in full; empty, never null */
+            collections: components["schemas"]["CuratedCollection"][];
+            /** @description Non-empty groups in display order; empty when groups are not configured */
+            groups: components["schemas"]["LibraryCollectionGroup"][];
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            library_id: string;
+            /** @description Absent when every collection is grouped */
+            ungrouped?: components["schemas"]["LibraryCollectionUngrouped"];
+        };
+        LibraryCollectionUngrouped: {
+            collections: components["schemas"]["LibraryCollectionCard"][];
+            /**
+             * Format: int64
+             * @example 9999
+             */
+            sort_order: number;
         };
         LoginInputBody: {
             /**
@@ -4647,6 +5073,128 @@ export interface operations {
             };
         };
     };
+    getCatalogFilters: {
+        parameters: {
+            query?: {
+                /** @description What scope to list facets for; default query */
+                source?: "query" | "section" | "library_collection" | "user_collection" | "favorites" | "watchlist" | "history" | "person";
+                scope?: "home" | "library";
+                section_id?: string;
+                /** @description Opaque identifier */
+                library_id?: string;
+                /** @description Restrict to several libraries, one library_ids parameter per id; combines with library_id. Libraries the viewer cannot see are dropped, and a scope left with none is empty. Not accepted with source=section */
+                library_ids?: string[];
+                collection_id?: string;
+                /** @description Opaque identifier */
+                person_id?: string;
+                /** @description Media scope, as on listCatalogItems; video_with_episodes lists the facets of video */
+                type?: string;
+                /** @description true omits the file-derived facets (resolutions, audio and subtitle languages) */
+                skip_technical?: boolean;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFilters"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCatalogItem: {
         parameters: {
             query?: {
@@ -4757,6 +5305,293 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    queryCatalogLetters: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogLettersQuery"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogLetters"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCatalogSearchCapabilities: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+                "If-Match"?: string;
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSearchCapabilities"];
+                };
+            };
+            /** @description The representation named by If-None-Match is current; no body. */
+            304: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5451,6 +6286,482 @@ export interface operations {
             path: {
                 /** @description Section identifier from the home layout */
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Section"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLibraryCollections: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Library identifier */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryCollectionTab"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLibraryCollectionItems: {
+        parameters: {
+            query?: {
+                /** @description Page size; default 50, maximum 200 */
+                limit?: number;
+                cursor?: string;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Opaque identifier */
+                id: string;
+                /** @description Opaque identifier */
+                collection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItemCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listLibrarySections: {
+        parameters: {
+            query?: {
+                /** @description Answer at most this many cards per section: each section's item_limit becomes the smaller of its own and this value; total_count keeps its meaning. Absent keeps each section's own limit. Send it only when getHomeCapabilities reports section_item_limit_max; an older server rejects the parameter */
+                item_limit?: number;
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+                "X-Silo-Client-Family"?: string;
+            };
+            path: {
+                /** @description Library identifier */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLibrarySectionItems: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+                /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
+                "X-Silo-Client-Family"?: string;
+            };
+            path: {
+                /** @description Library identifier */
+                id: string;
+                /** @description Section identifier from the layout */
+                section_id: string;
             };
             cookie?: never;
         };

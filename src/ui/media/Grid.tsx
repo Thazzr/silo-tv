@@ -92,6 +92,8 @@ export function Grid<T>({
           transform: `translateY(${-effectiveScroll * GRID_ROW_PITCH}px)`,
           height: totalRows * GRID_ROW_PITCH,
           left: ROW_INSET,
+          // The cards are absolute, so the track needs its width for the navigation to see its box.
+          width: GRID_COLUMNS * step - CARD_GAP,
         }}
       >
         {rows.flatMap((row) => {

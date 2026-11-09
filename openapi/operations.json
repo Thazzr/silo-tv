@@ -31,5 +31,12 @@
   { "path": "/api/v2/theme/capabilities", "method": "get" },
   { "path": "/api/v2/catalog/series/{id}/seasons", "method": "get" },
   { "path": "/api/v2/catalog/series/{id}/seasons/{num}/episodes", "method": "get" },
-  { "path": "/api/v2/recommendations/similar/{item_id}", "method": "get" }
+  { "path": "/api/v2/recommendations/similar/{item_id}", "method": "get" },
+  { "path": "/api/v2/library/{id}/sections", "method": "get" },
+  { "path": "/api/v2/library/{id}/sections/{section_id}/items", "method": "get" },
+  { "path": "/api/v2/catalog/filters", "method": "get" },
+  { "path": "/api/v2/catalog/letters", "method": "post" },
+  { "path": "/api/v2/library/{id}/collections", "method": "get" },
+  { "path": "/api/v2/library/{id}/collections/{collection_id}/items", "method": "get" },
+  { "path": "/api/v2/catalog/search/capabilities", "method": "get" }
 ]

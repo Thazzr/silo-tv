@@ -36,6 +36,8 @@ interface FakeOptions {
   profiles?: FakeProfile[];
   /** Puts a series ("A Show") first in the Recently Added row. */
   series?: boolean;
+  /** Adds a series library with a collection to the library list (the Series tab then has content). */
+  seriesLibrary?: boolean;
 }
 
 interface FakeProfile {
@@ -48,9 +50,63 @@ interface FakeProfile {
 
 const servers: Server[] = [];
 
+// The titles of the Movies library, for the Browse view: the fake server sorts, filters by genre
+// and by title prefix, and lists the letters the way Silo does.
+interface FakeTitle {
+  id: string;
+  title: string;
+  year: number;
+  genre: string;
+}
+const MOVIES: FakeTitle[] = [
+  { id: 'm1', title: 'First Title', year: 2019, genre: 'Drama' },
+  { id: 'm2', title: 'Second Title', year: 2021, genre: 'Action' },
+  { id: 'm3', title: 'Third Title', year: 2020, genre: 'Drama' },
+  { id: 'm4', title: 'Fourth Title', year: 2018, genre: 'Action' },
+  { id: 'm5', title: 'Seventh Title', year: 2017, genre: 'Action' },
+  { id: 'm6', title: 'Alpha Title', year: 2015, genre: 'Drama' },
+];
+
+interface FakeRule {
+  field: string;
+  op: string;
+  value: unknown;
+}
+type FakeGroup = { match: string; rules: FakeRule[] };
+
+/** The titles that satisfy the genre rules of the groups (the only rule these flows send). */
+function filterTitles(groups: FakeGroup[]): FakeTitle[] {
+  return MOVIES.filter((movie) =>
+    groups.every((group) =>
+      group.rules.some((rule) => rule.field === 'genre' && rule.value === movie.genre),
+    ),
+  );
+}
+
+function browseTitles(params: URLSearchParams): FakeTitle[] {
+  const groups = JSON.parse(params.get('groups') ?? '[]') as FakeGroup[];
+  const prefix = (params.get('name_prefix') ?? '').toLowerCase();
+  const sort = params.get('sort') ?? 'title';
+  const field = sort.replace(/^-/, '') === 'year' ? 'year' : 'title';
+  const direction = sort.startsWith('-') ? -1 : 1;
+  return filterTitles(groups)
+    .filter((movie) => movie.title.toLowerCase().startsWith(prefix))
+    .sort((a, b) =>
+      field === 'year' ? (a.year - b.year) * direction : a.title.localeCompare(b.title) * direction,
+    );
+}
+
+const asCard = (movie: FakeTitle) => ({
+  content_id: movie.id,
+  title: movie.title,
+  type: 'movie',
+  year: movie.year,
+});
+
 async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: string; seen: Seen[] }> {
   const { name = 'E2E Silo', token = 'fake-access', code = true, password = false } = options;
   const withSeries = options.series === true;
+  const withSeriesLibrary = options.seriesLibrary === true;
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -251,7 +307,12 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             storage_available: false,
           });
         case 'GET /api/v2/user/libraries':
-          return send(200, { items: [{ id: 'lib-1', name: 'Movies', type: 'movies' }] });
+          return send(200, {
+            items: [
+              { id: 'lib-1', name: 'Movies', type: 'movies' },
+              ...(withSeriesLibrary ? [{ id: 'lib-2', name: 'Shows', type: 'series' }] : []),
+            ],
+          });
         case 'GET /api/v2/playback/capabilities':
           return send(200, {
             state: 'available',
@@ -343,6 +404,16 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               page: { has_more: false },
             });
           }
+          if (url.searchParams.get('library_id') === 'lib-1') {
+            const items = browseTitles(url.searchParams).map(asCard);
+            return send(200, {
+              items,
+              total: items.length,
+              total_exact: true,
+              window_cursor: 'w',
+              page: { has_more: false },
+            });
+          }
           return send(200, {
             items: [
               { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
@@ -350,6 +421,87 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             ],
             total: 2,
             total_exact: true,
+          });
+        // The Movies and Series tabs: Recommended rows, the facets, the letters, the collections.
+        case 'GET /api/v2/library/lib-1/sections':
+          return send(200, {
+            sections: [
+              {
+                id: 'rec',
+                section_type: 'recently_added',
+                title: 'Empfohlen für dich',
+                featured: false,
+                item_limit: 20,
+                is_custom: false,
+                customized: false,
+                total_count: 2,
+                items: MOVIES.slice(0, 2).map(asCard),
+              },
+            ],
+          });
+        case 'GET /api/v2/library/lib-2/sections':
+          return send(200, { sections: [] });
+        case 'GET /api/v2/catalog/search/capabilities':
+          return send(200, {
+            allowed: true,
+            revision: 'r',
+            state: 'available',
+            extended_query_rules: true,
+          });
+        case 'GET /api/v2/catalog/filters':
+          return send(200, {
+            genres: ['Action', 'Drama'],
+            studios: [],
+            networks: [],
+            countries: [],
+            original_languages: [],
+            content_ratings: [],
+            authors: [],
+            narrators: [],
+            series: [],
+          });
+        case 'POST /api/v2/catalog/letters': {
+          const body = JSON.parse(requestBody || '{}') as { groups?: FakeGroup[] };
+          const letters = new Map<string, number>();
+          for (const movie of filterTitles(body.groups ?? [])) {
+            const letter = movie.title[0]!.toUpperCase();
+            letters.set(letter, (letters.get(letter) ?? 0) + 1);
+          }
+          const sorted = [...letters.entries()].sort(([a], [b]) => a.localeCompare(b));
+          return send(200, {
+            total: MOVIES.length,
+            letters: sorted.map(([letter, count], position) => ({ letter, count, position })),
+            runs: sorted.map(([letter], position) => ({ letter, position })),
+          });
+        }
+        case 'GET /api/v2/library/lib-2/collections': {
+          const card = {
+            id: 'c1',
+            title: 'Space Saga',
+            poster_url: '',
+            item_count: 1,
+            poster_is_collage: false,
+            featured: false,
+          };
+          return send(200, {
+            library_id: 'lib-2',
+            collections: [],
+            groups: [
+              {
+                id: 'g1',
+                name: 'Franchises',
+                kind: 'server',
+                sort_mode: 'manual',
+                sort_order: 0,
+                collections: [card],
+              },
+            ],
+          });
+        }
+        case 'GET /api/v2/library/lib-2/collections/c1/items':
+          return send(200, {
+            items: [{ content_id: 's1', title: 'A Show', type: 'series', year: 2020 }],
+            page: { has_more: false },
           });
         default:
           return send(404, { title: 'not found', status: 404 });
@@ -583,6 +735,152 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+});
+
+test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail and Back to the same poster; Series: Collections', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ seriesLibrary: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+
+  // Movies: OK on the tab shows it at once; Down reaches the sub-view pills (Recommended is open).
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  // Right onto Browse and OK: the library's titles, A to Z.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  const posters = page.getByTestId('card-title');
+  await expect(posters).toHaveText([
+    'Alpha Title',
+    'First Title',
+    'Fourth Title',
+    'Second Title',
+    'Seventh Title',
+    'Third Title',
+  ]);
+
+  // Sort by year: the list marks the current sort; Year starts with the newest.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Sortierung · Titel' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemradio', { name: /^Titel/ })).toBeFocused();
+  await expect(page.getByRole('menuitemradio', { name: /^Titel/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitemradio', { name: /^Jahr/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Sortierung · Jahr' })).toBeFocused();
+  await expect(posters).toHaveText([
+    'Second Title',
+    'Third Title',
+    'First Title',
+    'Fourth Title',
+    'Seventh Title',
+    'Alpha Title',
+  ]);
+  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('sort=-year'))).toBe(
+    true,
+  );
+
+  // Filter by genre: the facet's values are checkboxes; Back leaves them, Back again applies.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Filter', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Action' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Action' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('filter-panel')).toHaveCount(0);
+  await expect(page.getByTestId('filter-count')).toHaveText('1');
+  await expect(posters).toHaveText(['Second Title', 'Fourth Title', 'Seventh Title']);
+  const filtered = seen.filter((e) => e.path === '/api/v2/catalog' && e.search.includes('groups='));
+  expect(decodeURIComponent(filtered[filtered.length - 1]?.search ?? '')).toContain('"Action"');
+
+  // The alphabet rail: only F and S have titles now. Right from the last poster reaches it.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Seventh Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect
+    .poll(() => page.evaluate(`document.activeElement?.getAttribute('aria-label')`))
+    .toMatch(/^Springe zu /);
+  for (let i = 0; i < 30; i += 1) {
+    const label = await page.evaluate(`document.activeElement?.getAttribute('aria-label')`);
+    if (label === 'Springe zu S') break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(page.getByRole('button', { name: 'Springe zu S' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Springe zu B' })).toBeDisabled();
+  // OK: the titles under S, in the grid, with the focus on the first of them.
+  await page.keyboard.press('Enter');
+  await expect(posters).toHaveText(['Second Title', 'Seventh Title']);
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Springe zu S' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('name_prefix=S'))).toBe(
+    true,
+  );
+
+  // Open a title; Back returns to the same poster with the same sort, filter and letter.
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect(posters).toHaveText(['Second Title', 'Seventh Title']);
+  await expect(page.getByTestId('filter-count')).toHaveText('1');
+
+  // Back from the poster: the sub-view pills, then the tab bar.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
+
+  // Series: the Collections view lists the library's collections; OK opens one as a page.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-series')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Sammlungen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('card-title')).toHaveText(['Space Saga']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Space Saga/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('collection-title')).toHaveText('Space Saga');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  // Back: the collection's poster has the focus again.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('collections')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Space Saga/ })).toBeFocused();
 });
 
 test('profiles: picker with a PIN profile, create a kids profile, choose it, open it automatically on the next start', async ({

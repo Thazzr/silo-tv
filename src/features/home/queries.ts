@@ -106,12 +106,24 @@ export function useDismissItem() {
   });
 }
 
-/** The pages of one section's full list, 40 cards at a time, following the server's cursor. */
-export function useSectionPages(sectionId: string) {
+/**
+ * The pages of one section's full list, 40 cards at a time, following the server's cursor. A row
+ * of a library's Recommended view is read as that library's section; a mixed library's row also
+ * carries the kind its tab shows.
+ */
+export function useSectionPages(sectionId: string, library?: { id: string; type?: string }) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   return useInfiniteQuery({
-    queryKey: ['home', 'section-pages', baseUrl, profileId, sectionId],
+    queryKey: [
+      'home',
+      'section-pages',
+      baseUrl,
+      profileId,
+      sectionId,
+      library?.id ?? '',
+      library?.type ?? '',
+    ],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
@@ -119,8 +131,10 @@ export function useSectionPages(sectionId: string) {
           header: { 'X-Profile-Id': profileId },
           query: {
             source: 'section',
-            scope: 'home',
+            scope: library ? 'library' : 'home',
             section_id: sectionId,
+            library_id: library?.id,
+            type: library?.type,
             limit: GRID_PAGE_SIZE,
             cursor: pageParam,
             ...GRID_IMAGE_QUERY,
