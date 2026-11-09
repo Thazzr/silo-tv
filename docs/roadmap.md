@@ -124,13 +124,14 @@ The project is public and should be as usable for every Silo user as Silo itself
 Repository and project:
 
 - ⬜ Works with any Silo server: the address is entered in the app, nothing is built in
-- ✅ License like Silo: AGPL-3.0-or-later
+- ✅ License: MPL-2.0 (file-level copyleft that works in app stores; switched from AGPL-3.0 before the first push, 2026-11-09)
 - ✅ No server addresses, account names or e-mail addresses in the repository or its history
 - ✅ Repository in English (docs, comments, commit messages, changelog)
 - ⬜ No code copied from Silo's repositories, so the store build carries only code this project owns
 - ⬜ CI on GitHub: the gate on every push and pull request
 - ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
-- ⬜ Contribution guidelines and issue templates; a contributor agreement (CLA or DCO) that keeps store distribution possible
+- ⬜ Contribution guidelines and issue templates; contributions under the same MPL-2.0 with a DCO sign-off (no CLA needed for store distribution)
+- ⬜ An "About" page in the app's settings: version, licence, link to the source code, and the licence notices of the bundled third-party packages (required for distributing the `.ipk`)
 
 LG Content Store:
 

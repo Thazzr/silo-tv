@@ -61,4 +61,6 @@ Rules and workflow are in [`CLAUDE.md`](CLAUDE.md): Opus plans and reviews, a So
 
 ## License
 
-[GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`), like Silo itself. Anyone may use, change and share the app. Whoever shares a modified version must publish its source code under the same license.
+[Mozilla Public License 2.0](LICENSE) (`MPL-2.0`). Anyone may use, change and share the app, also through app stores. Whoever shares a modified version must publish the source code of the files they changed under the same license; files of their own may carry another license.
+
+This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
