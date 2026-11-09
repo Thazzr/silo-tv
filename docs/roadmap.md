@@ -36,16 +36,17 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 ## Phase 2 – Browse (target v0.3.0)
 
-- ⬜ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures
-- ⬜ Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
-- ⬜ Library tabs for Movies and Series:
+- 🟨 Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures
+- 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
+- 🟨 Library tabs for Movies and Series:
   - Recommended rows
-  - Browse grid with sort, filters and an alphabet rail
+  - Browse grid with sort, filters (genre, decade) and an alphabet rail; watch-state and content-rating filters still to come through the documented `GET /catalog` parameters
   - Collections
+- 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
 - ⬜ Search across movies, series and episodes; matching box sets first
-- ⬜ Movie detail page: hero, description, credit line, external ratings, quality badges
-- ⬜ Series detail page with seasons and episodes, cast, recommendations
-- ⬜ Similar titles
+- 🟨 Movie detail page: hero, description, credit line, external ratings, quality badges
+- 🟨 Series detail page with seasons and episodes, cast, recommendations
+- 🟨 Similar titles
 - ⬜ Person page: biography and filmography, filtered by All, Movies or Series
 - ⬜ Box sets: page with the films in release order, "Play next"
 - ⬜ Trailers & More: local trailers and extras; YouTube trailers through the TV's YouTube app
@@ -56,7 +57,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 ## Phase 3 – Player (target v0.4.0)
 
-- ⬜ Play, resume and start over, following the server's progress
+- ⬜ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly
+- ⬜ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen
 - ⬜ Choose version, audio track and subtitle on the detail page beforehand; save the choice as a server preference
 - ⬜ Direct play, HLS remux and transcode, as protocol v3 plans them
   - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
@@ -86,7 +88,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - request, cancel, notify me
   - My Requests
   - request search for missing titles
-- ⬜ Profile settings:
+- ⬜ Profile settings, in the settings screen that Phase 3 opens with the device settings:
   - playback, subtitle appearance, interface, home screen
   - metadata language, profile picker at launch
   - account and signed-in devices
