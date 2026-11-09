@@ -14,7 +14,8 @@ import {
 } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
-import { ShellScreen } from './ShellScreen';
+import type { LaunchMode } from '../../features/profiles/launchPrefs';
+import { ShellScreen, type ShellScreenProps } from './ShellScreen';
 import { ShellMemory, TAB_SWITCH_DELAY_MS, type TabId } from './tabs';
 
 const server = setupServer();
@@ -42,7 +43,12 @@ interface Calls {
 }
 
 /** Home lists the first video library (movies here); Series has a library of its own. */
-function serve(extra: { branding?: ReturnType<typeof branding> | 'fail' } = {}): Calls {
+function serve(
+  extra: {
+    branding?: ReturnType<typeof branding> | 'fail';
+    profiles?: ReturnType<typeof profile>[];
+  } = {},
+): Calls {
   const calls: Calls = { catalogLibraries: [], logout: [] };
   const byLibrary: Record<string, typeof homeTitles> = {
     'lib-film': homeTitles,
@@ -50,7 +56,7 @@ function serve(extra: { branding?: ReturnType<typeof branding> | 'fail' } = {}):
   };
   server.use(
     http.get(`${BASE_URL}/api/v2/profiles`, () =>
-      HttpResponse.json(profileCollection([profile({ id: 'p1', name: 'Alex' })])),
+      HttpResponse.json(profileCollection(extra.profiles ?? [profile({ id: 'p1', name: 'Alex' })])),
     ),
     http.get(`${BASE_URL}/api/v2/user/libraries`, () =>
       HttpResponse.json({
@@ -78,35 +84,47 @@ function serve(extra: { branding?: ReturnType<typeof branding> | 'fail' } = {}):
   return calls;
 }
 
-function signedIn() {
+function signedIn(profileId = 'p1') {
   const session = new Session(memoryStorage());
   session.set({
     accessToken: 'a',
     refreshToken: 'r',
     expiresAt: Date.now() + 3600_000,
     user: account,
-    profileId: 'p1',
+    profileId,
   });
   return session;
 }
 
-function setup(options: { memory?: ShellMemory; delay?: number | 'default' } = {}) {
+function setup(
+  options: {
+    memory?: ShellMemory;
+    delay?: number | 'default';
+    launchMode?: LaunchMode;
+    offer?: ShellScreenProps['offer'];
+    profileId?: string;
+  } = {},
+) {
   const memory = options.memory ?? new ShellMemory();
   const onPlay = vi.fn();
   const onSwitchProfile = vi.fn();
   const onSwitchServer = vi.fn();
-  const session = signedIn();
+  const onLaunchMode = vi.fn();
+  const session = signedIn(options.profileId);
   const view = renderWithSilo(
     <ShellScreen
       memory={memory}
       onPlay={onPlay}
       onSwitchProfile={onSwitchProfile}
       onSwitchServer={onSwitchServer}
+      launchMode={options.launchMode ?? 'every'}
+      onLaunchMode={onLaunchMode}
+      offer={options.offer}
       switchDelayMs={options.delay === 'default' ? undefined : (options.delay ?? DELAY)}
     />,
     { session },
   );
-  return { memory, onPlay, onSwitchProfile, onSwitchServer, ...view };
+  return { memory, onPlay, onSwitchProfile, onSwitchServer, onLaunchMode, ...view };
 }
 
 const tab = (name: string) => screen.getByRole('button', { name });
@@ -453,6 +471,7 @@ describe('ShellScreen avatar menu', () => {
     const items = screen.getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual([
       'Switch profile',
+      'Profile at launchEvery time',
       'Switch server',
       'Sign out',
     ]);
@@ -462,10 +481,11 @@ describe('ShellScreen avatar menu', () => {
     expect(items[0]).toHaveFocus();
     await pressKey(KEY.down);
     await pressKey(KEY.down);
-    expect(items[2]).toHaveFocus();
+    await pressKey(KEY.down);
+    expect(items[3]).toHaveFocus();
     await pressKey(KEY.down);
     await pressKey(KEY.right);
-    expect(items[2]).toHaveFocus();
+    expect(items[3]).toHaveFocus();
     await pressKey(KEY.back);
     await waitFor(() => expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument());
     expect(avatar()).toHaveFocus();
@@ -500,6 +520,7 @@ describe('ShellScreen avatar menu', () => {
     await ready();
     await openMenu();
     await pressKey(KEY.down);
+    await pressKey(KEY.down);
     await pressKey(KEY.enter);
     expect(onSwitchServer).toHaveBeenCalledTimes(1);
     expect(session.get()).not.toBeNull();
@@ -511,6 +532,7 @@ describe('ShellScreen avatar menu', () => {
     const { session } = setup();
     await ready();
     await openMenu();
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
@@ -525,6 +547,188 @@ describe('ShellScreen avatar menu', () => {
     await openMenu();
     fireEvent.click(document.querySelector('.menu-backdrop')!);
     expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShellScreen kids profile', () => {
+  async function openMenu() {
+    for (let i = 0; i < 6; i++) await pressKey(KEY.right);
+    await pressKey(KEY.enter);
+    await screen.findByTestId('avatar-menu');
+  }
+
+  it('offers no Switch server and no Sign out in a kids profile, but Switch profile stays', async () => {
+    serve({ profiles: [profile({ id: 'p1', name: 'Mia', is_child: true, is_primary: false })] });
+    setup({ delay: 60_000 });
+    await ready();
+    await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Mia'));
+    await openMenu();
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'Switch profile',
+      'Profile at launchEvery time',
+    ]);
+    expect(screen.queryByRole('menuitem', { name: 'Switch server' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-profile')).toHaveTextContent('Mia');
+  });
+
+  it('shows Switch server and Sign out in a profile that is not a kids profile', async () => {
+    serve({ profiles: [profile({ id: 'p1', name: 'Alex', is_child: false })] });
+    setup({ delay: 60_000 });
+    await ready();
+    await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Alex'));
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Switch server' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+  });
+
+  it('holds back Switch server and Sign out until the profile is known', async () => {
+    serve();
+    server.use(
+      http.get(`${BASE_URL}/api/v2/profiles`, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return HttpResponse.json(
+          profileCollection([profile({ id: 'p1', name: 'Mia', is_child: true })]),
+        );
+      }),
+    );
+    setup({ delay: 60_000 });
+    await ready();
+    await openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ShellScreen profile at launch', () => {
+  async function openMenu() {
+    for (let i = 0; i < 6; i++) await pressKey(KEY.right);
+    await pressKey(KEY.enter);
+    await screen.findByTestId('avatar-menu');
+  }
+  const optionNames = () => screen.getAllByRole('menuitemradio').map((i) => i.textContent);
+
+  it('shows the current mode in the menu entry', async () => {
+    serve();
+    setup({ delay: 60_000, launchMode: 'hour' });
+    await ready();
+    await openMenu();
+    expect(screen.getByTestId('launch-value')).toHaveTextContent('After 1 hour');
+  });
+
+  it('opens a chooser with the four options and marks the current one', async () => {
+    serve();
+    setup({ delay: 60_000, launchMode: 'halfday' });
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(optionNames()).toEqual(['Automatic', 'Every time', 'After 1 hour', 'After 12 hours✓']);
+    const radios = screen.getAllByRole('menuitemradio');
+    expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'false',
+      'true',
+    ]);
+    // The focus starts on the current option.
+    await waitFor(() => expect(radios[3]).toHaveFocus());
+  });
+
+  it('Back in the chooser returns to the menu on its entry; Back again closes the menu', async () => {
+    serve();
+    setup({ delay: 60_000 });
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    await screen.findAllByRole('menuitemradio');
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0));
+    expect(screen.getByTestId('avatar-menu')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: /Profile at launch/ })).toHaveFocus(),
+    );
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument());
+  });
+
+  it('choosing an option reports it and returns to the menu', async () => {
+    serve();
+    const { onLaunchMode } = setup({ delay: 60_000 });
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    await screen.findAllByRole('menuitemradio');
+    await waitFor(() =>
+      expect(screen.getByRole('menuitemradio', { name: /Every time/ })).toHaveFocus(),
+    );
+    await pressKey(KEY.up);
+    expect(screen.getByRole('menuitemradio', { name: /Automatic/ })).toHaveFocus();
+    await pressKey(KEY.enter);
+    expect(onLaunchMode).toHaveBeenCalledWith('automatic');
+    await waitFor(() => expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0));
+    expect(screen.getByTestId('avatar-menu')).toBeInTheDocument();
+  });
+
+  it('a kids profile can still reach the chooser', async () => {
+    serve({ profiles: [profile({ id: 'p1', name: 'Mia', is_child: true })] });
+    setup({ delay: 60_000 });
+    await ready();
+    await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Mia'));
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(optionNames()).toHaveLength(4);
+  });
+});
+
+describe('ShellScreen automatic-profile offer', () => {
+  it('asks "Open {name} automatically next time?" with Yes focused', async () => {
+    serve();
+    const onAnswer = vi.fn();
+    setup({ offer: { name: 'Alex', onAnswer } });
+    const dialog = await screen.findByTestId('launch-offer');
+    expect(dialog).toHaveTextContent('Open Alex automatically next time?');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Yes' })).toHaveFocus());
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it('Yes answers true and No answers false', async () => {
+    serve();
+    const yes = vi.fn();
+    const first = setup({ offer: { name: 'Alex', onAnswer: yes } });
+    await screen.findByTestId('launch-offer');
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    expect(yes).toHaveBeenCalledWith(true);
+    first.unmount();
+
+    const no = vi.fn();
+    setup({ offer: { name: 'Alex', onAnswer: no } });
+    await screen.findByTestId('launch-offer');
+    fireEvent.click(screen.getByRole('button', { name: 'No' }));
+    expect(no).toHaveBeenCalledWith(false);
+  });
+
+  it('Back answers No, and the arrow keys cannot leave the dialog', async () => {
+    serve();
+    const onAnswer = vi.fn();
+    setup({ offer: { name: 'Alex', onAnswer } });
+    await screen.findByTestId('launch-offer');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Yes' })).toHaveFocus());
+    await pressKey(KEY.up);
+    await pressKey(KEY.left);
+    expect(screen.getByRole('button', { name: 'Yes' })).toHaveFocus();
+    await pressKey(KEY.back);
+    expect(onAnswer).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+  });
+
+  it('shows no dialog without an offer', async () => {
+    serve();
+    setup();
+    await ready();
+    expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument();
   });
 });
 

@@ -12,8 +12,10 @@ import {
   useNavigator,
 } from '../nav';
 import { useSilo } from '../SiloContext';
-import { AvatarMenu } from './AvatarMenu';
+import type { LaunchMode } from '../../features/profiles/launchPrefs';
+import { AvatarMenu, type MenuView } from './AvatarMenu';
 import { ComingSoon } from './ComingSoon';
+import { LaunchOfferDialog } from './LaunchOfferDialog';
 import { TopBar } from './TopBar';
 import {
   AVATAR_KEY,
@@ -31,6 +33,11 @@ export interface ShellScreenProps {
   onPlay: (item: CatalogItem) => void;
   onSwitchProfile: () => void;
   onSwitchServer: () => void;
+  /** The device setting "Profile at launch" of this server, and its change from the menu. */
+  launchMode: LaunchMode;
+  onLaunchMode: (mode: LaunchMode) => void;
+  /** "Open {name} automatically?", asked once after the first pick; null when there is no question. */
+  offer?: { name: string; onAnswer: (automatic: boolean) => void } | null;
   /** How long a focused tab waits before its content replaces the old one; tests stretch it. */
   switchDelayMs?: number;
 }
@@ -72,6 +79,9 @@ export function ShellScreen({
   onPlay,
   onSwitchProfile,
   onSwitchServer,
+  launchMode,
+  onLaunchMode,
+  offer = null,
   switchDelayMs = TAB_SWITCH_DELAY_MS,
 }: ShellScreenProps) {
   const nav = useNavigator();
@@ -84,7 +94,14 @@ export function ShellScreen({
   const [initialTab] = useState(memory.tab);
   const [selected, setSelected] = useState<TabId>(memory.tab);
   const selectedRef = useRef<TabId>(memory.tab);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Which part of the avatar menu is open; null while it is closed.
+  const [menu, setMenu] = useState<MenuView | null>(null);
+  const [rendered, setRendered] = useState(false);
+  // The offer comes once the shell has rendered, so its focus does not fight the screen's own.
+  useEffect(() => {
+    const id = setTimeout(() => setRendered(true), 0);
+    return () => clearTimeout(id);
+  }, []);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearPending = useCallback(() => {
@@ -134,8 +151,13 @@ export function ShellScreen({
   }, [select]);
 
   useBackHandler(() => {
-    if (menuOpen) {
-      setMenuOpen(false);
+    if (offer) {
+      // Back answers the question with No, like Cancel in the exit popup.
+      offer.onAnswer(false);
+      return;
+    }
+    if (menu) {
+      setMenu(menu === 'launch' ? 'main' : null);
       return;
     }
     const focused = getCurrentFocusKey();
@@ -151,6 +173,8 @@ export function ShellScreen({
 
   const profile = profiles.data?.find((p) => p.id === session.get()?.profileId);
   const profileName = profile?.name ?? session.get()?.user?.username ?? '';
+  // A kids profile cannot leave the server it was given. Until the profile is known, assume it may be one.
+  const restricted = profiles.isPending || profile?.is_child === true;
 
   return (
     <FocusTrackerContext.Provider value={report}>
@@ -161,7 +185,7 @@ export function ShellScreen({
           profileName={profileName}
           onTabFocused={tabFocused}
           onTabPick={select}
-          onAvatar={() => setMenuOpen(true)}
+          onAvatar={() => setMenu('main')}
         />
         {/* Keyed by tab: the content of another tab is a new group that starts at its memory. */}
         <FocusGroup
@@ -177,15 +201,30 @@ export function ShellScreen({
         >
           <TabContent tab={selected} onPlay={onPlay} onHome={goHome} />
         </FocusGroup>
-        {menuOpen ? (
+        {menu ? (
           <AvatarMenu
+            view={menu}
             profileName={profileName}
             serverName={branding.serverName}
+            restricted={restricted}
+            launchMode={launchMode}
             signingOut={signOut.isPending}
-            onClose={() => setMenuOpen(false)}
+            onClose={() => setMenu(null)}
             onSwitchProfile={onSwitchProfile}
             onSwitchServer={onSwitchServer}
             onSignOut={() => signOut.mutate()}
+            onOpenLaunch={() => setMenu('launch')}
+            onChooseLaunch={(mode) => {
+              onLaunchMode(mode);
+              setMenu('main');
+            }}
+          />
+        ) : null}
+        {offer && rendered ? (
+          <LaunchOfferDialog
+            name={offer.name}
+            fallbackFocusKey={tabKey(selected)}
+            onAnswer={offer.onAnswer}
           />
         ) : null}
       </main>

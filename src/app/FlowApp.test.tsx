@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '../api/session';
 import type { KeyValueStore } from '../platform';
-import { BASE_URL, account, problemResponse, systemInfo } from '../test/apiFixtures';
+import { BASE_URL, account, problem, problemResponse, systemInfo } from '../test/apiFixtures';
 import {
   authProviders,
   branding,
@@ -21,6 +21,7 @@ import {
   tokenPair,
 } from '../test/flowFixtures';
 import { I18nProvider } from '../i18n';
+import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launchPrefs';
 import { clearInstallationCache } from '../playback/usePlaybackSession';
 import { servePlayback } from '../test/playbackFixtures';
 import { KEY, pressKey } from '../test/keys';
@@ -46,9 +47,20 @@ beforeEach(() => {
   clearInstallationCache();
 });
 
-/** Saves a server (it becomes the current one) and signs in to it, with a profile when given. */
+/**
+ * Saves a server (it becomes the current one) and signs in to it, with a profile when given. The
+ * device setting is seeded so that a session with a profile reopens it (Automatic) and no
+ * "Open automatically?" question comes up; the launch tests below seed their own.
+ */
 function signedIn(origin = BASE_URL, profileId?: string): Session {
   registry.add(origin);
+  const prefs = new ProfileLaunchPrefs(storage);
+  if (profileId) {
+    prefs.setMode(origin, 'automatic');
+    prefs.recordPick(origin, { id: profileId, has_pin: false });
+  } else {
+    prefs.markOffered(origin);
+  }
   const session = registry.session(origin);
   session.set({
     accessToken: origin === BASE_URL ? 'a' : 'token-other',
@@ -60,13 +72,14 @@ function signedIn(origin = BASE_URL, profileId?: string): Session {
   return session;
 }
 
-function flow(launchServer = '') {
+function flow(launchServer = '', now?: () => number) {
   return renderApp(
     <FlowApp
       launch={{ probe: false, transport: null, server: launchServer }}
       registry={registry}
       device={testDevice}
       storage={storage}
+      now={now}
     />,
   );
 }
@@ -184,6 +197,9 @@ describe('FlowApp', () => {
     fireEvent.keyDown(window, { keyCode: 461 });
     await waitFor(() => expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    fireEvent.click(
+      within(await screen.findByTestId('signout-dialog')).getByRole('button', { name: 'Sign out' }),
+    );
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
     expect(session.get()).toBeNull();
   });
@@ -699,5 +715,380 @@ describe('FlowApp branding', () => {
     await screen.findByRole('button', { name: /Title of/ });
     await waitFor(() => expect(screen.getByTestId('server-name')).toHaveTextContent('Test Server'));
     expect(rootStyle()).toBe('');
+  });
+});
+
+describe('FlowApp profile at launch', () => {
+  const T0 = 1_700_000_000_000;
+  const HOUR = 3_600_000;
+  const alex = profile({ id: 'p1', name: 'Alex' });
+  const sam = profile({ id: 'p2', name: 'Sam', has_pin: true, is_primary: false });
+  const mia = profile({ id: 'p3', name: 'Mia', is_child: true, is_primary: false });
+
+  /** A TV that used p1 at T0 under a mode, with the session still holding that profile. */
+  function usedAt(
+    mode: LaunchMode,
+    options: { profile?: { id: string; has_pin: boolean }; at?: number; token?: string } = {},
+  ): Session {
+    const picked = options.profile ?? { id: 'p1', has_pin: false };
+    const session = signedIn(BASE_URL, picked.id);
+    session.update({ profileToken: options.token });
+    const prefs = new ProfileLaunchPrefs(storage, () => options.at ?? T0);
+    prefs.setMode(BASE_URL, mode);
+    prefs.recordPick(BASE_URL, picked);
+    return session;
+  }
+
+  const stored = (origin = BASE_URL) => new ProfileLaunchPrefs(storage).get(origin);
+
+  it('Automatic opens the last profile without the picker, however long ago', async () => {
+    const seen = serveData(BASE_URL, [alex, sam]);
+    const session = usedAt('automatic', { at: T0 - 400 * HOUR });
+    flow('', () => T0);
+    expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('profile-list')).not.toBeInTheDocument();
+    expect(session.get()?.profileId).toBe('p1');
+    expect(seen.catalog).toHaveLength(1);
+  });
+
+  it('Every time shows the picker even though the session holds a profile, and forgets it', async () => {
+    serveData(BASE_URL, [alex, sam]);
+    const session = usedAt('every', { token: 'pvt_old' });
+    flow('', () => T0);
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(session.get()?.profileId).toBeUndefined();
+    expect(session.get()?.profileToken).toBeUndefined();
+    // The picker starts on the profile used last.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Alex/ })).toHaveFocus());
+  });
+
+  it('the picker starts on the remembered profile, not on the first one', async () => {
+    serveData(BASE_URL, [alex, mia]);
+    usedAt('every', { profile: { id: 'p3', has_pin: false } });
+    flow('', () => T0);
+    await screen.findByTestId('profile-list');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Mia/ })).toHaveFocus());
+  });
+
+  it.each([
+    ['hour', HOUR],
+    ['halfday', 12 * HOUR],
+  ] as const)(
+    '%s: reopens at exactly the limit and shows the picker just past it',
+    async (mode, limit) => {
+      serveData(BASE_URL, [alex, sam]);
+      usedAt(mode);
+      const first = flow('', () => T0 + limit);
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      first.unmount();
+
+      const session = usedAt(mode);
+      flow('', () => T0 + limit + 1);
+      expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+      expect(session.get()?.profileId).toBeUndefined();
+    },
+  );
+
+  describe('verifying the remembered profile before Automatic opens it', () => {
+    it('opens it only after the list confirmed it', async () => {
+      const seen = serveData(BASE_URL, [alex, sam]);
+      const session = usedAt('automatic');
+      flow('', () => T0);
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(session.get()?.profileId).toBe('p1');
+      expect(seen.catalog).toHaveLength(1);
+    });
+
+    it('shows the picker when the remembered profile was deleted', async () => {
+      const seen = serveData(BASE_URL, [sam, mia]);
+      const session = usedAt('automatic');
+      flow('', () => T0);
+      expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+      expect(session.get()?.profileId).toBeUndefined();
+      expect(seen.catalog).toHaveLength(0);
+    });
+
+    it('shows the picker when the remembered profile now has a PIN', async () => {
+      const seen = serveData(BASE_URL, [{ ...alex, has_pin: true }, mia]);
+      const session = usedAt('automatic');
+      flow('', () => T0);
+      expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+      expect(session.get()?.profileId).toBeUndefined();
+      expect(seen.catalog).toHaveLength(0);
+    });
+
+    it('never opens silently when the list cannot be read: error with Try again, then opens', async () => {
+      const seen = serveData(BASE_URL, [alex, sam]);
+      server.use(
+        http.get(
+          `${BASE_URL}/api/v2/profiles`,
+          () => HttpResponse.json(problem('internal', 500), { status: 500 }),
+          {
+            once: true,
+          },
+        ),
+      );
+      const session = usedAt('automatic');
+      flow('', () => T0);
+      expect(await screen.findByTestId('error-state')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Title of/ })).not.toBeInTheDocument();
+      expect(session.get()?.profileId).toBeUndefined();
+      expect(seen.catalog).toHaveLength(0);
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(session.get()?.profileId).toBe('p1');
+    });
+  });
+
+  it('shows the picker when the clock reads earlier than the last use', async () => {
+    serveData(BASE_URL, [alex, sam]);
+    usedAt('hour');
+    flow('', () => T0 - 1);
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+  });
+
+  it.each(['automatic', 'hour', 'halfday'] as const)(
+    'never opens a PIN profile by itself in mode %s: the picker asks for the PIN',
+    async (mode) => {
+      serveData(BASE_URL, [alex, sam]);
+      const session = usedAt(mode, {
+        profile: { id: 'p2', has_pin: true },
+        token: 'pvt_still_valid',
+      });
+      flow('', () => T0);
+      expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+      expect(session.get()?.profileToken).toBeUndefined();
+      await waitFor(() => expect(screen.getByRole('button', { name: /Sam/ })).toHaveFocus());
+      fireEvent.click(screen.getByRole('button', { name: /Sam/ }));
+      expect(await screen.findByTestId('pin-entry')).toBeInTheDocument();
+    },
+  );
+
+  it('a change of server follows the same rule: Every time shows that server picker', async () => {
+    serveData(BASE_URL, [alex, sam]);
+    serveData(OTHER, [profile({ id: 'q1', name: 'Quinn' }), profile({ id: 'q2', name: 'Robin' })]);
+    signedIn(BASE_URL, 'p1');
+    const other = signedIn(OTHER, 'q1');
+    new ProfileLaunchPrefs(storage, () => T0).setMode(OTHER, 'every');
+    flow('', () => T0);
+    await screen.findByTestId('server-list');
+    // The server with Automatic opens its profile; the one with Every time shows its picker.
+    fireEvent.click(serverRow(OTHER));
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(other.get()?.profileId).toBeUndefined();
+  });
+
+  describe('the "Open automatically?" question', () => {
+    /** A TV that never chose a profile: signed in, default setting, nothing offered yet. */
+    function newTv() {
+      const session = signedIn();
+      new ProfileLaunchPrefs(storage).clear(BASE_URL);
+      return session;
+    }
+
+    it('comes once after the first pick with the default; Yes stores Automatic for this server', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      newTv();
+      const first = flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      const dialog = await screen.findByTestId('launch-offer');
+      expect(dialog).toHaveTextContent('Open Alex automatically next time?');
+      expect(stored().mode).toBe('every');
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+      await waitFor(() => expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument());
+      expect(stored()).toMatchObject({ mode: 'automatic', lastProfileId: 'p1', offered: true });
+      first.unmount();
+
+      // Restart: the profile opens by itself.
+      flow('', () => T0 + 5000);
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(screen.queryByTestId('profile-list')).not.toBeInTheDocument();
+    });
+
+    it('No keeps Every time and the question does not come again', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      newTv();
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      await screen.findByTestId('launch-offer');
+      fireEvent.click(screen.getByRole('button', { name: 'No' }));
+      await waitFor(() => expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument());
+      expect(stored()).toMatchObject({ mode: 'every', offered: true });
+
+      // Switch profile and pick again: no second question.
+      fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument();
+    });
+
+    it('Back answers No', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      newTv();
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      await screen.findByTestId('launch-offer');
+      fireEvent.keyDown(window, { keyCode: 461 });
+      await waitFor(() => expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument());
+      expect(stored().mode).toBe('every');
+    });
+
+    it('does not come for a PIN profile, which never opens by itself', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      newTv();
+      server.use(
+        http.post(`${BASE_URL}/api/v2/profiles/p2/verify-pin`, () =>
+          HttpResponse.json({ valid: true, expires_at: null, profile_token: 'pvt_1' }),
+        ),
+      );
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Sam/ }));
+      await screen.findByTestId('pin-entry');
+      fireEvent.keyDown(window, { key: '1', keyCode: 49 });
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument();
+      expect(stored()).toMatchObject({ lastProfileId: 'p2', lastProfileHasPin: true });
+    });
+
+    it('also comes for a kids profile, which opens by itself like any other without a PIN', async () => {
+      serveData(BASE_URL, [alex, mia]);
+      newTv();
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Mia/ }));
+      expect(await screen.findByTestId('launch-offer')).toHaveTextContent('Open Mia');
+    });
+
+    it('does not come when the account has a single profile that opens without a question', async () => {
+      serveData(BASE_URL, [alex]);
+      newTv();
+      flow('', () => T0);
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument();
+      // The pick is still remembered for the picker's start.
+      expect(stored()).toMatchObject({ lastProfileId: 'p1', offered: false });
+    });
+
+    it('does not come when the mode is not the default any more', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      newTv();
+      // A timed mode that was never offered: only the default (Every time) gets the question.
+      storage.set(
+        'silo-tv.profileLaunch.v1.' + BASE_URL,
+        JSON.stringify({
+          v: 1,
+          record: {
+            mode: 'hour',
+            lastProfileId: null,
+            lastProfileHasPin: false,
+            lastUsedAt: null,
+            offered: false,
+          },
+        }),
+      );
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      expect(await screen.findByRole('button', { name: /Title of/ })).toBeInTheDocument();
+      expect(screen.queryByTestId('launch-offer')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the avatar menu', () => {
+    async function openMenu() {
+      fireEvent.click(await screen.findByRole('button', { name: /Profile menu for/ }));
+      await screen.findByTestId('avatar-menu');
+    }
+
+    it('"Profile at launch" stores the choice for this server only', async () => {
+      serveData(BASE_URL, [alex]);
+      serveData(OTHER, [alex]);
+      usedAt('automatic');
+      signedIn(OTHER, 'p1');
+      registry.touch(BASE_URL);
+      // Only one server shown at launch: remove the other from the list view by opening BASE directly.
+      flow('', () => T0);
+      await screen.findByTestId('server-list');
+      fireEvent.click(serverRow(BASE_URL));
+      await screen.findByRole('button', { name: /Title of/ });
+      await openMenu();
+      expect(screen.getByTestId('launch-value')).toHaveTextContent('Automatic');
+      fireEvent.click(screen.getByRole('menuitem', { name: /Profile at launch/ }));
+      fireEvent.click(await screen.findByRole('menuitemradio', { name: /After 12 hours/ }));
+      expect(stored(BASE_URL).mode).toBe('halfday');
+      expect(stored(OTHER).mode).toBe('automatic');
+      // The menu shows the new value at once.
+      await waitFor(() =>
+        expect(screen.getByTestId('launch-value')).toHaveTextContent('After 12 hours'),
+      );
+    });
+
+    it('choosing a mode in the menu answers the open question', async () => {
+      serveData(BASE_URL, [alex, sam]);
+      signedIn();
+      new ProfileLaunchPrefs(storage).clear(BASE_URL);
+      flow('', () => T0);
+      fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
+      await screen.findByTestId('launch-offer');
+      fireEvent.click(screen.getByRole('button', { name: 'No' }));
+      await openMenu();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Profile at launch/ }));
+      fireEvent.click(await screen.findByRole('menuitemradio', { name: /Automatic/ }));
+      expect(stored()).toMatchObject({ mode: 'automatic', offered: true });
+    });
+  });
+
+  describe('kids profile', () => {
+    it('has no Switch server and no Sign out, and Switch profile to a PIN profile asks for the PIN', async () => {
+      serveData(BASE_URL, [alex, sam, mia]);
+      usedAt('automatic', { profile: { id: 'p3', has_pin: false } });
+      flow('', () => T0);
+      await screen.findByRole('button', { name: /Title of/ });
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Profile menu for Mia' })).toBeInTheDocument(),
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+      await screen.findByTestId('avatar-menu');
+      expect(screen.queryByRole('menuitem', { name: 'Switch server' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Switch profile' }));
+      fireEvent.click(await screen.findByRole('button', { name: /Sam/ }));
+      expect(await screen.findByTestId('pin-entry')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Title of/ })).not.toBeInTheDocument();
+    });
+  });
+
+  it('stamps the use every five minutes while a profile is open', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      serveData(BASE_URL, [alex]);
+      usedAt('hour');
+      let clock = T0 + 1000;
+      flow('', () => clock);
+      await screen.findByRole('button', { name: /Title of/ });
+      clock = T0 + 5 * 60_000 + 1000;
+      act(() => {
+        vi.advanceTimersByTime(5 * 60_000);
+      });
+      expect(stored().lastUsedAt).toBe(clock);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('removing a server forgets its launch setting', async () => {
+    serveData(BASE_URL, [alex]);
+    serveData(OTHER, [alex]);
+    signedIn(BASE_URL, 'p1');
+    signedIn(OTHER, 'p1');
+    flow();
+    await screen.findByTestId('server-list');
+    // The server used last is the first row.
+    expect(storage.get('silo-tv.profileLaunch.v1.' + OTHER)).not.toBeNull();
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove/ })[0]!);
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(registry.get(OTHER)).toBeNull());
+    expect(storage.get('silo-tv.profileLaunch.v1.' + OTHER)).toBeNull();
+    expect(storage.get('silo-tv.profileLaunch.v1.' + BASE_URL)).not.toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { getTransportMode, setTransportMode } from '../api/transport';
 import { getPlatform, setPlatformForTests, type KeyValueStore } from '../platform';
 import { BASE_URL, account } from '../test/apiFixtures';
 import { capability, catalogPage, library, profile, profileCollection } from '../test/flowFixtures';
+import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { makeReport } from '../test/probeFixture';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { AppRoot } from './AppRoot';
@@ -158,9 +159,15 @@ describe('AppRoot routing', () => {
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
   });
 
-  it('starts at the library with a session that has a profile', async () => {
+  it('starts at the library when the last profile reopens automatically', async () => {
     saveSignedIn('p1');
+    const prefs = new ProfileLaunchPrefs(storage);
+    prefs.setMode(BASE_URL, 'automatic');
+    prefs.recordPick(BASE_URL, { id: 'p1', has_pin: false });
     server.use(
+      http.get(`${BASE_URL}/api/v2/profiles`, () =>
+        json(profileCollection([profile({ id: 'p1' })])),
+      ),
       http.get(`${BASE_URL}/api/v2/user/libraries`, () => json({ items: [library()] })),
       http.get(`${BASE_URL}/api/v2/catalog`, () => json(catalogPage([]))),
     );

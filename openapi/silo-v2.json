@@ -4721,6 +4721,176 @@
         ],
         "type": "object"
       },
+      "ProfileCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_library_ids": {
+            "description": "Unique library identifiers the profile may see when restrictions are enabled",
+            "examples": [
+              [
+                "1",
+                "2"
+              ]
+            ],
+            "items": {
+              "description": "Opaque identifier",
+              "examples": [
+                "1"
+              ],
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "auto_play_next_preview": {
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "auto_skip_credits": {
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "auto_skip_intro": {
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "auto_skip_recap": {
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "avatar": {
+            "description": "Preset avatar reference",
+            "examples": [
+              "preset:fox"
+            ],
+            "type": "string"
+          },
+          "is_child": {
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "language": {
+            "description": "Preferred audio language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; x-silo-original picks each item's original language; omitted or empty inherits",
+            "examples": [
+              "en"
+            ],
+            "pattern": "^[\\s\\v\\x85\\p{Z}]*(?:[A-Za-z]{2,3}(?:[-_][0-9A-Za-z]{1,8})*|[XxIi](?:[-_][0-9A-Za-z]{1,8})+)?[\\s\\v\\x85\\p{Z}]*$",
+            "type": "string"
+          },
+          "library_restrictions_enabled": {
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "max_advisory_age": {
+            "description": "Advisory-age limit: titles whose advisory age (for example Common Sense Media's 13+) is above it are hidden from the profile. Titles with no advisory age are limited by max_content_rating alone unless require_advisory_age is set",
+            "examples": [
+              12
+            ],
+            "format": "int64",
+            "maximum": 21,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_content_rating": {
+            "description": "Content-rating ceiling",
+            "examples": [
+              "PG-13"
+            ],
+            "type": "string"
+          },
+          "max_playback_quality": {
+            "description": "Playback ceiling",
+            "enum": [
+              "1080p",
+              "2160p"
+            ],
+            "examples": [
+              "1080p"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name; leading and trailing spaces are trimmed",
+            "examples": [
+              "Alice"
+            ],
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "pin": {
+            "description": "PIN, 1 to 72 bytes",
+            "examples": [
+              "1234"
+            ],
+            "maxLength": 72,
+            "minLength": 1,
+            "type": "string"
+          },
+          "preferred_metadata_language": {
+            "description": "Metadata language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; x-silo-original picks each item's original language; omitted or empty inherits the library's",
+            "examples": [
+              "en"
+            ],
+            "pattern": "^[\\s\\v\\x85\\p{Z}]*(?:[A-Za-z]{2,3}(?:[-_][0-9A-Za-z]{1,8})*|[XxIi](?:[-_][0-9A-Za-z]{1,8})+)?[\\s\\v\\x85\\p{Z}]*$",
+            "type": "string"
+          },
+          "quality_preference": {
+            "description": "Free-form until the vocabulary is ratified (#135); v1 never validated it. Canonical values today: auto, 720p, 1080p, 2160p, 4k; original is a deprecated alias of auto",
+            "examples": [
+              "auto"
+            ],
+            "maxLength": 32,
+            "type": "string"
+          },
+          "require_advisory_age": {
+            "description": "Hide titles with no advisory age as well, so the profile sees only titles an advisory service rated at or under max_advisory_age. Advisory ages are looked up over time, so on a large library a profile with this set starts with few titles. No effect without max_advisory_age",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "show_forced_subtitles": {
+            "description": "Defaults to true when omitted",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "subtitle_language": {
+            "description": "Preferred subtitle language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; omitted or empty inherits",
+            "examples": [
+              "en"
+            ],
+            "pattern": "^[\\s\\v\\x85\\p{Z}]*(?:[A-Za-z]{2,3}(?:[-_][0-9A-Za-z]{1,8})*|[XxIi](?:[-_][0-9A-Za-z]{1,8})+)?[\\s\\v\\x85\\p{Z}]*$",
+            "type": "string"
+          },
+          "subtitle_mode": {
+            "description": "Free-form until the vocabulary is ratified (#135); v1 never validated it. Canonical values today: auto, always, off, default, forced_only",
+            "examples": [
+              "auto"
+            ],
+            "maxLength": 32,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "ProfilePINCheck": {
         "additionalProperties": false,
         "properties": {
@@ -11023,6 +11193,206 @@
           "profiles"
         ],
         "x-silo-class": "profile_scoped",
+        "x-silo-service-backed": true
+      },
+      "post": {
+        "operationId": "createProfile",
+        "parameters": [
+          {
+            "description": "Optional. When present, it must name a profile of the authenticated account.",
+            "in": "header",
+            "name": "X-Profile-Id",
+            "schema": {
+              "examples": [
+                "1"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked",
+            "in": "header",
+            "name": "X-Profile-Token",
+            "schema": {
+              "examples": [
+                "pvt_5f3a9c1e7b2d4e8fa0c6"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "description": "The created profile's resource path",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "406": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Acceptable"
+          },
+          "408": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Timeout"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unsupported Media Type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a household profile.",
+        "tags": [
+          "profiles"
+        ],
+        "x-silo-class": "profile_scoped",
+        "x-silo-demo-restricted": true,
+        "x-silo-retry-safety": "non_retryable",
         "x-silo-service-backed": true
       }
     },

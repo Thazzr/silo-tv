@@ -6,17 +6,20 @@ export function Screen({
   title,
   onBack,
   testId,
+  className,
   children,
 }: {
   title: string;
   /** Replaces the default Back (pop the stack, or the exit popup on the root screen). */
   onBack?: () => void;
   testId?: string;
+  /** Extra class for the screen, e.g. to centre the profile picker. */
+  className?: string;
   children: ReactNode;
 }) {
   useBackHandler(onBack);
   return (
-    <main className="screen" data-testid={testId}>
+    <main className={className ? `screen ${className}` : 'screen'} data-testid={testId}>
       <h1>{title}</h1>
       {children}
     </main>

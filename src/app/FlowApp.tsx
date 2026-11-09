@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getDeviceIdentity, type DeviceIdentity } from '../api/deviceIdentity';
 import type { Session } from '../api/session';
-import type { KeyValueStore } from '../platform';
+import { getPlatform, type KeyValueStore } from '../platform';
 import { PasswordScreen } from '../features/auth/PasswordScreen';
 import { SignInScreen } from '../features/auth/SignInScreen';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
+import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
 import { ServerListScreen } from '../features/servers/ServerListScreen';
@@ -25,7 +26,7 @@ type FlowScreen =
   | { name: 'signIn' }
   | { name: 'password' }
   /** `autoSelect` is off after "Switch profile", so a single profile is still shown. */
-  | { name: 'profiles'; autoSelect: boolean }
+  | { name: 'profiles'; autoSelect: boolean; resumeId?: string }
   | { name: 'shell' }
   | { name: 'player'; contentId: string; title: string };
 
@@ -35,22 +36,54 @@ export interface FlowAppProps {
   registry?: ServerRegistry;
   device?: DeviceIdentity;
   storage?: KeyValueStore | null;
+  /** The clock of the "Profile at launch" timing; tests fake it. */
+  now?: () => number;
+}
+
+/** How often the use of a server is stamped while a profile is open (the timed launch modes). */
+const STAMP_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * Where a server opens, from its session and the device's "Profile at launch" setting: the shell
+ * when the last profile reopens, else the picker. Showing the picker forgets the open profile and
+ * its PIN proof, so a PIN profile asks for its PIN again.
+ */
+function entryScreen(
+  registry: ServerRegistry,
+  prefs: ProfileLaunchPrefs,
+  origin: string,
+): FlowScreen {
+  const session = registry.session(origin);
+  const current = session.get();
+  if (!current) return { name: 'signIn' };
+  // The profile counts as open only once the list confirmed it (it may be gone or have a PIN now),
+  // so the session starts without one either way.
+  const resume =
+    current.profileId &&
+    current.profileId === prefs.get(origin).lastProfileId &&
+    !prefs.shouldShowPicker(origin)
+      ? current.profileId
+      : undefined;
+  if (current.profileId) session.update({ profileId: undefined, profileToken: undefined });
+  return { name: 'profiles', autoSelect: true, resumeId: resume };
 }
 
 /** Where the app opens: the screen that follows from the saved servers and their sessions. */
-function startScreen(launch: Launch, registry: ServerRegistry): FlowScreen {
+function startScreen(
+  launch: Launch,
+  registry: ServerRegistry,
+  prefs: ProfileLaunchPrefs,
+): FlowScreen {
   const servers = registry.list();
   // A server given at launch is always shown (and checked) first.
   if (launch.server || servers.length === 0) return { name: 'add' };
   // Several servers always start at the list; a single one needs no list step.
   if (servers.length > 1) return { name: 'servers' };
-  const current = registry.session(servers[0]!.origin).get();
-  if (!current) return { name: 'signIn' };
-  return current.profileId ? { name: 'shell' } : { name: 'profiles', autoSelect: true };
+  return entryScreen(registry, prefs, servers[0]!.origin);
 }
 
 /** A refused refresh or a sign-out ends the session wherever the user is. */
-function SignedOutWatcher({ session }: { session: Session | null }) {
+function SignedOutWatcher({ session, onEnd }: { session: Session | null; onEnd: () => void }) {
   const queryClient = useQueryClient();
   const nav = useNavigator<FlowScreen>();
   const { reset } = nav;
@@ -58,9 +91,10 @@ function SignedOutWatcher({ session }: { session: Session | null }) {
     () =>
       session?.on('signedOut', () => {
         queryClient.removeQueries();
+        onEnd();
         reset({ name: 'signIn' });
       }),
-    [session, queryClient, reset],
+    [session, queryClient, reset, onEnd],
   );
   return null;
 }
@@ -75,14 +109,31 @@ export function FlowApp({
   registry: injected,
   device: injectedDevice,
   storage,
+  now,
 }: FlowAppProps) {
   const queryClient = useQueryClient();
   const [registry] = useState(() => injected ?? new ServerRegistry(storage));
   const [device] = useState(() => injectedDevice ?? getDeviceIdentity());
   const [origin, setOrigin] = useState<string | null>(() => registry.current()?.origin ?? null);
-  const [initial] = useState(() => startScreen(launch, registry));
+  const [prefs] = useState(
+    () => new ProfileLaunchPrefs(storage === undefined ? getPlatform().storage : storage, now),
+  );
+  const [initial] = useState(() => startScreen(launch, registry, prefs));
+  /** "Open {name} automatically?", asked once after the first pick on this server. */
+  const [offer, setOffer] = useState<{ origin: string; name: string } | null>(null);
+  const clearOffer = useCallback(() => setOffer(null), []);
   const [shellMemory] = useState(() => new ShellMemory());
   const session = origin ? registry.session(origin) : null;
+  const launchRecord = useSyncExternalStore(prefs.subscribe, () => prefs.get(origin ?? ''));
+
+  // Under the timed modes the last use counts: stamp it while a profile is open.
+  useEffect(() => {
+    if (!origin) return;
+    const id = setInterval(() => {
+      if (registry.session(origin).get()?.profileId) prefs.touch(origin);
+    }, STAMP_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [origin, registry, prefs]);
 
   /** Opens the shell as the root of a fresh visit: Home selected, no focus remembered. */
   const openShell = useCallback(
@@ -97,12 +148,12 @@ export function FlowApp({
   const enter = useCallback(
     (nav: NavApi<FlowScreen>, target: string) => {
       setOrigin(target);
-      const current = registry.session(target).get();
-      if (!current) nav.push({ name: 'signIn' });
-      else if (current.profileId) openShell(nav);
-      else nav.reset({ name: 'profiles', autoSelect: true });
+      const screen = entryScreen(registry, prefs, target);
+      if (screen.name === 'signIn') nav.push(screen);
+      else if (screen.name === 'shell') openShell(nav);
+      else nav.reset(screen);
     },
-    [registry, openShell],
+    [registry, prefs, openShell],
   );
 
   const renderScreen = (screen: FlowScreen, nav: NavApi<FlowScreen>) => {
@@ -131,6 +182,7 @@ export function FlowApp({
             }}
             onAdd={() => nav.push({ name: 'add' })}
             onRemoved={(removed) => {
+              prefs.clear(removed);
               const next = registry.current();
               if (!next) {
                 setOrigin(null);
@@ -177,16 +229,49 @@ export function FlowApp({
         );
       case 'profiles':
         return provide(
-          <ProfilesScreen autoSelect={screen.autoSelect} onSelected={() => openShell(nav)} />,
+          <ProfilesScreen
+            autoSelect={screen.autoSelect}
+            resumeId={screen.resumeId}
+            initialFocusId={launchRecord.lastProfileId}
+            onSelected={(picked, viaPicker) => {
+              const before = prefs.get(origin);
+              prefs.recordPick(origin, picked);
+              // Asked once, after the first profile the viewer picks; a PIN profile never opens by
+              // itself, so there is nothing to offer for it.
+              if (viaPicker && !before.offered && before.mode === 'every' && !picked.has_pin) {
+                prefs.markOffered(origin);
+                setOffer({ origin, name: picked.name });
+              }
+              openShell(nav);
+            }}
+          />,
         );
       case 'shell':
         return provide(
           <ShellScreen
             memory={shellMemory}
+            launchMode={launchRecord.mode}
+            onLaunchMode={(mode) => {
+              prefs.setMode(origin, mode);
+              // Choosing in the menu answers the question too.
+              setOffer(null);
+            }}
+            offer={
+              offer && offer.origin === origin
+                ? {
+                    name: offer.name,
+                    onAnswer: (automatic) => {
+                      if (automatic) prefs.setMode(origin, 'automatic');
+                      setOffer(null);
+                    },
+                  }
+                : null
+            }
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })
             }
             onSwitchProfile={() => {
+              setOffer(null);
               session.update({ profileId: undefined, profileToken: undefined });
               queryClient.removeQueries({ queryKey: ['libraries'] });
               queryClient.removeQueries({ queryKey: ['catalog'] });
@@ -205,7 +290,7 @@ export function FlowApp({
 
   return (
     <Navigator initial={initial} renderScreen={renderScreen}>
-      <SignedOutWatcher session={session} />
+      <SignedOutWatcher session={session} onEnd={clearOffer} />
     </Navigator>
   );
 }

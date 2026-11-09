@@ -812,3 +812,171 @@ html {
 .btn.choice.selected:focus {
   background: var(--focus-fill);
 }
+
+/* Profile picker: a centred row of round tiles. The focused tile grows by 5 % and gets the 4 px
+   inner ring; the ring is an overlay so it shows above the avatar image. Only transform animates. */
+.screen.picker {
+  text-align: center;
+}
+
+.screen.picker h1 {
+  font-size: var(--fs-profile-title);
+}
+
+.profile-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  justify-content: center;
+  margin: 48px 0 32px;
+  padding: 0;
+  list-style: none;
+}
+
+.profile-tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 232px;
+  padding: 16px 0;
+  font: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.tile-avatar {
+  position: relative;
+  display: block;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  transition: transform var(--transition);
+}
+
+.tile-avatar img,
+.tile-initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 84px;
+  font-weight: 700;
+  color: #fff;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.tile-avatar::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  border-radius: 50%;
+}
+
+.tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-tile:hover,
+.profile-tile:focus,
+.profile-tile.is-focused {
+  color: var(--text);
+}
+
+.profile-tile:focus .tile-avatar,
+.profile-tile.is-focused .tile-avatar {
+  transform: scale(1.05);
+}
+
+.profile-tile:focus .tile-avatar::after,
+.profile-tile.is-focused .tile-avatar::after {
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
+.tile-badge {
+  position: absolute;
+  z-index: 1;
+}
+
+.tile-badge.kids {
+  top: 4px;
+  right: -12px;
+  padding: 2px 14px;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  color: #000;
+  background: #fff;
+  border-radius: 999px;
+}
+
+.tile-badge.lock {
+  right: 4px;
+  bottom: 4px;
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  padding: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 50%;
+}
+
+.tile-avatar.add {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(255, 255, 255, 0.25);
+}
+
+.tile-plus {
+  font-size: 96px;
+  font-weight: 300;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.profile-tile:focus .tile-avatar.add,
+.profile-tile.is-focused .tile-avatar.add {
+  background: var(--chrome-selected);
+  border-color: var(--focus-ring);
+}
+
+.profile-tile:focus .tile-plus,
+.profile-tile.is-focused .tile-plus {
+  color: var(--text);
+}
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.menu-item-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-value {
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.menu-item:focus .menu-value {
+  color: rgba(0, 0, 0, 0.6);
+}

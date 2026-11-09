@@ -323,7 +323,8 @@ export interface paths {
         /** List the household profiles on the signed-in account. */
         get: operations["listProfiles"];
         put?: never;
-        post?: never;
+        /** Create a household profile. */
+        post: operations["createProfile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2431,6 +2432,95 @@ export interface components {
              * @example true
              */
             require_advisory_age_supported: boolean;
+        };
+        ProfileCreate: {
+            /**
+             * @description Unique library identifiers the profile may see when restrictions are enabled
+             * @example [
+             *       "1",
+             *       "2"
+             *     ]
+             */
+            allowed_library_ids?: string[];
+            /** @example false */
+            auto_play_next_preview?: boolean;
+            /** @example false */
+            auto_skip_credits?: boolean;
+            /** @example true */
+            auto_skip_intro?: boolean;
+            /** @example false */
+            auto_skip_recap?: boolean;
+            /**
+             * @description Preset avatar reference
+             * @example preset:fox
+             */
+            avatar?: string;
+            /** @example false */
+            is_child?: boolean;
+            /**
+             * @description Preferred audio language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; x-silo-original picks each item's original language; omitted or empty inherits
+             * @example en
+             */
+            language?: string;
+            /** @example false */
+            library_restrictions_enabled?: boolean;
+            /**
+             * Format: int64
+             * @description Advisory-age limit: titles whose advisory age (for example Common Sense Media's 13+) is above it are hidden from the profile. Titles with no advisory age are limited by max_content_rating alone unless require_advisory_age is set
+             * @example 12
+             */
+            max_advisory_age?: number;
+            /**
+             * @description Content-rating ceiling
+             * @example PG-13
+             */
+            max_content_rating?: string;
+            /**
+             * @description Playback ceiling
+             * @example 1080p
+             * @enum {string}
+             */
+            max_playback_quality?: "1080p" | "2160p";
+            /**
+             * @description Display name; leading and trailing spaces are trimmed
+             * @example Alice
+             */
+            name: string;
+            /**
+             * @description PIN, 1 to 72 bytes
+             * @example 1234
+             */
+            pin?: string;
+            /**
+             * @description Metadata language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; x-silo-original picks each item's original language; omitted or empty inherits the library's
+             * @example en
+             */
+            preferred_metadata_language?: string;
+            /**
+             * @description Free-form until the vocabulary is ratified (#135); v1 never validated it. Canonical values today: auto, 720p, 1080p, 2160p, 4k; original is a deprecated alias of auto
+             * @example auto
+             */
+            quality_preference?: string;
+            /**
+             * @description Hide titles with no advisory age as well, so the profile sees only titles an advisory service rated at or under max_advisory_age. Advisory ages are looked up over time, so on a large library a profile with this set starts with few titles. No effect without max_advisory_age
+             * @example true
+             */
+            require_advisory_age?: boolean;
+            /**
+             * @description Defaults to true when omitted
+             * @example true
+             */
+            show_forced_subtitles?: boolean;
+            /**
+             * @description Preferred subtitle language: BCP 47 tag or ISO 639 code, any case (en, eng, pt-BR), stored in canonical form; omitted or empty inherits
+             * @example en
+             */
+            subtitle_language?: string;
+            /**
+             * @description Free-form until the vocabulary is ratified (#135); v1 never validated it. Canonical values today: auto, always, off, default, forced_only
+             * @example auto
+             */
+            subtitle_mode?: string;
         };
         ProfilePINCheck: {
             /**
@@ -5589,6 +5679,153 @@ export interface operations {
             };
             /** @description Not Acceptable */
             406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createProfile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional. When present, it must name a profile of the authenticated account. */
+                "X-Profile-Id"?: string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };

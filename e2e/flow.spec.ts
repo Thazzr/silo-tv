@@ -30,12 +30,27 @@ interface FakeOptions {
   code?: boolean;
   /** Whether the server offers password sign-in. */
   password?: boolean;
+  /** The household's profiles; one primary profile without a PIN when omitted. */
+  profiles?: FakeProfile[];
+}
+
+interface FakeProfile {
+  id: string;
+  name: string;
+  has_pin: boolean;
+  is_primary: boolean;
+  is_child: boolean;
 }
 
 const servers: Server[] = [];
 
 async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: string; seen: Seen[] }> {
   const { name = 'E2E Silo', token = 'fake-access', code = true, password = false } = options;
+  const profiles: FakeProfile[] = [
+    ...(options.profiles ?? [
+      { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
+    ]),
+  ];
   const seen: Seen[] = [];
   let polls = 0;
   const server = createServer((req: IncomingMessage, res) => {
@@ -60,7 +75,10 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         search: url.search,
         authorization: req.headers.authorization,
         profileId: req.headers['x-profile-id'] as string | undefined,
-        body: url.pathname === '/api/v2/auth/login' ? requestBody : '',
+        body:
+          url.pathname === '/api/v2/auth/login' || url.pathname === '/api/v2/profiles'
+            ? requestBody
+            : '',
       });
       const send = (status: number, body: unknown) => {
         res.writeHead(status, { ...cors, 'Content-Type': 'application/json' });
@@ -114,9 +132,25 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             tokens,
           });
         case 'GET /api/v2/profiles':
-          return send(200, {
-            items: [{ id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true }],
-          });
+          return send(200, { items: profiles });
+        case 'POST /api/v2/profiles': {
+          const input = JSON.parse(requestBody) as {
+            name: string;
+            pin?: string;
+            is_child?: boolean;
+          };
+          const created: FakeProfile = {
+            id: `profile-${profiles.length + 1}`,
+            name: input.name,
+            has_pin: Boolean(input.pin),
+            is_primary: false,
+            is_child: input.is_child === true,
+          };
+          profiles.push(created);
+          return send(201, created);
+        }
+        case 'POST /api/v2/profiles/profile-2/verify-pin':
+          return send(200, { valid: true, expires_at: null, profile_token: 'pvt-fake' });
         case 'GET /api/v2/theme/branding':
           return send(200, {
             server_name: name,
@@ -301,6 +335,90 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByRole('dialog')).toHaveText(/App beenden?/);
 });
 
+test('profiles: picker with a PIN profile, create a kids profile, choose it, open it automatically on the next start', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    profiles: [
+      { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
+      { id: 'profile-2', name: 'Sam', has_pin: true, is_primary: false, is_child: false },
+    ],
+  });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Verbinden' })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The picker has both profiles, a lock on the PIN profile, and the Add profile tile last.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Wer schaut?');
+  const alex = page.getByRole('button', { name: /Alex/ });
+  const sam = page.getByRole('button', { name: /Sam/ });
+  await expect(alex).toBeFocused();
+  await expect(alex).toHaveClass(/is-focused/);
+  await expect(sam.getByTestId('lock-badge')).toBeVisible();
+  await expect(alex.getByTestId('lock-badge')).toHaveCount(0);
+  await page.keyboard.press('ArrowRight');
+  await expect(sam).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const add = page.getByRole('button', { name: 'Profil hinzufügen' });
+  await expect(add).toBeFocused();
+
+  // New profile: a name, a kids profile, Save with the keyboard only.
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Neues Profil');
+  await expect(page.getByLabel('Profilname')).toBeFocused();
+  await page.keyboard.type('Mia');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByLabel(/^PIN/)).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  const kids = page.getByRole('switch', { name: /Kinderprofil/ });
+  await expect(kids).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(kids).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Profil erstellen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // Back on the picker: Mia is there with a Kids badge and has the focus.
+  const mia = page.getByRole('button', { name: /Mia/ });
+  await expect(mia).toBeFocused();
+  await expect(mia.getByTestId('kids-badge')).toHaveText('Kinder');
+  const created = seen.find((e) => e.method === 'POST' && e.path === '/api/v2/profiles');
+  expect(created?.profileId).toBe('profile-1');
+  expect(JSON.parse(created?.body ?? '{}')).toEqual({ name: 'Mia', is_child: true });
+
+  // Choose her: the first pick asks whether to open her automatically; Yes.
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('launch-offer')).toContainText(
+    'Mia nächstes Mal automatisch öffnen?',
+  );
+  await expect(page.getByRole('button', { name: 'Ja' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('launch-offer')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+
+  // A kids profile has no Switch server and no Sign out in the avatar menu.
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Profilmenü für Mia' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  await expect(page.getByRole('menuitem', { name: /Profil beim Start/ })).toContainText(
+    'Automatisch',
+  );
+  await expect(page.getByRole('menuitem', { name: 'Server wechseln' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Abmelden' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // The next start (no server in the launch parameters) opens Mia without the picker.
+  await page.goto(distIndexUrl);
+  await expect(page.getByTestId('server-name')).toHaveText('E2E Silo', { timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Profilmenü für Mia' })).toBeVisible();
+  await expect(page.getByTestId('profile-list')).toHaveCount(0);
+  const catalogs = seen.filter((e) => e.path === '/api/v2/catalog');
+  expect(catalogs[catalogs.length - 1]?.profileId).toBe('profile-3');
+});
+
 test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({
   page,
 }) => {
@@ -386,6 +504,9 @@ async function openServerListFromShell(page: Page) {
   await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  // Profile at launch sits between Switch profile and Switch server.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: /Profil beim Start/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Server wechseln' })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -442,10 +563,10 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
     password: 'fake-password-0000',
   });
   expect(a.seen.some((entry) => entry.path === '/api/v2/auth/login')).toBe(false);
-  // B's catalog request carries B's token.
-  expect(b.seen.find((entry) => entry.path === '/api/v2/catalog')?.authorization).toBe(
-    'Bearer token-b',
-  );
+  // B's catalog request carries B's token (the name shows before the titles are asked for).
+  await expect
+    .poll(() => b.seen.find((entry) => entry.path === '/api/v2/catalog')?.authorization)
+    .toBe('Bearer token-b');
 
   // Switch back to A through the list: B is current (first), A is the second row; A still has its session.
   await openServerListFromShell(page);

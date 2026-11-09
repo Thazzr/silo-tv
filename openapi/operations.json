@@ -11,6 +11,7 @@
   { "path": "/api/v2/auth/device/cancel", "method": "post" },
   { "path": "/api/v2/account/me", "method": "get" },
   { "path": "/api/v2/profiles", "method": "get" },
+  { "path": "/api/v2/profiles", "method": "post" },
   { "path": "/api/v2/profiles/{id}/verify-pin", "method": "post" },
   { "path": "/api/v2/user/libraries", "method": "get" },
   { "path": "/api/v2/catalog", "method": "get" },

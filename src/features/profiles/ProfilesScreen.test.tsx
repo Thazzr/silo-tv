@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -108,15 +108,15 @@ describe('ProfilesScreen', () => {
     expect(onSelected).not.toHaveBeenCalled();
   });
 
-  it('lists several profiles with an avatar initial and a PIN marker', async () => {
+  it('lists several profiles as tiles with the name, and the first one has the focus', async () => {
     listProfiles(two);
     setup();
     const list = await screen.findByTestId('profile-list');
-    expect(list.querySelectorAll('button')).toHaveLength(2);
-    expect(list).toHaveTextContent('A');
-    expect(list).toHaveTextContent('alex');
-    expect(screen.getByRole('button', { name: /Sam/ })).toHaveTextContent('PIN');
-    expect(screen.getByRole('button', { name: /alex/ })).not.toHaveTextContent('PIN');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent("Who's watching?");
+    // Two profiles and the Add profile tile (alex is the primary profile).
+    expect(list.querySelectorAll('button')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /alex/ })).toHaveTextContent('alex');
+    expect(screen.getByRole('button', { name: /Sam/ })).toHaveTextContent('Sam');
     // The first profile has the focus, so Enter on the remote picks it.
     expect(screen.getByRole('button', { name: /alex/ })).toHaveFocus();
   });
@@ -152,8 +152,53 @@ describe('ProfilesScreen', () => {
     const { session } = setup();
     await screen.findByTestId('profile-list');
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    fireEvent.click(
+      within(await screen.findByTestId('signout-dialog')).getByRole('button', { name: 'Sign out' }),
+    );
     await waitFor(() => expect(session.get()).toBeNull());
     expect(auth).toBe('Bearer a');
+  });
+
+  describe('Sign out confirmation', () => {
+    async function openDialog() {
+      listProfiles(two);
+      let logouts = 0;
+      server.use(
+        http.post(`${BASE_URL}/api/v2/auth/logout`, () => {
+          logouts += 1;
+          return new HttpResponse(null, { status: 204 });
+        }),
+      );
+      const view = setup();
+      await screen.findByTestId('profile-list');
+      fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+      await screen.findByTestId('signout-dialog');
+      return { ...view, logouts: () => logouts };
+    }
+
+    it('asks first, names the server and has Cancel focused', async () => {
+      await openDialog();
+      expect(screen.getByRole('dialog')).toHaveTextContent(/Sign out of .+\?/);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+    });
+
+    it('Cancel keeps the session and sends nothing', async () => {
+      const { session, logouts } = await openDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => expect(screen.queryByTestId('signout-dialog')).not.toBeInTheDocument());
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(session.get()).not.toBeNull();
+      expect(logouts()).toBe(0);
+    });
+
+    it('Back closes the dialog instead of the exit popup and keeps the session', async () => {
+      const { session, logouts } = await openDialog();
+      fireEvent.keyDown(window, { keyCode: 461 });
+      await waitFor(() => expect(screen.queryByTestId('signout-dialog')).not.toBeInTheDocument());
+      expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+      expect(session.get()).not.toBeNull();
+      expect(logouts()).toBe(0);
+    });
   });
 
   it('shows an error with Try again when the profiles cannot be loaded', async () => {
