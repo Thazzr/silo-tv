@@ -43,12 +43,15 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - Browse grid with sort, filters (genre, decade) and an alphabet rail; watch-state and content-rating filters still to come through the documented `GET /catalog` parameters
   - Collections
 - 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
-- ⬜ Search across movies, series and episodes; matching box sets first
+- 🟨 Search with an on-screen keyboard of our own (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
 - 🟨 Movie detail page: hero, description, credit line, external ratings, quality badges
 - 🟨 Series detail page with seasons and episodes, cast, recommendations
 - 🟨 Similar titles
-- ⬜ Person page: biography and filmography, filtered by All, Movies or Series
-- ⬜ Box sets: page with the films in release order, "Play next"
+- 🟨 Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series
+- 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages
+- 🟨 Long synopses and biographies scroll in the text dialog
+- 🟨 Smooth scrolling on TV hardware: memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
+- ⬜ The Magic Remote wheel scrolls lists (LG recommendation)
 - ⬜ Trailers & More: local trailers and extras; YouTube trailers through the TV's YouTube app
 - ⬜ Theme music on detail pages when the profile turns it on
 - ⬜ Title art (logo instead of text) following the profile setting
@@ -57,8 +60,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 ## Phase 3 – Player (target v0.4.0)
 
-- ⬜ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly
-- ⬜ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen
+- ✅ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly (TV 2026-11-09)
+- ✅ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen (TV 2026-11-09)
 - ⬜ Choose version, audio track and subtitle on the detail page beforehand; save the choice as a server preference
 - ⬜ Direct play, HLS remux and transcode, as protocol v3 plans them
   - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
