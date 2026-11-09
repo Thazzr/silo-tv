@@ -6,7 +6,7 @@ A native TV client for the self-hosted media server [Silo](https://github.com/Si
 
 ## Status
 
-Phase 0 (feasibility) is in progress. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md).
+Phase 0 (feasibility) and Phase 1 (foundation: servers, sign-in, profiles, app shell, TV navigation) are built and tested in the browser and wait for the device test on the TV; Phase 2 (browse) is next. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md); the look: [`docs/design.md`](docs/design.md).
 
 ## Tech stack
 
