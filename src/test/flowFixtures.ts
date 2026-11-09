@@ -129,3 +129,14 @@ export function catalogItem(overrides: Partial<S['CatalogItem']> = {}): S['Catal
 export function catalogPage(items: S['CatalogItem'][]): S['CatalogBrowseCollection'] {
   return { items, total: items.length, total_exact: true, window_cursor: 'cursor' };
 }
+
+export function branding(
+  overrides: Partial<S['BrandingConfiguration']> = {},
+): S['BrandingConfiguration'] {
+  return {
+    login_subtitle: '',
+    server_name: 'Test Server',
+    storage_available: true,
+    ...overrides,
+  };
+}

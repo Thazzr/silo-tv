@@ -105,9 +105,10 @@ describe('AppRoot routing', () => {
     // The sign-in screen's first request already goes through the JS service (no MSW handler
     // exists, so a direct request would fail the test).
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
-    expect((serviceFetch.mock.calls[0]?.[0] as { url: string }).url).toBe(
-      `${BASE_URL}/api/v2/auth/device/capability`,
-    );
+    // The server's branding is asked for through the service as well.
+    const urls = serviceFetch.mock.calls.map((call) => (call[0] as { url: string }).url);
+    expect(urls).toContain(`${BASE_URL}/api/v2/auth/device/capability`);
+    expect(urls).toContain(`${BASE_URL}/api/v2/theme/branding`);
   });
 
   it('keeps the direct transport without a transport parameter', () => {

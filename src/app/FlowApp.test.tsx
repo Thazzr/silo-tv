@@ -7,6 +7,7 @@ import { Session } from '../api/session';
 import type { KeyValueStore } from '../platform';
 import { BASE_URL, account, systemInfo } from '../test/apiFixtures';
 import {
+  branding,
   capability,
   catalogItem,
   catalogPage,
@@ -71,6 +72,7 @@ function serveData(items = [profile({ id: 'p1' })]) {
     http.get(`${BASE_URL}/api/v2/auth/device/capability`, () =>
       HttpResponse.json({ ...capability, state: 'disabled' }),
     ),
+    http.get(`${BASE_URL}/api/v2/theme/branding`, () => HttpResponse.json(branding())),
     http.post(`${BASE_URL}/api/v2/auth/logout`, () => new HttpResponse(null, { status: 204 })),
   );
 }
@@ -109,18 +111,20 @@ describe('FlowApp', () => {
     expect(polls).toBe(2);
   });
 
-  it('Back from the library shows the profile list even for a single profile', async () => {
+  it('"Switch profile" in the avatar menu shows the profile list even for a single profile', async () => {
     saveServer(BASE_URL, storage);
     serveData();
     const session = sessionWith('p1');
     flow(session);
     await screen.findByRole('button', { name: /First Title/ });
-    fireEvent.keyDown(window, { keyCode: 461 });
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
     expect(session.get()?.profileId).toBeUndefined();
-    // Choosing it again returns to the library.
+    // Choosing it again returns to the shell, on Home.
     fireEvent.click(screen.getByRole('button', { name: /Alex/ }));
     expect(await screen.findByRole('button', { name: /First Title/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('Back on the profile list (the root) asks to exit; Sign out ends the session and returns to sign-in', async () => {
@@ -150,12 +154,14 @@ describe('FlowApp', () => {
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
   });
 
-  it('the sign-out button on the library returns to sign-in', async () => {
+  it('"Sign out" in the avatar menu returns to sign-in', async () => {
     saveServer(BASE_URL, storage);
     serveData();
     const session = sessionWith('p1');
     flow(session);
-    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await screen.findByRole('button', { name: /First Title/ });
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
     expect(await screen.findByTestId('signin-unavailable')).toBeInTheDocument();
     expect(session.get()).toBeNull();
   });
@@ -219,8 +225,9 @@ describe('FlowApp', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Sam/ }));
     await screen.findByRole('button', { name: /First Title/ });
     expect(ids).toEqual(['p2']);
-    // Another profile after Back: the new request carries the new id, not a cached one.
-    fireEvent.keyDown(window, { keyCode: 461 });
+    // Another profile after switching: the new request carries the new id, not a cached one.
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
     fireEvent.click(await screen.findByRole('button', { name: /Alex/ }));
     await screen.findByRole('button', { name: /First Title/ });
     expect(ids).toEqual(['p2', 'p1']);
@@ -251,7 +258,7 @@ describe('FlowApp', () => {
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
 
-  it('opens the player over the library, and Back returns to the title that was played', async () => {
+  it('opens the player over the shell, and Back returns to the title that was played', async () => {
     saveServer(BASE_URL, storage);
     const items = [
       catalogItem({ content_id: 'm1', title: 'First Title' }),
@@ -262,7 +269,10 @@ describe('FlowApp', () => {
     server.use(http.get(`${BASE_URL}/api/v2/catalog`, () => HttpResponse.json(catalogPage(items))));
     const calls = servePlayback(server);
     flow(sessionWith('p1'));
-    await waitFor(() => expect(screen.getByRole('button', { name: /First Title/ })).toHaveFocus());
+    // The shell opens on the Home tab; Down enters the list.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
+    await screen.findByTestId('title-list');
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus();
@@ -275,9 +285,9 @@ describe('FlowApp', () => {
     // Back lands on the title that was played, not on the first one.
     await waitFor(() => expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus());
     await waitFor(() => expect(calls.stop).toHaveLength(1));
-    // Back on the library leaves to the profile list (the root), which asks to exit on Back.
+    // Back in the list goes to the tab bar, and Back on Home's tab asks to exit.
     fireEvent.keyDown(window, { keyCode: 461 });
-    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
     fireEvent.keyDown(window, { keyCode: 461 });
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
@@ -310,5 +320,122 @@ describe('FlowApp', () => {
     act(() => session.signOut());
     await screen.findByTestId('signin-unavailable');
     expect(userData()).toHaveLength(0);
+  });
+
+  it('"Switch server" in the avatar menu opens the server screen and keeps the session; Back returns', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    const session = sessionWith('p1');
+    flow(session);
+    await screen.findByRole('button', { name: /First Title/ });
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch server' }));
+    expect(await screen.findByTestId('server-screen')).toBeInTheDocument();
+    expect(screen.getByLabelText('Server address')).toHaveValue(BASE_URL);
+    expect(session.get()).not.toBeNull();
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByRole('button', { name: /First Title/ })).toBeInTheDocument();
+    expect(session.get()?.profileId).toBe('p1');
+  });
+});
+
+describe('FlowApp branding', () => {
+  const rootStyle = () => document.documentElement.style.getPropertyValue('--accent');
+
+  function serveBranding(doc: ReturnType<typeof branding>) {
+    server.use(http.get(`${BASE_URL}/api/v2/theme/branding`, () => HttpResponse.json(doc)));
+  }
+
+  it('the sign-in screen shows the wordmark, the subtitle and the darkened background', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(
+      branding({
+        server_name: 'Movie Barn',
+        login_subtitle: 'Welcome back',
+        wordmark_url: '/api/v2/branding/assets/wordmark?v=2',
+        login_bg_url: '/api/v2/branding/assets/login_bg?v=3',
+      }),
+    );
+    flow(new Session(memoryStorage()));
+    await screen.findByTestId('signin-unavailable');
+    expect(await screen.findByTestId('wordmark')).toHaveAttribute(
+      'src',
+      `${BASE_URL}/api/v2/branding/assets/wordmark?v=2`,
+    );
+    expect(screen.getByTestId('wordmark')).toHaveAttribute('alt', 'Movie Barn');
+    expect(screen.getByTestId('brand-subtitle')).toHaveTextContent('Welcome back');
+    const backdrop = screen.getByTestId('brand-backdrop');
+    expect(backdrop.querySelector('img')).toHaveAttribute(
+      'src',
+      `${BASE_URL}/api/v2/branding/assets/login_bg?v=3`,
+    );
+    // The shade over the picture is what keeps the text readable.
+    expect(backdrop.querySelector('.brand-backdrop-shade')).toBeInTheDocument();
+  });
+
+  it('the server screen shows the wordmark of the stored server', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(branding({ wordmark_url: '/w.png' }));
+    flow(sessionWith('p1'), BASE_URL);
+    expect(await screen.findByTestId('wordmark')).toHaveAttribute('src', `${BASE_URL}/w.png`);
+    expect(screen.getByTestId('server-screen')).toBeInTheDocument();
+    // The subtitle belongs to the sign-in screen only.
+    expect(screen.queryByTestId('brand-subtitle')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the server name without a wordmark, and to the host without branding', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(branding({ server_name: 'Movie Barn' }));
+    const first = flow(new Session(memoryStorage()));
+    await screen.findByTestId('signin-unavailable');
+    await waitFor(() => expect(screen.getByTestId('brand-name')).toHaveTextContent('Movie Barn'));
+    expect(screen.queryByTestId('wordmark')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('brand-backdrop')).not.toBeInTheDocument();
+    first.unmount();
+
+    server.use(http.get(`${BASE_URL}/api/v2/theme/branding`, () => HttpResponse.error()));
+    flow(new Session(memoryStorage()));
+    await screen.findByTestId('signin-unavailable');
+    expect(screen.getByTestId('brand-name')).toHaveTextContent('silo.example.test');
+  });
+
+  it('shows the plain name when the wordmark or the background cannot be loaded', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(
+      branding({ server_name: 'Movie Barn', wordmark_url: '/w.png', login_bg_url: '/bg.png' }),
+    );
+    flow(new Session(memoryStorage()));
+    fireEvent.error(await screen.findByTestId('wordmark'));
+    expect(screen.getByTestId('brand-name')).toHaveTextContent('Movie Barn');
+    fireEvent.error(screen.getByTestId('brand-backdrop').querySelector('img')!);
+    expect(screen.queryByTestId('brand-backdrop')).not.toBeInTheDocument();
+  });
+
+  it('applies a light accent as --accent, also on the screens after a sign-out', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(branding({ accent_color: '#e5a00d' }));
+    const session = sessionWith('p1');
+    flow(session);
+    await screen.findByRole('button', { name: /First Title/ });
+    await waitFor(() => expect(rootStyle()).toBe('#e5a00d'));
+    act(() => session.signOut());
+    await screen.findByTestId('signin-unavailable');
+    // Signed out: the branding is fetched again for the sign-in screen and applied there too.
+    await waitFor(() => expect(rootStyle()).toBe('#e5a00d'));
+  });
+
+  it('ignores an accent that is too dark for the black page', async () => {
+    saveServer(BASE_URL, storage);
+    serveData();
+    serveBranding(branding({ accent_color: '#1a2b6d' }));
+    flow(sessionWith('p1'));
+    await screen.findByRole('button', { name: /First Title/ });
+    await waitFor(() => expect(screen.getByTestId('server-name')).toHaveTextContent('Test Server'));
+    expect(rootStyle()).toBe('');
   });
 });

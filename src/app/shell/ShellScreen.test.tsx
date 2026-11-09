@@ -1,0 +1,566 @@
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Session } from '../../api/session';
+import { BASE_URL, account } from '../../test/apiFixtures';
+import {
+  branding,
+  catalogItem,
+  catalogPage,
+  library,
+  profile,
+  profileCollection,
+} from '../../test/flowFixtures';
+import { KEY, pressKey } from '../../test/keys';
+import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { ShellScreen } from './ShellScreen';
+import { ShellMemory, TAB_SWITCH_DELAY_MS, type TabId } from './tabs';
+
+const server = setupServer();
+beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+const DELAY = 400;
+const sleep = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+const homeTitles = [
+  catalogItem({ content_id: 'h1', title: 'Home One' }),
+  catalogItem({ content_id: 'h2', title: 'Home Two' }),
+  catalogItem({ content_id: 'h3', title: 'Home Three' }),
+];
+const movieTitles = [
+  catalogItem({ content_id: 'f1', title: 'Film One' }),
+  catalogItem({ content_id: 'f2', title: 'Film Two' }),
+];
+const seriesTitles = [catalogItem({ content_id: 's1', title: 'Show One', type: 'series' })];
+
+interface Calls {
+  catalogLibraries: string[];
+  logout: string[];
+}
+
+/** Home lists the first video library (movies here); Series has a library of its own. */
+function serve(extra: { branding?: ReturnType<typeof branding> | 'fail' } = {}): Calls {
+  const calls: Calls = { catalogLibraries: [], logout: [] };
+  const byLibrary: Record<string, typeof homeTitles> = {
+    'lib-film': homeTitles,
+    'lib-show': seriesTitles,
+  };
+  server.use(
+    http.get(`${BASE_URL}/api/v2/profiles`, () =>
+      HttpResponse.json(profileCollection([profile({ id: 'p1', name: 'Alex' })])),
+    ),
+    http.get(`${BASE_URL}/api/v2/user/libraries`, () =>
+      HttpResponse.json({
+        items: [
+          library({ id: 'lib-film', name: 'Films', type: 'movies' }),
+          library({ id: 'lib-show', name: 'Shows', type: 'series' }),
+        ],
+      }),
+    ),
+    http.get(`${BASE_URL}/api/v2/catalog`, ({ request }) => {
+      const id = new URL(request.url).searchParams.get('library_id') ?? '';
+      calls.catalogLibraries.push(id);
+      return HttpResponse.json(catalogPage(byLibrary[id] ?? movieTitles));
+    }),
+    http.get(`${BASE_URL}/api/v2/theme/branding`, () =>
+      extra.branding === 'fail'
+        ? HttpResponse.error()
+        : HttpResponse.json(extra.branding ?? branding()),
+    ),
+    http.post(`${BASE_URL}/api/v2/auth/logout`, ({ request }) => {
+      calls.logout.push(request.headers.get('Authorization') ?? '');
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  return calls;
+}
+
+function signedIn() {
+  const session = new Session(memoryStorage());
+  session.set({
+    accessToken: 'a',
+    refreshToken: 'r',
+    expiresAt: Date.now() + 3600_000,
+    user: account,
+    profileId: 'p1',
+  });
+  return session;
+}
+
+function setup(options: { memory?: ShellMemory; delay?: number | 'default' } = {}) {
+  const memory = options.memory ?? new ShellMemory();
+  const onPlay = vi.fn();
+  const onSwitchProfile = vi.fn();
+  const onSwitchServer = vi.fn();
+  const session = signedIn();
+  const view = renderWithSilo(
+    <ShellScreen
+      memory={memory}
+      onPlay={onPlay}
+      onSwitchProfile={onSwitchProfile}
+      onSwitchServer={onSwitchServer}
+      switchDelayMs={options.delay === 'default' ? undefined : (options.delay ?? DELAY)}
+    />,
+    { session },
+  );
+  return { memory, onPlay, onSwitchProfile, onSwitchServer, ...view };
+}
+
+const tab = (name: string) => screen.getByRole('button', { name });
+const avatar = () => screen.getByRole('button', { name: /Profile menu for/ });
+const shown = () =>
+  (['home', 'movies', 'series', 'forYou', 'calendar', 'search'] as TabId[]).find(
+    (id) => screen.queryByTestId(`tab-${id}`) !== null,
+  );
+
+async function ready() {
+  await waitFor(() => expect(tab('Home')).toHaveFocus());
+  await screen.findByTestId('title-list');
+}
+
+/** Moves to a tab with Right/Left and waits until its content replaced the old one. */
+/**
+ * Presses a key that must move the focus and waits until it did. pressKey alone waits one task,
+ * which a loaded machine can overrun: the next key would then start from the old focus.
+ */
+async function move(key: number) {
+  const before = document.activeElement;
+  await pressKey(key);
+  await waitFor(() => expect(document.activeElement).not.toBe(before));
+}
+
+/** Moves to a tab with Right/Left and waits until its content replaced the old one. */
+async function goToTab(key: number, times: number, id: TabId) {
+  for (let i = 0; i < times; i++) await move(key);
+  await waitFor(() => expect(shown()).toBe(id), { timeout: 3000 });
+}
+
+describe('ShellScreen keys', () => {
+  it('opens with the Home tab focused and selected, and lists the tabs and the avatar', async () => {
+    serve();
+    setup();
+    await ready();
+    const names = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(names.slice(0, 6)).toEqual([
+      'Home',
+      'Movies',
+      'Series',
+      'For You',
+      'Calendar',
+      'Search',
+    ]);
+    expect(tab('Home')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('avatar')).toHaveTextContent('A');
+    // The list does not steal the focus from the bar.
+    expect(screen.getByRole('button', { name: /Home One/ })).not.toHaveFocus();
+  });
+
+  it('Left and Right move across the tabs and the avatar and stop at both ends', async () => {
+    serve();
+    setup();
+    await ready();
+    const order = ['Movies', 'Series', 'For You', 'Calendar', 'Search'];
+    for (const name of order) {
+      await pressKey(KEY.right);
+      expect(tab(name)).toHaveFocus();
+    }
+    await pressKey(KEY.right);
+    expect(avatar()).toHaveFocus();
+    await pressKey(KEY.right);
+    expect(avatar()).toHaveFocus();
+    await pressKey(KEY.left);
+    expect(tab('Search')).toHaveFocus();
+    for (let i = 0; i < 5; i++) await pressKey(KEY.left);
+    expect(tab('Home')).toHaveFocus();
+    await pressKey(KEY.left);
+    expect(tab('Home')).toHaveFocus();
+  });
+
+  it('Down enters the content and Up from the first row returns to the selected tab', async () => {
+    serve();
+    setup();
+    await ready();
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Home Two/ })).toHaveFocus();
+    await pressKey(KEY.up);
+    await pressKey(KEY.up);
+    expect(tab('Home')).toHaveFocus();
+  });
+
+  it('Up from the content goes to the selected tab, not to the one that was merely focused', async () => {
+    serve();
+    setup({ delay: 5000 });
+    await ready();
+    // Series is focused but its delay has not run out: Home is still selected and shown.
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    expect(tab('Series')).toHaveFocus();
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
+    expect(shown()).toBe('home');
+    await pressKey(KEY.up);
+    expect(tab('Home')).toHaveFocus();
+  });
+
+  it('Back in the content moves the focus to the selected tab, without the exit popup', async () => {
+    serve();
+    setup();
+    await ready();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Home Two/ })).toHaveFocus();
+    await pressKey(KEY.back);
+    expect(tab('Home')).toHaveFocus();
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+  });
+
+  it('Back on the tab bar of another tab goes to Home; on Home it opens the exit popup', async () => {
+    serve();
+    setup();
+    await ready();
+    await goToTab(KEY.right, 1, 'movies');
+    await pressKey(KEY.back);
+    expect(tab('Home')).toHaveFocus();
+    await waitFor(() => expect(shown()).toBe('home'));
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+    await pressKey(KEY.back);
+    expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
+    // Cancel keeps the shell as it was.
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument());
+    expect(tab('Home')).toHaveFocus();
+  });
+
+  it('Back on the avatar goes to the Home tab', async () => {
+    serve();
+    setup();
+    await ready();
+    for (let i = 0; i < 6; i++) await pressKey(KEY.right);
+    expect(avatar()).toHaveFocus();
+    await pressKey(KEY.back);
+    expect(tab('Home')).toHaveFocus();
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+  });
+
+  it('every tab remembers its own focused element', async () => {
+    serve();
+    setup();
+    await ready();
+    // Home: the third title.
+    await move(KEY.down);
+    await move(KEY.down);
+    await move(KEY.down);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Home Three/ })).toHaveFocus());
+    await move(KEY.back);
+    // Movies shows the same library here; go to the series tab, which has its own list.
+    await goToTab(KEY.right, 2, 'series');
+    await screen.findByRole('button', { name: /Show One/ });
+    await move(KEY.down);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Show One/ })).toHaveFocus());
+    await move(KEY.up);
+    await waitFor(() => expect(tab('Series')).toHaveFocus());
+    // Back to Home: Down lands on the third title again, not on the first.
+    await goToTab(KEY.left, 2, 'home');
+    await screen.findByRole('button', { name: /Home Three/ });
+    await move(KEY.down);
+    await waitFor(() => expect(screen.getByRole('button', { name: /Home Three/ })).toHaveFocus());
+  });
+
+  it('Down within a tab returns to the element focused there before Up', async () => {
+    serve();
+    setup();
+    await ready();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await pressKey(KEY.up);
+    await pressKey(KEY.up);
+    expect(tab('Home')).toHaveFocus();
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
+  });
+});
+
+describe('ShellScreen tab switch delay', () => {
+  it('shows the content of a focused tab only after the delay', async () => {
+    const calls = serve();
+    setup({ delay: DELAY });
+    await ready();
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    expect(tab('Series')).toHaveFocus();
+    // The content is still Home's, and the tab is not selected yet.
+    expect(shown()).toBe('home');
+    expect(tab('Series')).not.toHaveAttribute('aria-current');
+    await sleep(100);
+    expect(shown()).toBe('home');
+    await waitFor(() => expect(shown()).toBe('series'), { timeout: 3000 });
+    expect(tab('Series')).toHaveAttribute('aria-current', 'page');
+    await screen.findByRole('button', { name: /Show One/ });
+    expect(calls.catalogLibraries).toContain('lib-show');
+  });
+
+  it('mounts only the last tab when the user moves quickly across several', async () => {
+    const calls = serve();
+    setup({ delay: DELAY });
+    await ready();
+    const before = calls.catalogLibraries.length;
+    // Movies, Series, For You, Calendar: only the one that rests is mounted.
+    for (let i = 0; i < 4; i++) await pressKey(KEY.right);
+    expect(tab('Calendar')).toHaveFocus();
+    await waitFor(() => expect(shown()).toBe('calendar'), { timeout: 3000 });
+    expect(calls.catalogLibraries.length).toBe(before);
+    expect(screen.queryByTestId('tab-series')).not.toBeInTheDocument();
+  });
+
+  it('uses the default delay when none is given: not yet after 100 ms, switched after it', async () => {
+    serve();
+    setup({ delay: 'default' });
+    await ready();
+    await move(KEY.right);
+    expect(tab('Movies')).toHaveFocus();
+    await sleep(100);
+    expect(shown()).toBe('home');
+    await sleep(TAB_SWITCH_DELAY_MS + 100);
+    expect(shown()).toBe('movies');
+  });
+
+  it('Down during a pending switch cancels it: Home stays shown, selected and focused', async () => {
+    serve();
+    setup({ delay: DELAY });
+    await ready();
+    await move(KEY.right);
+    expect(tab('Movies')).toHaveFocus();
+    await move(KEY.down);
+    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
+    await sleep(DELAY + 200);
+    expect(shown()).toBe('home');
+    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
+    expect(tab('Home')).toHaveAttribute('data-selected', 'true');
+    expect(tab('Movies')).toHaveAttribute('data-selected', 'false');
+  });
+
+  it('moving back to the selected tab cancels the pending switch', async () => {
+    serve();
+    setup({ delay: DELAY });
+    await ready();
+    await pressKey(KEY.right);
+    await pressKey(KEY.left);
+    expect(tab('Home')).toHaveFocus();
+    await sleep(DELAY + 200);
+    expect(shown()).toBe('home');
+  });
+
+  it('OK on a tab shows its content at once', async () => {
+    serve();
+    setup({ delay: 5000 });
+    await ready();
+    await pressKey(KEY.right);
+    expect(shown()).toBe('home');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(shown()).toBe('movies'));
+  });
+});
+
+describe('ShellScreen tab content', () => {
+  it('Home and Movies list the first movie library, Series the first series library', async () => {
+    const calls = serve();
+    setup();
+    await ready();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Films');
+    await goToTab(KEY.right, 1, 'movies');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Films' })).toBeInTheDocument();
+    await goToTab(KEY.right, 1, 'series');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Shows' })).toBeInTheDocument();
+    // The heading comes with the libraries; the titles are requested right after.
+    await waitFor(() => expect(calls.catalogLibraries).toContain('lib-show'));
+  });
+
+  it('hands a selected title to onPlay', async () => {
+    serve();
+    const { onPlay } = setup();
+    await ready();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'h2' }));
+  });
+
+  it.each([
+    ['For You', 3],
+    ['Calendar', 4],
+    ['Search', 5],
+  ])('%s shows a calm placeholder that keeps Up and Down working', async (name, steps) => {
+    serve();
+    setup();
+    await ready();
+    await goToTab(KEY.right, steps, name === 'For You' ? 'forYou' : (name.toLowerCase() as TabId));
+    expect(screen.getByTestId('coming-soon')).toHaveTextContent('Coming soon');
+    await pressKey(KEY.down);
+    expect(screen.getByRole('button', { name: 'Go to Home' })).toHaveFocus();
+    await pressKey(KEY.up);
+    expect(tab(name)).toHaveFocus();
+  });
+
+  it('the placeholder button leads to Home', async () => {
+    serve();
+    setup();
+    await ready();
+    await goToTab(KEY.right, 3, 'forYou');
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(shown()).toBe('home'));
+    expect(tab('Home')).toHaveFocus();
+  });
+
+  it('keeps the selected tab and its focus in the memory for the next visit', async () => {
+    serve();
+    const memory = new ShellMemory();
+    const first = setup({ memory });
+    await ready();
+    await goToTab(KEY.right, 2, 'series');
+    await screen.findByRole('button', { name: /Show One/ });
+    await move(KEY.down);
+    await waitFor(() => expect(memory.focusOf('series')).toBe('title-s1'));
+    first.unmount();
+    expect(memory.tab).toBe('series');
+    expect(memory.focusOf('series')).toBe('title-s1');
+    setup({ memory });
+    await waitFor(() => expect(tab('Series')).toHaveFocus());
+    expect(tab('Series')).toHaveAttribute('aria-current', 'page');
+    await screen.findByRole('button', { name: /Show One/ });
+  });
+});
+
+describe('ShellScreen avatar menu', () => {
+  async function openMenu() {
+    for (let i = 0; i < 6; i++) await pressKey(KEY.right);
+    expect(avatar()).toHaveFocus();
+    await pressKey(KEY.enter);
+    await screen.findByTestId('avatar-menu');
+  }
+
+  it('opens on OK with the focus trapped inside, and Back closes it onto the avatar', async () => {
+    serve();
+    // Walking to the avatar passes the tabs; their pending switch must not run during the test.
+    setup({ delay: 60_000 });
+    await ready();
+    await openMenu();
+    const items = screen.getAllByRole('menuitem');
+    expect(items.map((i) => i.textContent)).toEqual([
+      'Switch profile',
+      'Switch server',
+      'Sign out',
+    ]);
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    // Arrow keys cannot leave the menu.
+    await pressKey(KEY.up);
+    expect(items[0]).toHaveFocus();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    expect(items[2]).toHaveFocus();
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    expect(items[2]).toHaveFocus();
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument());
+    expect(avatar()).toHaveFocus();
+    // Back closed the menu only: no exit popup, the shell is as it was.
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+    expect(shown()).toBe('home');
+  });
+
+  it('names the profile and the server in its header', async () => {
+    serve({ branding: branding({ server_name: 'Movie Barn' }) });
+    setup();
+    await ready();
+    await openMenu();
+    const menu = screen.getByTestId('avatar-menu');
+    expect(menu).toHaveTextContent('Alex');
+    await waitFor(() => expect(menu).toHaveTextContent('Movie Barn'));
+  });
+
+  it('Switch profile calls the profile list handler', async () => {
+    serve();
+    const { onSwitchProfile, onSwitchServer } = setup();
+    await ready();
+    await openMenu();
+    await pressKey(KEY.enter);
+    expect(onSwitchProfile).toHaveBeenCalledTimes(1);
+    expect(onSwitchServer).not.toHaveBeenCalled();
+  });
+
+  it('Switch server calls the server handler and leaves the session alone', async () => {
+    const calls = serve();
+    const { onSwitchServer, session } = setup();
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(onSwitchServer).toHaveBeenCalledTimes(1);
+    expect(session.get()).not.toBeNull();
+    expect(calls.logout).toHaveLength(0);
+  });
+
+  it('Sign out calls logout with the token and clears the session', async () => {
+    const calls = serve();
+    const { session } = setup();
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(session.get()).toBeNull());
+    expect(calls.logout).toEqual(['Bearer a']);
+  });
+
+  it('a click outside the menu closes it', async () => {
+    serve();
+    setup();
+    await ready();
+    await openMenu();
+    fireEvent.click(document.querySelector('.menu-backdrop')!);
+    expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('ShellScreen branding', () => {
+  it('shows the server mark and name from the branding', async () => {
+    serve({
+      branding: branding({
+        server_name: 'Movie Barn',
+        mark_url: '/api/v2/branding/assets/mark?v=1',
+      }),
+    });
+    setup();
+    await ready();
+    await waitFor(() => expect(screen.getByTestId('server-name')).toHaveTextContent('Movie Barn'));
+    expect(screen.getByTestId('server-mark')).toHaveAttribute(
+      'src',
+      `${BASE_URL}/api/v2/branding/assets/mark?v=1`,
+    );
+  });
+
+  it('falls back to the host and a neutral initial badge without branding', async () => {
+    serve({ branding: 'fail' });
+    setup();
+    await ready();
+    expect(screen.getByTestId('server-name')).toHaveTextContent('silo.example.test');
+    expect(screen.getByTestId('server-badge')).toHaveTextContent('S');
+    expect(screen.queryByTestId('server-mark')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the badge when the mark cannot be loaded', async () => {
+    serve({ branding: branding({ server_name: 'Movie Barn', mark_url: '/broken.png' }) });
+    setup();
+    await ready();
+    const mark = await screen.findByTestId('server-mark');
+    fireEvent.error(mark);
+    expect(screen.queryByTestId('server-mark')).not.toBeInTheDocument();
+    expect(screen.getByTestId('server-badge')).toHaveTextContent('M');
+  });
+});

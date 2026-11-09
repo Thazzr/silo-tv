@@ -465,3 +465,272 @@ h3 {
 .player-diag dd {
   margin: 0;
 }
+
+/* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the
+   avatar menu. Focus is always a fill or a ring; --accent only adds a small underline. */
+html {
+  /* Focus scrolling keeps the focused element clear of the sticky top bar. */
+  scroll-padding-top: 160px;
+}
+
+.shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: var(--safe-y) 88px 12px;
+  background: var(--bg);
+}
+
+.topbar-brand,
+.topbar-end {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.topbar-end {
+  justify-content: flex-end;
+}
+
+.topbar-name {
+  overflow: hidden;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.server-mark {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.server-mark.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  background: var(--chrome-selected);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  box-sizing: border-box;
+  min-width: var(--target);
+  min-height: var(--target);
+  padding: 0 32px;
+  font: inherit;
+  font-size: var(--fs-tab);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  background: transparent;
+  border: 2px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-radius: 999px;
+  outline: none;
+}
+
+.tab[data-selected='true'] {
+  color: var(--text);
+  background: var(--chrome-selected);
+  border-color: rgba(255, 255, 255, 0.1);
+  /* The accent is a small extra on the selected tab; the fill carries the state. */
+  border-bottom-color: var(--accent, rgba(255, 255, 255, 0.1));
+}
+
+.tab:hover {
+  color: var(--text);
+  background: var(--chrome-selected);
+}
+
+.tab:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+}
+
+.avatar-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+}
+
+.avatar-button .avatar {
+  font-size: var(--fs-card-title);
+  transition: transform var(--transition);
+}
+
+.avatar-button:hover .avatar {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* A white ring inside the circle and a larger circle; not colour alone. */
+.avatar-button:focus .avatar {
+  box-shadow: inset 0 0 0 4px var(--focus-ring);
+  transform: scale(1.1);
+}
+
+.shell-content {
+  padding: 24px 88px 120px;
+}
+
+.section-title {
+  margin: 0 0 16px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+}
+
+.coming-soon {
+  max-width: 900px;
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.menu {
+  position: absolute;
+  top: 140px;
+  right: 88px;
+  box-sizing: border-box;
+  width: 460px;
+  padding: 14px;
+  background: var(--surface-raised);
+  border: 2px solid var(--hairline);
+  border-radius: var(--radius-card);
+}
+
+.menu-header {
+  padding: 8px 16px 12px;
+}
+
+.menu-profile {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+}
+
+.menu-server {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: var(--target);
+  padding: 0 16px;
+  font: inherit;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  outline: none;
+}
+
+.menu-item.danger {
+  color: var(--danger);
+}
+
+.menu-item:hover {
+  background: var(--chrome-selected);
+}
+
+.menu-item:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+}
+
+.menu-item:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+/* Server branding on the server and sign-in screens. */
+.brand-header {
+  padding: var(--safe-y) var(--safe-x) 0;
+}
+
+.brand-header + .screen {
+  padding-top: 24px;
+}
+
+.wordmark {
+  display: block;
+  max-width: 480px;
+  height: 72px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand-name {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.brand-subtitle {
+  margin: 8px 0 0;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.brand-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.brand-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* At least 82 % black everywhere, so the text stays above 4.5:1 on any picture. */
+.brand-backdrop-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.82));
+}

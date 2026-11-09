@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { KEY, pressKey } from '../../test/keys';
-import { Focusable, FocusableInput, Navigator } from '.';
+import { FocusGroup, Focusable, FocusableInput, FocusTrackerContext, Navigator } from '.';
 
 function setup(onPick: (name: string) => void = () => undefined) {
   render(
@@ -136,5 +136,77 @@ describe('keys', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await pressKey(KEY.up, field);
     expect(screen.getByText('epsilon')).toHaveFocus();
+  });
+});
+
+describe('focus reports', () => {
+  it('onFocused and the tracker hear every focus change, from keys and from the pointer', async () => {
+    const own = vi.fn();
+    const tracked: string[] = [];
+    render(
+      <Navigator
+        initial="home"
+        renderScreen={() => (
+          <FocusTrackerContext.Provider value={(key) => tracked.push(key)}>
+            <Focusable focusKey="a" autoFocus onFocused={own}>
+              alpha
+            </Focusable>
+            <Focusable focusKey="b">beta</Focusable>
+          </FocusTrackerContext.Provider>
+        )}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
+    expect(own).toHaveBeenCalledTimes(1);
+    await pressKey(KEY.down);
+    expect(screen.getByText('beta')).toHaveFocus();
+    expect(own).toHaveBeenCalledTimes(1);
+    await pressKey(KEY.up);
+    expect(own).toHaveBeenCalledTimes(2);
+    fireEvent.mouseEnter(screen.getByText('beta'));
+    await waitFor(() => expect(screen.getByText('beta')).toHaveFocus());
+    expect(tracked).toEqual(['a', 'b', 'a', 'b']);
+  });
+});
+
+describe('FocusGroup', () => {
+  function Two({ saveLast }: { saveLast?: boolean }) {
+    return (
+      <Navigator
+        initial="home"
+        renderScreen={() => (
+          <main>
+            <FocusGroup
+              focusKey="top"
+              enterable
+              preferredChildFocusKey="t2"
+              saveLastFocusedChild={saveLast}
+            >
+              <Focusable focusKey="t1" autoFocus data-rect="0,0,100,100">
+                t1
+              </Focusable>
+              <Focusable focusKey="t2" data-rect="200,0,100,100">
+                t2
+              </Focusable>
+            </FocusGroup>
+            <FocusGroup focusKey="below" enterable>
+              <Focusable focusKey="c1" data-rect="0,500,100,100">
+                c1
+              </Focusable>
+            </FocusGroup>
+          </main>
+        )}
+      />
+    );
+  }
+
+  it('an enterable group is entered from the group above, at its preferred child', async () => {
+    render(<Two saveLast={false} />);
+    await waitFor(() => expect(screen.getByText('t1')).toHaveFocus());
+    await pressKey(KEY.down);
+    expect(screen.getByText('c1')).toHaveFocus();
+    await pressKey(KEY.up);
+    // Not the last focused child (it is not saved), but the preferred one.
+    expect(screen.getByText('t2')).toHaveFocus();
   });
 });

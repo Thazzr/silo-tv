@@ -1,4 +1,5 @@
 import {
+  createContext,
   useContext,
   useEffect,
   useRef,
@@ -9,28 +10,48 @@ import { useFocusable } from '@noriginmedia/norigin-spatial-navigation';
 import { FrameContext } from './ScreenFrame';
 import { getCurrentFocusKey, setFocus } from './init';
 
+/**
+ * Lets a container hear which element got the focus, whatever the element is (a tab, a card in a
+ * list a feature owns). The shell uses it for the tab switch delay and for per-tab focus memory.
+ */
+export const FocusTrackerContext = createContext<((focusKey: string) => void) | null>(null);
+
 interface ItemOptions {
   /** Must be stable across renders and screen visits: focus memory finds the element by it. */
   focusKey: string;
   autoFocus?: boolean;
   disabled?: boolean;
+  /** Called when this element receives the focus (arrow keys, setFocus or the pointer). */
+  onFocused?: () => void;
 }
 
 /**
  * Joins one element to the spatial navigation: OK clicks it, the Magic Remote pointer and DOM
  * focus move the shared focus state to it, so 5-way keys continue from wherever the pointer is.
  */
-function useNavItem<E extends HTMLElement>({ focusKey, autoFocus, disabled }: ItemOptions) {
+function useNavItem<E extends HTMLElement>({
+  focusKey,
+  autoFocus,
+  disabled,
+  onFocused,
+}: ItemOptions) {
   const frame = useContext(FrameContext);
+  const tracker = useContext(FocusTrackerContext);
   const click = useRef<() => void>(() => undefined);
+  const focused = useRef<() => void>(() => undefined);
   const { ref } = useFocusable<unknown, E>({
     focusKey,
     focusable: !disabled,
     onEnterPress: () => click.current(),
+    onFocus: () => focused.current(),
   });
 
   useEffect(() => {
     click.current = () => ref.current?.click();
+    focused.current = () => {
+      tracker?.(focusKey);
+      onFocused?.();
+    };
   });
 
   // Registered after useFocusable's own effect, so the element is known to the service here.
@@ -56,8 +77,20 @@ export interface FocusableProps
     ItemOptions {}
 
 /** A button that takes part in 5-way navigation. */
-export function Focusable({ focusKey, autoFocus, disabled, type, ...rest }: FocusableProps) {
-  const { ref, handlers } = useNavItem<HTMLButtonElement>({ focusKey, autoFocus, disabled });
+export function Focusable({
+  focusKey,
+  autoFocus,
+  disabled,
+  onFocused,
+  type,
+  ...rest
+}: FocusableProps) {
+  const { ref, handlers } = useNavItem<HTMLButtonElement>({
+    focusKey,
+    autoFocus,
+    disabled,
+    onFocused,
+  });
   return (
     <button
       ref={ref}
@@ -76,7 +109,18 @@ export interface FocusableInputProps
     ItemOptions {}
 
 /** A text field that takes part in 5-way navigation; Left, Right and Enter stay with the field. */
-export function FocusableInput({ focusKey, autoFocus, disabled, ...rest }: FocusableInputProps) {
-  const { ref, handlers } = useNavItem<HTMLInputElement>({ focusKey, autoFocus, disabled });
+export function FocusableInput({
+  focusKey,
+  autoFocus,
+  disabled,
+  onFocused,
+  ...rest
+}: FocusableInputProps) {
+  const { ref, handlers } = useNavItem<HTMLInputElement>({
+    focusKey,
+    autoFocus,
+    disabled,
+    onFocused,
+  });
   return <input ref={ref} disabled={disabled} data-focus-key={focusKey} {...handlers} {...rest} />;
 }

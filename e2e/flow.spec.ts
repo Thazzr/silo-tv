@@ -85,6 +85,13 @@ async function startFakeSilo(): Promise<{ origin: string; seen: Seen[] }> {
         return send(200, {
           items: [{ id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true }],
         });
+      case 'GET /api/v2/theme/branding':
+        return send(200, {
+          server_name: 'E2E Silo',
+          login_subtitle: '',
+          accent_color: '#e5a00d',
+          storage_available: false,
+        });
       case 'GET /api/v2/user/libraries':
         return send(200, { items: [{ id: 'lib-1', name: 'Movies', type: 'movies' }] });
       case 'GET /api/v2/playback/capabilities':
@@ -172,11 +179,24 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
     'https://silo.example.test/activate',
   );
 
-  // Approved on the second poll: the single profile is selected, the list shows.
+  // Approved on the second poll: the single profile is selected and the shell shows, on Home.
   await expect(page.getByRole('button', { name: /First Title/ })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Movies');
-  // The first title has the focus; Down, Enter opens the second one in the player.
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText('Movies');
+  await expect(page.getByTestId('server-name')).toHaveText('E2E Silo');
+  // The server's accent is applied: it only colours the underline of the selected tab.
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(`getComputedStyle(document.documentElement).getPropertyValue('--accent')`),
+    )
+    .toBe('#e5a00d');
+  // The Home tab has the focus; Down enters the list, then Down, Enter opens the second title.
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
@@ -206,6 +226,46 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   const media = seen.find((entry) => entry.path === '/api/v2/stream/e2e-session');
   expect(media?.search).toBe('?st=x&token=fake-access');
   expect(seen.filter((entry) => entry.path === '/api/v2/auth/device/poll')).toHaveLength(2);
+
+  // Shell, keyboard only: Back in the list moves the focus to the Home tab.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  // Right moves across the tabs; the content follows after a short delay.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Serien', exact: true })).toBeFocused();
+  await expect(page.getByTestId('tab-series')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Serien', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Für dich', exact: true })).toBeFocused();
+  await expect(page.getByTestId('coming-soon')).toHaveText(/Kommt bald/);
+  // Down reaches the placeholder in the content, Up returns to the tab.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Zur Startseite' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Für dich', exact: true })).toBeFocused();
+  // Calendar, Search, then the avatar; OK opens its menu, Back closes it.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  const avatar = page.getByRole('button', { name: /Profilmenü für/ });
+  await expect(avatar).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('avatar-menu')).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('avatar-menu')).toHaveCount(0);
+  await expect(avatar).toBeFocused();
+  // Back on the bar goes to Home, and on Home it asks to exit.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await expect(page.getByTestId('tab-home')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveText(/App beenden?/);
 });
 
 test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({

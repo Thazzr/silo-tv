@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,8 +8,8 @@ import { catalogItem, catalogPage, library } from '../../test/flowFixtures';
 import { servePlayback } from '../../test/playbackFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { clearInstallationCache } from '../../playback/usePlaybackSession';
-import { LibraryScreen } from './LibraryScreen';
-import { firstVideoLibrary } from './queries';
+import { TitleList } from './TitleList';
+import { firstLibraryOfKind, firstVideoLibrary, type LibraryKind } from './queries';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -29,12 +29,11 @@ function signedIn() {
   return session;
 }
 
-function setup() {
-  const onBack = vi.fn();
+function setup(kind?: LibraryKind) {
   const onPlay = vi.fn();
   const session = signedIn();
-  const view = renderWithSilo(<LibraryScreen onBack={onBack} onPlay={onPlay} />, { session });
-  return { onBack, onPlay, ...view };
+  const view = renderWithSilo(<TitleList kind={kind} onPlay={onPlay} />, { session });
+  return { onPlay, ...view };
 }
 
 const titles = [
@@ -71,7 +70,7 @@ describe('firstVideoLibrary', () => {
   });
 });
 
-describe('LibraryScreen', () => {
+describe('TitleList', () => {
   it('shows a loading cue with row skeletons while the data loads', async () => {
     server.use(
       http.get(`${BASE_URL}/api/v2/user/libraries`, async () => {
@@ -101,12 +100,10 @@ describe('LibraryScreen', () => {
     expect(rows[0]).toHaveTextContent('2019');
     expect(rows[2]).toHaveTextContent('No Year');
     expect(rows[2]).not.toHaveTextContent(/\d{4}/);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Films');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Films');
     expect(seen.catalog[0]?.searchParams.get('library_id')).toBe('lib-9');
     expect(seen.catalog[0]?.searchParams.get('limit')).toBe('20');
     expect(seen.headers[0]?.get('X-Profile-Id')).toBe('p1');
-    // The first title is focused, so OK on the remote selects it.
-    await waitFor(() => expect(rows[0]).toHaveFocus());
   });
 
   it('hands a selected movie to onPlay and does not render a player itself', async () => {
@@ -186,39 +183,61 @@ describe('LibraryScreen', () => {
     expect(await screen.findByText('This library is empty.')).toBeInTheDocument();
   });
 
-  it('goes back with the Back key', async () => {
-    serve();
-    const { onBack } = setup();
-    await screen.findByTestId('title-list');
-    fireEvent.keyDown(window, { keyCode: 461 });
-    expect(onBack).toHaveBeenCalledTimes(1);
-    // The screen handles Back itself, so the exit popup stays closed.
-    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
-  });
+  describe('by kind', () => {
+    it('lists the first movie library for movies and the first series library for series', async () => {
+      const libs = [
+        library({ id: 'tv', name: 'Shows', type: 'series' }),
+        library({ id: 'film', name: 'Films', type: 'movies' }),
+      ];
+      const movies = serve(libs);
+      const { unmount } = setup('movie');
+      expect(await screen.findByRole('heading', { level: 2, name: 'Films' })).toBeInTheDocument();
+      expect(movies.catalog[0]?.searchParams.get('library_id')).toBe('film');
+      expect(movies.catalog[0]?.searchParams.has('type')).toBe(false);
+      unmount();
 
-  it('signs out: calls logout and clears the session', async () => {
-    serve();
-    let auth: string | null = null;
-    server.use(
-      http.post(`${BASE_URL}/api/v2/auth/logout`, ({ request }) => {
-        auth = request.headers.get('Authorization');
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
-    const { session } = setup();
-    await screen.findByTestId('title-list');
-    expect(session.get()).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    await waitFor(() => expect(session.get()).toBeNull());
-    expect(auth).toBe('Bearer a');
-  });
+      const series = serve(libs);
+      setup('series');
+      expect(await screen.findByRole('heading', { level: 2, name: 'Shows' })).toBeInTheDocument();
+      expect(series.catalog[0]?.searchParams.get('library_id')).toBe('tv');
+    });
 
-  it('clears the session even when the logout call fails', async () => {
-    serve();
-    server.use(http.post(`${BASE_URL}/api/v2/auth/logout`, () => HttpResponse.error()));
-    const { session } = setup();
-    await screen.findByTestId('title-list');
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    await waitFor(() => expect(session.get()).toBeNull());
+    it('asks a mixed library for its own kind', async () => {
+      const seen = serve([library({ id: 'mix', type: 'mixed' })]);
+      setup('series');
+      await screen.findByTestId('title-list');
+      expect(seen.catalog[0]?.searchParams.get('type')).toBe('series');
+    });
+
+    it('lists a mixed library for Home without asking for a type', async () => {
+      const seen = serve([library({ id: 'mix', type: 'mixed' })]);
+      setup('video');
+      await screen.findByTestId('title-list');
+      expect(seen.catalog[0]?.searchParams.get('library_id')).toBe('mix');
+      expect(seen.catalog[0]?.searchParams.has('type')).toBe(false);
+    });
+
+    it('says which kind is missing', async () => {
+      server.use(
+        http.get(`${BASE_URL}/api/v2/user/libraries`, () =>
+          HttpResponse.json({ items: [library({ type: 'movies' })] }),
+        ),
+      );
+      setup('series');
+      expect(await screen.findByText('This profile has no series library.')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('firstLibraryOfKind', () => {
+  it('keeps movies and series apart and lets a mixed library count for both', () => {
+    const film = library({ id: 'f', type: 'movies' });
+    const show = library({ id: 's', type: 'tvshows' });
+    const mix = library({ id: 'm', type: 'Mixed' });
+    expect(firstLibraryOfKind([show, film], 'movie')?.id).toBe('f');
+    expect(firstLibraryOfKind([film, show], 'series')?.id).toBe('s');
+    expect(firstLibraryOfKind([film, mix], 'series')?.id).toBe('m');
+    expect(firstLibraryOfKind([film], 'series')).toBeUndefined();
+    expect(firstLibraryOfKind([mix], 'video')?.id).toBe('m');
   });
 });

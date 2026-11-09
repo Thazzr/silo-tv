@@ -1,25 +1,26 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getDeviceIdentity, type DeviceIdentity } from '../api/deviceIdentity';
 import { Session } from '../api/session';
 import type { KeyValueStore } from '../platform';
 import { SignInScreen } from '../features/auth/SignInScreen';
-import { LibraryScreen } from '../features/library/LibraryScreen';
+import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
 import { PlayerScreen } from '../playback/PlayerScreen';
 import type { Launch } from './launch';
 import { Navigator, useNavigator, type NavApi } from './nav';
 import { loadServer, saveServer } from './serverStore';
+import { ShellMemory, ShellScreen } from './shell';
 import { SiloProvider } from './SiloContext';
 
 /** One entry of the screen stack. */
 type FlowScreen =
   | { name: 'server' }
   | { name: 'signIn' }
-  /** `autoSelect` is off after Back from the library, so a single profile is still shown. */
+  /** `autoSelect` is off after "Switch profile", so a single profile is still shown. */
   | { name: 'profiles'; autoSelect: boolean }
-  | { name: 'library' }
+  | { name: 'shell' }
   | { name: 'player'; contentId: string; title: string };
 
 export interface FlowAppProps {
@@ -35,7 +36,7 @@ function startScreen(launch: Launch, server: string | null, session: Session): F
   if (launch.server || !server) return { name: 'server' };
   const current = session.get();
   if (!current) return { name: 'signIn' };
-  return current.profileId ? { name: 'library' } : { name: 'profiles', autoSelect: true };
+  return current.profileId ? { name: 'shell' } : { name: 'profiles', autoSelect: true };
 }
 
 /** A refused refresh or a sign-out ends the session wherever the user is. */
@@ -55,7 +56,7 @@ function SignedOutWatcher({ session }: { session: Session }) {
 }
 
 /**
- * The first real flow as a screen stack: server → signIn → profiles → library → player. The
+ * The first real flow as a screen stack: server → signIn → profiles → shell → player. The
  * server screen is the root while no server is known; later flows start at the screen that fits
  * the stored server and session, so Back on that screen asks to exit.
  */
@@ -70,6 +71,16 @@ export function FlowApp({
   const [device] = useState(() => injectedDevice ?? getDeviceIdentity());
   const [server, setServer] = useState(() => loadServer(storage));
   const [initial] = useState(() => startScreen(launch, server, session));
+  const [shellMemory] = useState(() => new ShellMemory());
+
+  /** Opens the shell as the root of a fresh visit: Home selected, no focus remembered. */
+  const openShell = useCallback(
+    (nav: NavApi<FlowScreen>) => {
+      shellMemory.reset();
+      nav.reset({ name: 'shell' });
+    },
+    [shellMemory],
+  );
 
   const connected = useCallback(
     (nav: NavApi<FlowScreen>, origin: string) => {
@@ -83,65 +94,72 @@ export function FlowApp({
       }
       const current = session.get();
       if (!current) nav.push({ name: 'signIn' });
-      else if (current.profileId) nav.reset({ name: 'library' });
+      else if (current.profileId) openShell(nav);
       else nav.reset({ name: 'profiles', autoSelect: true });
     },
-    [server, session, storage],
+    [server, session, storage, openShell],
   );
 
   const renderScreen = (screen: FlowScreen, nav: NavApi<FlowScreen>) => {
+    // The server's branding is shown from the stored server; without one there is nothing to ask.
+    const provide = (content: ReactNode, branded?: 'server' | 'signIn') =>
+      server ? (
+        <SiloProvider baseUrl={server} session={session} device={device}>
+          <AccentTheme />
+          {branded ? <BrandBackdrop /> : null}
+          {branded ? <BrandHeader withSubtitle={branded === 'signIn'} /> : null}
+          {content}
+        </SiloProvider>
+      ) : (
+        content
+      );
+
     if (screen.name === 'server' || !server) {
-      return (
+      return provide(
         <ServerScreen
           initial={launch.server || server || ''}
           device={device}
           onConnected={(origin) => connected(nav, origin)}
-        />
+        />,
+        'server',
       );
     }
-    let body;
     switch (screen.name) {
       case 'signIn':
-        body = (
+        return provide(
           <SignInScreen
             onSignedIn={() => nav.reset({ name: 'profiles', autoSelect: true })}
             // The sign-in screen is the root after a sign-out; Back then leads to the server.
             onBack={() => (nav.depth > 1 ? nav.pop() : nav.replace({ name: 'server' }))}
-          />
+          />,
+          'signIn',
         );
-        break;
       case 'profiles':
-        body = (
-          <ProfilesScreen
-            autoSelect={screen.autoSelect}
-            onSelected={() => nav.reset({ name: 'library' })}
-          />
+        return provide(
+          <ProfilesScreen autoSelect={screen.autoSelect} onSelected={() => openShell(nav)} />,
         );
-        break;
-      case 'library':
-        body = (
-          <LibraryScreen
+      case 'shell':
+        return provide(
+          <ShellScreen
+            memory={shellMemory}
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })
             }
-            onBack={() => {
+            onSwitchProfile={() => {
               session.update({ profileId: undefined, profileToken: undefined });
               queryClient.removeQueries({ queryKey: ['libraries'] });
               queryClient.removeQueries({ queryKey: ['catalog'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
-          />
+            // The stored session stays until another server is actually connected.
+            onSwitchServer={() => nav.push({ name: 'server' })}
+          />,
         );
-        break;
       case 'player':
-        body = <PlayerScreen contentId={screen.contentId} title={screen.title} onExit={nav.pop} />;
-        break;
+        return provide(
+          <PlayerScreen contentId={screen.contentId} title={screen.title} onExit={nav.pop} />,
+        );
     }
-    return (
-      <SiloProvider baseUrl={server} session={session} device={device}>
-        {body}
-      </SiloProvider>
-    );
   };
 
   return (

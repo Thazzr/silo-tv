@@ -8,17 +8,36 @@ export type CatalogItem = components['schemas']['CatalogItem'];
 
 // Library types Silo stores as free text, with the spellings its own web client accepts.
 // Mixed libraries hold movies and series, so they count as video too.
-const VIDEO_TYPES = new Set(['movie', 'movies', 'series', 'tv', 'show', 'tvshows', 'mixed']);
+const MOVIE_TYPES = ['movie', 'movies'];
+const SERIES_TYPES = ['series', 'tv', 'show', 'tvshows'];
+const MIXED_TYPES = ['mixed'];
+
+/** What a tab lists: any video library (Home), or movies or series only. */
+export type LibraryKind = 'video' | 'movie' | 'series';
+
+const KIND_TYPES: Record<LibraryKind, Set<string>> = {
+  video: new Set([...MOVIE_TYPES, ...SERIES_TYPES, ...MIXED_TYPES]),
+  movie: new Set([...MOVIE_TYPES, ...MIXED_TYPES]),
+  series: new Set([...SERIES_TYPES, ...MIXED_TYPES]),
+};
+
+/** The first library of the kind; a mixed library counts for every kind. */
+export function firstLibraryOfKind(
+  libraries: UserLibrary[],
+  kind: LibraryKind,
+): UserLibrary | undefined {
+  return libraries.find((library) => KIND_TYPES[kind].has(library.type.trim().toLowerCase()));
+}
 
 /** The first library that holds movies or series. */
 export function firstVideoLibrary(libraries: UserLibrary[]): UserLibrary | undefined {
-  return libraries.find((library) => VIDEO_TYPES.has(library.type.trim().toLowerCase()));
+  return firstLibraryOfKind(libraries, 'video');
 }
 
 const PAGE_SIZE = 20;
 
-/** The user's libraries, then the first page of titles of the first video library. */
-export function useFirstLibrary() {
+/** The user's libraries, then the first page of titles of the first library of the kind. */
+export function useFirstLibrary(kind: LibraryKind = 'video') {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
 
@@ -30,15 +49,20 @@ export function useFirstLibrary() {
       return data.items;
     },
   });
-  const library = libraries.data ? firstVideoLibrary(libraries.data) : undefined;
+  const library = libraries.data ? firstLibraryOfKind(libraries.data, kind) : undefined;
+  // A mixed library holds both; the tab asks the server for its own kind.
+  const mixedType =
+    library && kind !== 'video' && MIXED_TYPES.includes(library.type.trim().toLowerCase())
+      ? kind
+      : undefined;
 
   const titles = useQuery({
-    queryKey: ['catalog', baseUrl, profileId, library?.id ?? ''],
+    queryKey: ['catalog', baseUrl, profileId, library?.id ?? '', mixedType ?? ''],
     enabled: Boolean(library),
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          query: { library_id: library?.id, limit: PAGE_SIZE },
+          query: { library_id: library?.id, type: mixedType, limit: PAGE_SIZE },
           header: { 'X-Profile-Id': profileId },
         },
       });

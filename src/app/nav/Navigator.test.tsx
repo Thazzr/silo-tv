@@ -239,6 +239,16 @@ describe('Navigator Back', () => {
     expect(screen.getByTestId('exit-dialog')).toBeInTheDocument();
   });
 
+  it('askExit opens the exit popup for a screen that handles Back itself', () => {
+    setup(() => undefined);
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+    act(() => nav().askExit());
+    expect(screen.getByTestId('exit-dialog')).toBeInTheDocument();
+    // Back closes it again.
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+  });
+
   it('prevents the default action of Back', () => {
     setup();
     const event = new KeyboardEvent('keydown', { keyCode: KEY.back, cancelable: true });

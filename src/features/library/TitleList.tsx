@@ -1,19 +1,28 @@
 import { useState } from 'react';
-import { Button, ErrorState, ListSkeleton, Screen } from '../../app/ui';
-import { useT } from '../../i18n';
-import { useFirstLibrary, useSignOut, type CatalogItem } from './queries';
+import { Button, ErrorState, ListSkeleton } from '../../app/ui';
+import { useT, type MessageKey } from '../../i18n';
+import { useFirstLibrary, type CatalogItem, type LibraryKind } from './queries';
 
-export function LibraryScreen({
-  onBack,
+const NO_LIBRARY_TEXT: Record<LibraryKind, MessageKey> = {
+  video: 'library.noLibrary',
+  movie: 'library.noMovies',
+  series: 'library.noSeries',
+};
+
+/**
+ * The Phase 0 title list of the first library of a kind, as the content of a shell tab. It never
+ * takes the focus by itself: the tab bar keeps it until the user moves down into the list.
+ */
+export function TitleList({
+  kind = 'video',
   onPlay,
 }: {
-  onBack: () => void;
-  /** Opens the player for a title; the screen stack keeps this list underneath. */
+  kind?: LibraryKind;
+  /** Opens the player for a title; the screen stack keeps the shell underneath. */
   onPlay: (item: CatalogItem) => void;
 }) {
   const t = useT();
-  const { library, items, isLoading, isError, noLibrary, retry } = useFirstLibrary();
-  const signOut = useSignOut();
+  const { library, items, isLoading, isError, noLibrary, retry } = useFirstLibrary(kind);
   const [seriesNote, setSeriesNote] = useState(false);
 
   const open = (item: CatalogItem) => {
@@ -32,18 +41,17 @@ export function LibraryScreen({
   } else if (isError) {
     body = <ErrorState message={t('library.error')} onRetry={retry} />;
   } else if (noLibrary) {
-    body = <p className="note">{t('library.noLibrary')}</p>;
+    body = <p className="note">{t(NO_LIBRARY_TEXT[kind])}</p>;
   } else if (items?.length === 0) {
     body = <p className="note">{t('library.empty')}</p>;
   } else {
     body = (
       <ul className="list" data-testid="title-list">
-        {items?.map((item, index) => (
+        {items?.map((item) => (
           <li key={item.content_id}>
             <Button
               focusKey={`title-${item.content_id}`}
               className="row"
-              autoFocus={index === 0}
               onClick={() => open(item)}
             >
               <span className="grow">{item.title}</span>
@@ -56,21 +64,14 @@ export function LibraryScreen({
   }
 
   return (
-    <Screen title={library?.name ?? t('library.title')} onBack={onBack} testId="library-screen">
-      <Button
-        focusKey="signout"
-        className="secondary"
-        disabled={signOut.isPending}
-        onClick={() => signOut.mutate()}
-      >
-        {t('library.signOut')}
-      </Button>
+    <section data-testid="library-screen">
+      <h2 className="section-title">{library?.name ?? t('library.title')}</h2>
       {seriesNote ? (
         <p role="status" className="note toast" data-testid="series-note">
           {t('library.seriesLater')}
         </p>
       ) : null}
       {body}
-    </Screen>
+    </section>
   );
 }

@@ -23,6 +23,8 @@ export interface NavApi<S> {
   replace(screen: S): void;
   /** Drops the whole stack; the screen becomes the root entry. */
   reset(screen: S): void;
+  /** Opens the exit popup; for a screen that handles Back itself and still is the entry page. */
+  askExit(): void;
   /** Number of entries; 1 means the current screen is the root. */
   readonly depth: number;
   readonly current: S;
@@ -144,8 +146,16 @@ export function Navigator<S>({ initial, renderScreen, children }: NavigatorProps
 
   const top = stack[stack.length - 1]!;
   const api = useMemo<NavApi<S>>(
-    () => ({ push, pop, replace, reset, depth: stack.length, current: top.screen }),
-    [push, pop, replace, reset, stack.length, top.screen],
+    () => ({
+      push,
+      pop,
+      replace,
+      reset,
+      askExit: () => setExit(true),
+      depth: stack.length,
+      current: top.screen,
+    }),
+    [push, pop, replace, reset, setExit, stack.length, top.screen],
   );
   const internals = useMemo<NavInternals>(
     () => ({

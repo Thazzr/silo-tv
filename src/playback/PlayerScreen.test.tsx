@@ -418,7 +418,7 @@ describe('PlayerScreen failure', () => {
       'This server does not support this playback protocol.',
     );
     expect(calls.start).toHaveLength(0);
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Back' })).toHaveFocus());
     key(BACK);
     expect(onExit).toHaveBeenCalledTimes(1);
   });

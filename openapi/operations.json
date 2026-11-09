@@ -22,5 +22,7 @@
   { "path": "/api/v2/playback/{session_id}", "method": "delete" },
   { "path": "/api/v2/playback/{session_id}/replan", "method": "post" },
   { "path": "/api/v2/playback/route-events", "method": "post" },
-  { "path": "/api/v2/home/sections", "method": "get" }
+  { "path": "/api/v2/home/sections", "method": "get" },
+  { "path": "/api/v2/theme/branding", "method": "get" },
+  { "path": "/api/v2/theme/capabilities", "method": "get" }
 ]
