@@ -20,6 +20,7 @@
     "package": "ares-package dist service -o out -n",
     "tv:deploy": "node scripts/tv-deploy.mjs",
     "tv:eval": "node scripts/tv-eval.mjs",
+    "tv:profile": "node scripts/tv-profile.mjs",
     "openapi:update": "node scripts/update-openapi.mjs",
     "generate:api": "openapi-typescript openapi/silo-v2.json -o src/api/generated/schema.d.ts"
   },

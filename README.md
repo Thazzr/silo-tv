@@ -38,6 +38,8 @@ npx playwright install chromium --only-shell
 | `npm run verify` | the full gate (see [`tools/README.md`](tools/README.md)) |
 | `npm run tv:deploy` | build, package, install and launch on the TV named `tv` (`WEBOS_DEVICE` overrides it) |
 | `npm run tv:eval` | read the TV probe report (or any expression) from the running app through the webOS Web Inspector |
+| `npm run tv:profile` | record a sampling CPU profile of the running app on the TV (`--seconds`, `--interval`, `--out`) into `perf-results/*.cpuprofile` and print the most expensive functions; deploy with `PERF_BUILD=1 npm run tv:deploy` first for readable function names |
+| `npm run perf:scroll` | local scroll profiling: unminified build, CPU throttle 6, long tasks, slow frames and renders per key press (not part of the gate) |
 | `npm run openapi:update` | refresh the slim Silo API spec from `SILO_SERVER` (no address is stored) |
 | `npm run generate:api` | regenerate the typed API client from `openapi/silo-v2.json` |
 

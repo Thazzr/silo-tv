@@ -2,16 +2,20 @@
 // The device name comes from WEBOS_DEVICE (default "tv"); it must exist in ares-setup-device.
 // Launch parameters come from the environment (see scripts/launch-params.mjs): SILO_SERVER, PROBE=1,
 // TRANSPORT=direct|service. Only what is set is passed.
+// PERF_BUILD=1 builds with `vite build --mode perf` and ships dist-perf (readable function names for
+// npm run tv:profile) instead of dist.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveBuild } from './deploy-build.mjs';
 import { buildLaunchParams } from './launch-params.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const device = process.env.WEBOS_DEVICE || 'tv';
 const appId = 'io.github.thazzr.silotv';
 const { version } = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8'));
+const build = resolveBuild(process.env);
 const ipk = `out/${appId}_${version}_all.ipk`;
 const aresBin = resolve(root, 'node_modules', '@webos-tools', 'cli', 'bin');
 
@@ -32,9 +36,16 @@ if (Object.keys(params).length > 0) launchArgs.push('--params', JSON.stringify(p
 launchArgs.push(appId);
 
 // These mirror the npm scripts "build", "check:bundle" and "package" without going through npm.
-run('vite build', resolve(root, 'node_modules', 'vite', 'bin', 'vite.js'), ['build']);
-run('check-bundle', resolve(root, 'scripts', 'check-bundle.mjs'), []);
-run('ares-package', resolve(aresBin, 'ares-package.js'), ['dist', 'service', '-o', 'out', '-n']);
+run('vite build', resolve(root, 'node_modules', 'vite', 'bin', 'vite.js'), build.viteArgs);
+// check-bundle inspects dist/ only; the unminified perf build is a profiling aid, not a release.
+if (!build.perf) run('check-bundle', resolve(root, 'scripts', 'check-bundle.mjs'), []);
+run('ares-package', resolve(aresBin, 'ares-package.js'), [
+  build.distDir,
+  'service',
+  '-o',
+  'out',
+  '-n',
+]);
 run('ares-install', resolve(aresBin, 'ares-install.js'), ['-d', device, ipk]);
 run('ares-launch', resolve(aresBin, 'ares-launch.js'), launchArgs);
 

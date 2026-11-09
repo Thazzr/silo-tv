@@ -3,10 +3,13 @@ import {
   DEFAULT_EXPRESSION,
   DEFAULT_WAIT_FOR,
   createCdpClient,
+  formatCpuProfileSummary,
   formatValue,
   parseArgs,
   parseInspectorUrl,
+  parseProfileArgs,
   pickTarget,
+  summarizeCpuProfile,
 } from './tv-eval-lib.mjs';
 
 describe('parseArgs', () => {
@@ -206,5 +209,123 @@ describe('createCdpClient', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('parseProfileArgs', () => {
+  const now = new Date('2026-11-09T10:20:30.456Z');
+
+  it('defaults to 20 s, 1000 us, device tv and a timestamped file in perf-results', () => {
+    expect(parseProfileArgs([], {}, now)).toEqual({
+      seconds: 20,
+      intervalUs: 1000,
+      out: 'perf-results/tv-2026-11-09T10-20-30-456Z.cpuprofile',
+      device: 'tv',
+      waitFor: null,
+      timeoutSec: 60,
+    });
+  });
+
+  it('takes every option, WEBOS_DEVICE as default device', () => {
+    const args = parseProfileArgs(
+      ['--seconds', '8', '--interval', '500', '--out', 'x.cpuprofile', '--wait-for', 'window.ok'],
+      { WEBOS_DEVICE: 'living-room' },
+      now,
+    );
+    expect(args).toMatchObject({
+      seconds: 8,
+      intervalUs: 500,
+      out: 'x.cpuprofile',
+      device: 'living-room',
+      waitFor: 'window.ok',
+    });
+    expect(parseProfileArgs(['--device', 'b'], { WEBOS_DEVICE: 'a' }, now).device).toBe('b');
+  });
+
+  it.each([
+    [['--seconds', '0'], /positive number/],
+    [['--seconds', 'abc'], /positive number/],
+    [['--interval', '-5'], /positive number/],
+    [['--seconds'], /needs a value/],
+    [['--nope', '1'], /Unknown option/],
+    [['stray'], /Unexpected argument/],
+  ])('rejects %j', (argv, message) => {
+    expect(() => parseProfileArgs(argv, {}, now)).toThrow(message);
+  });
+});
+
+describe('summarizeCpuProfile', () => {
+  const frame = (functionName: string, url = '', lineNumber = 0) => ({
+    functionName,
+    url,
+    lineNumber,
+    columnNumber: 0,
+    scriptId: '1',
+  });
+  // root -> (idle) | (program) | (garbage collector) | A -> B -> B (recursion)
+  const profile = {
+    nodes: [
+      { id: 1, callFrame: frame('(root)'), children: [2, 3, 4, 5] },
+      { id: 2, callFrame: frame('(idle)') },
+      { id: 3, callFrame: frame('(program)') },
+      { id: 4, callFrame: frame('(garbage collector)') },
+      { id: 5, callFrame: frame('A', 'file:///app/a.js?v=1', 0), children: [6] },
+      { id: 6, callFrame: frame('B', 'file:///app/bundle.js', 9), children: [7] },
+      { id: 7, callFrame: frame('B', 'file:///app/bundle.js', 9) },
+    ],
+    // Chrome: timeDeltas[i] is the gap before sample i, so sample i lasts timeDeltas[i + 1] us;
+    // the last sample reuses its own delta.
+    samples: [2, 6, 7, 3, 4, 5],
+    timeDeltas: [0, 1000, 2000, 3000, 4000, 5000],
+  };
+  const summary = summarizeCpuProfile(profile);
+  const byName = (list: { name: string; ms: number }[], name: string) =>
+    list.find((e) => e.name === name)?.ms;
+
+  it('splits idle, program and garbage collector out of the sampled time', () => {
+    expect(summary.totalMs).toBeCloseTo(20);
+    expect(summary.idleMs).toBeCloseTo(1);
+    expect(summary.programMs).toBeCloseTo(4);
+    expect(summary.gcMs).toBeCloseTo(5);
+  });
+
+  it('attributes self time to the sampled function, merging identical frames', () => {
+    expect(byName(summary.topSelf, 'B')).toBeCloseTo(5); // nodes 6 and 7 are the same function
+    expect(byName(summary.topSelf, 'A')).toBeCloseTo(5);
+    expect(summary.topSelf[0].percent).toBeGreaterThan(0);
+    expect(summary.topSelf.find((e) => e.name === 'B')).toMatchObject({
+      file: 'bundle.js',
+      line: 10,
+    });
+  });
+
+  it('counts total time once per sample even for recursion', () => {
+    expect(byName(summary.topTotal, 'B')).toBeCloseTo(5); // not 2 + 3 + 3
+    expect(byName(summary.topTotal, 'A')).toBeCloseTo(10);
+    expect(byName(summary.topTotal, '(root)')).toBeCloseTo(20);
+  });
+
+  it('totals self time per file, query string stripped, unnamed frames as (native)', () => {
+    expect(Object.fromEntries(summary.files.map((f) => [f.file, f.ms]))).toEqual({
+      '(native)': 10,
+      'a.js': 5,
+      'bundle.js': 5,
+    });
+  });
+
+  it('limits the rankings', () => {
+    expect(summarizeCpuProfile(profile, { topSelf: 1, topTotal: 2 })).toMatchObject({
+      topSelf: [expect.anything()],
+      topTotal: [expect.anything(), expect.anything()],
+    });
+  });
+
+  it('copes with an empty profile and renders text', () => {
+    const empty = summarizeCpuProfile({ nodes: [], samples: [], timeDeltas: [] });
+    expect(empty.totalMs).toBe(0);
+    const text = formatCpuProfileSummary(summary);
+    expect(text).toContain('Top functions by self time');
+    expect(text).toContain('B (bundle.js:10)');
+    expect(text).toContain('Self time per file');
   });
 });
