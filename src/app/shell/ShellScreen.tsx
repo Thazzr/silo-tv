@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { useBranding } from '../../features/branding/queries';
 import type { DetailTarget } from '../../features/detail/detailMemory';
 import { HomeScreen } from '../../features/home/HomeScreen';
@@ -28,7 +29,7 @@ import { AVATAR_KEY, MENU_KEY_PREFIX, ShellMemory, tabKey, tabOfKey, type TabId 
 export interface ShellScreenProps {
   memory: ShellMemory;
   /** Opens the player for a title; the screen stack keeps the shell underneath. */
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   /** Opens the detail page of a movie or series; the screen stack keeps the shell underneath. */
   onOpenDetail: (target: DetailTarget) => void;
   /** Opens the full list of a row ("Explore all") as a screen of its own. */
@@ -37,6 +38,8 @@ export interface ShellScreenProps {
   onOpenCollection?: (target: CollectionTarget) => void;
   onSwitchProfile: () => void;
   onSwitchServer: () => void;
+  /** Opens the device settings as a screen of its own. */
+  onOpenSettings?: () => void;
   /** The device setting "Profile at launch" of this server, and its change from the menu. */
   launchMode: LaunchMode;
   onLaunchMode: (mode: LaunchMode) => void;
@@ -62,7 +65,7 @@ function TabContent({
 }: {
   tab: TabId;
   memory: ShellMemory;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
   onExploreSection: (section: ExploreTarget) => void;
   onOpenCollection: (target: CollectionTarget) => void;
@@ -114,6 +117,7 @@ export function ShellScreen({
   onOpenCollection = () => undefined,
   onSwitchProfile,
   onSwitchServer,
+  onOpenSettings = () => undefined,
   launchMode,
   onLaunchMode,
   offer = null,
@@ -126,6 +130,11 @@ export function ShellScreen({
 
   // The tab that has the focus first; later changes of the selection must not move it.
   const [initialTab] = useState(memory.tab);
+  // Back from Settings lands on the avatar; the flag is spent once the shell has shown.
+  const [avatarFirst] = useState(memory.returnToAvatar);
+  useEffect(() => {
+    memory.expectAvatarReturn(true);
+  }, [memory]);
   const [selected, setSelected] = useState<TabId>(memory.tab);
   const selectedRef = useRef<TabId>(memory.tab);
   // Which part of the avatar menu is open; null while it is closed.
@@ -206,6 +215,7 @@ export function ShellScreen({
           <TopBar
             selected={selected}
             initialTab={initialTab}
+            focusAvatar={avatarFirst}
             profileName={profileName}
             onTabPick={select}
             onAvatar={() => setMenu('main')}
@@ -247,6 +257,10 @@ export function ShellScreen({
               onSwitchServer={onSwitchServer}
               onSignOut={() => setSignOutOpen(true)}
               onOpenLaunch={() => setMenu('launch')}
+              onOpenSettings={() => {
+                memory.expectAvatarReturn();
+                onOpenSettings();
+              }}
               onChooseLaunch={(mode) => {
                 onLaunchMode(mode);
                 setMenu('main');

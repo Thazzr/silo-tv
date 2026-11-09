@@ -25,7 +25,7 @@ describe('openItem', () => {
   });
 
   it.each(['in_progress', 'next_up'])(
-    'plays an episode card of Continue Watching or Next Up right away (%s)',
+    'plays an episode card of Continue Watching or Next Up right away, resuming (%s)',
     (itemSource) => {
       const { play, openDetail, item } = open({
         type: 'episode',
@@ -34,7 +34,7 @@ describe('openItem', () => {
         season_number: 2,
         item_source: itemSource,
       });
-      expect(play).toHaveBeenCalledWith(item);
+      expect(play).toHaveBeenCalledWith(item, { kind: 'resume' });
       expect(openDetail).not.toHaveBeenCalled();
     },
   );
@@ -53,7 +53,7 @@ describe('openItem', () => {
 
   it('plays an episode that does not name its series, there is no page to open', () => {
     const { play, openDetail, item } = open({ type: 'episode', content_id: 'e7' });
-    expect(play).toHaveBeenCalledWith(item);
+    expect(play).toHaveBeenCalledWith(item, { kind: 'ask' });
     expect(openDetail).not.toHaveBeenCalled();
   });
 
@@ -64,7 +64,7 @@ describe('openItem', () => {
 
   it('plays anything else', () => {
     const { play, openDetail, item } = open({ type: 'audiobook' });
-    expect(play).toHaveBeenCalledWith(item);
+    expect(play).toHaveBeenCalledWith(item, { kind: 'ask' });
     expect(openDetail).not.toHaveBeenCalled();
   });
 });

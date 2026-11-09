@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup } from '../../app/nav';
 import { useT } from '../../i18n';
@@ -95,7 +96,7 @@ export function RecommendedView({
   library: UserLibrary;
   kind: LibraryKind;
   memory: LibraryMemory;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
   onExploreSection: (section: ExploreTarget) => void;
 }) {

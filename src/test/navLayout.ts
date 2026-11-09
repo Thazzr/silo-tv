@@ -7,6 +7,7 @@
 //  - the focusables of the shell's top bar (class "topbar") and of a server row (class
 //    "server-row": the server and its Remove button) and of a media row (class "row-strip": its
 //    cards) form one row;
+//  - the choice pills of the settings screen (class "settings-choices") form one row;
 //  - the pills of a library tab (class "lib-pills") and its Browse toolbar form one row each, and
 //    the letters of the alphabet rail (class "alpha-rail") stand in a column far to the right,
 //    level with the first poster of the grid;
@@ -45,7 +46,7 @@ function measure(node: HTMLElement): ReturnType<typeof rect> {
     return rect(5000, top + letters.indexOf(node) * 40, 40, 40);
   }
   const row = node.closest<HTMLElement>(
-    '.topbar, .server-row, .row-strip, .detail-row, .detail-episode-strip, .lib-pills, .browse-toolbar',
+    '.topbar, .server-row, .row-strip, .detail-row, .detail-episode-strip, .lib-pills, .browse-toolbar, .settings-choices',
   );
   if (row) {
     const cells = all.filter((el) => row.contains(el));

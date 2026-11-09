@@ -5,6 +5,7 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
 import { SectionGridScreen } from '../../features/home/SectionGridScreen';
+import { SettingsScreen } from '../../features/settings/SettingsScreen';
 import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { branding, catalogPage, profile, profileCollection } from '../../test/flowFixtures';
@@ -22,7 +23,8 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-type Screen = { name: 'shell' } | { name: 'grid'; sectionId: string; title: string };
+type Screen =
+  { name: 'shell' } | { name: 'settings' } | { name: 'grid'; sectionId: string; title: string };
 
 /** The shell with Home and the row grid on a screen stack, like the app flow has them. */
 function renderHome() {
@@ -49,9 +51,12 @@ function renderHome() {
         }
         onSwitchProfile={() => undefined}
         onSwitchServer={() => undefined}
+        onOpenSettings={() => nav.push({ name: 'settings' })}
         launchMode="every"
         onLaunchMode={() => undefined}
       />
+    ) : screen.name === 'settings' ? (
+      <SettingsScreen onBack={nav.pop} />
     ) : (
       <SectionGridScreen
         sectionId={screen.sectionId}
@@ -104,6 +109,25 @@ const homeTab = () => screen.getByRole('button', { name: 'Home' });
 const key = (row: string, id: string) => cardFocusKey(row, id);
 
 describe('Home in the shell', () => {
+  it('opens Settings from the avatar menu, and Back returns to the shell with the avatar focused', async () => {
+    serve([homeSection('a', 2)]);
+    renderHome();
+    await screen.findByTestId('row-a', {}, { timeout: 10_000 });
+    await waitFor(() => expect(homeTab()).toHaveFocus());
+    for (let i = 0; i < 6; i += 1) await pressKey(KEY.right);
+    await pressKey(KEY.enter);
+    await screen.findByTestId('avatar-menu');
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toHaveFocus();
+    await pressKey(KEY.enter);
+    await screen.findByTestId('settings-screen');
+    await pressKey(KEY.back);
+    await screen.findByTestId('shell');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Profile menu/ })).toHaveFocus());
+    expect(screen.queryByTestId('settings-screen')).toBeNull();
+  });
+
   it('Down enters the first row, Up leaves it for the tab bar, Back from a row goes to the tab bar', async () => {
     serve([homeSection('a', 3), homeSection('b', 3)]);
     renderHome();

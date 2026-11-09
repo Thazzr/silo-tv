@@ -13,6 +13,7 @@ import { AVATAR_KEY, TAB_IDS, TAB_LABELS, tabKey, type TabId } from './tabs';
 export function TopBar({
   selected,
   initialTab,
+  focusAvatar = false,
   profileName,
   onTabPick,
   onAvatar,
@@ -20,6 +21,8 @@ export function TopBar({
   selected: TabId;
   /** The tab that takes the focus when the shell opens. */
   initialTab: TabId;
+  /** The avatar, not a tab, takes the focus when the shell opens (coming back from Settings). */
+  focusAvatar?: boolean;
   profileName: string;
   /** OK or a click on a tab: its content shows; focus alone never does. */
   onTabPick: (tab: TabId) => void;
@@ -48,7 +51,7 @@ export function TopBar({
           <Focusable
             key={tab}
             focusKey={tabKey(tab)}
-            autoFocus={tab === initialTab}
+            autoFocus={!focusAvatar && tab === initialTab}
             className="tab"
             aria-current={tab === selected ? 'page' : undefined}
             data-selected={tab === selected}
@@ -61,6 +64,7 @@ export function TopBar({
       <div className="topbar-end">
         <Focusable
           focusKey={AVATAR_KEY}
+          autoFocus={focusAvatar}
           className="avatar-button"
           aria-label={t('shell.avatar', { name: profileName })}
           aria-haspopup="menu"

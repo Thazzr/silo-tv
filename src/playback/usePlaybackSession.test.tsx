@@ -21,6 +21,8 @@ import {
   watchUserData,
 } from '../test/playbackFixtures';
 import { memoryStorage, testDevice } from '../test/renderFlow';
+import { setResumeRewind } from './resumeRewind';
+import type { StartIntent } from './resume';
 import {
   PROGRESS_INTERVAL_MS,
   clearInstallationCache,
@@ -39,7 +41,11 @@ afterEach(async () => {
   server.resetHandlers();
 });
 afterAll(() => server.close());
-beforeEach(() => clearInstallationCache());
+beforeEach(() => {
+  // The rewind setting lives in the device storage; every test starts on its default (7 s).
+  window.localStorage.clear();
+  clearInstallationCache();
+});
 
 function signedIn() {
   const session = new Session(memoryStorage());
@@ -53,14 +59,14 @@ function signedIn() {
   return session;
 }
 
-function setup() {
+function setup(intent?: StartIntent) {
   const session = signedIn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
       {children}
     </SiloProvider>
   );
-  const hook = renderHook(() => usePlaybackSession('m1'), { wrapper });
+  const hook = renderHook(() => usePlaybackSession('m1', intent), { wrapper });
   hooks.push(hook);
   return hook;
 }
@@ -152,7 +158,8 @@ describe('start', () => {
     for (const userData of [
       undefined,
       watchUserData({ position_seconds: 0 }),
-      watchUserData({ position_seconds: 600, played: true }),
+      watchUserData({ position_seconds: 20 }),
+      watchUserData({ position_seconds: 3511, duration_seconds: 3514 }),
     ]) {
       const calls = servePlayback(server, { watch: watchDetail({ user_data: userData }) });
       const hook = setup();
@@ -162,13 +169,99 @@ describe('start', () => {
     }
   });
 
+  describe('one resume rule', () => {
+    // The TV finding: the server keeps position and duration of an episode that counts as played.
+    const rewatch = {
+      watch: watchDetail({
+        user_data: watchUserData({
+          position_seconds: 362.464,
+          played: true,
+          duration_seconds: 3514,
+        }),
+      }),
+    };
+
+    it('asks for a played rewatch with a position, then resumes rewound', async () => {
+      setResumeRewind(15);
+      const calls = servePlayback(server, rewatch);
+      const hook = setup();
+      await waitFor(() => expect(hook.result.current.state.kind).toBe('prompt'));
+      expect(hook.result.current.state).toMatchObject({ positionSeconds: 362 });
+      expect(calls.start).toHaveLength(0);
+      act(() => hook.result.current.resume());
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(347);
+    });
+
+    it('the prompt resumes at the saved point when the rewind is off, and starts over at 0', async () => {
+      setResumeRewind(0);
+      const calls = servePlayback(server, rewatch);
+      const hook = setup();
+      await waitFor(() => expect(hook.result.current.state.kind).toBe('prompt'));
+      act(() => hook.result.current.resume());
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(362);
+      hook.unmount();
+      const again = setup();
+      await waitFor(() => expect(again.result.current.state.kind).toBe('prompt'));
+      act(() => again.result.current.choose(0));
+      await waitFor(() => expect(calls.start).toHaveLength(2));
+      expect(calls.start[1]?.body.start_position).toBe(0);
+    });
+
+    it('the intent resume starts rewound without a prompt', async () => {
+      setResumeRewind(15);
+      const calls = servePlayback(server, rewatch);
+      const hook = setup({ kind: 'resume' });
+      await ready(hook);
+      expect(calls.start).toHaveLength(1);
+      expect(calls.start[0]?.body.start_position).toBe(347);
+    });
+
+    it('the intent resume applies the default rewind of 7 s, never going below 0', async () => {
+      const calls = servePlayback(server, rewatch);
+      const hook = setup({ kind: 'resume' });
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(355);
+    });
+
+    it('the intent beginning starts at 0 without a prompt', async () => {
+      const calls = servePlayback(server, rewatch);
+      const hook = setup({ kind: 'beginning' });
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(0);
+    });
+
+    it.each([
+      ['a position of 20 s', watchUserData({ position_seconds: 20 })],
+      [
+        'a position within 5 s of the end',
+        watchUserData({ position_seconds: 3511, duration_seconds: 3514 }),
+      ],
+    ])('the intent resume starts at 0 for %s', async (_name, userData) => {
+      const calls = servePlayback(server, { watch: watchDetail({ user_data: userData }) });
+      const hook = setup({ kind: 'resume' });
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(0);
+    });
+
+    it('measures the end by the file duration when the watch state has none', async () => {
+      const calls = servePlayback(server, {
+        watch: watchDetail({ user_data: watchUserData({ position_seconds: 5398 }) }),
+      });
+      const hook = setup({ kind: 'resume' });
+      await ready(hook);
+      expect(calls.start[0]?.body.start_position).toBe(0);
+    });
+  });
+
   it('asks before resuming, and starts at the chosen position', async () => {
     const calls = servePlayback(server, {
       watch: watchDetail({ user_data: watchUserData({ position_seconds: 1234.5 }) }),
     });
     const hook = setup();
     await waitFor(() => expect(hook.result.current.state.kind).toBe('prompt'));
-    expect(hook.result.current.state).toMatchObject({ positionSeconds: 1234.5 });
+    expect(hook.result.current.state).toMatchObject({ positionSeconds: 1234 });
     expect(calls.start).toHaveLength(0);
     act(() => hook.result.current.choose(1234.5));
     await ready(hook);

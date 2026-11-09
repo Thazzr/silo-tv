@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup, Focusable, setFocus } from '../../app/nav';
 import { useT } from '../../i18n';
@@ -52,7 +53,7 @@ export function BrowseView({
   memory: LibraryMemory;
   overlay: BrowseOverlay;
   onOverlay: (overlay: BrowseOverlay) => void;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
 }) {
   const t = useT();

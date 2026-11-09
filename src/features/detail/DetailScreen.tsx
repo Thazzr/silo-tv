@@ -11,20 +11,14 @@ import {
   rowHeight,
   type CatalogItem,
 } from '../../ui/media';
+import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import { ActionRow, type EpisodeRef } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeRow, EpisodeStripSkeleton } from './EpisodeRow';
-import {
-  defaultSeason,
-  initials,
-  orderSeasons,
-  resumePoint,
-  type Episode,
-  type ItemDetail,
-} from './info';
+import { defaultSeason, initials, orderSeasons, type Episode, type ItemDetail } from './info';
 import {
   DETAIL_INSET,
   detailScrollOffset,
@@ -41,11 +35,11 @@ import { SynopsisDialog } from './SynopsisDialog';
 /** How long "Person pages come soon" stays on screen. */
 const NOTE_MS = 4000;
 
-/** What the player needs to start a title; `startPosition` skips its resume prompt. */
+/** What the player needs to start a title; an intent other than `ask` skips its resume prompt. */
 export interface PlayRequest {
   contentId: string;
   title: string;
-  startPosition?: number;
+  intent?: StartIntent;
 }
 
 export interface DetailScreenProps {
@@ -160,8 +154,8 @@ function DetailBody({
     ? { season: primaryEpisode.season_number, episode: primaryEpisode.episode_number }
     : undefined;
 
-  const play = (startPosition: number | undefined) => {
-    if (playId) onPlay({ contentId: playId, title: detail.title, startPosition });
+  const play = (intent: StartIntent) => {
+    if (playId) onPlay({ contentId: playId, title: detail.title, intent });
   };
 
   // --- Season switch: a season shows only when its pill is activated (OK or a click) -------------
@@ -178,7 +172,8 @@ function DetailBody({
   // --- More like this ---------------------------------------------------------------------------
   const similar = useSimilar(detail.content_id, true);
   const playItem = useCallback(
-    (item: CatalogItem) => onPlay({ contentId: item.content_id, title: item.title }),
+    (item: CatalogItem, intent?: StartIntent) =>
+      onPlay({ contentId: item.content_id, title: item.title, intent }),
     [onPlay],
   );
   const { open: openSimilar } = useItemOpener({ onPlay: playItem, onOpenDetail });
@@ -320,9 +315,9 @@ function DetailBody({
                   resumeSeconds={resumeSeconds}
                   episode={series ? episodeRef : undefined}
                   autoFocus={openedOn === undefined}
-                  onPlay={() => play(stateKnown ? 0 : undefined)}
-                  onResume={() => play(resumeSeconds ?? undefined)}
-                  onStartOver={() => play(0)}
+                  onPlay={() => play({ kind: stateKnown ? 'beginning' : 'ask' })}
+                  onResume={() => play({ kind: 'resume' })}
+                  onStartOver={() => play({ kind: 'beginning' })}
                   onFocused={inHero}
                 />
               ) : null

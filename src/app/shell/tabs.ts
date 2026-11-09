@@ -34,11 +34,22 @@ export function tabOfKey(focusKey: string): TabId | null {
  */
 export class ShellMemory {
   tab: TabId = 'home';
+  private avatarReturn = false;
   private focus: Partial<Record<TabId, string>> = {};
   /** The focused card of every Home row; the rows read it when they are shown again. */
   readonly rows = new FocusIndexMemory();
   /** The library, sub-view, Browse choices and focus of the Movies and Series tabs. */
   readonly library = new LibraryMemory();
+
+  /** Whether the shell opens with the avatar focused (it does after the settings screen). */
+  get returnToAvatar(): boolean {
+    return this.avatarReturn;
+  }
+
+  /** Called when the settings screen opens over the shell: the next visit lands on the avatar. */
+  expectAvatarReturn(spent = false): void {
+    this.avatarReturn = !spent;
+  }
 
   selectTab(tab: TabId): void {
     this.tab = tab;
@@ -55,6 +66,7 @@ export class ShellMemory {
   /** A new visit (another profile, a fresh sign-in) starts on Home with nothing remembered. */
   reset(): void {
     this.tab = 'home';
+    this.avatarReturn = false;
     this.focus = {};
     this.rows.clear();
     this.library.reset();

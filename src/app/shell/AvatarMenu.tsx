@@ -19,7 +19,7 @@ export const LAUNCH_LABELS: Record<LaunchMode, MessageKey> = {
 export type MenuView = 'main' | 'launch';
 
 /**
- * The avatar's menu: switch profile, profile at launch, switch server, sign out. A restricted
+ * The avatar's menu: switch profile, profile at launch, settings, switch server, sign out. A restricted
  * (kids) profile gets no way off the server it was given: no server switch and no sign-out. The
  * focus is trapped in it, Back (routed here by the shell) closes it or leaves the chooser, and
  * closing puts the focus back on the avatar.
@@ -36,6 +36,7 @@ export function AvatarMenu({
   onSwitchServer,
   onSignOut,
   onOpenLaunch,
+  onOpenSettings,
   onChooseLaunch,
 }: {
   view: MenuView;
@@ -49,6 +50,7 @@ export function AvatarMenu({
   onSwitchServer: () => void;
   onSignOut: () => void;
   onOpenLaunch: () => void;
+  onOpenSettings: () => void;
   onChooseLaunch: (mode: LaunchMode) => void;
 }) {
   const t = useT();
@@ -114,6 +116,14 @@ export function AvatarMenu({
               <span className="menu-value" data-testid="launch-value">
                 {t(LAUNCH_LABELS[launchMode])}
               </span>
+            </Focusable>
+            <Focusable
+              focusKey={`${MENU_KEY_PREFIX}settings`}
+              role="menuitem"
+              className="menu-item"
+              onClick={onOpenSettings}
+            >
+              {t('shell.menu.settings')}
             </Focusable>
             {restricted ? null : (
               <>

@@ -329,7 +329,9 @@ describe('HomeScreen: removing from Continue Watching', () => {
     const { onPlay } = setup();
     await focusKeyIs(key('cw', 'e1'));
     tap(KEY.enter);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'e1' }));
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'e1' }), {
+      kind: 'resume',
+    });
     expect(screen.queryByTestId('remove-dialog')).toBeNull();
 
     fireEvent.keyDown(window, { keyCode: KEY.enter });

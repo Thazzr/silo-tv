@@ -11,41 +11,10 @@ import {
   orderSeasons,
   qualityBadges,
   ratingEntries,
-  resumePoint,
 } from './info';
 
 const t = (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) =>
   translate('en', key, params);
-
-describe('resumePoint', () => {
-  it('is null at or below 30 s and the position past it', () => {
-    expect(resumePoint({ position_seconds: 30, duration_seconds: 5400 })).toBeNull();
-    expect(resumePoint({ position_seconds: 31, duration_seconds: 5400 })).toBe(31);
-    expect(resumePoint({ position_seconds: 600.9, duration_seconds: 5400 })).toBe(600);
-  });
-
-  it('is null within 5 s of the end', () => {
-    expect(resumePoint({ position_seconds: 5395, duration_seconds: 5400 })).toBeNull();
-    expect(resumePoint({ position_seconds: 5394, duration_seconds: 5400 })).toBe(5394);
-  });
-
-  it('measures the end by the fallback runtime when the state has no duration', () => {
-    expect(resumePoint({ position_seconds: 2398 }, 2400)).toBeNull();
-    expect(resumePoint({ position_seconds: 1200 }, 2400)).toBe(1200);
-    expect(resumePoint({ position_seconds: 1200 })).toBe(1200);
-  });
-
-  it('resumes a rewatch that stopped partway although the server counts the item played', () => {
-    expect(
-      resumePoint({ position_seconds: 900, duration_seconds: 5400, ...{ played: true } }),
-    ).toBe(900);
-  });
-
-  it('is null without a watch state', () => {
-    expect(resumePoint(undefined)).toBeNull();
-    expect(resumePoint({})).toBeNull();
-  });
-});
 
 describe('metaLine', () => {
   it('joins year, runtime, rating and the first three genres', () => {

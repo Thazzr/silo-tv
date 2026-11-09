@@ -57,9 +57,34 @@ describe('watchedFraction', () => {
     expect(watchedFraction(catalogItem({ position_seconds: 600, duration_seconds: 2400 }))).toBe(
       0.25,
     );
-    expect(watchedFraction(catalogItem({ position_seconds: 9000, duration_seconds: 2400 }))).toBe(
-      1,
-    );
+    expect(
+      watchedFraction(catalogItem({ position_seconds: 2000, duration_seconds: 2400 })),
+    ).toBeCloseTo(0.8333, 3);
+  });
+
+  it('shows the bar of a played rewatch that has a position', () => {
+    expect(
+      watchedFraction(
+        catalogItem({
+          item_source: 'in_progress',
+          position_seconds: 362.464,
+          duration_seconds: 3514,
+          ...{ played: true },
+        }),
+      ),
+    ).toBeCloseTo(362 / 3514, 5);
+  });
+
+  it('shows no bar for 30 s or less, or within 5 s of the end (no resume point)', () => {
+    expect(
+      watchedFraction(catalogItem({ position_seconds: 30, duration_seconds: 2400 })),
+    ).toBeNull();
+    expect(
+      watchedFraction(catalogItem({ position_seconds: 9000, duration_seconds: 2400 })),
+    ).toBeNull();
+    expect(
+      watchedFraction(catalogItem({ position_seconds: 2396, duration_seconds: 2400 })),
+    ).toBeNull();
   });
 
   it('falls back to the runtime in minutes', () => {

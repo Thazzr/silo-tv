@@ -116,6 +116,7 @@ function setup(
   const onSwitchProfile = vi.fn();
   const onSwitchServer = vi.fn();
   const onLaunchMode = vi.fn();
+  const onOpenSettings = vi.fn();
   const session = signedIn(options.profileId);
   const view = renderWithSilo(
     <ShellScreen
@@ -124,13 +125,23 @@ function setup(
       onOpenDetail={onOpenDetail}
       onSwitchProfile={onSwitchProfile}
       onSwitchServer={onSwitchServer}
+      onOpenSettings={onOpenSettings}
       launchMode={options.launchMode ?? 'every'}
       onLaunchMode={onLaunchMode}
       offer={options.offer}
     />,
     { session },
   );
-  return { memory, onPlay, onOpenDetail, onSwitchProfile, onSwitchServer, onLaunchMode, ...view };
+  return {
+    memory,
+    onPlay,
+    onOpenDetail,
+    onSwitchProfile,
+    onSwitchServer,
+    onLaunchMode,
+    onOpenSettings,
+    ...view,
+  };
 }
 
 const tab = (name: string) => screen.getByRole('button', { name });
@@ -509,6 +520,7 @@ describe('ShellScreen avatar menu', () => {
     expect(items.map((i) => i.textContent)).toEqual([
       'Switch profile',
       'Profile at launchEvery time',
+      'Settings',
       'Switch server',
       'Sign out',
     ]);
@@ -519,16 +531,41 @@ describe('ShellScreen avatar menu', () => {
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
-    expect(items[3]).toHaveFocus();
+    await pressKey(KEY.down);
+    expect(items[4]).toHaveFocus();
     await pressKey(KEY.down);
     await pressKey(KEY.right);
-    expect(items[3]).toHaveFocus();
+    expect(items[4]).toHaveFocus();
     await pressKey(KEY.back);
     await waitFor(() => expect(screen.queryByTestId('avatar-menu')).not.toBeInTheDocument());
     expect(avatar()).toHaveFocus();
     // Back closed the menu only: no exit popup, the shell is as it was.
     expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
     expect(shown()).toBe('home');
+  });
+
+  it('Settings opens the settings screen and the shell remembers to land on the avatar', async () => {
+    serve();
+    const { onOpenSettings, memory } = setup();
+    await ready();
+    await openMenu();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toHaveFocus();
+    await pressKey(KEY.enter);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(memory.returnToAvatar).toBe(true);
+  });
+
+  it('a shell opened with the avatar flag starts with the avatar focused', async () => {
+    serve();
+    const memory = new ShellMemory();
+    memory.expectAvatarReturn();
+    setup({ memory });
+    await screen.findByTestId('row-r1');
+    await waitFor(() => expect(avatar()).toHaveFocus());
+    expect(tab('Home')).not.toHaveFocus();
+    expect(memory.returnToAvatar).toBe(false);
   });
 
   it('names the profile and the server in its header', async () => {
@@ -558,6 +595,7 @@ describe('ShellScreen avatar menu', () => {
     await openMenu();
     await pressKey(KEY.down);
     await pressKey(KEY.down);
+    await pressKey(KEY.down);
     await pressKey(KEY.enter);
     expect(onSwitchServer).toHaveBeenCalledTimes(1);
     expect(session.get()).not.toBeNull();
@@ -567,6 +605,7 @@ describe('ShellScreen avatar menu', () => {
   async function askSignOut() {
     await ready();
     await openMenu();
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.down);
@@ -649,6 +688,7 @@ describe('ShellScreen kids profile', () => {
     expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'Switch profile',
       'Profile at launchEvery time',
+      'Settings',
     ]);
     expect(screen.queryByRole('menuitem', { name: 'Switch server' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();

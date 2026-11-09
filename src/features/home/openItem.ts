@@ -1,10 +1,11 @@
 import type { DetailTarget } from '../detail/detailMemory';
+import type { StartIntent } from '../../playback/resume';
 import type { CatalogItem } from '../../ui/media';
 
 /** What activating an item can lead to; the screen that shows the cards supplies both. */
 export interface OpenTargets {
   /** Opens the player for an episode of Continue Watching or Next Up (or another playable item). */
-  play: (item: CatalogItem) => void;
+  play: (item: CatalogItem, intent?: StartIntent) => void;
   /** Opens the detail page of a title. */
   openDetail: (target: DetailTarget) => void;
 }
@@ -18,10 +19,10 @@ function isResumeCard(item: CatalogItem): boolean {
 /**
  * The one place that decides what OK on a card does.
  * - A movie or a series opens its detail page.
- * - An episode card of Continue Watching or Next Up plays right away (the player offers to
- *   resume); any other episode card opens its series with that season selected and that episode
+ * - An episode card of Continue Watching or Next Up plays right away and resumes where it left
+ *   off, like Silo's web client; any other episode card opens its series with that season selected and that episode
  *   focused. A season card opens its series on that season.
- * - Anything else plays, as before.
+ * - Anything else plays, and the player asks whether to resume.
  */
 export function openItem(item: CatalogItem, targets: OpenTargets): void {
   const type = item.type.trim().toLowerCase();
@@ -33,7 +34,11 @@ export function openItem(item: CatalogItem, targets: OpenTargets): void {
     targets.openDetail({ itemId: item.series_id, season: item.season_number });
     return;
   }
-  if (type === 'episode' && !isResumeCard(item) && item.series_id) {
+  if (type === 'episode' && isResumeCard(item)) {
+    targets.play(item, { kind: 'resume' });
+    return;
+  }
+  if (type === 'episode' && item.series_id) {
     targets.openDetail({
       itemId: item.series_id,
       season: item.season_number,
@@ -41,5 +46,5 @@ export function openItem(item: CatalogItem, targets: OpenTargets): void {
     });
     return;
   }
-  targets.play(item);
+  targets.play(item, { kind: 'ask' });
 }

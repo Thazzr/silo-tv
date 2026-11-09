@@ -2,6 +2,7 @@
 // credit lines, the quality badges and an episode's progress.
 import type { components } from '../../api/generated/schema';
 import type { MessageKey } from '../../i18n';
+import { resumePoint } from '../../playback/resume';
 
 type S = components['schemas'];
 export type ItemDetail = S['CatalogItemDetail'];
@@ -9,30 +10,6 @@ export type Season = S['Season'];
 export type Episode = S['Episode'];
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
-
-/** A saved position counts as a resume point past this many seconds ... */
-export const RESUME_MIN_SECONDS = 30;
-/** ... and while more than this many seconds of the item are left. */
-export const RESUME_END_SECONDS = 5;
-
-interface Progress {
-  position_seconds?: number;
-  duration_seconds?: number;
-}
-
-/**
- * Where "Resume" starts, in whole seconds, or null when the item plays from the start. The saved
- * position must pass 30 s and be more than 5 s from the end, whether or not the server counts the
- * item played (the server keeps the position of a rewatch that stopped partway). `fallbackSeconds`
- * is the runtime to measure the end by when the watch state carries no duration.
- */
-export function resumePoint(state: Progress | undefined, fallbackSeconds?: number): number | null {
-  const position = state?.position_seconds ?? 0;
-  if (position <= RESUME_MIN_SECONDS) return null;
-  const total = state?.duration_seconds || fallbackSeconds || 0;
-  if (total > 0 && total - position <= RESUME_END_SECONDS) return null;
-  return Math.floor(position);
-}
 
 function runtimeText(minutes: number, t: Translate): string {
   const h = Math.floor(minutes / 60);

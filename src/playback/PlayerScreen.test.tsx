@@ -19,6 +19,8 @@ import {
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderWithSilo } from '../test/renderFlow';
 import { PlayerScreen } from './PlayerScreen';
+import { setResumeRewind } from './resumeRewind';
+import type { StartIntent } from './resume';
 import { clearInstallationCache } from './usePlaybackSession';
 
 const server = setupServer();
@@ -27,6 +29,8 @@ afterAll(() => server.close());
 
 let restoreMedia: () => void;
 beforeEach(() => {
+  // The rewind setting lives in the device storage; every test starts on its default (7 s).
+  window.localStorage.clear();
   clearInstallationCache();
   restoreMedia = installFakeMedia();
 });
@@ -63,16 +67,11 @@ function signedIn(token = ACCESS_TOKEN) {
   return session;
 }
 
-function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, startPosition?: number) {
+function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, intent?: StartIntent) {
   const calls = servePlayback(server, options);
   const onExit = vi.fn();
   const view = renderWithSilo(
-    <PlayerScreen
-      contentId="m1"
-      title="First Title"
-      startPosition={startPosition}
-      onExit={onExit}
-    />,
+    <PlayerScreen contentId="m1" title="First Title" intent={intent} onExit={onExit} />,
     { session: signedIn(token) },
   );
   const currentVideo = () => view.container.querySelector('video');
@@ -447,7 +446,8 @@ describe('PlayerScreen resume prompt', () => {
   it.each([
     ['no user data', undefined],
     ['position zero', watchUserData({ position_seconds: 0 })],
-    ['a played title', watchUserData({ position_seconds: 90, played: true })],
+    ['a position of 30 s or less', watchUserData({ position_seconds: 30 })],
+    ['a position at the very end', watchUserData({ position_seconds: 5398 })],
   ])('is not shown for %s', async (_name, userData) => {
     const { calls } = render({ watch: watchDetail({ user_data: userData }) });
     await screen.findByTestId('player');
@@ -455,7 +455,22 @@ describe('PlayerScreen resume prompt', () => {
     expect(calls.start[0]?.body.start_position).toBe(0);
   });
 
-  it('Resume starts at the saved position', async () => {
+  it('is shown for a played title that has a saved position (a rewatch)', async () => {
+    render({
+      watch: watchDetail({ user_data: watchUserData({ position_seconds: 362.464, played: true }) }),
+    });
+    expect(await screen.findByTestId('resume-prompt')).toHaveTextContent('Resume from 6:02');
+  });
+
+  it('Resume starts at the saved position rewound by the setting (7 s by default)', async () => {
+    const { calls } = render(resumable);
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume from 1:30' }));
+    await screen.findByTestId('player');
+    expect(calls.start[0]?.body.start_position).toBe(83);
+  });
+
+  it('Resume starts exactly at the saved position when the rewind is off', async () => {
+    setResumeRewind(0);
     const { calls } = render(resumable);
     fireEvent.click(await screen.findByRole('button', { name: 'Resume from 1:30' }));
     await screen.findByTestId('player');
@@ -475,16 +490,21 @@ describe('PlayerScreen resume prompt', () => {
     expect(calls.start[0]?.body.start_position).toBe(0);
   });
 
-  it('starts at the position the detail page chose and skips the prompt', async () => {
-    const { calls } = render(resumable, ACCESS_TOKEN, 754);
+  it('resumes rewound without asking for the intent resume', async () => {
+    setResumeRewind(15);
+    const { calls } = render(
+      { watch: watchDetail({ user_data: watchUserData({ position_seconds: 754 }) }) },
+      ACCESS_TOKEN,
+      { kind: 'resume' },
+    );
     await screen.findByTestId('player');
     expect(screen.queryByTestId('resume-prompt')).not.toBeInTheDocument();
     expect(calls.start).toHaveLength(1);
-    expect(calls.start[0]?.body.start_position).toBe(754);
+    expect(calls.start[0]?.body.start_position).toBe(739);
   });
 
-  it('starts from the beginning without asking when the detail page chose 0', async () => {
-    const { calls } = render(resumable, ACCESS_TOKEN, 0);
+  it('starts from the beginning without asking for the intent beginning', async () => {
+    const { calls } = render(resumable, ACCESS_TOKEN, { kind: 'beginning' });
     await screen.findByTestId('player');
     expect(screen.queryByTestId('resume-prompt')).not.toBeInTheDocument();
     expect(calls.start[0]?.body.start_position).toBe(0);

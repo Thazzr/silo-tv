@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusTrackerContext, getCurrentFocusKey, setFocus } from '../../app/nav';
 import { useContentBack } from '../../app/shell/ShellBack';
@@ -35,7 +36,7 @@ const NO_LIBRARY_TEXT: Record<LibraryKind, MessageKey> = {
 export interface LibraryScreenProps {
   kind: LibraryKind;
   memory: LibraryMemory;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
   /** "Explore all" of a Recommended row: opens its full list. */
   onExploreSection: (section: ExploreTarget) => void;

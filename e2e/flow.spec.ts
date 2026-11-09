@@ -38,6 +38,8 @@ interface FakeOptions {
   series?: boolean;
   /** Adds a series library with a collection to the library list (the Series tab then has content). */
   seriesLibrary?: boolean;
+  /** Adds a watched episode that is being watched again (position 600 s of 2700 s) to Continue Watching. */
+  rewatch?: boolean;
 }
 
 interface FakeProfile {
@@ -107,6 +109,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const { name = 'E2E Silo', token = 'fake-access', code = true, password = false } = options;
   const withSeries = options.series === true;
   const withSeriesLibrary = options.seriesLibrary === true;
+  const withRewatch = options.rewatch === true;
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -230,12 +233,58 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       }
       const watch = /^\/api\/v2\/watch\/(.+)$/.exec(url.pathname);
       if (req.method === 'GET' && watch) {
+        if (watch[1] === 'e9') {
+          // The server counts a rewatch as played but keeps its position (the TV finding).
+          return send(200, {
+            content_id: 'e9',
+            title: 'Episode 1.9',
+            type: 'episode',
+            subtitles: [],
+            versions: [
+              {
+                file_id: 'file-e9',
+                added_at: '2026-01-01T00:00:00.000Z',
+                bitrate: 8000,
+                codec_audio: 'aac',
+                codec_video: 'h264',
+                container: 'mp4',
+                duration_seconds: 2700,
+                file_size: 1000,
+                hdr: false,
+                marker_segments: [],
+                resolution: '1080p',
+                trickplay_available: false,
+              },
+            ],
+            user_data: {
+              played: true,
+              position_seconds: 600,
+              duration_seconds: 2700,
+              watched_count: 1,
+              unplayed_count: 0,
+              in_progress_count: 1,
+            },
+          });
+        }
         return send(200, {
           content_id: watch[1],
           title: 'Played',
           type: 'movie',
           subtitles: [],
           versions: [{ file_id: `file-${watch[1]}` }],
+          // The movie of the detail page is half way through; the player reads it fresh.
+          ...(watch[1] === 'm2'
+            ? {
+                user_data: {
+                  position_seconds: 1350,
+                  duration_seconds: 5400,
+                  played: false,
+                  watched_count: 0,
+                  unplayed_count: 1,
+                  in_progress_count: 1,
+                },
+              }
+            : {}),
         });
       }
       switch (`${req.method} ${url.pathname}`) {
@@ -372,8 +421,24 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                     item_source: 'in_progress',
                     overview: 'The second title, half way through.',
                   },
+                  ...(withRewatch
+                    ? [
+                        {
+                          content_id: 'e9',
+                          title: 'Episode 1.9',
+                          type: 'episode',
+                          series_id: 's1',
+                          series_title: 'A Show',
+                          season_number: 1,
+                          episode_number: 9,
+                          position_seconds: 600,
+                          duration_seconds: 2700,
+                          item_source: 'in_progress',
+                        },
+                      ]
+                    : []),
                 ],
-                total_count: 1,
+                total_count: withRewatch ? 2 : 1,
               },
               {
                 id: 'recently_added',
@@ -612,13 +677,14 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByTestId('detail-meta')).toHaveText('2021 · 1 Std. 30 Min.');
   await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Von vorn' })).toBeVisible();
-  // Resume starts the playback at that position without asking again.
+  // Resume starts the playback without asking again, at that position minus the default rewind
+  // of 7 s.
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
   await expect(page.getByTestId('player-cue')).toBeVisible();
   await expect.poll(() => seen.some((e) => e.path === '/api/v2/playback/start')).toBe(true);
   const resumeStart = seen.find((e) => e.path === '/api/v2/playback/start');
-  expect(JSON.parse(resumeStart?.body ?? '{}')).toMatchObject({ start_position: 1350 });
+  expect(JSON.parse(resumeStart?.body ?? '{}')).toMatchObject({ start_position: 1343 });
 
   // Back leaves the player: the session is stopped and the page has its focus on Resume again.
   await page.keyboard.press('Escape');
@@ -694,6 +760,59 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByTestId('tab-home')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveText(/App beenden?/);
+});
+
+test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewatch resumes 15 s before its saved position without asking', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+
+  // The avatar menu: Switch profile, Profile at launch, then Settings.
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Einstellungen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+  // The row opens on the saved pill (7 s); the arrows only move the highlight, OK selects.
+  await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
+  await expect(page.getByRole('radio', { name: '7 s' })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name: '15 s' })).toBeFocused();
+  await expect(page.getByRole('radio', { name: '7 s' })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('radio', { name: '15 s' })).toHaveAttribute('aria-checked', 'true');
+  // Back returns to the shell with the avatar focused; the next Back goes to the Home tab.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+
+  // The rewatch card of Continue Watching plays at once, 15 s before the saved 600 s.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('resume-prompt')).toHaveCount(0);
+  await expect
+    .poll(() => {
+      const start = seen.find((e) => e.path === '/api/v2/playback/start');
+      return start ? (JSON.parse(start.body) as { start_position?: number }).start_position : null;
+    })
+    .toBe(585);
 });
 
 test('Home to a series, season 2, play an episode and Back to the same episode, keyboard only', async ({
@@ -1074,16 +1193,18 @@ test('the bundled Inter font loads under file://', async ({ page }) => {
 const serverRow = (page: Page, name: string) => page.locator('button.server', { hasText: name });
 
 // From the Home tab to the avatar (Home, Movies, Series, For you, Calendar, Search, avatar), then
-// its menu: "Switch server" is the second item.
+// its menu: "Switch server" is the fourth item.
 async function openServerListFromShell(page: Page) {
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
   for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitem', { name: 'Profil wechseln' })).toBeFocused();
-  // Profile at launch sits between Switch profile and Switch server.
+  // Profile at launch and Settings sit between Switch profile and Switch server.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: /Profil beim Start/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Einstellungen' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Server wechseln' })).toBeFocused();
   await page.keyboard.press('Enter');

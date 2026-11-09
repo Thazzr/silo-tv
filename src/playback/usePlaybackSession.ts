@@ -15,6 +15,8 @@ import {
 } from './deviceProfile';
 import { mediaUrlWithToken } from './mediaUrl';
 import { collectProfileProbe } from './probe';
+import { resumePoint, rewound, type StartIntent } from './resume';
+import { getResumeRewind } from './resumeRewind';
 import { uuidV4 } from './uuid';
 
 type S = components['schemas'];
@@ -69,8 +71,8 @@ interface Deps {
   baseUrl: string;
   session: Session;
   contentId: string;
-  /** Where to start; set when the viewer already chose (the detail page), else the resume prompt decides. */
-  startPosition?: number;
+  /** How to start; without one the player asks when there is something to resume. */
+  intent?: StartIntent;
   onState(state: SessionState): void;
   onMediaError(failure: MediaFailure | null): void;
 }
@@ -90,6 +92,7 @@ export class PlaybackController {
   private capabilities: ClientCapabilities | null = null;
   private context: PlaybackContext | null = null;
   private startPosition = 0;
+  private resumeAt: number | null = null;
   private sequence = 0;
   private loadId = 0;
   private replans = 0;
@@ -137,15 +140,17 @@ export class PlaybackController {
       if (this.disposed) return;
       this.installationId = installationId;
       this.fileId = watch.fileId;
-      if (this.deps.startPosition !== undefined) {
-        await this.start(this.deps.startPosition);
-        return;
-      }
-      if (watch.resume > 0) {
+      this.resumeAt = watch.resume;
+      const kind = this.deps.intent?.kind ?? 'ask';
+      if (kind === 'beginning') {
+        await this.start(0);
+      } else if (kind === 'resume') {
+        await this.resume();
+      } else if (watch.resume !== null) {
         this.set({ kind: 'prompt', positionSeconds: watch.resume });
-        return;
+      } else {
+        await this.start(0);
       }
-      await this.start(0);
     } catch (error) {
       this.fail(error instanceof SessionError ? error.reason : 'failed');
     }
@@ -169,7 +174,7 @@ export class PlaybackController {
     return data.installation_id;
   }
 
-  private async watch(): Promise<{ fileId: string; resume: number }> {
+  private async watch(): Promise<{ fileId: string; resume: number | null }> {
     const { data, error, response } = await this.deps.client.GET('/api/v2/watch/{id}', {
       params: { path: { id: this.deps.contentId }, header: this.header() },
     });
@@ -177,12 +182,20 @@ export class PlaybackController {
     const last = data.user_data?.last_file_id;
     const version = data.versions.find((v) => v.file_id === last) ?? data.versions[0];
     if (!version) throw new SessionError('noFile');
-    const position = data.user_data?.position_seconds ?? 0;
-    const resume = position > 0 && !data.user_data?.played ? position : 0;
+    // One rule for every entry: the detail page's. A rewatch that stopped partway resumes too.
+    const resume = resumePoint(data.user_data, version.duration_seconds);
     return { fileId: version.file_id, resume };
   }
 
   // --- Start ---------------------------------------------------------------------------------
+
+  /**
+   * Starts at the resume point, moved back by the "Rewind on resume" setting (read now, so a
+   * change applies to the next start); from the beginning when there is no resume point.
+   */
+  async resume(): Promise<void> {
+    await this.start(this.resumeAt === null ? 0 : rewound(this.resumeAt, getResumeRewind()));
+  }
 
   /** Starts the playback at `position` seconds (0 means from the beginning). */
   async start(position: number, retryInstallation = true): Promise<void> {
@@ -433,8 +446,10 @@ export class PlaybackController {
 export interface PlaybackSession {
   state: SessionState;
   mediaError: MediaFailure | null;
-  /** From the resume prompt: `0` starts over. */
+  /** From the resume prompt: start over (`0`) or at another position, as given. */
   choose(position: number): void;
+  /** From the resume prompt: continue at the resume point, rewound. */
+  resume(): void;
   bindPlayer(read: (() => PlayerReading | null) | null): void;
   onPlaying(): void;
   onPause(): void;
@@ -442,7 +457,7 @@ export interface PlaybackSession {
   stop(): Promise<void>;
 }
 
-export function usePlaybackSession(contentId: string, startPosition?: number): PlaybackSession {
+export function usePlaybackSession(contentId: string, intent?: StartIntent): PlaybackSession {
   const { client, baseUrl, session } = useSilo();
   const [state, setState] = useState<SessionState>({ kind: 'loading' });
   const [mediaError, setMediaError] = useState<MediaFailure | null>(null);
@@ -454,7 +469,7 @@ export function usePlaybackSession(contentId: string, startPosition?: number): P
       baseUrl,
       session,
       contentId,
-      startPosition,
+      intent,
       onState: setState,
       onMediaError: setMediaError,
     });
@@ -464,9 +479,12 @@ export function usePlaybackSession(contentId: string, startPosition?: number): P
       created.dispose();
       controller.current = null;
     };
-  }, [client, baseUrl, session, contentId, startPosition]);
+    // The intent is a plain value: its kind restarts the session, a new object of the same kind must not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, baseUrl, session, contentId, intent?.kind]);
 
   const choose = useCallback((position: number) => void controller.current?.start(position), []);
+  const resume = useCallback(() => void controller.current?.resume(), []);
   const bindPlayer = useCallback(
     (read: (() => PlayerReading | null) | null) => controller.current?.bindPlayer(read),
     [],
@@ -480,7 +498,17 @@ export function usePlaybackSession(contentId: string, startPosition?: number): P
   const stop = useCallback(() => controller.current?.stop() ?? Promise.resolve(), []);
 
   return useMemo(
-    () => ({ state, mediaError, choose, bindPlayer, onPlaying, onPause, onMediaError, stop }),
-    [state, mediaError, choose, bindPlayer, onPlaying, onPause, onMediaError, stop],
+    () => ({
+      state,
+      mediaError,
+      choose,
+      resume,
+      bindPlayer,
+      onPlaying,
+      onPause,
+      onMediaError,
+      stop,
+    }),
+    [state, mediaError, choose, resume, bindPlayer, onPlaying, onPause, onMediaError, stop],
   );
 }

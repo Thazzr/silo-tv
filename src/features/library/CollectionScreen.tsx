@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { SiloApiError } from '../../api/problem';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
@@ -18,7 +19,7 @@ export interface CollectionScreenProps {
   target: CollectionTarget;
   /** The grid's focus survives the player and the detail page being opened over it. */
   memory: FocusIndexMemory;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
   onBack: () => void;
 }

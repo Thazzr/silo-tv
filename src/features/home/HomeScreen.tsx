@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import { useContentBack } from '../../app/shell/ShellBack';
 import { Button } from '../../app/ui';
 import { FocusGroup, getCurrentFocusKey } from '../../app/nav';
@@ -89,7 +90,7 @@ interface PendingRemoval {
 export interface HomeScreenProps {
   /** Where each row's focus was when Home was last shown; it outlives this screen. */
   rowMemory: FocusIndexMemory;
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   /** Opens the detail page of a movie or series (or of the series of an episode). */
   onOpenDetail: (target: DetailTarget) => void;
   /** "Explore all" of a row: opens its full list. */

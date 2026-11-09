@@ -993,3 +993,32 @@ html {
 .menu-item:focus .menu-value {
   color: rgba(0, 0, 0, 0.6);
 }
+
+/* Settings screen: choice pills in one row, the saved one marked like the password screen's choice. */
+.settings-section h2 {
+  margin-top: 24px;
+}
+
+.settings-name {
+  margin: 24px 0 4px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+}
+
+.settings-hint {
+  max-width: 1200px;
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+}
+
+.settings-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.settings-choices .btn.choice {
+  display: inline-block;
+  margin: 0;
+  border-radius: 38px;
+}

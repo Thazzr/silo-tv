@@ -1,6 +1,7 @@
 // What a card shows of a catalog item, as pure functions: its caption lines, the picture it uses
 // and how far along it is.
 import type { components } from '../../api/generated/schema';
+import { resumePoint } from '../../playback/resume';
 
 export type CatalogItem = components['schemas']['CatalogItem'];
 
@@ -79,10 +80,11 @@ export function landscapeArt(item: CatalogItem): { url?: string; thumbhash?: str
  * "next up" card has none: nothing of it has been watched yet.
  */
 export function watchedFraction(item: CatalogItem): number | null {
-  const position = item.position_seconds;
-  if (!position || position <= 0 || item.item_source === 'next_up') return null;
+  if (item.item_source === 'next_up') return null;
   const total = item.duration_seconds ?? (item.runtime ? item.runtime * 60 : 0);
-  if (!total || total <= 0) return null;
+  // The bar and the Resume button share one rule: no resume point, no bar.
+  const position = resumePoint({ position_seconds: item.position_seconds }, total);
+  if (position === null || !total || total <= 0) return null;
   return Math.max(0, Math.min(1, position / total));
 }
 

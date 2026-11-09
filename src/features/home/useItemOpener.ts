@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
+import type { StartIntent } from '../../playback/resume';
 import type { CatalogItem } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { openItem } from './openItem';
 
 /** What a screen that shows cards hands over: the player and the detail page. */
 export interface ItemHandlers {
-  onPlay: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem, intent?: StartIntent) => void;
   onOpenDetail: (target: DetailTarget) => void;
 }
 

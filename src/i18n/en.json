@@ -283,5 +283,12 @@
   "detail.seasonsError": "The seasons could not be loaded.",
   "detail.episodesError": "The episodes could not be loaded.",
   "detail.episodesEmpty": "This season has no episodes.",
-  "detail.quality": "Quality"
+  "detail.quality": "Quality",
+  "shell.menu.settings": "Settings",
+  "settings.title": "Settings",
+  "settings.playback": "Playback",
+  "settings.rewind.title": "Rewind on resume",
+  "settings.rewind.hint": "Skips back a little when you resume, so you find your way back into the scene. Applies to this device.",
+  "settings.rewind.off": "Off",
+  "settings.rewind.seconds": "{seconds} s"
 }

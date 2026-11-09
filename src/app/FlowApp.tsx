@@ -16,6 +16,8 @@ import { SectionGridScreen } from '../features/home/SectionGridScreen';
 import { CollectionScreen } from '../features/library/CollectionScreen';
 import type { CollectionTarget } from '../features/library/targets';
 import { PlayerScreen } from '../playback/PlayerScreen';
+import type { StartIntent } from '../playback/resume';
+import { SettingsScreen } from '../features/settings/SettingsScreen';
 import { FocusIndexMemory } from '../ui/media';
 import type { Launch } from './launch';
 import { Navigator, useNavigator, type NavApi } from './nav';
@@ -45,8 +47,10 @@ type FlowScreen =
   | ({ name: 'collection' } & CollectionTarget)
   /** A movie or series; the season and episode are set when an episode card opened it. */
   | ({ name: 'detail' } & DetailTarget)
-  /** A start position skips the resume prompt: the detail page already asked. */
-  | { name: 'player'; contentId: string; title: string; startPosition?: number };
+  /** The intent says how it starts; without one the player asks when there is something to resume. */
+  | { name: 'player'; contentId: string; title: string; intent?: StartIntent }
+  /** The device settings. */
+  | { name: 'settings' };
 
 export interface FlowAppProps {
   launch: Launch;
@@ -291,8 +295,8 @@ export function FlowApp({
                   }
                 : null
             }
-            onPlay={(item) =>
-              nav.push({ name: 'player', contentId: item.content_id, title: item.title })
+            onPlay={(item, intent) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
             }
             onOpenDetail={openDetail}
             onExploreSection={(section) =>
@@ -316,6 +320,7 @@ export function FlowApp({
             }}
             // Every server keeps its own session; the list only changes which one is shown.
             onSwitchServer={() => nav.push({ name: 'servers' })}
+            onOpenSettings={() => nav.push({ name: 'settings' })}
           />,
         );
       case 'sectionGrid':
@@ -325,8 +330,8 @@ export function FlowApp({
             title={screen.title}
             library={screen.library}
             memory={gridMemory}
-            onPlay={(item) =>
-              nav.push({ name: 'player', contentId: item.content_id, title: item.title })
+            onPlay={(item, intent) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
             }
             onOpenDetail={openDetail}
             onBack={nav.pop}
@@ -337,8 +342,8 @@ export function FlowApp({
           <CollectionScreen
             target={screen}
             memory={gridMemory}
-            onPlay={(item) =>
-              nav.push({ name: 'player', contentId: item.content_id, title: item.title })
+            onPlay={(item, intent) =>
+              nav.push({ name: 'player', contentId: item.content_id, title: item.title, intent })
             }
             onOpenDetail={openDetail}
             onBack={nav.pop}
@@ -354,19 +359,21 @@ export function FlowApp({
                 name: 'player',
                 contentId: request.contentId,
                 title: request.title,
-                startPosition: request.startPosition,
+                intent: request.intent,
               })
             }
             onOpenDetail={openDetail}
             onBack={nav.pop}
           />,
         );
+      case 'settings':
+        return provide(<SettingsScreen onBack={nav.pop} />);
       case 'player':
         return provide(
           <PlayerScreen
             contentId={screen.contentId}
             title={screen.title}
-            startPosition={screen.startPosition}
+            intent={screen.intent}
             onExit={nav.pop}
           />,
         );

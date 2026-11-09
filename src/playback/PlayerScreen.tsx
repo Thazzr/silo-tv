@@ -13,6 +13,7 @@ import { useT, type MessageKey } from '../i18n';
 import { getPlatform } from '../platform';
 import { formatClock, redact } from './format';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
+import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
   type PlaybackSession,
@@ -34,16 +35,16 @@ const ERROR_TEXT: Record<SessionFailure, MessageKey> = {
 export interface PlayerScreenProps {
   contentId: string;
   title: string;
-  /** Starts here and skips the resume prompt (0 plays from the beginning). */
-  startPosition?: number;
+  /** How to start; the default asks when there is something to resume. */
+  intent?: StartIntent;
   onExit: () => void;
 }
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
-export function PlayerScreen({ contentId, title, startPosition, onExit }: PlayerScreenProps) {
+export function PlayerScreen({ contentId, title, intent, onExit }: PlayerScreenProps) {
   const t = useT();
   const { session: auth } = useSilo();
-  const playback = usePlaybackSession(contentId, startPosition);
+  const playback = usePlaybackSession(contentId, intent);
   const { state } = playback;
   const token = auth.get()?.accessToken;
 
@@ -61,7 +62,7 @@ export function PlayerScreen({ contentId, title, startPosition, onExit }: Player
   if (state.kind === 'prompt') {
     return (
       <Screen title={title} onBack={onExit} testId="resume-prompt">
-        <Button focusKey="resume" autoFocus onClick={() => playback.choose(state.positionSeconds)}>
+        <Button focusKey="resume" autoFocus onClick={() => playback.resume()}>
           {t('player.resumeFrom', { time: formatClock(state.positionSeconds) })}
         </Button>
         <Button focusKey="start-over" onClick={() => playback.choose(0)}>

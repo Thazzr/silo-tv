@@ -191,7 +191,7 @@ describe('DetailScreen: a movie', () => {
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'm1',
       title: 'First Title',
-      startPosition: 0,
+      intent: { kind: 'beginning' },
     });
   });
 
@@ -207,7 +207,7 @@ describe('DetailScreen: a movie', () => {
     expect(onPlay).toHaveBeenLastCalledWith({
       contentId: 'm1',
       title: 'First Title',
-      startPosition: 754,
+      intent: { kind: 'resume' },
     });
     await screen.findByTestId('player-stub');
   });
@@ -226,7 +226,7 @@ describe('DetailScreen: a movie', () => {
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'm1',
       title: 'First Title',
-      startPosition: 0,
+      intent: { kind: 'beginning' },
     });
   });
 
@@ -576,7 +576,7 @@ describe('DetailScreen: a series', () => {
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'e12',
       title: 'A Show',
-      startPosition: undefined,
+      intent: undefined,
     });
   });
 
@@ -748,7 +748,11 @@ describe('DetailScreen: a series', () => {
     expect(calls.episodes).toEqual(['s1/2']);
     await focusKeyIs('detail-play');
     fireEvent.click(button('Play S2 · E2'));
-    expect(onPlay).toHaveBeenCalledWith({ contentId: 'e22', title: 'A Show', startPosition: 0 });
+    expect(onPlay).toHaveBeenCalledWith({
+      contentId: 'e22',
+      title: 'A Show',
+      intent: { kind: 'beginning' },
+    });
   });
 
   it('resumes the target episode from its position and offers Start over', async () => {
@@ -764,7 +768,11 @@ describe('DetailScreen: a series', () => {
     });
     const { onPlay } = setup({ itemId: 's1' });
     fireEvent.click(await screen.findByRole('button', { name: 'Resume S1 · E2' }));
-    expect(onPlay).toHaveBeenCalledWith({ contentId: 'e12', title: 'A Show', startPosition: 600 });
+    expect(onPlay).toHaveBeenCalledWith({
+      contentId: 'e12',
+      title: 'A Show',
+      intent: { kind: 'resume' },
+    });
     expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
   });
 
@@ -802,7 +810,11 @@ describe('DetailScreen: a series', () => {
     await focusKeyIs('episode:e23');
     // Play names the episode the page was opened on, not the server's target.
     fireEvent.click(await screen.findByRole('button', { name: 'Play S2 · E3' }));
-    expect(onPlay).toHaveBeenCalledWith({ contentId: 'e23', title: 'A Show', startPosition: 0 });
+    expect(onPlay).toHaveBeenCalledWith({
+      contentId: 'e23',
+      title: 'A Show',
+      intent: { kind: 'beginning' },
+    });
   });
 
   it('comes back from the player on the same season and episode', async () => {
