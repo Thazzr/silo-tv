@@ -40,7 +40,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
 - 🟨 Library tabs for Movies and Series:
   - Recommended rows
-  - Browse grid with sort, filters (genre, decade) and an alphabet rail; watch-state and content-rating filters still to come through the documented `GET /catalog` parameters
+  - Browse grid with sort, filters (genre, decade, content rating, and watch state – unwatched, watched, in progress – when a silent probe shows the server accepts its rules) and an alphabet rail
   - Collections
 - 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
 - 🟨 Search with an on-screen keyboard of our own (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
@@ -52,10 +52,11 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Long synopses and biographies scroll in the text dialog
 - 🟨 Smooth scrolling on TV hardware: memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
 - 🟨 The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe
-- ⬜ Trailers & More: local trailers and extras; YouTube trailers through the TV's YouTube app
+- 🟨 Profile settings read from the server (effective values, gated by the settings contract), shared by the features below
+- 🟨 Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (the webOS hand-off is not yet verified on hardware)
 - ⬜ Theme music on detail pages when the profile turns it on
-- ⬜ Title art (logo instead of text) following the profile setting
-- ⬜ Spoiler protection: blurred still and hidden description for unwatched episodes
+- 🟨 Title art (logo instead of text) following the profile setting `ui.title_art`
+- 🟨 Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes
 - ⬜ AI translation of descriptions when the server offers it
 
 ## Phase 3 – Player (target v0.4.0)

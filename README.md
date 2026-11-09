@@ -6,7 +6,7 @@ A native TV client for the self-hosted media server [Silo](https://github.com/Si
 
 ## Status
 
-Phase 0 (feasibility) and Phase 1 (foundation: servers, sign-in, profiles, app shell, TV navigation) are built and run on the first test TV. Phase 2 (browse) is under way: Home, the Movies and Series tabs, the detail pages and resuming are checked on the TV; search, person pages and box sets are built and wait for the device test; trailers and extras, theme music, spoiler protection and translation are next. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md); the look: [`docs/design.md`](docs/design.md).
+Phase 0 (feasibility) and Phase 1 (foundation: servers, sign-in, profiles, app shell, TV navigation) are built and run on the first test TV. Phase 2 (browse) is under way: Home, the Movies and Series tabs, the detail pages and resuming are checked on the TV; search, person pages, box sets, the content-rating and watch-state filters, title art, spoiler protection and Trailers & More are built and wait for the device test; theme music and AI translation are next. What the app is meant to do, and in which order: [`docs/roadmap.md`](docs/roadmap.md); the look: [`docs/design.md`](docs/design.md).
 
 ## Tech stack
 
