@@ -330,6 +330,7 @@ export function FlowApp({
               queryClient.removeQueries({ queryKey: ['detail'] });
               queryClient.removeQueries({ queryKey: ['person'] });
               queryClient.removeQueries({ queryKey: ['boxset'] });
+              queryClient.removeQueries({ queryKey: ['search'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.

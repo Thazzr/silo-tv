@@ -54,6 +54,8 @@ export interface RowProps<T> {
   artUrl?: (item: T) => string | null;
   /** A row that is not mounted yet but is next in line: its first cards' pictures are fetched ahead. */
   prefetchRow?: boolean;
+  /** Cards that fit the row's width; the whole screen's worth unless the row sits in a narrower column. */
+  visibleCards?: number;
 }
 
 /**
@@ -78,9 +80,10 @@ function RowImpl<T>({
   inset = ROW_INSET,
   artUrl,
   prefetchRow = false,
+  visibleCards,
 }: RowProps<T>) {
   const count = items.length + (onExploreAll ? 1 : 0);
-  const visible = rowVisibleCards(shape);
+  const visible = visibleCards ?? rowVisibleCards(shape);
   const step = rowStep(shape);
   const [focused, setFocused] = useState(() =>
     Math.min(memory?.get(rowId) ?? 0, Math.max(0, count - 1)),

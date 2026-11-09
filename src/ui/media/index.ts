@@ -20,6 +20,7 @@ export {
   cardTitle,
   GRID_IMAGE_QUERY,
   IMAGE_WIDTHS,
+  isEpisode,
   isLandscapeSection,
   landscapeArt,
   posterArt,

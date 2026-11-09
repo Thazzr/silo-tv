@@ -1,5 +1,6 @@
 import type { MessageKey } from '../../i18n';
 import { LibraryMemory } from '../../features/library/libraryMemory';
+import { SearchMemory } from '../../features/search/searchMemory';
 import { FocusIndexMemory } from '../../ui/media/scroll';
 
 export const TAB_IDS = ['home', 'movies', 'series', 'forYou', 'calendar', 'search'] as const;
@@ -40,6 +41,8 @@ export class ShellMemory {
   readonly rows = new FocusIndexMemory();
   /** The library, sub-view, Browse choices and focus of the Movies and Series tabs. */
   readonly library = new LibraryMemory();
+  /** The text, segment and focused cards of the Search tab. */
+  readonly search = new SearchMemory();
 
   /** Whether the shell opens with the avatar focused (it does after the settings screen). */
   get returnToAvatar(): boolean {
@@ -70,5 +73,6 @@ export class ShellMemory {
     this.focus = {};
     this.rows.clear();
     this.library.reset();
+    this.search.reset();
   }
 }

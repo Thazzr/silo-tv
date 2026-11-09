@@ -18,6 +18,7 @@ export function PillRow({
   onPick,
   onFocused,
   autoFocus = false,
+  className,
   testId,
 }: {
   focusKey: string;
@@ -31,6 +32,8 @@ export function PillRow({
   onFocused?: () => void;
   /** The selected pill takes the focus when the row appears. */
   autoFocus?: boolean;
+  /** Extra class on the row, for a screen that places the pills differently. */
+  className?: string;
   testId: string;
 }) {
   return (
@@ -39,7 +42,7 @@ export function PillRow({
       enterable
       saveLastFocusedChild={false}
       preferredChildFocusKey={selected === undefined ? undefined : `${keyPrefix}${selected}`}
-      className="lib-pills"
+      className={className ? `lib-pills ${className}` : 'lib-pills'}
       role="tablist"
       aria-label={label}
       data-testid={testId}

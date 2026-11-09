@@ -15,6 +15,8 @@ import { homeSection, serveHome } from '../../test/homeFixtures';
 import { serveLibrary, type LibraryCalls } from '../../test/libraryFixtures';
 import { cardFocusKey } from '../../ui/media';
 import { KEY, pressKey } from '../../test/keys';
+import { matches, serveSearch } from '../../test/searchFixtures';
+import { getCurrentFocusKey, setFocus } from '../nav';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import type { LaunchMode } from '../../features/profiles/launchPrefs';
 import { ShellScreen, type ShellScreenProps } from './ShellScreen';
@@ -457,7 +459,6 @@ describe('ShellScreen tab content', () => {
   it.each([
     ['For You', 3],
     ['Calendar', 4],
-    ['Search', 5],
   ])('%s shows a calm placeholder that keeps Up and Down working', async (name, steps) => {
     serve();
     setup();
@@ -889,5 +890,97 @@ describe('ShellScreen branding', () => {
     fireEvent.error(mark);
     expect(screen.queryByTestId('server-mark')).not.toBeInTheDocument();
     expect(screen.getByTestId('server-badge')).toHaveTextContent('M');
+  });
+});
+
+describe('ShellScreen search tab', () => {
+  async function openSearch() {
+    await ready();
+    await goToTab(KEY.right, 5, 'search');
+  }
+
+  it('shows the keyboard and the hint instead of the placeholder', async () => {
+    serve();
+    serveSearch(server, { capabilities: {} });
+    setup();
+    await openSearch();
+    expect(screen.queryByTestId('coming-soon')).toBeNull();
+    expect(screen.getByTestId('search-keyboard')).toBeInTheDocument();
+    expect(await screen.findByText('Search Test Server')).toBeInTheDocument();
+  });
+
+  it('Down from the tab lands on "a" the first time and on the last key used later', async () => {
+    serve();
+    serveSearch(server, { capabilities: {} });
+    setup();
+    await openSearch();
+    await pressKey(KEY.down);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('osk:a'));
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('osk:i'));
+    await pressKey(KEY.up);
+    await pressKey(KEY.up);
+    await waitFor(() => expect(tab('Search')).toHaveFocus());
+    await pressKey(KEY.down);
+    // The last key used: the second Up started on "b".
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('osk:b'));
+  });
+
+  it('opens on the last key of the memory when the tab is shown again', async () => {
+    serve();
+    serveSearch(server, { capabilities: {} });
+    const memory = new ShellMemory();
+    memory.search.rememberKey('x');
+    setup({ memory });
+    await openSearch();
+    await pressKey(KEY.down);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('osk:x'));
+  });
+
+  it('Down lands on the keyboard even when the focus was last in the results', async () => {
+    serve();
+    serveSearch(server, { capabilities: {}, titles: () => matches('Title', 3) });
+    setup();
+    await openSearch();
+    await pressKey(KEY.down);
+    fireEvent.click(screen.getByTestId('osk-s'));
+    await screen.findAllByText('Title 1');
+    await act(async () => void (await setFocus('gcard:search:title-1')));
+    await pressKey(KEY.back);
+    await waitFor(() => expect(getCurrentFocusKey()).toMatch(/^osk:/));
+    await act(async () => void (await setFocus('shell-tab-search')));
+    await pressKey(KEY.down);
+    await waitFor(() => expect(getCurrentFocusKey()).toMatch(/^osk:/));
+  });
+
+  it('Back from the results goes to the keyboard, from the keyboard to the tab bar', async () => {
+    serve();
+    serveSearch(server, { capabilities: {}, titles: () => matches('Title', 3) });
+    setup();
+    await openSearch();
+    await pressKey(KEY.down);
+    fireEvent.click(screen.getByTestId('osk-s'));
+    await screen.findAllByText('Title 1');
+    await act(async () => void (await setFocus('gcard:search:title-2')));
+    await pressKey(KEY.back);
+    await waitFor(() => expect(getCurrentFocusKey()).toMatch(/^osk:/));
+    await pressKey(KEY.back);
+    await waitFor(() => expect(tab('Search')).toHaveFocus());
+  });
+
+  it('keeps the text in the memory while the shell is away', async () => {
+    serve();
+    serveSearch(server, { capabilities: {} });
+    const memory = new ShellMemory();
+    const first = setup({ memory });
+    await openSearch();
+    await pressKey(KEY.down);
+    fireEvent.click(screen.getByTestId('osk-s'));
+    fireEvent.click(screen.getByTestId('osk-a'));
+    first.unmount();
+    expect(memory.search.query).toBe('sa');
+    setup({ memory });
+    expect(await screen.findByTestId('search-text')).toHaveTextContent('sa');
   });
 });

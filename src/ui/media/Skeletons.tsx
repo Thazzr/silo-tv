@@ -1,14 +1,12 @@
 import { useT } from '../../i18n';
 import {
-  CARD_GAP,
   cardBlockHeight,
-  GRID_CARD_SIZE,
-  GRID_COLUMNS,
-  GRID_ROW_PITCH,
-  ROW_INSET,
+  DEFAULT_GRID,
+  type GridMetrics,
   rowHeight,
   rowStep,
   rowVisibleCards,
+  ROW_INSET,
   STRIP_PADDING,
   type CardShape,
 } from './layout';
@@ -57,10 +55,11 @@ export function RowSkeleton({ shape }: { shape: CardShape }) {
 }
 
 /** The loading stand-in of a grid: two rows of posters in the grid's columns. */
-export function GridSkeleton() {
+export function GridSkeleton({ layout = DEFAULT_GRID }: { layout?: GridMetrics }) {
   const t = useT();
+  const { columns, rowPitch } = layout;
   const rows = 2;
-  const step = GRID_CARD_SIZE.width + CARD_GAP;
+  const step = layout.card.width + layout.gap;
   return (
     <div
       className="grid-viewport"
@@ -68,14 +67,14 @@ export function GridSkeleton() {
       aria-label={t('home.grid.loading')}
       data-testid="grid-skeleton"
     >
-      <div className="grid-track" style={{ left: ROW_INSET, height: rows * GRID_ROW_PITCH }}>
-        {Array.from({ length: rows * GRID_COLUMNS }, (_, i) => (
+      <div className="grid-track" style={{ left: layout.inset, height: rows * rowPitch }}>
+        {Array.from({ length: rows * columns }, (_, i) => (
           <div
             className="grid-slot"
             key={i}
             style={{
-              left: (i % GRID_COLUMNS) * step,
-              top: Math.floor(i / GRID_COLUMNS) * GRID_ROW_PITCH,
+              left: (i % columns) * step,
+              top: Math.floor(i / columns) * rowPitch,
             }}
           >
             <CardSkeleton shape="grid" />

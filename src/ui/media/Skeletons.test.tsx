@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderWithSilo } from '../../test/renderFlow';
-import { rowHeight, rowVisibleCards } from './layout';
+import { gridMetrics, rowHeight, rowVisibleCards } from './layout';
 import { CardSkeleton, GridSkeleton, RowSkeleton } from './Skeletons';
 
 describe('skeletons', () => {
@@ -37,5 +37,12 @@ describe('skeletons', () => {
     const cards = screen.getAllByTestId('card-skeleton');
     expect(cards).toHaveLength(12);
     expect(cards[0]).toHaveClass('card-grid');
+  });
+});
+
+describe('grid skeleton with another layout', () => {
+  it('follows the columns of the layout it stands in for', () => {
+    renderWithSilo(<GridSkeleton layout={gridMetrics(4, { width: 236, height: 354 }, 40, 24)} />);
+    expect(screen.getAllByTestId('card-skeleton')).toHaveLength(8);
   });
 });

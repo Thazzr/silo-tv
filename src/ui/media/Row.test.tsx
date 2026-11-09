@@ -192,3 +192,32 @@ describe('Row', () => {
     expect(memory.get('r')).toBe(2);
   });
 });
+
+describe('Row visibleCards', () => {
+  it('scrolls once the focus passes the cards that fit the narrower column', async () => {
+    renderWithSilo(
+      <Row
+        rowId="n"
+        title="Narrow"
+        shape="poster"
+        items={items(12)}
+        getKey={(item) => item.content_id}
+        visibleCards={5}
+        renderCard={(item, ctx) => (
+          <PosterCard
+            item={item}
+            focusKey={ctx.focusKey}
+            onFocused={ctx.onFocused}
+            onOpen={() => {}}
+          />
+        )}
+      />,
+    );
+    await act(async () => {
+      await setFocus(cardFocusKey('n', 'i1'));
+    });
+    for (let i = 0; i < 5; i += 1) await pressKey(KEY.right);
+    // The sixth card is focused: with five visible the strip has moved by one card (216 px).
+    expect(screen.getByTestId('row-track').style.transform).toBe('translateX(-216px)');
+  });
+});

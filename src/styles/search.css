@@ -1,0 +1,240 @@
+/* The Search tab (docs/design.md): the query field and the on-screen keyboard on the left, the
+   results in a column from x 736 (its cards start at x 760, 24 px in, so a focused card's scale is
+   not clipped). Sizes are CSS pixels on the 1920x1080 layout and must match
+   src/features/search/layout.ts. Only transform and opacity animate. */
+
+.search {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- Query field and keyboard ---- */
+.search-left {
+  position: absolute;
+  top: 12px;
+  left: var(--safe-x);
+  width: 573px;
+}
+
+.search-field {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: 75px;
+  margin-bottom: 16px;
+  padding: 0 24px;
+  overflow: hidden;
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text);
+  background: var(--chrome);
+  border: 2px solid var(--chrome-border);
+  border-radius: var(--radius-control);
+}
+
+/* The text starts at the left like the placeholder; a text wider than the field is shifted left
+   by a transform (fieldShift) so its end and the caret stay in view. */
+.search-field-inner {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.search-run {
+  display: flex;
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.search-text {
+  flex: none;
+}
+
+.search-placeholder {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.search-caret {
+  flex: none;
+  width: 3px;
+  height: 38px;
+  margin-left: 3px;
+  background: var(--text);
+}
+
+.search-caret.is-first {
+  margin: 0 8px 0 0;
+}
+
+.osk {
+  display: grid;
+  grid-template-columns: repeat(7, 75px);
+  gap: 8px;
+}
+
+.osk-key {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  height: 75px;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--chrome);
+  border: 2px solid var(--chrome-border);
+  border-radius: var(--radius-control);
+  outline: none;
+}
+
+.osk-key-space,
+.osk-key-delete,
+.osk-key-clear {
+  font-size: 24px;
+}
+
+.osk-key:hover {
+  background: var(--chrome-selected);
+}
+
+/* The same cue as every button: a light fill with dark content. */
+.osk-key:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+}
+
+.osk-icon {
+  flex: none;
+}
+
+/* ---- Results ---- */
+.search-results {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 736px;
+  display: flex;
+  flex-direction: column;
+  width: 1112px;
+  padding-top: 12px;
+  overflow: hidden;
+}
+
+.lib-pills.search-pills {
+  padding: 0 24px 12px;
+}
+
+/* From under the pills (75 px and 12 px below) to the foot of the content. The page inside moves
+   up while the focus is in the titles, so the rows of box sets and people make way. */
+.search-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.search-page {
+  transition: transform var(--scroll-transition);
+  will-change: transform;
+}
+
+.search-count {
+  box-sizing: border-box;
+  height: 48px;
+  margin: 0;
+  padding: 0 24px;
+  font-size: 22px;
+  line-height: 48px;
+  color: var(--text-secondary);
+}
+
+/* The titles take what is left of the content under the count: the content is the window minus
+   141 px (top bar), 12 px padding, the pills (87 px) and the count line (48 px). */
+.search-results .grid-viewport {
+  height: calc(100vh - 288px);
+}
+
+/* Four posters across the column: 236 x 354 instead of the browse grid's 260 x 390. */
+.search-results .card-grid {
+  width: 236px;
+}
+
+.search-results .card-grid .card-art {
+  height: 354px;
+}
+
+.search-message {
+  max-width: 900px;
+  padding: 24px;
+}
+
+.search-message-title {
+  margin: 0 0 12px;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+}
+
+.search-hint {
+  padding: 160px 24px 0;
+}
+
+.search-hint-title {
+  margin: 0 0 12px;
+  font-size: 48px;
+  font-weight: 700;
+}
+
+/* The people row is compact: a round portrait of 128 px, the name in up to two lines under it. */
+.card-person {
+  width: 150px;
+}
+
+.card-person .card-art {
+  width: 128px;
+  height: 128px;
+  margin: 0 auto;
+  border-radius: 50%;
+}
+
+.card-person .art,
+.card-person .card-shadow,
+.card-person .card-ring {
+  border-radius: 50%;
+}
+
+.card-person:focus .card-art {
+  transform: scale(1.05);
+}
+
+.card-person .card-caption {
+  height: 52px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.card-person .card-title {
+  display: -webkit-box;
+  height: 52px;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  line-height: 26px;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.card-person .card-sub {
+  display: none;
+}

@@ -5,7 +5,7 @@ import { boxSetSummary } from '../../test/boxSetFixtures';
 import { catalogItem } from '../../test/flowFixtures';
 import { renderWithSilo } from '../../test/renderFlow';
 import { setFocus } from '../../app/nav';
-import { BoxSetCard, ExploreAllCard, LandscapeCard, PosterCard } from './Cards';
+import { BoxSetCard, ExploreAllCard, LandscapeCard, PersonCard, PosterCard } from './Cards';
 
 /** A ThumbHash with a mid-grey average, so a placeholder colour is visible. */
 const GREY_HEADER = 32 | (32 << 6) | (32 << 12);
@@ -221,5 +221,24 @@ describe('BoxSetCard', () => {
   it('falls back to a title tile without a poster', () => {
     box(boxSetSummary({ poster_url: undefined }));
     expect(screen.getByTestId('art-tile')).toHaveTextContent('Great Saga Box Set');
+  });
+});
+
+describe('PosterCard subtitle', () => {
+  it('shows the given second line instead of the year', () => {
+    poster({ subtitle: 'S1 · E2 · Pilot' });
+    expect(screen.getByTestId('card-sub')).toHaveTextContent('S1 · E2 · Pilot');
+  });
+});
+
+describe('PersonCard compact', () => {
+  it('is a round portrait card with the name under it', () => {
+    renderWithSilo(
+      <PersonCard name="Sage Actor" initials="SA" focusKey="p" compact onOpen={() => undefined} />,
+    );
+    const card = screen.getByRole('button', { name: 'Sage Actor' });
+    expect(card).toHaveClass('card-person');
+    expect(card).not.toHaveClass('card-poster');
+    expect(screen.getByTestId('card-title')).toHaveTextContent('Sage Actor');
   });
 });

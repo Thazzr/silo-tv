@@ -37,7 +37,7 @@ export const GRID_IMAGE_QUERY = {
   still_width: IMAGE_WIDTHS.still,
 } as const;
 
-const isEpisode = (item: CatalogItem) => item.type.trim().toLowerCase() === 'episode';
+export const isEpisode = (item: CatalogItem) => item.type.trim().toLowerCase() === 'episode';
 
 /** An episode is shown under its series; the episode's own title only when the series is unknown. */
 export function cardTitle(item: CatalogItem): string {

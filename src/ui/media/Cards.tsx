@@ -27,7 +27,7 @@ export interface CardProps {
 
 export interface FrameProps {
   focusKey: string;
-  variant: 'poster' | 'landscape' | 'grid';
+  variant: 'poster' | 'landscape' | 'person' | 'grid';
   /** Extra class on the card, for a caption taller than the two lines the cards share. */
   className?: string;
   label?: string;
@@ -73,8 +73,13 @@ export function CardFrame({
   );
 }
 
-function Caption({ item }: { item: CatalogItem }) {
-  const subtitle = cardSubtitle(item);
+function Caption({
+  item,
+  subtitle = cardSubtitle(item),
+}: {
+  item: CatalogItem;
+  subtitle?: string;
+}) {
   return (
     <>
       <span className="card-title" data-testid="card-title">
@@ -99,7 +104,8 @@ export const PosterCard = memo(function PosterCard({
   autoFocus,
   grid = false,
   badge,
-}: CardProps & { grid?: boolean; badge?: string }) {
+  subtitle,
+}: CardProps & { grid?: boolean; badge?: string; subtitle?: string }) {
   const url = useMediaUrl();
   const art = posterArt(item);
   return (
@@ -115,7 +121,7 @@ export const PosterCard = memo(function PosterCard({
           {badge ? <CardPill place="start" text={badge} /> : null}
         </>
       }
-      caption={<Caption item={item} />}
+      caption={<Caption item={item} subtitle={subtitle} />}
     />
   );
 });
@@ -280,6 +286,7 @@ export const PersonCard = memo(function PersonCard({
   focusKey,
   onOpen,
   onFocused,
+  compact = false,
 }: {
   name: string;
   role?: string;
@@ -289,12 +296,14 @@ export const PersonCard = memo(function PersonCard({
   focusKey: string;
   onOpen: () => void;
   onFocused?: () => void;
+  /** A round portrait with the name under it, for a row that has little room (Search). */
+  compact?: boolean;
 }) {
   const url = useMediaUrl();
   return (
     <CardFrame
       focusKey={focusKey}
-      variant="poster"
+      variant={compact ? 'person' : 'poster'}
       label={role ? `${name}, ${role}` : name}
       onClick={onOpen}
       onFocused={onFocused}

@@ -253,6 +253,18 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             })),
           }
         : {};
+      // "Saga Three", a search result that opens a plain movie page.
+      if (req.method === 'GET' && url.pathname === '/api/v2/catalog/items/f3') {
+        return send(200, {
+          ...baseItem,
+          content_id: 'f3',
+          type: 'movie',
+          title: 'Saga Three',
+          year: 2023,
+          runtime: 100,
+          overview: 'The third film.',
+        });
+      }
       const detail = /^\/api\/v2\/catalog\/items\/(m2|s1)$/.exec(url.pathname);
       if (req.method === 'GET' && detail) {
         return send(
@@ -320,6 +332,17 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         if (url.pathname === '/api/v2/catalog/items/m2/box-set')
           return send(200, { box_set: saga });
         if (url.pathname === '/api/v2/catalog/box-sets/bs1') return send(200, saga);
+        if (url.pathname === '/api/v2/catalog/people') {
+          const text = (url.searchParams.get('q') ?? '').toLowerCase();
+          return send(200, {
+            items: 'sage actor'.includes(text) ? [{ id: 'p9', name: 'Sage Actor' }] : [],
+          });
+        }
+        if (url.pathname === '/api/v2/catalog/box-sets') {
+          const text = (url.searchParams.get('q') ?? '').toLowerCase();
+          const summary = { ...saga, items: undefined };
+          return send(200, { items: saga.title.toLowerCase().includes(text) ? [summary] : [] });
+        }
       }
       if (req.method === 'GET' && url.pathname.startsWith('/api/v2/recommendations/similar/')) {
         return send(200, {
@@ -569,6 +592,30 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             ],
           });
         case 'GET /api/v2/catalog':
+          // A text search: the titles that contain the text, "Saga One" and "Saga Three" for "sag".
+          if (url.searchParams.has('q')) {
+            const text = (url.searchParams.get('q') ?? '').toLowerCase();
+            const found = [
+              ...MOVIES.map(asCard),
+              ...sagaFilms.map((film) => ({
+                content_id: film.content_id,
+                title: film.title,
+                type: film.type,
+                year: film.year,
+              })),
+            ]
+              .filter((card) => card.title.toLowerCase().includes(text))
+              .filter(
+                (card, i, all) => all.findIndex((c) => c.content_id === card.content_id) === i,
+              );
+            return send(200, {
+              items: found,
+              total: found.length,
+              total_exact: true,
+              window_cursor: 'w',
+              page: { has_more: false },
+            });
+          }
           // A person's credits: newest first; "video" is movies and series together.
           if (url.searchParams.get('source') === 'person') {
             const credit = (id: string, title: string, type: string, year: number) => ({
@@ -648,7 +695,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             revision: 'r',
             state: 'available',
             extended_query_rules: true,
-            ...(withBoxSet ? { box_sets: true } : {}),
+            ...(withBoxSet ? { box_sets: true, people_media_scope: true } : {}),
           });
         case 'GET /api/v2/catalog/filters':
           return send(200, {
@@ -2123,4 +2170,137 @@ test('a screen taller than the window scrolls the document to the focused elemen
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
   await expect.poll(inWindow).toBe(true);
+});
+
+test('search: type with the on-screen keyboard, results with a box set, open a title and come back, clear again, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ boxSet: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+
+  // The Search tab is the last one; Down lands on the keyboard, on "a".
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Suche', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-hint')).toContainText('Finde Filme, Serien und Personen');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('osk-a')).toBeFocused();
+
+  // "sag" with the arrow keys: s is in the third row (o p q r s t u), fifth column.
+  const press = async (key: string, times = 1) => {
+    for (let i = 0; i < times; i += 1) await page.keyboard.press(key);
+  };
+  await press('ArrowDown', 2);
+  await press('ArrowRight', 4);
+  await expect(page.getByTestId('osk-s')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await press('ArrowUp', 2);
+  await press('ArrowLeft', 4);
+  await expect(page.getByTestId('osk-a')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await press('ArrowRight', 6);
+  await expect(page.getByTestId('osk-g')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-text')).toHaveText('sag');
+  // Typing keeps the focus on the keyboard.
+  await expect(page.getByTestId('osk-g')).toBeFocused();
+
+  // One request after the pause: the box set row and the titles appear.
+  await expect(page.getByTestId('row-search-boxsets')).toBeVisible();
+  await expect(page.getByTestId('search-count')).toHaveText('2 Ergebnisse');
+  await expect(page.getByTestId('grid-track').getByTestId('card-title')).toHaveText([
+    'Saga One',
+    'Saga Three',
+  ]);
+  expect(
+    seen.filter((e) => e.path === '/api/v2/catalog' && e.search.includes('q=sag')),
+  ).toHaveLength(1);
+
+  // A short text starts at the left of the field, like the placeholder.
+  const run = page.getByTestId('search-run');
+  const fieldBox = (await page.getByTestId('search-field').boundingBox())!;
+  const runBox = (await run.boundingBox())!;
+  expect(runBox.x - fieldBox.x).toBeLessThan(40);
+  await expect(run).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+  // With the box set row, the people row and the segments all present, the count line and the top
+  // of the first title row are on screen before the focus moves into the results.
+  await expect(page.getByTestId('search-count')).toHaveText('2 Ergebnisse');
+  await expect(page.getByTestId('row-search-people')).toBeVisible();
+  const countBox = (await page.getByTestId('search-count').boundingBox())!;
+  expect(countBox.y + countBox.height).toBeLessThan(1080 - 54);
+  const firstTitle = (await page
+    .getByTestId('grid-track')
+    .getByRole('button', { name: /Saga One/ })
+    .boundingBox())!;
+  expect(firstTitle.y).toBeLessThan(1080 - 54);
+  const peopleBox = (await page.getByTestId('row-search-people').boundingBox())!;
+  expect(peopleBox.height).toBeLessThanOrEqual(280);
+  // Right from the keyboard's edge: the box set first. Down to the titles; OK opens the second.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('row-search-boxsets').getByRole('button')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('row-search-people').getByRole('button')).toBeFocused();
+  await expect(page.getByTestId('row-search-people')).toContainText('Personen');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Saga One/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Saga Three/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toBeVisible();
+
+  // Back: the search is as it was, with the same card focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('search-text')).toHaveText('sag');
+  await expect(page.getByRole('button', { name: /Saga Three/ })).toBeFocused();
+
+  // Left to the first column, then to the keyboard (the key last used); Delete three times: the
+  // hint is back.
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: /Saga One/ })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('osk-g')).toBeFocused();
+  await press('ArrowDown', 6);
+  await press('ArrowLeft');
+  await expect(page.getByTestId('osk-delete')).toBeFocused();
+  await press('Enter', 3);
+  await expect(page.getByTestId('search-hint')).toBeVisible();
+  await expect(page.getByTestId('search-field')).toContainText('Suchen');
+});
+
+test('search: a query wider than the field keeps its end and the caret in view', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo();
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  // "m" is in the second row, sixth column.
+  await page.keyboard.press('ArrowDown');
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('osk-m')).toBeFocused();
+  for (let i = 0; i < 40; i += 1) await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-text')).toHaveText('m'.repeat(40));
+  const field = page.getByTestId('search-field');
+  const text = page.getByTestId('search-text');
+  // The text is wider than the field and shifted left: the field's right edge shows its end.
+  await expect
+    .poll(async () => {
+      const f = (await field.boundingBox())!;
+      const t = (await text.boundingBox())!;
+      return t.x < f.x && t.x + t.width <= f.x + f.width;
+    })
+    .toBe(true);
 });

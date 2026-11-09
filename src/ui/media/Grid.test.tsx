@@ -8,7 +8,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { renderWithSilo } from '../../test/renderFlow';
 import { PosterCard } from './Cards';
 import { Grid, gridCardKey } from './Grid';
-import { GRID_ROW_PITCH } from './layout';
+import { GRID_ROW_PITCH, gridMetrics } from './layout';
 import { FocusIndexMemory } from './scroll';
 
 const makeItems = (from: number, to: number) =>
@@ -230,5 +230,53 @@ describe('Grid', () => {
     renderWithSilo(<TestGrid items={makeItems(0, 8)} />);
     // 6 posters of 260 px and 5 gaps of 40 px; without it the track is as wide as nothing.
     expect(screen.getByTestId('grid-track').style.width).toBe('1760px');
+  });
+});
+
+describe('Grid with a layout of four columns', () => {
+  const layout = gridMetrics(4, { width: 236, height: 354 }, 40, 24);
+
+  function FourGrid() {
+    return (
+      <Grid
+        gridId="g"
+        items={makeItems(0, 10)}
+        getKey={(item) => item.content_id}
+        hasMore={false}
+        loadingMore={false}
+        onLoadMore={() => {}}
+        layout={layout}
+        renderCard={(item, ctx) => (
+          <PosterCard
+            grid
+            item={item}
+            focusKey={ctx.focusKey}
+            onFocused={ctx.onFocused}
+            onOpen={() => {}}
+          />
+        )}
+      />
+    );
+  }
+
+  it('places the cards in four columns at the layout pitch', async () => {
+    renderWithSilo(<FourGrid />);
+    const slots = document.querySelectorAll<HTMLElement>('.grid-slot');
+    expect(slots[3]!.style.left).toBe('828px');
+    expect(slots[4]!.style.left).toBe('0px');
+    expect(slots[4]!.style.top).toBe(`${layout.rowPitch}px`);
+    expect(slots[0]!.dataset.navRect).toBe('0,0,236,354');
+    expect(track().style.width).toBe('1064px');
+    expect(track().style.left).toBe('24px');
+  });
+
+  it('moves Down by four cards and stops Right at the fourth column', async () => {
+    renderWithSilo(<FourGrid />);
+    await focusAt(key('g1'));
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(key('g5'));
+    await focusAt(key('g4'));
+    await pressKey(KEY.right);
+    expect(getCurrentFocusKey()).toBe(key('g4'));
   });
 });

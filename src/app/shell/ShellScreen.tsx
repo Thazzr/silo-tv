@@ -6,6 +6,10 @@ import { HomeScreen } from '../../features/home/HomeScreen';
 import { keepAtOrigin } from '../../ui/media';
 import { LibraryScreen } from '../../features/library/LibraryScreen';
 import type { CollectionTarget, ExploreTarget } from '../../features/library/targets';
+import type { BoxSetTarget } from '../../features/boxset/boxSetMemory';
+import type { PersonTarget } from '../../features/person/personMemory';
+import { SEARCH_KEYBOARD_KEY } from '../../features/search/arrows';
+import { SearchScreen } from '../../features/search/SearchScreen';
 import { useSignOut, type CatalogItem } from '../../features/library/queries';
 import { useProfiles } from '../../features/profiles/queries';
 import {
@@ -36,6 +40,10 @@ export interface ShellScreenProps {
   onExploreSection?: (section: ExploreTarget) => void;
   /** Opens a collection of a library as a screen of its own. */
   onOpenCollection?: (target: CollectionTarget) => void;
+  /** Opens the page of a person (a search result). */
+  onOpenPerson?: (target: PersonTarget) => void;
+  /** Opens the page of a box set (a search result). */
+  onOpenBoxSet?: (target: BoxSetTarget) => void;
   onSwitchProfile: () => void;
   onSwitchServer: () => void;
   /** Opens the device settings as a screen of its own. */
@@ -47,11 +55,12 @@ export interface ShellScreenProps {
   offer?: { name: string; onAnswer: (automatic: boolean) => void } | null;
 }
 
-/** Home and the library tabs clip and scroll their own content; the others flow with the page. */
+/** Home, the library tabs and Search clip and scroll their own content; the others flow with the page. */
 const CONTENT_CLASS: Partial<Record<TabId, string>> = {
   home: 'shell-content shell-content-home',
   movies: 'shell-content shell-content-library',
   series: 'shell-content shell-content-library',
+  search: 'shell-content shell-content-library',
 };
 
 function TabContent({
@@ -61,6 +70,8 @@ function TabContent({
   onOpenDetail,
   onExploreSection,
   onOpenCollection,
+  onOpenPerson,
+  onOpenBoxSet,
   onHome,
 }: {
   tab: TabId;
@@ -69,6 +80,8 @@ function TabContent({
   onOpenDetail: (target: DetailTarget) => void;
   onExploreSection: (section: ExploreTarget) => void;
   onOpenCollection: (target: CollectionTarget) => void;
+  onOpenPerson: (target: PersonTarget) => void;
+  onOpenBoxSet: (target: BoxSetTarget) => void;
   onHome: () => void;
 }) {
   switch (tab) {
@@ -93,8 +106,18 @@ function TabContent({
           onOpenCollection={onOpenCollection}
         />
       );
+    case 'search':
+      return (
+        <SearchScreen
+          memory={memory.search}
+          onPlay={onPlay}
+          onOpenDetail={onOpenDetail}
+          onOpenPerson={onOpenPerson}
+          onOpenBoxSet={onOpenBoxSet}
+        />
+      );
     default:
-      // For You, Calendar and Search come with Phase 2.
+      // For You and Calendar come with Phase 2.
       return <ComingSoon onHome={onHome} />;
   }
 }
@@ -115,6 +138,8 @@ export function ShellScreen({
   onOpenDetail,
   onExploreSection = () => undefined,
   onOpenCollection = () => undefined,
+  onOpenPerson = () => undefined,
+  onOpenBoxSet = () => undefined,
   onSwitchProfile,
   onSwitchServer,
   onOpenSettings = () => undefined,
@@ -228,11 +253,15 @@ export function ShellScreen({
             className={CONTENT_CLASS[selected] ?? 'shell-content'}
             // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
             onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
-            saveLastFocusedChild
+            // Search always opens on its keyboard (it remembers its last key itself); the others
+            // reopen where the focus was.
+            saveLastFocusedChild={selected !== 'search'}
             // Home clips its content; focus must not scroll that box (the rows scroll by transform).
             onScroll={keepAtOrigin}
             data-transform-scrolled={CONTENT_CLASS[selected] ? 'page' : undefined}
-            preferredChildFocusKey={memory.focusOf(selected)}
+            preferredChildFocusKey={
+              selected === 'search' ? SEARCH_KEYBOARD_KEY : memory.focusOf(selected)
+            }
             data-testid={`tab-${selected}`}
           >
             <TabContent
@@ -242,6 +271,8 @@ export function ShellScreen({
               onOpenDetail={onOpenDetail}
               onExploreSection={onExploreSection}
               onOpenCollection={onOpenCollection}
+              onOpenPerson={onOpenPerson}
+              onOpenBoxSet={onOpenBoxSet}
               onHome={goHome}
             />
           </FocusGroup>
