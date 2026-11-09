@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Focusable } from '.';
 import { NavAdapter, scrollFocusedIntoView } from './adapter';
+import * as origin from './origin';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -172,5 +173,27 @@ describe('scrollFocusedIntoView', () => {
     } finally {
       Reflect.deleteProperty(document, 'scrollingElement');
     }
+  });
+});
+
+describe('scrolling and the pointer', () => {
+  it('brings a focused element into view with keys but leaves the scroll box alone for a hovered one', async () => {
+    const host = html('<div id="box" style="overflow:auto"><button id="far">far</button></div>');
+    const box = host.querySelector<HTMLElement>('#box')!;
+    const state = layoutBox(box, { top: 0, bottom: 100, scrollHeight: 900 });
+    const node = host.querySelector<HTMLElement>('#far')!;
+    node.getBoundingClientRect = () => ({ top: 500, bottom: 560, left: 0, right: 50 }) as DOMRect;
+    fakeRoot();
+    const adapter = new NavAdapter({ options: {} } as ConstructorParameters<typeof NavAdapter>[0]);
+
+    // The pointer's element is the focused one: nothing scrolls.
+    vi.spyOn(origin, 'focusFromPointer').mockReturnValue(true);
+    adapter.focusNode({ node } as never);
+    expect(state.scrollTop).toBe(0);
+
+    // Keys or code: the box follows the focus.
+    vi.spyOn(origin, 'focusFromPointer').mockReturnValue(false);
+    adapter.focusNode({ node } as never);
+    expect(state.scrollTop).toBeGreaterThan(0);
   });
 });

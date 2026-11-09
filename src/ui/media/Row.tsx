@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FocusGroup, moveFocusTo, type ArrowDirection } from '../../app/nav';
+import { FocusGroup, focusFromPointer, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { ExploreAllCard } from './Cards';
 import {
   CARD_SIZE,
@@ -88,9 +88,12 @@ function RowImpl<T>({
   const [focused, setFocused] = useState(() =>
     Math.min(memory?.get(rowId) ?? 0, Math.max(0, count - 1)),
   );
+  // The card the strip last scrolled to. It follows the focus, except while the pointer moves the
+  // focus: a hovered card is focused where it sits, and the strip stays put (see nav/origin.ts).
+  const [scrolledTo, setScrolledTo] = useState(focused);
   const [scroll, setScroll] = useState(() => nextScrollIndex(0, focused, visible, count));
   // The count changes when cards load or are removed; keep the position valid.
-  const effectiveScroll = nextScrollIndex(scroll, Math.min(focused, count - 1), visible, count);
+  const effectiveScroll = nextScrollIndex(scroll, Math.min(scrolledTo, count - 1), visible, count);
 
   // The callbacks of a card must not change when the focus moves, or no card could be skipped
   // while the row re-renders: the latest ones are read when the focus arrives.
@@ -101,7 +104,10 @@ function RowImpl<T>({
   const focusIndex = useCallback(
     (index: number) => {
       setFocused(index);
-      setScroll((current) => nextScrollIndex(current, index, visible, count));
+      if (!focusFromPointer()) {
+        setScrolledTo(index);
+        setScroll((current) => nextScrollIndex(current, index, visible, count));
+      }
       memory?.set(rowId, index);
       const now = latest.current;
       now.onRowFocused?.();

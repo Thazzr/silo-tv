@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
-import { FocusGroup, getCurrentFocusKey, setFocus, type ArrowHandler } from '../../app/nav';
+import {
+  FocusGroup,
+  focusFromPointer,
+  getCurrentFocusKey,
+  setFocus,
+  type ArrowHandler,
+} from '../../app/nav';
 import { useContentBack } from '../../app/shell/ShellBack';
 import { useT } from '../../i18n';
 import {
@@ -152,7 +158,8 @@ export function SearchScreen({
   const keyFocused = useCallback(
     (key: KeySpec) => {
       memory.rememberKey(key.id);
-      setZone('top');
+      // A hovered key keeps the page where it is (nav/origin.ts).
+      if (!focusFromPointer()) setZone('top');
     },
     [memory],
   );
@@ -164,8 +171,12 @@ export function SearchScreen({
     },
     [memory],
   );
-  const inTop = useCallback(() => setZone('top'), []);
-  const inGrid = useCallback(() => setZone('grid'), []);
+  const inTop = useCallback(() => {
+    if (!focusFromPointer()) setZone('top');
+  }, []);
+  const inGrid = useCallback(() => {
+    if (!focusFromPointer()) setZone('grid');
+  }, []);
 
   // --- Arrow keys and Back ----------------------------------------------------------------------
   const present: PresentBlocks = {

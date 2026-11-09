@@ -742,6 +742,57 @@ describe('SearchScreen: moving between the keyboard and the results', () => {
     await waitFor(() => expect(page.style.transform).toBe('translateY(0px)'));
   });
 
+  describe('and the pointer', () => {
+    const gridOffset = `translateY(-${rowHeight('poster') + rowHeight('person')}px)`;
+
+    it('keeps the page at the top for a hovered title; the next key inside the grid scrolls it (inGrid)', async () => {
+      setup({ ...FULL });
+      type('sag');
+      await found('Title 1');
+      const page = screen.getByTestId('search-page');
+      expect(page.style.transform).toBe('translateY(0px)');
+      fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${titleCard('title-1')}"]`)!);
+      await focusKeyIs(titleCard('title-1'));
+      await act(async () => {});
+      expect(page.style.transform).toBe('translateY(0px)');
+      await pressKey(KEY.right);
+      await focusKeyIs(titleCard('title-2'));
+      await waitFor(() => expect(page.style.transform).toBe(gridOffset));
+    });
+
+    it('keeps the page scrolled for a hovered keyboard key; the next key on the keyboard moves it back (keyFocused)', async () => {
+      setup({ ...FULL });
+      type('sag');
+      await found('Title 1');
+      const page = screen.getByTestId('search-page');
+      await focusOn(titleCard('title-1'));
+      await waitFor(() => expect(page.style.transform).toBe(gridOffset));
+      fireEvent.mouseEnter(screen.getByTestId('osk-b'));
+      await focusKeyIs(key('b'));
+      await act(async () => {});
+      expect(page.style.transform).toBe(gridOffset);
+      await pressKey(KEY.right);
+      await focusKeyIs(key('c'));
+      await waitFor(() => expect(page.style.transform).toBe('translateY(0px)'));
+    });
+
+    it('keeps the page scrolled for a hovered segment pill; the next key onto another pill moves it back (inTop)', async () => {
+      setup({ ...FULL });
+      type('sag');
+      await found('Title 1');
+      const page = screen.getByTestId('search-page');
+      await focusOn(titleCard('title-1'));
+      await waitFor(() => expect(page.style.transform).toBe(gridOffset));
+      fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${pill('all')}"]`)!);
+      await focusKeyIs(pill('all'));
+      await act(async () => {});
+      expect(page.style.transform).toBe(gridOffset);
+      await pressKey(KEY.right);
+      expect(getCurrentFocusKey()).not.toBe(pill('all'));
+      await waitFor(() => expect(page.style.transform).toBe('translateY(0px)'));
+    });
+  });
+
   it('puts the focus back on the keyboard when the results it is in turn empty', async () => {
     setup({
       capabilities: {},

@@ -12,6 +12,7 @@
 //     scroll (a long list in a panel, a tall screen) are brought to the focused element here, in
 //     one place, instead of by each screen.
 import { BaseWebAdapter } from '@noriginmedia/norigin-spatial-navigation';
+import { focusFromPointer } from './origin';
 
 /** Attribute of a card's slot: its box in the coordinates of its group, "x,y,width,height". */
 export const NAV_RECT_ATTR = 'data-nav-rect';
@@ -101,7 +102,8 @@ export class NavAdapter extends BaseWebAdapter {
     const focusDom = this.focusNode;
     this.focusNode = (component) => {
       focusDom(component);
-      if (component.node) scrollFocusedIntoView(component.node);
+      // Hover moves the focus where it is; only keys and code bring the element into view.
+      if (component.node && !focusFromPointer()) scrollFocusedIntoView(component.node);
     };
   }
 }

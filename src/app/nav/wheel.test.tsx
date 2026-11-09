@@ -1,6 +1,6 @@
-import { act, render } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FocusGroup, Focusable, suspendWheel } from '.';
+import { FocusGroup, Focusable, focusFromPointer, getCurrentFocusKey, suspendWheel } from '.';
 import { spySpatialSearch } from './testing';
 import {
   WHEEL_IDLE_RESET_MS,
@@ -96,6 +96,16 @@ describe('wheel navigation', () => {
     vi.setSystemTime(Date.now() + 1000);
     await wheel({ deltaY: -100 });
     expect(onArrow).toHaveBeenLastCalledWith('up', 'a');
+  });
+
+  it('presses Down from an element the pointer focused, and the press ends the pointer focus', async () => {
+    const onArrow = renderGroup();
+    fireEvent.mouseEnter(screen.getByText('b'));
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('b'));
+    expect(focusFromPointer()).toBe(true);
+    await wheel({ deltaY: 100 });
+    expect(onArrow).toHaveBeenCalledWith('down', 'b');
+    expect(focusFromPointer()).toBe(false);
   });
 
   it('presses nothing before 100 px, and ignores horizontal movement', async () => {

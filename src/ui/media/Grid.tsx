@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FocusGroup, moveFocusTo, type ArrowDirection } from '../../app/nav';
+import { FocusGroup, focusFromPointer, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { CardSkeleton } from './Skeletons';
 import { DEFAULT_GRID, type GridMetrics } from './layout';
 import { prefetchImage } from './prefetch';
@@ -70,8 +70,10 @@ export function Grid<T>({
   );
   const totalRows = Math.ceil(count / columns) + (loadingMore ? 1 : 0);
   const focusedRow = Math.floor(focused / columns);
+  // The grid row the viewport last scrolled to; a hovered card does not move it (nav/origin.ts).
+  const [scrolledRow, setScrolledRow] = useState(() => focusedRow);
   const [scrollRow, setScrollRow] = useState(() => focusedRow);
-  const effectiveScroll = nextScrollIndex(scrollRow, focusedRow, 1, totalRows);
+  const effectiveScroll = nextScrollIndex(scrollRow, scrolledRow, 1, totalRows);
 
   const loadMore = useRef(onLoadMore);
   useEffect(() => {
@@ -87,9 +89,12 @@ export function Grid<T>({
   const focusIndex = useCallback(
     (index: number) => {
       setFocused(index);
-      setScrollRow((current) =>
-        nextScrollIndex(current, Math.floor(index / columns), 1, totalRows),
-      );
+      if (!focusFromPointer()) {
+        setScrolledRow(Math.floor(index / columns));
+        setScrollRow((current) =>
+          nextScrollIndex(current, Math.floor(index / columns), 1, totalRows),
+        );
+      }
       memory?.set(gridId, index);
     },
     [columns, gridId, memory, totalRows],

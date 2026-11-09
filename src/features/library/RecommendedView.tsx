@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
-import { FocusGroup, stackArrows } from '../../app/nav';
+import { FocusGroup, focusFromPointer, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
 import {
   CatalogRow,
@@ -129,7 +129,8 @@ export function RecommendedView({
   const memoryIndices = memory.indices;
   const rowFocused = useCallback(
     (index: number) => {
-      setFocusedRow(index);
+      // The page scrolls to the focused row; a hovered card keeps the page where it is.
+      if (!focusFromPointer()) setFocusedRow(index);
       memoryIndices.set(lastRowKey(latest.current.library, latest.current.kind), index);
     },
     [memoryIndices],

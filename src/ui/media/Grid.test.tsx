@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
@@ -151,6 +151,20 @@ describe('Grid', () => {
     expect(document.querySelector(`[data-focus-key="${key('g49')}"]`)).not.toBeNull();
     expect(document.querySelector(`[data-focus-key="${key('g55')}"]`)).toBeNull();
     expect(mounted()).toBeLessThanOrEqual(30);
+  });
+
+  it('focuses a hovered card in a lower row without moving the grid; the next key scrolls as before', async () => {
+    renderWithSilo(<TestGrid items={makeItems(0, 120)} />);
+    await act(async () => {});
+    await focusAt(key('g1'));
+    // Row 2 sits below the first row; the window is scrolled to row 0.
+    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${key('g13')}"]`)!);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(key('g13')));
+    await act(async () => {});
+    expect(track().style.transform).toBe('translateY(0px)');
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(key('g19'));
+    expect(track().style.transform).toBe(`translateY(${-3 * GRID_ROW_PITCH}px)`);
   });
 
   it('asks for the next page when the focus is within three rows of the end, not before', async () => {

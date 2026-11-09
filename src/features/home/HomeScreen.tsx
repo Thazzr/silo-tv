@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { useContentBack } from '../../app/shell/ShellBack';
 import { Button } from '../../app/ui';
-import { FocusGroup, getCurrentFocusKey, stackArrows } from '../../app/nav';
+import { FocusGroup, focusFromPointer, getCurrentFocusKey, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
 import {
@@ -215,7 +215,8 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   );
   const rowFocused = useCallback(
     (index: number) => {
-      setFocusedRow(index);
+      // The page scrolls to the focused row; a hovered card keeps the page where it is.
+      if (!focusFromPointer()) setFocusedRow(index);
       rowMemory.set(LAST_ROW_KEY, index);
     },
     [rowMemory],

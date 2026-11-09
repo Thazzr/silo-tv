@@ -222,6 +222,29 @@ describe('HomeScreen: rows', () => {
   });
 });
 
+describe('HomeScreen: the pointer', () => {
+  it('focuses a hovered card of a row below the screen without scrolling the page; the next key does', async () => {
+    serveHome(server, {
+      sections: [homeSection('a', 3), homeSection('b', 3), homeSection('c', 3)],
+    });
+    setup();
+    await focusKeyIs(key('a', 'a-1'));
+    const inner = document.querySelector<HTMLElement>('.home-rows-inner')!;
+    expect(inner.style.transform).toBe('translateY(0px)');
+    // The second row is the one peeking in at the bottom edge.
+    await waitFor(() =>
+      expect(document.querySelector(`[data-focus-key="${key('b', 'b-1')}"]`)).not.toBeNull(),
+    );
+    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${key('b', 'b-1')}"]`)!);
+    await focusKeyIs(key('b', 'b-1'));
+    await act(async () => {});
+    expect(inner.style.transform).toBe('translateY(0px)');
+    await pressKey(KEY.down);
+    await focusKeyIs(key('c', 'c-1'));
+    await waitFor(() => expect(inner.style.transform).toMatch(/^translateY\(-[1-9]\d+px\)$/));
+  });
+});
+
 describe('HomeScreen: states', () => {
   it('shows the hero skeleton and row skeletons while loading', async () => {
     serveHome(server);

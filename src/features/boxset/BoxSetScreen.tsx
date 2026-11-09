@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
-import { useBackHandler } from '../../app/nav';
+import { focusFromPointer, useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import {
@@ -139,8 +139,13 @@ function BoxSetBody({
 
   // --- Vertical scroll: the page moves once, from the hero to the films --------------------------
   const [zone, setZone] = useState<BoxSetZone>('top');
-  const inTop = useCallback(() => setZone('top'), []);
-  const inFilms = useCallback(() => setZone('films'), []);
+  // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
+  const inTop = useCallback(() => {
+    if (!focusFromPointer()) setZone('top');
+  }, []);
+  const inFilms = useCallback(() => {
+    if (!focusFromPointer()) setZone('films');
+  }, []);
   const pageRef = useRef<HTMLDivElement>(null);
   // The films block's top is measured, not assumed: the hero grows with a long title or overview.
   const [filmsTop, setFilmsTop] = useState<number | undefined>(undefined);

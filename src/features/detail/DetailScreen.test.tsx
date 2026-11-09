@@ -389,6 +389,40 @@ describe('DetailScreen: a movie', () => {
   });
 });
 
+describe('DetailScreen: the pointer', () => {
+  it('focuses a hovered element of a lower block without moving the page; the next key does', async () => {
+    // jsdom has no layout: give the blocks below the hero a top, so the page has somewhere to go.
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.hasAttribute('data-zone') ? 900 : 0;
+    });
+    try {
+      serveDetail(server, {
+        item: () => itemDetail({ cast: [{ name: 'First Actor', character: 'Fay', order: 0 }] }),
+        similar: [catalogItem({ content_id: 'x1', title: 'Similar One' })],
+      });
+      setup({ itemId: 'm1' });
+      await ready();
+      const similar = await screen.findByRole('button', { name: /Similar One/ });
+      await focusKeyIs('detail-play');
+      const page = () => document.querySelector<HTMLElement>('.detail-page')!;
+      expect(page().style.transform).toBe('translateY(0px)');
+      fireEvent.mouseEnter(similar);
+      await focusKeyIs('card:similar:x1');
+      await act(async () => {});
+      expect(page().style.transform).toBe('translateY(0px)');
+      expect(document.querySelector('[data-zone="cast"]')).toHaveAttribute('data-faded', 'false');
+      // Up to the cast row is a key press: the page scrolls to it.
+      await pressKey(KEY.up);
+      await focusKeyIs('card:cast:0-First Actor');
+      expect(page().style.transform).toBe('translateY(-846px)');
+    } finally {
+      top.mockRestore();
+    }
+  });
+});
+
 describe('DetailScreen: more like this', () => {
   const similar = [
     catalogItem({ content_id: 'x1', title: 'Similar One' }),

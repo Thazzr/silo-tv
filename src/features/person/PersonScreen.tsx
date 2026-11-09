@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
-import { useBackHandler } from '../../app/nav';
+import { focusFromPointer, useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import {
@@ -97,8 +97,13 @@ export function PersonScreen({ target, memory, onPlay, onOpenDetail, onBack }: P
 
   // --- Vertical scroll: the page moves once, from the header to the filmography ------------------
   const [zone, setZone] = useState<PersonZone>('top');
-  const inTop = useCallback(() => setZone('top'), []);
-  const inGrid = useCallback(() => setZone('grid'), []);
+  // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
+  const inTop = useCallback(() => {
+    if (!focusFromPointer()) setZone('top');
+  }, []);
+  const inGrid = useCallback(() => {
+    if (!focusFromPointer()) setZone('grid');
+  }, []);
   const pageRef = useRef<HTMLDivElement>(null);
   // The pills' top is measured, not assumed: the header grows with the biography.
   const [pillsTop, setPillsTop] = useState<number | undefined>(undefined);

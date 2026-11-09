@@ -327,6 +327,27 @@ describe('sub-view pills', () => {
     );
   });
 
+  it('focuses a hovered card of a lower row without scrolling the page; the next key does', async () => {
+    serveLibrary(server, {
+      ...LIBRARIES,
+      sections: { 'lib-a': [homeSection('x', 3), homeSection('y', 3), homeSection('z', 3)] },
+    });
+    setup();
+    await screen.findByText('Row y');
+    await focus(cardFocusKey('lib-a/x', 'x-1'));
+    const inner = () => document.querySelector<HTMLElement>('.library-rows-inner')!;
+    expect(inner().style.transform).toBe('translateY(0px)');
+    const lower = cardFocusKey('lib-a/y', 'y-1');
+    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${lower}"]`)!);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(lower));
+    await act(async () => {});
+    expect(inner().style.transform).toBe('translateY(0px)');
+    // Down moves on from the hovered card to the third row and the page scrolls to it.
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-a/z', 'z-1'));
+    await waitFor(() => expect(inner().style.transform).toMatch(/^translateY\(-[1-9]\d+px\)$/));
+  });
+
   it('switch to Collections on OK', async () => {
     serveLibrary(server, LIBRARIES);
     setup();

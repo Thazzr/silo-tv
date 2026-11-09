@@ -6,9 +6,11 @@ import {
   destroy,
   init,
   setKeyMap,
+  setFocus as libSetFocus,
   type SpatialNavigationServiceOptions,
 } from '@noriginmedia/norigin-spatial-navigation';
 import { NavAdapter } from './adapter';
+import { clearPointerFocus, markPointerFocus, startOriginTracking } from './origin';
 import { startWheelNavigation } from './wheel';
 
 /** Options of the service (key handling, layout measuring); tests pass a fake layout. */
@@ -57,10 +59,13 @@ export function initNavigation(options: NavigationOptions = {}): void {
     layoutAdapter,
   });
   setKeyMap(NAV_KEYS);
+  // Before the guard and the library: the listeners run in the order they were added.
+  const stopOrigin = startOriginTracking();
   window.addEventListener('keydown', guardTextField, true);
   const stopWheel = startWheelNavigation();
   teardown = () => {
     stopWheel();
+    stopOrigin();
     window.removeEventListener('keydown', guardTextField, true);
     destroy();
   };
@@ -71,11 +76,19 @@ export function destroyNavigation(): void {
   teardown = null;
 }
 
-export {
-  setFocus,
-  getCurrentFocusKey,
-  doesFocusableExist,
-} from '@noriginmedia/norigin-spatial-navigation';
+export { getCurrentFocusKey, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+
+/** Moves the focus from code (a screen opening, focus memory, the arrow handlers): it scrolls. */
+export function setFocus(focusKey: string): Promise<void> {
+  clearPointerFocus();
+  return libSetFocus(focusKey);
+}
+
+/** Moves the focus because the pointer hovers the element: the focus moves, nothing scrolls. */
+export function setFocusFromPointer(focusKey: string): Promise<void> {
+  markPointerFocus(focusKey);
+  return libSetFocus(focusKey);
+}
 
 /** True when `focusKey` is focusable and sits somewhere below `ancestorKey`. */
 export function isInside(focusKey: string | null, ancestorKey: string): boolean {

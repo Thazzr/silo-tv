@@ -145,6 +145,42 @@ describe('BoxSetScreen: the hero', () => {
     expect(screen.getByRole('button', { name: 'Play Film 1' })).toBeInTheDocument();
   });
 
+  it('keeps the page where it is for a hovered element in either zone; the next key moves it', async () => {
+    // jsdom has no layout: the films block gets a top, so the page has somewhere to go.
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.hasAttribute('data-boxset-films') ? 500 : 0;
+    });
+    try {
+      serve({ boxSet: boxSetDetail({}, 3, 0) });
+      setup();
+      await ready();
+      await focusKeyIs('boxset-play');
+      const page = () => screen.getByTestId('boxset').querySelector<HTMLElement>('.detail-page')!;
+      const text = () => screen.getByTestId('boxset-hero').querySelector('.detail-text')!;
+      expect(page().style.transform).toBe('translateY(0px)');
+      // Hero zone: a hovered film is focused, the page stays (inFilms).
+      fireEvent.mouseEnter(screen.getByRole('button', { name: /Film 2/ }));
+      await focusKeyIs(cardKey('film-2'));
+      await act(async () => {});
+      expect(page().style.transform).toBe('translateY(0px)');
+      expect(text()).toHaveAttribute('data-faded', 'false');
+      // A key press inside the grid scrolls the page to the films.
+      await pressKey(KEY.right);
+      await focusKeyIs(cardKey('film-3'));
+      expect(page().style.transform).toBe('translateY(-446px)');
+      // Films zone: a hovered Play is focused, the page stays (inTop).
+      fireEvent.mouseEnter(screen.getByRole('button', { name: /Play Film 1/ }));
+      await focusKeyIs('boxset-play');
+      await act(async () => {});
+      expect(page().style.transform).toBe('translateY(-446px)');
+      expect(text()).toHaveAttribute('data-faded', 'true');
+    } finally {
+      top.mockRestore();
+    }
+  });
+
   it('cuts a long overview and opens the full text from More; Back closes it onto More', async () => {
     const overview = 'The saga goes on and on. '.repeat(30).trim();
     serve({ boxSet: boxSetDetail({ overview }) });

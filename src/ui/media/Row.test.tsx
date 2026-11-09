@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { setFocus, getCurrentFocusKey } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
@@ -118,6 +118,21 @@ describe('Row', () => {
     for (let i = 0; i < 9; i += 1) await pressKey(KEY.left);
     expect(getCurrentFocusKey()).toBe(key('r', 'i1'));
     expect(track().style.transform).toBe('translateX(0px)');
+  });
+
+  it('focuses a hovered, partly visible card without moving the strip; the next key scrolls as before', async () => {
+    renderWithSilo(<TestRow />);
+    await focusAt(key('r', 'i1'));
+    // Eight poster cards fit; the ninth is mounted and peeks in at the right edge.
+    const peeking = document.querySelector(`[data-focus-key="${key('r', 'i9')}"]`)!;
+    fireEvent.mouseEnter(peeking);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(key('r', 'i9')));
+    await act(async () => {});
+    expect(track().style.transform).toBe('translateX(0px)');
+    // The next key moves on from the hovered card and brings the tenth into view.
+    await pressKey(KEY.right);
+    expect(getCurrentFocusKey()).toBe(key('r', 'i10'));
+    expect(track().style.transform).toBe('translateX(-432px)');
   });
 
   it('mounts only the cards near the viewport and follows the focus', async () => {

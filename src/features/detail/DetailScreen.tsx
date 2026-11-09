@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
-import { getCurrentFocusKey, moveFocusTo, useBackHandler } from '../../app/nav';
+import { focusFromPointer, getCurrentFocusKey, moveFocusTo, useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
@@ -317,12 +317,16 @@ function DetailBody({
   }, [measure, blockSet]);
   const offset = detailScrollOffset(zone, tops);
   const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
-  const inHero = useCallback(() => setZone('hero'), []);
-  const inEpisodes = useCallback(() => setZone('episodes'), []);
-  const inCast = useCallback(() => setZone('cast'), []);
-  const inExtras = useCallback(() => setZone('extras'), []);
-  const inBoxSet = useCallback(() => setZone('boxSet'), []);
-  const inSimilar = useCallback(() => setZone('similar'), []);
+  // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
+  const enter = useCallback((next: DetailZone) => {
+    if (!focusFromPointer()) setZone(next);
+  }, []);
+  const inHero = useCallback(() => enter('hero'), [enter]);
+  const inEpisodes = useCallback(() => enter('episodes'), [enter]);
+  const inCast = useCallback(() => enter('cast'), [enter]);
+  const inExtras = useCallback(() => enter('extras'), [enter]);
+  const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
+  const inSimilar = useCallback(() => enter('similar'), [enter]);
 
   const openedIndex = episodes?.findIndex((episode) => episode.content_id === openedOn) ?? -1;
 

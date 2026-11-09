@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FocusGroup } from '../../app/nav';
+import { FocusGroup, focusFromPointer } from '../../app/nav';
 import { useT } from '../../i18n';
 import {
   Artwork,
@@ -169,13 +169,18 @@ export function EpisodeRow({
   const [focused, setFocused] = useState(() =>
     Math.min(memory.get(memoryId) ?? initialIndex, Math.max(0, count - 1)),
   );
+  // The episode the strip last scrolled to; a hovered card does not move it (nav/origin.ts).
+  const [scrolledTo, setScrolledTo] = useState(focused);
   const [scroll, setScroll] = useState(() => nextScrollIndex(0, focused, visible, count));
-  const effectiveScroll = nextScrollIndex(scroll, Math.min(focused, count - 1), visible, count);
+  const effectiveScroll = nextScrollIndex(scroll, Math.min(scrolledTo, count - 1), visible, count);
 
   const focus = useCallback(
     (index: number, episode: Episode) => {
       setFocused(index);
-      setScroll((current) => nextScrollIndex(current, index, visible, count));
+      if (!focusFromPointer()) {
+        setScrolledTo(index);
+        setScroll((current) => nextScrollIndex(current, index, visible, count));
+      }
       memory.set(memoryId, index);
       onFocused(episode);
     },

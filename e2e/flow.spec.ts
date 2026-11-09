@@ -45,6 +45,8 @@ interface FakeOptions {
    * taller than 760 px), the movie gets a cast and a "More like this" row.
    */
   tall?: boolean;
+  /** "Weiterschauen" holds twelve more titles ("Extra 1" to "Extra 12"): the row reaches past the screen's right edge. */
+  longRow?: boolean;
   /**
    * The server has box sets: "Second Title" (m2) is the middle film of the box set "Saga Box Set",
    * whose first film is played; its page and the movie's row read from the same data.
@@ -184,6 +186,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withSeriesLibrary = options.seriesLibrary === true;
   const withRewatch = options.rewatch === true;
   const tall = options.tall === true;
+  const withLongRow = options.longRow === true;
   const withExtras = options.extras === true;
   const seasonCount = options.seasons ?? 2;
   const withBoxSet = options.boxSet === true;
@@ -735,6 +738,16 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                           item_source: 'in_progress',
                         },
                       ]
+                    : []),
+                  ...(withLongRow
+                    ? Array.from({ length: 12 }, (_, i) => ({
+                        content_id: `x${i + 1}`,
+                        title: `Extra ${i + 1}`,
+                        type: 'movie',
+                        position_seconds: 600,
+                        duration_seconds: 5400,
+                        item_source: 'in_progress',
+                      }))
                     : []),
                 ],
                 total_count: withRewatch ? 2 : 1,
@@ -2945,4 +2958,92 @@ test('detail page: AI translation in button mode is started with the remote from
   });
   await expect(page.getByTestId('detail-translation')).toHaveText('Von KI übersetzt');
   await expect(play).toBeFocused();
+});
+
+// The Magic Remote pointer moves the focus and nothing else: a hovered card at the edge of the
+// screen is focused where it sits, the page and the strip stay put, and only the next key scrolls
+// (user decision 2026-11-09, TV test: the page ran away under a cursor near the edge).
+const transformOf = (page: Page, selector: string) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((el) => (el as { style: { transform: string } }).style.transform);
+
+test('the Magic Remote pointer focuses a half-visible card at the right edge of a row without scrolling the strip or the page', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ longRow: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await page.keyboard.press('ArrowDown');
+  const second = page.getByRole('button', { name: /Second Title/ });
+  await expect(second).toBeFocused();
+  const rows = '.home-rows-inner';
+  expect(await transformOf(page, rows)).toBe('translateY(0px)');
+
+  // The row's right edge: the card that starts on the screen and ends past it.
+  const track = page.locator('[data-testid="row-continue_watching"] [data-testid="row-track"]');
+  const before = await track.evaluate(
+    (el) => (el as { style: { transform: string } }).style.transform,
+  );
+  const edgeKey = await page.evaluate(`(() => {
+    const cards = Array.from(document.querySelectorAll('[data-testid="row-continue_watching"] [data-focus-key]'));
+    const hit = cards.find((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left < 1880 && r.right > 1920;
+    });
+    return hit ? hit.getAttribute('data-focus-key') : null;
+  })()`);
+  expect(edgeKey).not.toBeNull();
+  const edge = page.locator(`[data-focus-key="${edgeKey}"]`);
+  const box = (await edge.boundingBox())!;
+  await page.mouse.move(Math.min(box.x + 60, 1910), box.y + box.height / 2);
+  await expect(edge).toBeFocused();
+  await page.waitForTimeout(700);
+  expect(
+    await track.evaluate((el) => (el as { style: { transform: string } }).style.transform),
+  ).toBe(before);
+  expect(await transformOf(page, rows)).toBe('translateY(0px)');
+
+  // The next key moves on from the hovered card and shifts the strip as before.
+  await page.keyboard.press('ArrowRight');
+  await expect(edge).not.toBeFocused();
+  await expect
+    .poll(() => track.evaluate((el) => (el as { style: { transform: string } }).style.transform))
+    .not.toBe(before);
+});
+
+test('the Magic Remote pointer focuses a card of a lower block on the detail page without scrolling the page', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByTestId('row-cast')).toBeVisible();
+  const top = async (testId: string) => (await page.getByTestId(testId).boundingBox())!.y;
+  const castTop = await top('row-cast');
+
+  // The cast row is on screen below the hero: the pointer focuses its card, the page stays.
+  const card = (await page.getByRole('button', { name: /Ann Actor/ }).boundingBox())!;
+  await page.mouse.move(card.x + card.width / 2, Math.min(card.y + card.height / 2, 1070));
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.waitForTimeout(700);
+  expect(await top('row-cast')).toBe(castTop);
+
+  // The next key scrolls: Down brings the similar row to the top safe-area line.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Similar 1/ })).toBeFocused();
+  await expect.poll(async () => Math.abs((await top('row-similar')) - 54)).toBeLessThanOrEqual(2);
 });

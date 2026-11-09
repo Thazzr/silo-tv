@@ -397,6 +397,46 @@ describe('PersonScreen: the filmography', () => {
     );
   });
 
+  it('keeps the page where it is for a hovered element in either zone; the next key moves it', async () => {
+    // jsdom has no layout: the pills row gets a top, so the page has somewhere to go.
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.hasAttribute('data-person-pills') ? 500 : 0;
+    });
+    try {
+      serveMovies(8);
+      setup();
+      await ready();
+      await screen.findByRole('button', { name: /Movie 1/ });
+      await focusKeyIs('person-pill:all');
+      const page = () => screen.getByTestId('person').querySelector<HTMLElement>('.person-page')!;
+      expect(page().style.transform).toBe('translateY(0px)');
+      // Top zone: a hovered filmography card is focused, the page stays (inGrid).
+      fireEvent.mouseEnter(screen.getByRole('button', { name: /Movie 2/ }));
+      await focusKeyIs(cardKey('mov-2'));
+      await act(async () => {});
+      expect(page().style.transform).toBe('translateY(0px)');
+      expect(screen.getByTestId('person-header')).toHaveAttribute('data-faded', 'false');
+      // A key press inside the grid scrolls the page to it.
+      await pressKey(KEY.right);
+      await focusKeyIs(cardKey('mov-3'));
+      expect(page().style.transform).toBe('translateY(-446px)');
+      // Grid zone: a hovered pill is focused, the page stays (inTop).
+      fireEvent.mouseEnter(screen.getByRole('tab', { name: /All/ }));
+      await focusKeyIs('person-pill:all');
+      await act(async () => {});
+      expect(page().style.transform).toBe('translateY(-446px)');
+      expect(screen.getByTestId('person-header')).toHaveAttribute('data-faded', 'true');
+      // A key press onto another pill scrolls back up.
+      await pressKey(KEY.right);
+      await focusKeyIs('person-pill:movie');
+      expect(page().style.transform).toBe('translateY(0px)');
+    } finally {
+      top.mockRestore();
+    }
+  });
+
   it('asks for the next page while the focus nears the end, with the server cursor', async () => {
     const calls = serveMovies(50);
     setup();

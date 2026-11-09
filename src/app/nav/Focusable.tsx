@@ -9,7 +9,7 @@ import {
 import { useFocusable } from '@noriginmedia/norigin-spatial-navigation';
 import { ArrowContext, type ArrowDirection } from './arrows';
 import { FrameContext } from './ScreenFrame';
-import { getCurrentFocusKey, setFocus } from './init';
+import { getCurrentFocusKey, setFocus, setFocusFromPointer } from './init';
 
 /**
  * Lets a container hear which element got the focus, whatever the element is (a tab, a card in a
@@ -70,11 +70,13 @@ function useNavItem<E extends HTMLElement>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const focusHere = () => {
-    if (!disabled && getCurrentFocusKey() !== focusKey) void setFocus(focusKey);
+  const focusHere = (fromPointer: boolean) => () => {
+    if (disabled || getCurrentFocusKey() === focusKey) return;
+    void (fromPointer ? setFocusFromPointer(focusKey) : setFocus(focusKey));
   };
-  // onFocus covers DOM focus that did not come from the service (touch, a script).
-  return { ref, handlers: { onMouseEnter: focusHere, onFocus: focusHere } };
+  // Hover moves the focus but never scrolls (see origin.ts). onFocus covers DOM focus that did
+  // not come from the service (touch, a script).
+  return { ref, handlers: { onMouseEnter: focusHere(true), onFocus: focusHere(false) } };
 }
 
 export interface FocusableProps
