@@ -39,6 +39,7 @@ import {
 } from './queries';
 import { SeasonPills } from './SeasonPills';
 import { SynopsisDialog } from './SynopsisDialog';
+import { useThemeMusic } from './useThemeMusic';
 
 /** What the player needs to start a title; an intent other than `ask` skips its resume prompt. */
 export interface PlayRequest {
@@ -123,6 +124,8 @@ function DetailBody({
   const t = useT();
   const series = isSeries(detail);
   const seriesId = detail.content_id;
+  // The title's theme song plays while this page is the screen on top.
+  useThemeMusic(detail);
 
   const [synopsisOpen, setSynopsisOpen] = useState(false);
   // Back closes the synopsis first; without a handler it leaves the page.

@@ -73,6 +73,11 @@ interface FakeOptions {
    * first episode is unwatched and the second one is played; every episode has a still.
    */
   spoilers?: boolean;
+  /**
+   * The server speaks the settings contract and the profile's `ui.theme_music_enabled` is this
+   * value; the theme capability is available and "Second Title" (m2) has a theme song.
+   */
+  themeMusic?: boolean;
 }
 
 interface FakeProfile {
@@ -176,7 +181,10 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withExtras = options.extras === true;
   const seasonCount = options.seasons ?? 2;
   const withBoxSet = options.boxSet === true;
-  const settingsUnknown = options.titleArt === undefined && options.spoilers === undefined;
+  const settingsUnknown =
+    options.titleArt === undefined &&
+    options.spoilers === undefined &&
+    options.themeMusic === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -239,7 +247,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         body:
           url.pathname === '/api/v2/auth/login' ||
           url.pathname === '/api/v2/profiles' ||
-          url.pathname === '/api/v2/playback/start'
+          url.pathname === '/api/v2/playback/start' ||
+          (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/'))
             ? requestBody
             : '',
       });
@@ -326,6 +335,10 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 year: 2021,
                 runtime: 90,
                 overview: 'The second title, half way through.',
+                themes: {
+                  owner_id: '42',
+                  items: [{ id: '5', title: 'Main Theme', duration_seconds: 80, container: 'mp3' }],
+                },
                 user_data: {
                   position_seconds: 1350,
                   duration_seconds: 5400,
@@ -526,11 +539,31 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   ? (options.titleArt ?? true)
                   : key.startsWith('catalog.hide_unwatched')
                     ? (options.spoilers ?? false)
-                    : false,
+                    : key === 'ui.theme_music_enabled'
+                      ? (options.themeMusic ?? false)
+                      : false,
               source: 'profile',
               definition_revision: 1,
             })),
             revision: 40,
+          });
+        case 'GET /api/v2/catalog/themes/capabilities':
+          return send(200, {
+            state: 'available',
+            allowed: true,
+            delivery: 'local_direct_play',
+            transcode: true,
+            cluster_routing: false,
+            grant_lifetime_seconds: 60,
+            revision: 'r1',
+          });
+        case 'POST /api/v2/catalog/items/42/themes/5/playback':
+          // The grant points at a file the mock never serves: the app must stay quiet.
+          return send(200, {
+            url: '/audio/theme-grant.mp3',
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+            delivery: 'original',
+            content_type: 'audio/mpeg',
           });
         case 'GET /api/v2/auth/providers':
           return send(200, {
@@ -2789,4 +2822,50 @@ test('Magic Remote wheel: on the settings screen in a small window nothing scrol
   await page.mouse.wheel(0, 400);
   await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
   expect(await page.evaluate<number>('window.scrollY')).toBe(0);
+});
+
+async function openSecondTitleDetail(page: Page, themeMusic: boolean) {
+  const { origin, seen } = await startFakeSilo({ themeMusic });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  return { seen };
+}
+
+test('detail page: with theme music on, the grant is requested for the title theme and the page stays quiet when the audio fails', async ({
+  page,
+}) => {
+  const { seen } = await openSecondTitleDetail(page, true);
+  const grants = () =>
+    seen.filter((entry) => entry.path === '/api/v2/catalog/items/42/themes/5/playback');
+  await expect.poll(() => grants().length).toBeGreaterThanOrEqual(1);
+  const grant = seen.find((entry) => entry.path.endsWith('/themes/5/playback'));
+  expect(grant?.method).toBe('POST');
+  expect(grant?.profileId).toBe('profile-1');
+  expect(JSON.parse(grant?.body ?? '{}')).toHaveProperty('accepted_formats');
+  // The audio file answers 404: the stream is retried once with a new grant, then it stays quiet.
+  await expect
+    .poll(() => seen.filter((entry) => entry.path === '/audio/theme-grant.mp3').length)
+    .toBe(2);
+  await page.waitForTimeout(500);
+  expect(grants().length).toBe(2);
+  expect(seen.filter((entry) => entry.path === '/audio/theme-grant.mp3')).toHaveLength(2);
+  // No credential is appended to the grant's URL.
+  expect(seen.every((entry) => !entry.search.includes('token='))).toBe(true);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+});
+
+test('detail page: with theme music off, no capability or grant request is made', async ({
+  page,
+}) => {
+  const { seen } = await openSecondTitleDetail(page, false);
+  await page.waitForTimeout(500);
+  expect(seen.some((entry) => entry.path.includes('/themes/'))).toBe(false);
 });
