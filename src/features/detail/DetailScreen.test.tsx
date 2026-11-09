@@ -41,7 +41,8 @@ const pressFaked = (keyCode: number) =>
 const focusKeyIs = (focusKey: string) => waitFor(() => expect(getCurrentFocusKey()).toBe(focusKey));
 
 /** Short enough to keep the tests quick, long enough to tell "rested" from "passed over". */
-const SWITCH_MS = 150;
+/** Far longer than the old rest delay: focus alone must not switch a season in this time. */
+const LONG_REST = 5000;
 
 type Screen = { name: 'detail'; target: DetailTarget } | { name: 'player'; request: PlayRequest };
 
@@ -51,7 +52,7 @@ type Screen = { name: 'detail'; target: DetailTarget } | { name: 'player'; reque
  */
 function setup(
   target: DetailTarget,
-  options: { queryClient?: QueryClient; onBack?: () => void; defaultDelay?: boolean } = {},
+  options: { queryClient?: QueryClient; onBack?: () => void } = {},
 ) {
   const session = new Session(memoryStorage());
   session.set({
@@ -69,7 +70,6 @@ function setup(
       <DetailScreen
         target={current.target}
         memory={memory.of(current)}
-        switchDelayMs={options.defaultDelay ? undefined : SWITCH_MS}
         onPlay={(request) => {
           onPlay(request);
           nav.push({ name: 'player', request });
@@ -512,6 +512,10 @@ describe('DetailScreen: a series', () => {
           user_data: rollup({ position_seconds: 750, duration_seconds: 3000 }),
         }),
         episodeOf(season, 3, { overview: undefined }),
+        // Watched and being watched again: the check and the bar together.
+        episodeOf(season, 4, {
+          user_data: rollup({ played: true, position_seconds: 360, duration_seconds: 3000 }),
+        }),
       ],
     });
     setup({ itemId: 's1' });
@@ -521,20 +525,29 @@ describe('DetailScreen: a series', () => {
       'E1 · Episode 1.1',
       'E2 · Episode 1.2',
       'E3 · Episode 1.3',
+      'E4 · Episode 1.4',
     ]);
     expect(screen.getAllByTestId('episode-runtime').map((el) => el.textContent)).toEqual([
       '45 min',
       '50 min',
       '45 min',
+      '45 min',
     ]);
     expect(screen.getAllByTestId('episode-synopsis')[1]).toHaveTextContent('Synopsis of 1.2.');
-    // Only the first is watched; only the second is partway (a quarter of 50 minutes).
-    expect(screen.getAllByTestId('episode-watched')).toHaveLength(1);
-    expect(
-      within(screen.getByRole('button', { name: /Episode 1.1/ })).getByTestId('episode-watched'),
-    ).toBeInTheDocument();
+    // The first and the fourth are watched; the second is partway (a quarter of 50 minutes) and
+    // the fourth is being watched again (360 s of 50 minutes), so it has both.
+    expect(screen.getAllByTestId('episode-watched')).toHaveLength(2);
+    const first = within(screen.getByRole('button', { name: /Episode 1.1/ }));
+    expect(first.getByTestId('episode-watched')).toBeInTheDocument();
+    expect(first.queryByTestId('card-progress')).toBeNull();
+    const fourth = within(screen.getByRole('button', { name: /Episode 1.4/ }));
+    expect(fourth.getByTestId('episode-watched')).toBeInTheDocument();
+    expect(fourth.getByTestId('card-progress')).toHaveAttribute(
+      'style',
+      expect.stringContaining('width: 12%'),
+    );
     const bars = screen.getAllByTestId('card-progress');
-    expect(bars).toHaveLength(1);
+    expect(bars).toHaveLength(2);
     expect(bars[0]).toHaveAttribute('style', expect.stringContaining('width: 25%'));
   });
 
@@ -567,60 +580,23 @@ describe('DetailScreen: a series', () => {
     });
   });
 
-  it('switches the season once the focus has rested on its pill, not on the way past', async () => {
+  it('never switches the season when the focus only passes over or rests on a pill', async () => {
     const calls = serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' }, { defaultDelay: true });
+    setup({ itemId: 's1' });
     await screen.findByTestId('episode-strip');
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await focusKeyIs('episode:e11');
     await pressKey(KEY.up);
     await focusKeyIs('season:1');
-    // From here the delay is a faked timer: it is exactly 299 ms short, then exactly there.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      // Right, then right again before the delay ran out: season 2 is only passed over.
       await pressFaked(KEY.right);
       expect(getCurrentFocusKey()).toBe('season:2');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(299);
-      });
-      expect(titles()[0]).toBe('E1 · Episode 1.1');
       await pressFaked(KEY.right);
       expect(getCurrentFocusKey()).toBe('season:0');
-      // The delay starts again for the specials: 299 ms are not enough, season 2 never showed.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(299);
-      });
-      expect(titles()[0]).toBe('E1 · Episode 1.1');
-      expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 1');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-    // The specials took over, as the focus rested there; season 2 was never read.
-    await waitFor(() => expect(titles()).toEqual(['E1 · Special']));
-    expect(calls.episodes).toEqual(['s1/1', 's1/0']);
-    expect(screen.getByRole('tab', { name: 'Specials' })).toHaveAttribute('aria-selected', 'true');
-  });
-
-  it('keeps the season that is shown when the focus moves down into the episodes before the delay', async () => {
-    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' }, { defaultDelay: true });
-    await screen.findByTestId('episode-strip');
-    await pressKey(KEY.down);
-    await focusKeyIs('season:1');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await pressFaked(KEY.right);
-      expect(getCurrentFocusKey()).toBe('season:2');
-      await pressFaked(KEY.down);
-      expect(getCurrentFocusKey()).toBe('episode:e11');
-      // Well past the delay: nothing is pending any more.
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(LONG_REST);
       });
     } finally {
       vi.useRealTimers();
@@ -630,31 +606,71 @@ describe('DetailScreen: a series', () => {
     expect(calls.episodes).toEqual(['s1/1']);
   });
 
-  it('waits 300 ms by default before the season changes', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' }, { defaultDelay: true });
+  it('switches the season on OK on its pill', async () => {
+    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
+    setup({ itemId: 's1' });
     await screen.findByTestId('episode-strip');
     await pressKey(KEY.down);
     await focusKeyIs('season:1');
-    const selected = () => screen.getByRole('tab', { selected: true }).textContent;
-    vi.useFakeTimers();
+    await pressKey(KEY.right);
+    await focusKeyIs('season:2');
+    expect(titles()[0]).toBe('E1 · Episode 1.1');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 2');
+    expect(calls.episodes).toEqual(['s1/1', 's1/2']);
+  });
+
+  it('hovering a season pill with the pointer does not switch; a click does', async () => {
+    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-strip');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await act(async () => {
-        fireEvent.keyDown(window, { keyCode: KEY.right });
+        fireEvent.mouseEnter(screen.getByRole('tab', { name: 'Season 2' }));
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
       });
       expect(getCurrentFocusKey()).toBe('season:2');
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(299);
+        await vi.advanceTimersByTimeAsync(LONG_REST);
       });
-      expect(selected()).toBe('Season 1');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      expect(selected()).toBe('Season 2');
+      expect(titles()[0]).toBe('E1 · Episode 1.1');
+      expect(calls.episodes).toEqual(['s1/1']);
     } finally {
       vi.useRealTimers();
     }
+    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
+    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
+  });
+
+  it('Down from a focused season that is not selected enters the episodes that are shown', async () => {
+    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-strip');
+    await pressKey(KEY.down);
+    await focusKeyIs('season:1');
+    await pressKey(KEY.right);
+    await focusKeyIs('season:2');
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe('episode:e11');
+    expect(titles()[0]).toBe('E1 · Episode 1.1');
+    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 1');
+    expect(calls.episodes).toEqual(['s1/1']);
+  });
+
+  it('lands on the selected season when Up comes back from the episodes', async () => {
+    serveDetail(server, { item: () => series(), seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-strip');
+    await pressKey(KEY.down);
+    await focusKeyIs('season:1');
+    await pressKey(KEY.right);
+    await focusKeyIs('season:2');
+    await pressKey(KEY.down);
+    await focusKeyIs('episode:e11');
+    await pressKey(KEY.up);
+    await focusKeyIs('season:1');
   });
 
   it('marks exactly one season pill as selected, and the mark follows the season', async () => {
@@ -693,6 +709,7 @@ describe('DetailScreen: a series', () => {
     await focusKeyIs('season:1');
     await pressKey(KEY.right);
     await focusKeyIs('season:2');
+    await pressKey(KEY.enter);
     await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
     await pressKey(KEY.down);
     await focusKeyIs('episode:e21');
@@ -704,6 +721,7 @@ describe('DetailScreen: a series', () => {
     await focusKeyIs('season:2');
     await pressKey(KEY.left);
     await focusKeyIs('season:1');
+    await pressKey(KEY.enter);
     await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 1.1'));
     await pressKey(KEY.down);
     await focusKeyIs('episode:e12');
@@ -711,6 +729,7 @@ describe('DetailScreen: a series', () => {
     await pressKey(KEY.up);
     await pressKey(KEY.right);
     await focusKeyIs('season:2');
+    await pressKey(KEY.enter);
     await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
     await pressKey(KEY.down);
     await focusKeyIs('episode:e23');
@@ -794,6 +813,7 @@ describe('DetailScreen: a series', () => {
     await focusKeyIs('season:1');
     await pressKey(KEY.right);
     await focusKeyIs('season:2');
+    await pressKey(KEY.enter);
     await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
     await pressKey(KEY.down);
     await focusKeyIs('episode:e21');

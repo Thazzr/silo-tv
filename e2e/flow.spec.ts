@@ -546,6 +546,22 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByTestId('hero-title')).toHaveText('Second Title');
   await expect(page.getByTestId('hero-synopsis')).toHaveText('The second title, half way through.');
   await expect(page.getByTestId('card-progress')).toHaveAttribute('style', /width: 25%/);
+  // The bar is 6 px high and inset 10 px from the art's left, right and bottom edge; the fill
+  // follows the position (a quarter of the inner width).
+  const geometry = await page.getByTestId('card-progress').evaluate((fill) => {
+    const track = fill.parentElement!;
+    const art = track.parentElement!.getBoundingClientRect();
+    const t = track.getBoundingClientRect();
+    return {
+      height: t.height,
+      left: t.left - art.left,
+      right: art.right - t.right,
+      bottom: art.bottom - t.bottom,
+      ratio: fill.getBoundingClientRect().width / (t.width - 2),
+    };
+  });
+  expect(geometry).toMatchObject({ height: 6, left: 10, right: 10, bottom: 10 });
+  expect(geometry.ratio).toBeCloseTo(0.25, 1);
   await expect(page.getByTestId('server-name')).toHaveText('E2E Silo');
   // The server's accent is applied: it only colours the underline of the selected tab.
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toHaveAttribute(
@@ -630,18 +646,22 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   expect(start?.authorization).toBe('Bearer fake-access');
   expect(start?.profileId).toBe('profile-1');
   // A video element cannot set headers: the media request carries the token as a query parameter.
-  const media = seen.find((entry) => entry.path === '/api/v2/stream/e2e-session');
-  expect(media?.search).toBe('?st=x&token=fake-access');
+  await expect
+    .poll(() => seen.find((entry) => entry.path === '/api/v2/stream/e2e-session')?.search)
+    .toBe('?st=x&token=fake-access');
   expect(seen.filter((entry) => entry.path === '/api/v2/auth/device/poll')).toHaveLength(2);
 
   // Shell, keyboard only: Back in a row moves the focus to the Home tab.
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
-  // Right moves across the tabs; the content follows after a short delay.
+  // Right moves across the tabs; the content changes only on OK.
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Serien', exact: true })).toBeFocused();
+  await page.waitForTimeout(700);
+  await expect(page.getByTestId('tab-home')).toBeVisible();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('tab-series')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Serien', exact: true })).toHaveAttribute(
     'aria-current',
@@ -649,6 +669,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   );
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Für dich', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('coming-soon')).toHaveText(/Kommt bald/);
   // Down reaches the placeholder in the content, Up returns to the tab.
   await page.keyboard.press('ArrowDown');
@@ -704,11 +725,14 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
     'E2 · Episode 1.2',
   ]);
 
-  // Down to the pills, Right onto season 2: it shows after the focus has rested there.
+  // Down to the pills, Right onto season 2: it shows only on OK, not while the focus rests there.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Staffel 2' })).toBeFocused();
+  await page.waitForTimeout(700);
+  await expect(page.getByTestId('episode-title').first()).toHaveText('E1 · Episode 1.1');
+  await page.keyboard.press('Enter');
   await expect(page.getByTestId('episode-title').first()).toHaveText('E1 · Episode 2.1');
   await expect(page.getByRole('tab', { name: 'Staffel 2' })).toHaveAttribute(
     'aria-selected',
@@ -963,8 +987,13 @@ test('profiles: picker with a PIN profile, create a kids profile, choose it, ope
   await expect(page.getByTestId('server-name')).toHaveText('E2E Silo', { timeout: 10_000 });
   await expect(page.getByRole('button', { name: 'Profilmenü für Mia' })).toBeVisible();
   await expect(page.getByTestId('profile-list')).toHaveCount(0);
-  const homes = seen.filter((e) => e.path === '/api/v2/home/sections');
-  expect(homes[homes.length - 1]?.profileId).toBe('profile-3');
+  // Home's request of this start may still be on its way when the avatar shows: wait for it.
+  await expect
+    .poll(() => {
+      const homes = seen.filter((e) => e.path === '/api/v2/home/sections');
+      return homes[homes.length - 1]?.profileId;
+    })
+    .toBe('profile-3');
 });
 
 test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({
@@ -1123,8 +1152,12 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
   await expect(serverRow(page, 'Silo A')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('server-name')).toHaveText('Silo A', { timeout: 10_000 });
-  const homesOfA = a.seen.filter((entry) => entry.path === '/api/v2/home/sections');
-  expect(homesOfA[homesOfA.length - 1]?.authorization).toBe('Bearer token-a');
+  await expect
+    .poll(() => {
+      const homesOfA = a.seen.filter((entry) => entry.path === '/api/v2/home/sections');
+      return homesOfA[homesOfA.length - 1]?.authorization;
+    })
+    .toBe('Bearer token-a');
   // A was not asked to sign in again: its code flow ran once.
   expect(a.seen.filter((entry) => entry.path === '/api/v2/auth/device/start')).toHaveLength(1);
 
@@ -1186,6 +1219,20 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   const panel = page.getByTestId('player-diagnostics');
   await expect(panel).toBeVisible();
 
+  // The probe screen's dl rules must not leak in: no 280 px grid, no break-anywhere values.
+  const styles = await panel.evaluate((el) => {
+    const view = el.ownerDocument.defaultView!;
+    const dd = el.querySelector('dd')!;
+    return {
+      display: view.getComputedStyle(el).display,
+      columns: view.getComputedStyle(el).gridTemplateColumns,
+      wordBreak: view.getComputedStyle(dd).wordBreak,
+    };
+  });
+  expect(styles.display).not.toBe('grid');
+  expect(styles.columns).not.toContain('280px');
+  expect(styles.wordBreak).not.toBe('break-all');
+
   const rows = await panel.locator('.player-diag-row').evaluateAll((els) =>
     els.map((el) => {
       const dt = el.querySelector('dt')!.getBoundingClientRect();
@@ -1224,4 +1271,88 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   await page.screenshot({
     path: 'test-results/shots/overlay-fixed.png',
   });
+});
+
+async function openSeriesDetail(page: Page) {
+  const { origin } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+}
+
+test('detail page: focused pills have black content on white, the selected season keeps its style', async ({
+  page,
+}) => {
+  await openSeriesDetail(page);
+  const paint = (locator: ReturnType<Page['locator']>) =>
+    locator.evaluate((el) => {
+      const style = el.ownerDocument.defaultView!.getComputedStyle(el);
+      return { color: style.color, background: style.backgroundColor };
+    });
+  const white = { color: 'rgb(0, 0, 0)', background: 'rgb(255, 255, 255)' };
+
+  // The focused action pill.
+  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  expect(await paint(play)).toEqual(white);
+
+  // The focused season pill, which is also the selected one.
+  await page.keyboard.press('ArrowDown');
+  const season1 = page.getByRole('tab', { name: 'Staffel 1' });
+  await expect(season1).toBeFocused();
+  expect(await paint(season1)).toEqual(white);
+
+  // Another season focused: it is white too, and the selected one is back to its resting style.
+  await page.keyboard.press('ArrowRight');
+  const season2 = page.getByRole('tab', { name: 'Staffel 2' });
+  await expect(season2).toBeFocused();
+  expect(await paint(season2)).toEqual(white);
+  const rest = await paint(season1);
+  expect(rest.color).not.toBe('rgb(0, 0, 0)');
+  expect(rest.background).not.toBe('rgb(255, 255, 255)');
+});
+
+test('detail page: the backdrop stays, the page snaps to the season pills, the text column is narrow', async ({
+  page,
+}) => {
+  await openSeriesDetail(page);
+  const shots =
+    'test-results/shots';
+  const layer = page.getByTestId('detail-backdrop-layer');
+  const before = await layer.boundingBox();
+  expect(before).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
+
+  // The hero's text column ends at 1000 px at the latest.
+  const column = await page.locator('.detail-text').boundingBox();
+  expect(column!.x + column!.width).toBeLessThanOrEqual(1000);
+  const synopsis = await page.getByTestId('detail-synopsis').boundingBox();
+  expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1000);
+  await page.screenshot({ path: `${shots}/series-resume.png` });
+
+  // Down to the season pills and into the episodes: the actions are out of view, and no pill
+  // reaches into the top safe-area band (54 px).
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await page.waitForTimeout(400);
+  const pills = await page
+    .locator('.detail-actions .detail-pill')
+    .evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect()).map((r) => [r.top, r.bottom]),
+    );
+  expect(pills.length).toBeGreaterThan(0);
+  for (const [top, bottom] of pills) {
+    expect(bottom <= 0 || top >= 54).toBe(true);
+  }
+  const seasons = await page.getByRole('tab', { name: 'Staffel 1' }).boundingBox();
+  expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(4);
+  expect(await layer.boundingBox()).toEqual(before);
+  await expect(page.getByTestId('detail-dim')).toHaveAttribute('data-scrolled', 'true');
+  await page.screenshot({ path: `${shots}/series-episodes.png` });
 });

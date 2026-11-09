@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { Button } from '../../app/ui';
 import { FocusTrackerContext, getCurrentFocusKey, setFocus } from '../../app/nav';
 import { useContentBack } from '../../app/shell/ShellBack';
-import { AVATAR_KEY, TAB_SWITCH_DELAY_MS, tabOfKey } from '../../app/shell/tabs';
+import { AVATAR_KEY, tabOfKey } from '../../app/shell/tabs';
 import { useT, type MessageKey } from '../../i18n';
 import { RowSkeleton, type CatalogItem } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
@@ -41,15 +41,13 @@ export interface LibraryScreenProps {
   onExploreSection: (section: ExploreTarget) => void;
   /** OK on a collection: opens its page. */
   onOpenCollection: (target: CollectionTarget) => void;
-  /** How long a focused pill waits before its content replaces the old one; tests stretch it. */
-  switchDelayMs?: number;
 }
 
 /**
  * The content of the Movies and Series tabs: the libraries of the kind as pills (when there are
  * several), the sub-views Recommended, Browse and Collections as pills below them, and the
- * selected view. A pill that keeps the focus shows its content after a short rest; OK shows it
- * at once; moving on before that leaves the content as it was. The library, the sub-view and the
+ * selected view. A pill shows its content only on OK or a click; focus and hover only move the
+ * highlight, so moving on leaves the content as it was. The library, the sub-view and the
  * Browse choices are kept in `memory`.
  *
  * Back leaves the content step by step: from a view to its pill, to the library pills, to the
@@ -62,7 +60,6 @@ export function LibraryScreen({
   onOpenDetail,
   onExploreSection,
   onOpenCollection,
-  switchDelayMs = TAB_SWITCH_DELAY_MS,
 }: LibraryScreenProps) {
   const t = useT();
   const libraries = useLibraries();
@@ -77,41 +74,21 @@ export function LibraryScreen({
   const [view, setView] = useState<LibraryView>(() => memory.viewOf(kind));
   const [overlay, setOverlay] = useState<BrowseOverlay>(null);
 
-  // --- A pill that keeps the focus shows its content after a short rest -------------------------
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearPending = useCallback(() => {
-    if (pending.current !== null) clearTimeout(pending.current);
-    pending.current = null;
-  }, []);
-  useEffect(() => clearPending, [clearPending]);
-
+  // --- A pill shows its content only when it is activated (OK or a click) ---------------------
   const selectLibrary = useCallback(
     (id: string) => {
-      clearPending();
       memory.selectLibrary(kind, id);
       setLibraryId(id);
     },
-    [clearPending, kind, memory],
+    [kind, memory],
   );
   const selectView = useCallback(
     (next: LibraryView) => {
-      clearPending();
       memory.selectView(kind, next);
       setView(next);
     },
-    [clearPending, kind, memory],
+    [kind, memory],
   );
-  const rest = useCallback(
-    (apply: () => void) => {
-      clearPending();
-      pending.current = setTimeout(() => {
-        pending.current = null;
-        apply();
-      }, switchDelayMs);
-    },
-    [clearPending, switchDelayMs],
-  );
-
   const libraryRef = useRef(library);
   const viewRef = useRef(view);
   useEffect(() => {
@@ -119,16 +96,13 @@ export function LibraryScreen({
     viewRef.current = view;
   });
 
-  // Every focusable below reports here. Anything but a pill ends a pending switch ("Down before
-  // the delay ran out"); the keys of a list or panel are the screen's own and go no further.
+  // Every focusable below reports here; the keys of a list or panel are the screen's own and go
+  // no further than the shell.
   const track = useCallback(
     (focusKey: string) => {
-      if (!focusKey.startsWith(LIBRARY_KEY_PREFIX) && !focusKey.startsWith(VIEW_KEY_PREFIX)) {
-        clearPending();
-      }
       if (!focusKey.startsWith(DIALOG_KEY_PREFIX)) outerTracker?.(focusKey);
     },
-    [clearPending, outerTracker],
+    [outerTracker],
   );
 
   // --- Back --------------------------------------------------------------------------------------
@@ -246,10 +220,6 @@ export function LibraryScreen({
               label={t('library.pills')}
               items={candidates.map((l) => ({ id: l.id, label: l.name }))}
               selected={library.id}
-              onFocusPill={(id) => {
-                if (id === library.id) clearPending();
-                else rest(() => selectLibrary(id));
-              }}
               onPick={selectLibrary}
               testId="library-pills"
             />
@@ -260,10 +230,6 @@ export function LibraryScreen({
             label={t('library.views')}
             items={LIBRARY_VIEWS.map((id) => ({ id, label: t(VIEW_LABELS[id]) }))}
             selected={view}
-            onFocusPill={(id) => {
-              if (id === view) clearPending();
-              else rest(() => selectView(id as LibraryView));
-            }}
             onPick={(id) => selectView(id as LibraryView)}
             testId="view-pills"
           />

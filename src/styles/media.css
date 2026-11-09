@@ -151,14 +151,20 @@
   text-align: center;
 }
 
+/* Dark track with a light outline, inset 10 px from the art's edges: it stays visible on bright
+   artwork (design.md, --progress). */
 .card-progress {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
   z-index: 2;
-  height: 4px;
+  box-sizing: border-box;
+  height: 6px;
+  overflow: hidden;
   background: var(--progress-track);
+  border: 1px solid var(--progress-outline);
+  border-radius: 3px;
 }
 
 .card-progress-fill {

@@ -6,9 +6,8 @@ export interface PillItem {
 }
 
 /**
- * A row of pills, one of them selected (marked like the season pills). A focused pill is only a
- * candidate: the screen shows its content once the focus has rested on it (`onFocusPill`), and
- * OK shows it at once (`onPick`). Entering the row from below lands on the selected pill.
+ * A row of pills, one of them selected (marked like the season pills). Focus and hover only move
+ * the highlight; OK or a click shows a pill's content (`onPick`). Entering the row from below lands on the selected pill.
  */
 export function PillRow({
   focusKey,
@@ -16,7 +15,6 @@ export function PillRow({
   label,
   items,
   selected,
-  onFocusPill,
   onPick,
   testId,
 }: {
@@ -26,7 +24,6 @@ export function PillRow({
   label: string;
   items: readonly PillItem[];
   selected: string | undefined;
-  onFocusPill: (id: string) => void;
   onPick: (id: string) => void;
   testId: string;
 }) {
@@ -48,7 +45,6 @@ export function PillRow({
           className={`btn lib-pill${item.id === selected ? ' selected' : ''}`}
           role="tab"
           aria-selected={item.id === selected}
-          onFocused={() => onFocusPill(item.id)}
           onClick={() => onPick(item.id)}
         >
           {item.label}

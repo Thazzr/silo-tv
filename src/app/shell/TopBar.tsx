@@ -14,7 +14,6 @@ export function TopBar({
   selected,
   initialTab,
   profileName,
-  onTabFocused,
   onTabPick,
   onAvatar,
 }: {
@@ -22,8 +21,7 @@ export function TopBar({
   /** The tab that takes the focus when the shell opens. */
   initialTab: TabId;
   profileName: string;
-  onTabFocused: (tab: TabId) => void;
-  /** OK or a click on a tab: its content shows at once, without the delay. */
+  /** OK or a click on a tab: its content shows; focus alone never does. */
   onTabPick: (tab: TabId) => void;
   onAvatar: () => void;
 }) {
@@ -54,7 +52,6 @@ export function TopBar({
             className="tab"
             aria-current={tab === selected ? 'page' : undefined}
             data-selected={tab === selected}
-            onFocused={() => onTabFocused(tab)}
             onClick={() => onTabPick(tab)}
           >
             {t(TAB_LABELS[tab])}

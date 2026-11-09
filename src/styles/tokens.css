@@ -19,8 +19,9 @@
   --error: #ff6961;
   --warning: #f4c869;
   --danger: #ff453a;
-  --progress: #ededed;
-  --progress-track: rgba(255, 255, 255, 0.2);
+  --progress: #ffffff;
+  --progress-track: rgba(0, 0, 0, 0.6);
+  --progress-outline: rgba(255, 255, 255, 0.35);
   --radius-card: 12px;
   --radius-still: 18px;
   --radius-control: 12px;

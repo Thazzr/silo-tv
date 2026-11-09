@@ -20,9 +20,8 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-const DELAY = 150;
-/** For tests that are not about the delay: a pill the frame focuses at mount must not switch. */
-const NEVER = 60_000;
+/** Far longer than the old rest delay: focus alone must not switch anything in this time. */
+const LONG_REST = 5000;
 
 function signedIn() {
   const session = new Session(memoryStorage());
@@ -40,7 +39,6 @@ function setup(
   options: {
     kind?: LibraryScreenProps['kind'];
     memory?: LibraryMemory;
-    delay?: number;
   } = {},
 ) {
   const memory = options.memory ?? new LibraryMemory();
@@ -56,7 +54,6 @@ function setup(
       onOpenDetail={onOpenDetail}
       onExploreSection={onExploreSection}
       onOpenCollection={onOpenCollection}
-      switchDelayMs={options.delay ?? NEVER}
     />,
     { session: signedIn() },
   );
@@ -71,11 +68,6 @@ async function focusFaked(key: string) {
   });
   expect(getCurrentFocusKey()).toBe(key);
 }
-const pressFaked = (keyCode: number) =>
-  act(async () => {
-    fireEvent.keyDown(window, { keyCode });
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
-  });
 
 async function focus(key: string) {
   await act(async () => {
@@ -135,60 +127,88 @@ describe('library pills', () => {
     expect(screen.queryByTestId('library-pills')).toBeNull();
   });
 
-  it('show the content of the library that rests, after the delay', async () => {
-    const calls = serveLibrary(server, LIBRARIES);
-    setup({ delay: DELAY });
+  it('hovering a library pill with the pointer does not switch; a click does', async () => {
+    serveLibrary(server, LIBRARIES);
+    setup();
     await screen.findByText('Row a-rec');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-      await focusFaked('lib-pill:lib-b');
-      // Exactly one millisecond short: the first library is still shown and selected.
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(DELAY - 1);
+        fireEvent.mouseEnter(screen.getByRole('tab', { name: 'Films B' }));
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(getCurrentFocusKey()).toBe('lib-pill:lib-b');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LONG_REST);
       });
       expect(rowTitles()).toEqual(['Row a-rec']);
-      expect(screen.getByRole('tab', { name: 'Films A' })).toHaveAttribute('aria-selected', 'true');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
     } finally {
       vi.useRealTimers();
     }
+    fireEvent.click(screen.getByRole('tab', { name: 'Films B' }));
     await screen.findByText('Row b-rec');
-    expect(rowTitles()).toEqual(['Row b-rec']);
     expect(screen.getByRole('tab', { name: 'Films B' })).toHaveAttribute('aria-selected', 'true');
-    expect(calls.sections.map((read) => read.id)).toEqual(['lib-a', 'lib-b']);
-  });
-  it('show the library at once on OK', async () => {
-    serveLibrary(server, LIBRARIES);
-    setup({ delay: 60_000 });
-    await screen.findByText('Row a-rec');
-    await focus('lib-pill:lib-b');
-    await pressKey(KEY.enter);
-    await screen.findByText('Row b-rec');
   });
 
-  it('cancel a switch that Down overtakes', async () => {
-    serveLibrary(server, LIBRARIES);
-    setup({ delay: DELAY });
+  it('never switch the library when a pill only has the focus', async () => {
+    const calls = serveLibrary(server, LIBRARIES);
+    setup();
     await screen.findByText('Row a-rec');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await focusFaked('lib-pill:lib-b');
-      await pressFaked(KEY.down);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(DELAY * 5);
+        await vi.advanceTimersByTimeAsync(LONG_REST);
       });
     } finally {
       vi.useRealTimers();
     }
     expect(rowTitles()).toEqual(['Row a-rec']);
     expect(screen.getByRole('tab', { name: 'Films A' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Films B' })).toHaveAttribute('aria-selected', 'false');
+    expect(calls.sections.map((read) => read.id)).toEqual(['lib-a']);
   });
+
+  it('show the library on OK', async () => {
+    serveLibrary(server, LIBRARIES);
+    setup();
+    await screen.findByText('Row a-rec');
+    await focus('lib-pill:lib-b');
+    await pressKey(KEY.enter);
+    await screen.findByText('Row b-rec');
+  });
+
+  it('let Down from a focused pill that is not selected enter the content that is shown', async () => {
+    serveLibrary(server, LIBRARIES);
+    setup();
+    await screen.findByText('Row a-rec');
+    await focus('lib-pill:lib-b');
+    // Down passes the view pills (on their selected one) and enters the rows that are shown.
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe('lib-view:recommended');
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-a/a-rec', 'a-rec-1'));
+    expect(rowTitles()).toEqual(['Row a-rec']);
+    expect(screen.getByRole('tab', { name: 'Films A' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('land on the selected pill when Up comes back from the content', async () => {
+    serveLibrary(server, LIBRARIES);
+    setup();
+    await screen.findByText('Row a-rec');
+    await focus('lib-pill:lib-b');
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await pressKey(KEY.up);
+    expect(getCurrentFocusKey()).toBe('lib-view:recommended');
+    await pressKey(KEY.up);
+    expect(getCurrentFocusKey()).toBe('lib-pill:lib-a');
+  });
+
   it('are remembered per tab', async () => {
     serveLibrary(server, LIBRARIES);
     const memory = new LibraryMemory();
-    const first = setup({ memory, delay: 60_000 });
+    const first = setup({ memory });
     await screen.findByText('Row a-rec');
     await focus('lib-pill:lib-b');
     await pressKey(KEY.enter);
@@ -268,62 +288,61 @@ describe('sub-view pills', () => {
     );
   });
 
-  it('switch to the view that rests, after the delay, and remember it', async () => {
+  it('never switch the view when a pill only has the focus', async () => {
     serveLibrary(server, LIBRARIES);
-    const { memory } = setup({ delay: DELAY });
+    const { memory } = setup();
     await screen.findByText('Row a-rec');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await focusFaked('lib-view:browse');
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(DELAY - 1);
-      });
-      expect(screen.queryByTestId('browse')).toBeNull();
-      expect(screen.getByTestId('recommended')).toBeInTheDocument();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
+        await vi.advanceTimersByTimeAsync(LONG_REST);
       });
     } finally {
       vi.useRealTimers();
     }
+    expect(screen.queryByTestId('browse')).toBeNull();
+    expect(screen.getByTestId('recommended')).toBeInTheDocument();
+    expect(memory.viewOf('movie')).toBe('recommended');
+  });
+
+  it('switch to a view on OK and remember it', async () => {
+    serveLibrary(server, LIBRARIES);
+    const { memory } = setup();
+    await screen.findByText('Row a-rec');
+    await focus('lib-view:browse');
+    await pressKey(KEY.enter);
     await screen.findByTestId('browse');
-    expect(screen.queryByTestId('recommended')).toBeNull();
     expect(screen.getByRole('tab', { name: 'Browse' })).toHaveAttribute('aria-selected', 'true');
     expect(memory.viewOf('movie')).toBe('browse');
   });
-  it('switch at once on OK', async () => {
+
+  it('switch to Collections on OK', async () => {
     serveLibrary(server, LIBRARIES);
-    setup({ delay: 60_000 });
+    setup();
     await screen.findByText('Row a-rec');
     await focus('lib-view:collections');
     await pressKey(KEY.enter);
     await screen.findByTestId('collections-empty');
   });
 
-  it('are cancelled when Down enters the content before the delay ran out', async () => {
+  it('let Down from a focused view pill enter the content that is shown', async () => {
     serveLibrary(server, LIBRARIES);
-    setup({ delay: DELAY });
+    setup();
     await screen.findByText('Row a-rec');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await focusFaked('lib-view:browse');
-      await pressFaked(KEY.down);
-      expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-a/a-rec', 'a-rec-1'));
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(DELAY * 5);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+    await focus('lib-view:browse');
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-a/a-rec', 'a-rec-1'));
     expect(screen.getByTestId('recommended')).toBeInTheDocument();
     expect(screen.queryByTestId('browse')).toBeNull();
   });
+
   it('keep a card focus per view: Recommended and Browse each return to their own', async () => {
     serveLibrary(server, {
       ...LIBRARIES,
       sections: { 'lib-a': [homeSection('x', 3), homeSection('y', 3)] },
     });
-    setup({ delay: 60_000 });
+    setup();
     await screen.findByText('Row y');
     // Recommended: the third card of the second row.
     const remembered = cardFocusKey('lib-a/y', 'y-3');

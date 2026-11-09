@@ -168,14 +168,16 @@ export function qualityBadges(detail: ItemDetail): QualityBadge[] {
   return BADGE_ORDER.filter((badge) => found.has(badge));
 }
 
-/** How far into an episode the profile is, 0 to 1, or null without a position. */
+/**
+ * How far into an episode the profile is, 0 to 1, or null without a resume position. The rule is
+ * the Resume button's (`resumePoint`), so a watched episode that is being watched again shows its
+ * bar together with the check.
+ */
 export function episodeProgress(episode: Episode): number | null {
   const state = episode.user_data;
-  if (!state || state.played) return null;
-  const position = state.position_seconds ?? 0;
-  if (position <= 0) return null;
-  const total = state.duration_seconds || episode.runtime * 60;
-  if (!total || total <= 0) return null;
+  const total = state?.duration_seconds || episode.runtime * 60;
+  const position = resumePoint(state, total);
+  if (position === null || !total || total <= 0) return null;
   return Math.max(0, Math.min(1, position / total));
 }
 

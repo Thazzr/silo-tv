@@ -53,7 +53,6 @@ function setupView(
       onOpenDetail={vi.fn()}
       onExploreSection={vi.fn()}
       onOpenCollection={onOpenCollection}
-      switchDelayMs={60_000}
     />,
     { session: signedIn() },
   );

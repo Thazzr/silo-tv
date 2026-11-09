@@ -9,8 +9,9 @@
   background: var(--bg);
 }
 
-/* The page scrolls in steps, from the hero to the section that holds the focus. */
+/* The page scrolls in steps, from the hero to the block that holds the focus. */
 .detail-page {
+  position: relative;
   transition: transform var(--transition);
 }
 
@@ -18,6 +19,12 @@
   position: relative;
   /* HERO_HEIGHT */
   height: 760px;
+}
+
+/* The picture and its darkening sit behind the page and do not scroll with it. */
+.detail-backdrop-layer {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
 }
 
@@ -32,9 +39,9 @@
 }
 
 /* Darkens the picture so the text keeps 4.5:1 even over a white backdrop. The text column
-   (100 to 1180 px) lies under 90 % black: the lightest possible picture is then darker than
-   #252525, which gives the secondary text above 6:1. The picture fades to black at the foot, where
-   the first section starts. */
+   (100 to 1000 px) lies under at least 92 % black (DETAIL_SHADE_MIN_ALPHA): the lightest
+   picture is then darker than #141414, which gives the secondary text above 6:1. The foot only darkens a little, so the
+   lower half of the screen still shows the picture behind the episodes. */
 .detail-shade {
   position: absolute;
   inset: 0;
@@ -43,16 +50,29 @@
       180deg,
       rgba(0, 0, 0, 0.55) 0,
       rgba(0, 0, 0, 0) 18%,
-      rgba(0, 0, 0, 0) 62%,
-      #000000 100%
+      rgba(0, 0, 0, 0) 70%,
+      rgba(0, 0, 0, 0.6) 100%
     ),
     linear-gradient(
       90deg,
       rgba(0, 0, 0, 0.96) 0,
-      rgba(0, 0, 0, 0.9) 62%,
+      rgba(0, 0, 0, 0.92) 56%,
       rgba(0, 0, 0, 0.3) 88%,
       rgba(0, 0, 0, 0.1) 100%
     );
+}
+
+/* Once the page has left the hero the picture dims further; only opacity animates. */
+.detail-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.detail-dim[data-scrolled='true'] {
+  opacity: 1;
 }
 
 .detail-text {
@@ -63,7 +83,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 16px;
-  width: 1080px;
+  width: 900px;
 }
 
 .detail-title {
@@ -211,7 +231,11 @@
   border-bottom-color: var(--accent, rgba(255, 255, 255, 0.1));
 }
 
-.detail-season.selected:focus {
+/* Focus wins over every resting or selected style, and over hover: black on white. */
+.detail-pill:focus,
+.detail-pill:hover:focus,
+.detail-season.selected:focus,
+.detail-season.selected:hover:focus {
   color: var(--focus-content);
   background: var(--focus-fill);
   border-color: var(--focus-fill);
@@ -299,7 +323,7 @@
 }
 
 .detail-skeleton-synopsis {
-  width: 1080px;
+  width: 900px;
   height: 144px;
 }
 

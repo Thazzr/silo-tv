@@ -24,18 +24,18 @@ h2 {
   margin: 40px 0 16px;
 }
 
-dl {
+.platform dl {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 8px 24px;
   margin: 0;
 }
 
-dt {
+.platform dt {
   color: #9aa3b0;
 }
 
-dd {
+.platform dd {
   margin: 0;
   word-break: break-all;
 }
@@ -273,7 +273,7 @@ h3 {
 .spinner {
   width: 28px;
   height: 28px;
-  border: 4px solid var(--progress-track);
+  border: 4px solid rgba(255, 255, 255, 0.2);
   border-top-color: var(--progress);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -427,10 +427,12 @@ h3 {
 
 .player-track {
   flex: 1;
-  height: 4px;
+  box-sizing: border-box;
+  height: 6px;
   overflow: hidden;
   background: var(--progress-track);
-  border-radius: 2px;
+  border: 1px solid var(--progress-outline);
+  border-radius: 3px;
 }
 
 .player-fill {
@@ -440,13 +442,12 @@ h3 {
   transform-origin: left center;
 }
 
-/* The global dl is a two-column grid (label | value) whose break-all values collapse to one
-   character when a row is a single grid item; the overlay lays out its own rows instead. */
+/* The overlay lays out its own rows (label | value); the probe screen's dl styles are scoped to
+   .platform and do not apply here. */
 .player-diag {
   position: absolute;
   top: var(--safe-y);
   left: var(--safe-x);
-  display: block;
   box-sizing: border-box;
   width: 960px;
   max-width: calc(100vw - 2 * var(--safe-x));
@@ -476,9 +477,6 @@ h3 {
 .player-diag dd {
   margin: 0;
   color: var(--text);
-  /* Values wrap at word boundaries only; the global dd rule would break anywhere. */
-  word-break: normal;
-  overflow-wrap: normal;
 }
 
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the

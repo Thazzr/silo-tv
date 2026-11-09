@@ -3,24 +3,21 @@ import { useT } from '../../i18n';
 import type { Season } from './info';
 
 export const seasonKey = (season: number) => `season:${season}`;
-export const isSeasonKey = (focusKey: string) => focusKey.startsWith('season:');
 
 /**
- * The seasons as a row of pills (numbered seasons in order, Specials last). The focused pill is
- * only a candidate: the page shows its season once the focus has rested on it (`onFocusSeason`),
- * and OK shows it at once (`onPick`).
+ * The seasons as a row of pills (numbered seasons in order, Specials last). Focus and hover only
+ * move the highlight; OK or a click shows a season (`onPick`). Entering the row from the episodes
+ * lands on the selected season.
  */
 export function SeasonPills({
   seasons,
   selected,
-  onFocusSeason,
   onPick,
   onFocused,
 }: {
   /** In display order. */
   seasons: readonly Season[];
   selected: number | undefined;
-  onFocusSeason: (season: number) => void;
   onPick: (season: number) => void;
   onFocused: () => void;
 }) {
@@ -29,7 +26,7 @@ export function SeasonPills({
     <FocusGroup
       focusKey="detail-seasons"
       enterable
-      saveLastFocusedChild
+      saveLastFocusedChild={false}
       preferredChildFocusKey={selected === undefined ? undefined : seasonKey(selected)}
       className="detail-row detail-seasons"
       role="tablist"
@@ -47,7 +44,6 @@ export function SeasonPills({
             aria-selected={season.season_number === selected}
             onFocused={() => {
               onFocused();
-              onFocusSeason(season.season_number);
             }}
             onClick={() => onPick(season.season_number)}
           >

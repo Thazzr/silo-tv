@@ -46,7 +46,6 @@ function setup(memory = new LibraryMemory()) {
       onOpenDetail={onOpenDetail}
       onExploreSection={vi.fn()}
       onOpenCollection={vi.fn()}
-      switchDelayMs={60_000}
     />,
     { session },
   );

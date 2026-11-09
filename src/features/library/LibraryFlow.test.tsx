@@ -89,7 +89,6 @@ function renderMovies(
             onSwitchServer={() => undefined}
             launchMode="every"
             onLaunchMode={() => undefined}
-            switchDelayMs={60_000}
           />
         );
       case 'grid':

@@ -244,9 +244,31 @@ describe('episodes', () => {
     });
     expect(episodeProgress(half)).toBe(0.5);
     expect(episodeProgress(episodeOf(1, 1))).toBeNull();
+    // A watched episode that is being watched again keeps its bar (the Resume button's rule).
     expect(
       episodeProgress(
-        episodeOf(1, 1, { user_data: rollup({ position_seconds: 1350, played: true }) }),
+        episodeOf(1, 1, {
+          user_data: rollup({ position_seconds: 360, duration_seconds: 2700, played: true }),
+        }),
+      ),
+    ).toBeCloseTo(360 / 2700);
+    // A watched episode whose position is at the end or at 0 has no bar.
+    expect(
+      episodeProgress(
+        episodeOf(1, 1, {
+          user_data: rollup({ position_seconds: 2698, duration_seconds: 2700, played: true }),
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      episodeProgress(
+        episodeOf(1, 1, { user_data: rollup({ position_seconds: 0, played: true }) }),
+      ),
+    ).toBeNull();
+    // Up to 30 s in is not a resume point: no bar, like no Resume button.
+    expect(
+      episodeProgress(
+        episodeOf(1, 1, { user_data: rollup({ position_seconds: 30, duration_seconds: 2700 }) }),
       ),
     ).toBeNull();
     // Without a duration the runtime (45 min) stands in.

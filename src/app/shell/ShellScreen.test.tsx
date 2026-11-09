@@ -18,7 +18,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import type { LaunchMode } from '../../features/profiles/launchPrefs';
 import { ShellScreen, type ShellScreenProps } from './ShellScreen';
-import { ShellMemory, TAB_SWITCH_DELAY_MS, type TabId } from './tabs';
+import { ShellMemory, type TabId } from './tabs';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -105,7 +105,6 @@ function signedIn(profileId = 'p1') {
 function setup(
   options: {
     memory?: ShellMemory;
-    delay?: number | 'default';
     launchMode?: LaunchMode;
     offer?: ShellScreenProps['offer'];
     profileId?: string;
@@ -128,7 +127,6 @@ function setup(
       launchMode={options.launchMode ?? 'every'}
       onLaunchMode={onLaunchMode}
       offer={options.offer}
-      switchDelayMs={options.delay === 'default' ? undefined : (options.delay ?? DELAY)}
     />,
     { session },
   );
@@ -147,7 +145,6 @@ async function ready() {
   await screen.findByTestId('row-r1');
 }
 
-/** Moves to a tab with Right/Left and waits until its content replaced the old one. */
 /**
  * Presses a key that must move the focus and waits until it did. pressKey alone waits one task,
  * which a loaded machine can overrun: the next key would then start from the old focus.
@@ -158,9 +155,10 @@ async function move(key: number) {
   await waitFor(() => expect(document.activeElement).not.toBe(before));
 }
 
-/** Moves to a tab with Right/Left and waits until its content replaced the old one. */
+/** Moves to a tab with Right/Left, activates it with OK and waits until its content shows. */
 async function goToTab(key: number, times: number, id: TabId) {
   for (let i = 0; i < times; i++) await move(key);
+  await pressKey(KEY.enter);
   await waitFor(() => expect(shown()).toBe(id), { timeout: 3000 });
 }
 
@@ -220,9 +218,9 @@ describe('ShellScreen keys', () => {
 
   it('Up from the content goes to the selected tab, not to the one that was merely focused', async () => {
     serve();
-    setup({ delay: 5000 });
+    setup();
     await ready();
-    // Series is focused but its delay has not run out: Home is still selected and shown.
+    // Series is focused but not activated: Home is still selected and shown.
     await pressKey(KEY.right);
     await pressKey(KEY.right);
     expect(tab('Series')).toHaveFocus();
@@ -313,67 +311,83 @@ describe('ShellScreen keys', () => {
   });
 });
 
-describe('ShellScreen tab switch delay', () => {
-  it('shows the content of a focused tab only after the delay', async () => {
-    const calls = serve();
-    setup({ delay: DELAY });
-    await ready();
-    await pressKey(KEY.right);
-    await pressKey(KEY.right);
-    expect(tab('Series')).toHaveFocus();
-    // The content is still Home's, and the tab is not selected yet.
-    expect(shown()).toBe('home');
-    expect(tab('Series')).not.toHaveAttribute('aria-current');
-    await sleep(100);
-    expect(shown()).toBe('home');
-    await waitFor(() => expect(shown()).toBe('series'), { timeout: 3000 });
-    expect(tab('Series')).toHaveAttribute('aria-current', 'page');
-    await screen.findByRole('button', { name: /Show One/ });
-    expect(sectionReads(calls)).toContain('lib-show');
-  });
+describe('ShellScreen tab activation', () => {
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    });
 
-  it('mounts only the last tab when the user moves quickly across several', async () => {
+  it('arrow keys across the tabs never switch the content, however long the focus rests', async () => {
     const calls = serve();
-    setup({ delay: DELAY });
+    setup();
     await ready();
     const before = sectionReads(calls).length;
-    // Movies, Series, For You, Calendar: only the one that rests is mounted.
-    for (let i = 0; i < 4; i++) await pressKey(KEY.right);
-    expect(tab('Calendar')).toHaveFocus();
-    await waitFor(() => expect(shown()).toBe('calendar'), { timeout: 3000 });
-    expect(sectionReads(calls).length).toBe(before);
-    expect(screen.queryByTestId('tab-series')).not.toBeInTheDocument();
-  });
-
-  it('uses the default delay when none is given: not yet at 299 ms, switched at 300', async () => {
-    serve();
-    setup({ delay: 'default' });
-    await ready();
-    // The timer is faked from here on, so the delay is exact however loaded the machine is.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
+      for (let i = 0; i < 2; i += 1) {
+        await act(async () => {
+          fireEvent.keyDown(window, { keyCode: KEY.right });
+          for (let n = 0; n < 20; n += 1) await Promise.resolve();
+        });
+      }
+      expect(tab('Series')).toHaveFocus();
       await act(async () => {
-        fireEvent.keyDown(window, { keyCode: KEY.right });
-        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(5000);
       });
-      expect(tab('Movies')).toHaveFocus();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(TAB_SWITCH_DELAY_MS - 1);
-      });
-      expect(TAB_SWITCH_DELAY_MS).toBe(300);
+      // Home stays shown and selected; Series is only highlighted.
       expect(shown()).toBe('home');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      expect(shown()).toBe('movies');
+      expect(tab('Home')).toHaveAttribute('data-selected', 'true');
+      expect(tab('Series')).toHaveAttribute('data-selected', 'false');
+      expect(sectionReads(calls).length).toBe(before);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('Down during a pending switch cancels it: Home stays shown, selected and focused', async () => {
+  it('OK on a tab shows its content and marks the tab as selected', async () => {
+    const calls = serve();
+    setup();
+    await ready();
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    expect(shown()).toBe('home');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(shown()).toBe('series'));
+    expect(tab('Series')).toHaveAttribute('aria-current', 'page');
+    await screen.findByRole('button', { name: /Show One/ });
+    expect(sectionReads(calls)).toContain('lib-show');
+  });
+
+  it('a pointer click switches at once; hovering the tab only moves the highlight', async () => {
     serve();
-    setup({ delay: DELAY });
+    setup();
+    await ready();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await act(async () => {
+        fireEvent.mouseEnter(tab('Movies'));
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(tab('Movies')).toHaveFocus();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(shown()).toBe('home');
+      expect(tab('Home')).toHaveAttribute('data-selected', 'true');
+      await act(async () => {
+        fireEvent.click(tab('Movies'));
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(shown()).toBe('movies');
+    } finally {
+      vi.useRealTimers();
+    }
+    await settle();
+  });
+
+  it('Down from a focused tab that is not selected enters the content that is shown', async () => {
+    serve();
+    setup();
     await ready();
     await move(KEY.right);
     expect(tab('Movies')).toHaveFocus();
@@ -381,30 +395,20 @@ describe('ShellScreen tab switch delay', () => {
     expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
     await sleep(DELAY + 200);
     expect(shown()).toBe('home');
-    expect(screen.getByRole('button', { name: /Home One/ })).toHaveFocus();
     expect(tab('Home')).toHaveAttribute('data-selected', 'true');
     expect(tab('Movies')).toHaveAttribute('data-selected', 'false');
   });
 
-  it('moving back to the selected tab cancels the pending switch', async () => {
+  it('Up from the content lands on the selected tab, not on the one that was merely focused', async () => {
     serve();
-    setup({ delay: DELAY });
+    setup();
     await ready();
-    await pressKey(KEY.right);
-    await pressKey(KEY.left);
+    await move(KEY.right);
+    await move(KEY.right);
+    expect(tab('Series')).toHaveFocus();
+    await move(KEY.down);
+    await move(KEY.up);
     expect(tab('Home')).toHaveFocus();
-    await sleep(DELAY + 200);
-    expect(shown()).toBe('home');
-  });
-
-  it('OK on a tab shows its content at once', async () => {
-    serve();
-    setup({ delay: 5000 });
-    await ready();
-    await pressKey(KEY.right);
-    expect(shown()).toBe('home');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(shown()).toBe('movies'));
   });
 });
 
@@ -498,7 +502,7 @@ describe('ShellScreen avatar menu', () => {
   it('opens on OK with the focus trapped inside, and Back closes it onto the avatar', async () => {
     serve();
     // Walking to the avatar passes the tabs; their pending switch must not run during the test.
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await openMenu();
     const items = screen.getAllByRole('menuitem');
@@ -638,7 +642,7 @@ describe('ShellScreen kids profile', () => {
 
   it('offers no Switch server and no Sign out in a kids profile, but Switch profile stays', async () => {
     serve({ profiles: [profile({ id: 'p1', name: 'Mia', is_child: true, is_primary: false })] });
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Mia'));
     await openMenu();
@@ -653,7 +657,7 @@ describe('ShellScreen kids profile', () => {
 
   it('shows Switch server and Sign out in a profile that is not a kids profile', async () => {
     serve({ profiles: [profile({ id: 'p1', name: 'Alex', is_child: false })] });
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Alex'));
     await openMenu();
@@ -671,7 +675,7 @@ describe('ShellScreen kids profile', () => {
         );
       }),
     );
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await openMenu();
     expect(screen.queryByRole('menuitem', { name: 'Sign out' })).not.toBeInTheDocument();
@@ -688,7 +692,7 @@ describe('ShellScreen profile at launch', () => {
 
   it('shows the current mode in the menu entry', async () => {
     serve();
-    setup({ delay: 60_000, launchMode: 'hour' });
+    setup({ launchMode: 'hour' });
     await ready();
     await openMenu();
     expect(screen.getByTestId('launch-value')).toHaveTextContent('After 1 hour');
@@ -696,7 +700,7 @@ describe('ShellScreen profile at launch', () => {
 
   it('opens a chooser with the four options and marks the current one', async () => {
     serve();
-    setup({ delay: 60_000, launchMode: 'halfday' });
+    setup({ launchMode: 'halfday' });
     await ready();
     await openMenu();
     await pressKey(KEY.down);
@@ -715,7 +719,7 @@ describe('ShellScreen profile at launch', () => {
 
   it('Back in the chooser returns to the menu on its entry; Back again closes the menu', async () => {
     serve();
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await openMenu();
     await pressKey(KEY.down);
@@ -733,7 +737,7 @@ describe('ShellScreen profile at launch', () => {
 
   it('choosing an option reports it and returns to the menu', async () => {
     serve();
-    const { onLaunchMode } = setup({ delay: 60_000 });
+    const { onLaunchMode } = setup();
     await ready();
     await openMenu();
     await pressKey(KEY.down);
@@ -752,7 +756,7 @@ describe('ShellScreen profile at launch', () => {
 
   it('a kids profile can still reach the chooser', async () => {
     serve({ profiles: [profile({ id: 'p1', name: 'Mia', is_child: true })] });
-    setup({ delay: 60_000 });
+    setup();
     await ready();
     await waitFor(() => expect(avatar()).toHaveAccessibleName('Profile menu for Mia'));
     await openMenu();

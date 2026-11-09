@@ -20,7 +20,7 @@ All sizes are CSS pixels on the 1920×1080 layout (the TV renders it at device p
 | `--focus-ring` | 4 px `rgba(255, 255, 255, 0.7)` inside the edge | focused cards |
 | `--accent` | none by default; the server's branding accent when it keeps 4.5:1 contrast on `--bg` | small highlights only, never the only focus cue |
 | `--error` / `--warning` / `--danger` | `#FF6961` / `#F4C869` / `#FF453A` | messages, sign out |
-| `--progress` | `#EDEDED` over `rgba(255, 255, 255, 0.2)`, 4 px | progress on cards and in the player |
+| `--progress` | fill `#FFFFFF` (or the server accent when it passes the contrast rule) on a track of `rgba(0, 0, 0, 0.6)` with a 1 px `rgba(255, 255, 255, 0.35)` outline, 6 px high, radius 3 px, inset 10 px from the left, right and bottom edge of the artwork | progress on cards and in the player – it must stay visible on bright artwork (TV test 2026-11-09: a 4 px light bar on the edge of bright posters was almost invisible) |
 | `--radius-card` | 12 px | cards; 18 px for episode stills |
 | `--font` | Inter (OFL), bundled: Regular 400, Medium 500, SemiBold 600, Bold 700 | everything; tabular digits for timecodes |
 
@@ -46,6 +46,7 @@ All sizes are CSS pixels on the 1920×1080 layout (the TV renders it at device p
 - **Cards:** scale 1.05 on whole pixels, the 4 px inner ring, a soft shadow (black 50 %, 20 px blur, 10 px down). Animate only `transform` and `opacity`, 150 ms ease-out.
 - **Buttons and pills:** focused = white fill with black content; scale 1.04 for fields and the sort pill, no scale for others.
 - **Every focusable element has a visible focus state and a hover state** (Magic Remote pointer); hover moves focus. Targets are at least 75×75 px.
+- **Tabs and pills switch only on activation** (OK or a pointer click), never on focus or hover, for every bar: top bar, library views, seasons. The shown tab keeps a "selected" mark that differs from focus. Down from a focused tab that is not selected enters the content that is shown; coming back up lands on the selected tab (user decision 2026-11-09).
 - **Focus memory:** returning to a screen or row restores the item that was focused; Back lands on the card you came from.
 - **Back:** goes one step back; on the entry screen it opens the exit popup ("Exit the app?" – Exit / Cancel, Cancel focused), Exit calls `platform.exitApp()`.
 - **Loading:** skeletons shaped like the layout they replace; a spinner only inside buttons and the player.

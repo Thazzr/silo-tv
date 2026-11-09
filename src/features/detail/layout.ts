@@ -7,8 +7,40 @@ import { CARD_GAP, SCREEN_WIDTH, STRIP_PADDING } from '../../ui/media';
 export const DETAIL_INSET = 100;
 /** The hero: backdrop, title, facts, synopsis and the action row. */
 export const HERO_HEIGHT = 760;
-/** How much of the page above a section stays visible when the page scrolls to it. */
-export const SECTION_TOP_MARGIN = 40;
+/** The hero's text column (title, facts, synopsis, credits), from the inset to 1000 px. */
+export const DETAIL_TEXT_WIDTH = 900;
+/**
+ * The least opacity of black over the backdrop under the text column; src/styles/detail.css draws
+ * at least this (0.92 up to 1075 px). A white backdrop then shows as #141414 or darker.
+ */
+export const DETAIL_SHADE_MIN_ALPHA = 0.92;
+
+/** The top of the safe area (5 % of 1080 px): scrolled-to blocks start on this line. */
+export const SAFE_TOP = 54;
+
+/** The blocks of the page the view snaps between. */
+export type DetailZone = 'hero' | 'episodes' | 'cast' | 'similar';
+/** A block below the hero, in page order, with its height. */
+export interface DetailSection {
+  zone: Exclude<DetailZone, 'hero'>;
+  height: number;
+}
+
+/**
+ * How far the page is scrolled while the focus is in `zone`: the hero stays at the origin, and any
+ * other block is scrolled so its first line (the season pills, a row's title) sits on the top
+ * safe-area line. The block above, with its focusable buttons, is then out of view and nothing is
+ * cut off at the top edge.
+ */
+export function detailScrollOffset(zone: DetailZone, sections: readonly DetailSection[]): number {
+  if (zone === 'hero') return 0;
+  let top = HERO_HEIGHT;
+  for (const section of sections) {
+    if (section.zone === zone) break;
+    top += section.height;
+  }
+  return top - SAFE_TOP;
+}
 
 /** An episode card: a 360x200 still with the title, the runtime and two lines of synopsis. */
 export const EPISODE_CARD = { width: 360, height: 200 } as const;

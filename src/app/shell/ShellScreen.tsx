@@ -23,15 +23,7 @@ import { SignOutDialog } from '../../features/profiles/SignOutDialog';
 import { LaunchOfferDialog } from './LaunchOfferDialog';
 import { ShellBackContext, type ContentBack } from './ShellBack';
 import { TopBar } from './TopBar';
-import {
-  AVATAR_KEY,
-  MENU_KEY_PREFIX,
-  ShellMemory,
-  TAB_SWITCH_DELAY_MS,
-  tabKey,
-  tabOfKey,
-  type TabId,
-} from './tabs';
+import { AVATAR_KEY, MENU_KEY_PREFIX, ShellMemory, tabKey, tabOfKey, type TabId } from './tabs';
 
 export interface ShellScreenProps {
   memory: ShellMemory;
@@ -50,8 +42,6 @@ export interface ShellScreenProps {
   onLaunchMode: (mode: LaunchMode) => void;
   /** "Open {name} automatically?", asked once after the first pick; null when there is no question. */
   offer?: { name: string; onAnswer: (automatic: boolean) => void } | null;
-  /** How long a focused tab waits before its content replaces the old one; tests stretch it. */
-  switchDelayMs?: number;
 }
 
 /** Home and the library tabs clip and scroll their own content; the others flow with the page. */
@@ -68,7 +58,6 @@ function TabContent({
   onOpenDetail,
   onExploreSection,
   onOpenCollection,
-  switchDelayMs,
   onHome,
 }: {
   tab: TabId;
@@ -77,7 +66,6 @@ function TabContent({
   onOpenDetail: (target: DetailTarget) => void;
   onExploreSection: (section: ExploreTarget) => void;
   onOpenCollection: (target: CollectionTarget) => void;
-  switchDelayMs: number;
   onHome: () => void;
 }) {
   switch (tab) {
@@ -100,7 +88,6 @@ function TabContent({
           onOpenDetail={onOpenDetail}
           onExploreSection={onExploreSection}
           onOpenCollection={onOpenCollection}
-          switchDelayMs={switchDelayMs}
         />
       );
     default:
@@ -114,8 +101,8 @@ function TabContent({
  * content of the selected tab below it.
  *
  * Focus rules: Down enters the content, Up from its first row returns to the selected tab. A tab
- * that takes the focus shows its content only after a short delay, so moving across the bar does
- * not mount every tab on the way. Each tab remembers its focused element (kept in `memory`, as
+ * shows its content only when it is activated (OK or a click); focus and hover only move the
+ * highlight, so the shown tab stays marked as selected. Each tab remembers its focused element (kept in `memory`, as
  * the stack unmounts the shell while the player is open). Back closes the menu, then leaves the
  * content for the tab bar, then the bar for Home, and on Home it asks to exit.
  */
@@ -130,7 +117,6 @@ export function ShellScreen({
   launchMode,
   onLaunchMode,
   offer = null,
-  switchDelayMs = TAB_SWITCH_DELAY_MS,
 }: ShellScreenProps) {
   const nav = useNavigator();
   const { session } = useSilo();
@@ -152,40 +138,19 @@ export function ShellScreen({
     const id = setTimeout(() => setRendered(true), 0);
     return () => clearTimeout(id);
   }, []);
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Content with a popup of its own (Home's removal question) takes Back before the shell does.
   const contentBack = useRef<ContentBack | null>(null);
   const registerContentBack = useCallback((handler: ContentBack | null) => {
     contentBack.current = handler;
   }, []);
 
-  const clearPending = useCallback(() => {
-    if (pending.current !== null) clearTimeout(pending.current);
-    pending.current = null;
-  }, []);
-  useEffect(() => clearPending, [clearPending]);
-
   const select = useCallback(
     (tab: TabId) => {
-      clearPending();
       selectedRef.current = tab;
       memory.selectTab(tab);
       setSelected(tab);
     },
-    [clearPending, memory],
-  );
-
-  // A tab that has the focus is shown after the delay; moving on before that cancels it.
-  const tabFocused = useCallback(
-    (tab: TabId) => {
-      clearPending();
-      if (tab === selectedRef.current) return;
-      pending.current = setTimeout(() => {
-        pending.current = null;
-        select(tab);
-      }, switchDelayMs);
-    },
-    [clearPending, select, switchDelayMs],
+    [memory],
   );
 
   // Every focusable below the shell reports here; only the content matters for the memory.
@@ -193,11 +158,9 @@ export function ShellScreen({
     (focusKey: string) => {
       if (tabOfKey(focusKey) !== null || focusKey === AVATAR_KEY) return;
       if (focusKey.startsWith(MENU_KEY_PREFIX)) return;
-      // Down into the content before the delay ran out: the content that is shown stays.
-      clearPending();
       memory.rememberFocus(selectedRef.current, focusKey);
     },
-    [clearPending, memory],
+    [memory],
   );
 
   const goHome = useCallback(() => {
@@ -244,7 +207,6 @@ export function ShellScreen({
             selected={selected}
             initialTab={initialTab}
             profileName={profileName}
-            onTabFocused={tabFocused}
             onTabPick={select}
             onAvatar={() => setMenu('main')}
           />
@@ -269,7 +231,6 @@ export function ShellScreen({
               onOpenDetail={onOpenDetail}
               onExploreSection={onExploreSection}
               onOpenCollection={onOpenCollection}
-              switchDelayMs={switchDelayMs}
               onHome={goHome}
             />
           </FocusGroup>

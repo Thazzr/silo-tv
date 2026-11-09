@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SiloApiError } from '../../api/problem';
-import { FocusTrackerContext, useBackHandler } from '../../app/nav';
+import { useBackHandler } from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import {
@@ -13,7 +13,7 @@ import {
 } from '../../ui/media';
 import { useItemOpener } from '../home/useItemOpener';
 import { ActionRow, type EpisodeRef } from './ActionRow';
-import { DetailHero } from './DetailHero';
+import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeRow, EpisodeStripSkeleton } from './EpisodeRow';
@@ -27,18 +27,17 @@ import {
 } from './info';
 import {
   DETAIL_INSET,
+  detailScrollOffset,
+  type DetailSection,
+  type DetailZone,
   EPISODES_SECTION_HEIGHT,
-  HERO_HEIGHT,
-  SECTION_TOP_MARGIN,
   SEASON_PILLS_GAP,
   SEASON_PILLS_HEIGHT,
 } from './layout';
 import { CAST_LIMIT, useItemDetail, useSeasonEpisodes, useSeasons, useSimilar } from './queries';
-import { SeasonPills, isSeasonKey } from './SeasonPills';
+import { SeasonPills } from './SeasonPills';
 import { SynopsisDialog } from './SynopsisDialog';
 
-/** How long the focus must rest on a season pill before its episodes replace the shown ones. */
-export const SEASON_SWITCH_DELAY_MS = 300;
 /** How long "Person pages come soon" stays on screen. */
 const NOTE_MS = 4000;
 
@@ -57,12 +56,7 @@ export interface DetailScreenProps {
   /** Opens another title's page over this one ("More like this"). */
   onOpenDetail: (target: DetailTarget) => void;
   onBack: () => void;
-  /** How long the focus rests on a season pill before the season changes; tests shorten it. */
-  switchDelayMs?: number;
 }
-
-/** The sections of the page the view scrolls between. */
-type Zone = 'hero' | 'episodes' | 'cast' | 'similar';
 
 const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
@@ -115,7 +109,6 @@ function DetailBody({
   memory,
   onPlay,
   onOpenDetail,
-  switchDelayMs = SEASON_SWITCH_DELAY_MS,
 }: DetailScreenProps & { detail: ItemDetail }) {
   const t = useT();
   const series = isSeries(detail);
@@ -171,44 +164,15 @@ function DetailBody({
     if (playId) onPlay({ contentId: playId, title: detail.title, startPosition });
   };
 
-  // --- Season switch: a pill that keeps the focus shows its season after a short rest -----------
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const shownRef = useRef(shown);
-  useEffect(() => {
-    shownRef.current = shown;
-  });
-  const clearPending = useCallback(() => {
-    if (pending.current !== null) clearTimeout(pending.current);
-    pending.current = null;
-  }, []);
-  useEffect(() => clearPending, [clearPending]);
+  // --- Season switch: a season shows only when its pill is activated (OK or a click) -------------
   const selectSeason = useCallback(
     (season: number) => {
-      clearPending();
       memory.pickSeason(season);
       setPicked(season);
       // Choosing a season ends the page's own claim on the focus.
       setOpenedOn(undefined);
     },
-    [clearPending, memory],
-  );
-  const seasonFocused = useCallback(
-    (season: number) => {
-      clearPending();
-      if (season === shownRef.current) return;
-      pending.current = setTimeout(() => {
-        pending.current = null;
-        selectSeason(season);
-      }, switchDelayMs);
-    },
-    [clearPending, selectSeason, switchDelayMs],
-  );
-  // Down into the episodes before the delay ran out: the season that is shown stays.
-  const report = useCallback(
-    (focusKey: string) => {
-      if (!isSeasonKey(focusKey)) clearPending();
-    },
-    [clearPending],
+    [memory],
   );
 
   // --- More like this ---------------------------------------------------------------------------
@@ -241,20 +205,12 @@ function DetailBody({
   };
 
   // --- Vertical scroll: the page moves to the section that holds the focus ----------------------
-  const [zone, setZone] = useState<Zone>('hero');
-  const sections: { zone: Zone; height: number }[] = [];
+  const [zone, setZone] = useState<DetailZone>('hero');
+  const sections: DetailSection[] = [];
   if (series) sections.push({ zone: 'episodes', height: EPISODES_SECTION_HEIGHT });
   else if (cast.length > 0) sections.push({ zone: 'cast', height: rowHeight('poster') });
   if (similarItems.length > 0) sections.push({ zone: 'similar', height: rowHeight('poster') });
-  let offset = 0;
-  if (zone !== 'hero') {
-    let top = HERO_HEIGHT;
-    for (const section of sections) {
-      if (section.zone === zone) break;
-      top += section.height;
-    }
-    offset = top - SECTION_TOP_MARGIN;
-  }
+  const offset = detailScrollOffset(zone, sections);
   const inHero = useCallback(() => setZone('hero'), []);
   const inEpisodes = useCallback(() => setZone('episodes'), []);
   const inCast = useCallback(() => setZone('cast'), []);
@@ -328,7 +284,6 @@ function DetailBody({
         <SeasonPills
           seasons={seasons}
           selected={shown}
-          onFocusSeason={seasonFocused}
           onPick={selectSeason}
           onFocused={inEpisodes}
         />
@@ -352,8 +307,9 @@ function DetailBody({
   }
 
   return (
-    <FocusTrackerContext.Provider value={report}>
+    <>
       <main className="detail" data-testid="detail" data-type={detail.type} onScroll={keepAtOrigin}>
+        <DetailBackdrop detail={detail} scrolled={zone !== 'hero'} />
         <div className="detail-page" style={{ transform: `translateY(${-offset}px)` }}>
           <DetailHero
             detail={detail}
@@ -431,6 +387,6 @@ function DetailBody({
           />
         ) : null}
       </main>
-    </FocusTrackerContext.Provider>
+    </>
   );
 }

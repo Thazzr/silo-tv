@@ -27,9 +27,6 @@ export function tabOfKey(focusKey: string): TabId | null {
   return (TAB_IDS as readonly string[]).includes(id) ? (id as TabId) : null;
 }
 
-/** How long a tab keeps the focus before its content replaces the old one, so scrolling across the bar stays smooth. */
-export const TAB_SWITCH_DELAY_MS = 300;
-
 /**
  * What the shell remembers while another screen (the player) is on top of it: the selected tab
  * and, per tab, the content element that had the focus. The screen stack unmounts the shell

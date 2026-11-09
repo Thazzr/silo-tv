@@ -6,9 +6,9 @@ import { creditLine, metaLine, qualityBadges, ratingEntries, type ItemDetail } f
 
 /**
  * A synopsis longer than this many characters is taken to be cut at four lines when the layout
- * cannot say (it is measured wherever there is a layout): 26 px text in a 1080 px column.
+ * cannot say (it is measured wherever there is a layout): 26 px text in a 900 px column.
  */
-const FOUR_LINES_CHARS = 330;
+const FOUR_LINES_CHARS = 275;
 
 /** The synopsis, at most four lines, with "More" under it when the text goes on. */
 function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
@@ -37,6 +37,30 @@ function Synopsis({ text, onMore }: { text: string; onMore: () => void }) {
 }
 
 /**
+ * The picture behind the whole page. It stays where it is while the content scrolls over it, and
+ * it is darkened further once the page has left the hero so cards and rows stay readable.
+ */
+export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrolled: boolean }) {
+  const url = useMediaUrl();
+  const backdrop = url(detail.backdrop_url);
+  return (
+    <div className="detail-backdrop-layer" data-testid="detail-backdrop-layer" aria-hidden="true">
+      {backdrop ? (
+        <img
+          className="detail-backdrop"
+          data-testid="detail-backdrop"
+          src={backdrop}
+          alt=""
+          decoding="async"
+        />
+      ) : null}
+      <div className="detail-shade" />
+      <div className="detail-dim" data-scrolled={scrolled} data-testid="detail-dim" />
+    </div>
+  );
+}
+
+/**
  * The top of a detail page: the title art or the title, the metadata line, quality badges and
  * external ratings, the synopsis, the credit line and the action row (`actions`).
  */
@@ -52,7 +76,6 @@ export function DetailHero({
   const t = useT();
   const url = useMediaUrl();
   const [failed, setFailed] = useState<string | null>(null);
-  const backdrop = url(detail.backdrop_url);
   const logo = url(detail.logo_url);
   const showLogo = logo !== null && failed !== logo;
   const meta = metaLine(detail, t);
@@ -62,16 +85,6 @@ export function DetailHero({
 
   return (
     <div className="detail-hero" data-testid="detail-hero">
-      {backdrop ? (
-        <img
-          className="detail-backdrop"
-          data-testid="detail-backdrop"
-          src={backdrop}
-          alt=""
-          decoding="async"
-        />
-      ) : null}
-      <div className="detail-shade" aria-hidden="true" />
       <div className="detail-text">
         {showLogo ? (
           <img
