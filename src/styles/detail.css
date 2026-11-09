@@ -34,6 +34,16 @@
   transition: opacity var(--scroll-transition);
 }
 
+/* Layers that animate over the large backdrop stay on permanent compositor layers; otherwise each
+   transition start or end promotes or demotes a layer and re-rasters the full-screen 4K backdrop
+   on the TV (a stall of about 80 ms in the scroll). */
+.detail-text,
+.detail-page [data-zone],
+.detail-dim,
+.detail-backdrop-layer {
+  will-change: opacity;
+}
+
 .detail-text[data-faded='true'],
 [data-zone][data-faded='true'] {
   opacity: 0;

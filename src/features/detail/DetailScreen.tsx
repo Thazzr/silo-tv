@@ -211,16 +211,22 @@ function DetailBody({
     }
     setTops((old) => (BLOCK_ZONES.every((block) => old[block] === next[block]) ? old : next));
   }, []);
-  // After every render (blocks appear as their data arrives) and whenever a box changes size.
-  useLayoutEffect(measure);
-  useEffect(() => {
+  // Which blocks exist below the hero: the observer is attached once per such set, and the tops
+  // are measured when it changes (blocks appear as their data arrives).
+  const blockSet = [
+    series ? 'episodes' : cast.length > 0 ? 'cast' : '',
+    similarItems.length > 0 ? 'similar' : '',
+  ].join('|');
+  useLayoutEffect(() => {
+    measure();
     const page = pageRef.current;
     if (!page || typeof ResizeObserver === 'undefined') return;
+    // Whenever a box changes size (fonts, a longer synopsis, the logo): measure again.
     const observer = new ResizeObserver(measure);
     observer.observe(page);
     page.querySelectorAll('[data-zone], .detail-hero').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  });
+  }, [measure, blockSet]);
   const offset = detailScrollOffset(zone, tops);
   const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
   const inHero = useCallback(() => setZone('hero'), []);

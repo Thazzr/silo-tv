@@ -1572,6 +1572,18 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).transitionDuration),
   ).toBe('0.4s');
 
+  // The layers that animate over the 4K backdrop stay on permanent compositor layers, or each
+  // transition start or end re-rasters the backdrop on the TV.
+  const willChange = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).willChange);
+  for (const selector of ['.detail-text', '[data-zone]', '.detail-dim', '.detail-backdrop-layer']) {
+    expect(await willChange(selector), selector).toContain('opacity');
+  }
+  expect(await willChange('.detail-page')).toContain('transform');
+
   // (b) Down to the season pills: they end on the top safe line, and the hero text is gone.
   await page.keyboard.press('ArrowDown');
   await expect(seasonTab).toBeFocused();
