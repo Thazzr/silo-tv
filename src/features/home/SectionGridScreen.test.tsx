@@ -27,6 +27,7 @@ function setup(memory = new FocusIndexMemory()) {
     profileId: 'p1',
   });
   const onPlay = vi.fn<(item: CatalogItem) => void>();
+  const onOpenDetail = vi.fn();
   const onBack = vi.fn();
   const view = renderWithSilo(
     <SectionGridScreen
@@ -34,11 +35,12 @@ function setup(memory = new FocusIndexMemory()) {
       title="Trending now"
       memory={memory}
       onPlay={onPlay}
+      onOpenDetail={onOpenDetail}
       onBack={onBack}
     />,
     { session },
   );
-  return { onPlay, onBack, memory, ...view };
+  return { onPlay, onOpenDetail, onBack, memory, ...view };
 }
 
 const titles = (from: number, to: number) =>
@@ -154,13 +156,14 @@ describe('SectionGridScreen', () => {
     expect(await screen.findByTestId('grid-empty')).toHaveTextContent('has nothing in it');
   });
 
-  it('plays a movie with OK', async () => {
+  it('opens the detail page of a movie with OK', async () => {
     serveHome(server, { page: () => catalogPage(titles(0, 12)) });
-    const { onPlay } = setup();
+    const { onPlay, onOpenDetail } = setup();
     await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('trending', 't1')));
     await pressKey(KEY.right);
     await pressKey(KEY.enter);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 't2' }));
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 't2' });
+    expect(onPlay).not.toHaveBeenCalled();
   });
 
   it('opens at the remembered card', async () => {

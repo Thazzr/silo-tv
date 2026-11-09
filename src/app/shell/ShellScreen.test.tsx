@@ -114,6 +114,7 @@ function setup(
 ) {
   const memory = options.memory ?? new ShellMemory();
   const onPlay = vi.fn();
+  const onOpenDetail = vi.fn();
   const onSwitchProfile = vi.fn();
   const onSwitchServer = vi.fn();
   const onLaunchMode = vi.fn();
@@ -122,6 +123,7 @@ function setup(
     <ShellScreen
       memory={memory}
       onPlay={onPlay}
+      onOpenDetail={onOpenDetail}
       onSwitchProfile={onSwitchProfile}
       onSwitchServer={onSwitchServer}
       launchMode={options.launchMode ?? 'every'}
@@ -131,7 +133,7 @@ function setup(
     />,
     { session },
   );
-  return { memory, onPlay, onSwitchProfile, onSwitchServer, onLaunchMode, ...view };
+  return { memory, onPlay, onOpenDetail, onSwitchProfile, onSwitchServer, onLaunchMode, ...view };
 }
 
 const tab = (name: string) => screen.getByRole('button', { name });
@@ -409,14 +411,14 @@ describe('ShellScreen tab content', () => {
     await waitFor(() => expect(calls.catalogLibraries).toContain('lib-show'));
   });
 
-  it('hands a selected title to onPlay', async () => {
+  it('hands a selected title to onOpenDetail', async () => {
     serve();
-    const { onPlay } = setup();
+    const { onOpenDetail } = setup();
     await ready();
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'h2' }));
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 'h2' });
   });
 
   it.each([

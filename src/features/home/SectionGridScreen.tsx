@@ -9,6 +9,7 @@ import {
   type CatalogItem,
   type FocusIndexMemory,
 } from '../../ui/media';
+import type { DetailTarget } from '../detail/detailMemory';
 import { useSectionPages } from './queries';
 import { useItemOpener } from './useItemOpener';
 
@@ -18,6 +19,7 @@ export interface SectionGridScreenProps {
   /** The grid's focus survives the player being opened over it. */
   memory: FocusIndexMemory;
   onPlay: (item: CatalogItem) => void;
+  onOpenDetail: (target: DetailTarget) => void;
   onBack: () => void;
 }
 
@@ -30,11 +32,12 @@ export function SectionGridScreen({
   title,
   memory,
   onPlay,
+  onOpenDetail,
   onBack,
 }: SectionGridScreenProps) {
   const t = useT();
   const pages = useSectionPages(sectionId);
-  const { open, note } = useItemOpener(onPlay);
+  const { open } = useItemOpener({ onPlay, onOpenDetail });
   const items = useMemo(() => pages.data?.pages.flatMap((page) => page.items) ?? [], [pages.data]);
 
   let body;
@@ -93,7 +96,6 @@ export function SectionGridScreen({
         {title}
       </h1>
       {body}
-      {note}
     </main>
   );
 }

@@ -34,7 +34,9 @@ function measure(node: HTMLElement): ReturnType<typeof rect> {
       return rect(left, top, right - left, bottom - top);
     }
   }
-  const row = node.closest<HTMLElement>('.topbar, .server-row, .row-strip');
+  const row = node.closest<HTMLElement>(
+    '.topbar, .server-row, .row-strip, .detail-row, .detail-episode-strip',
+  );
   if (row) {
     const cells = all.filter((el) => row.contains(el));
     return rect(cells.indexOf(node) * 120, all.indexOf(cells[0]!) * 1000, 100, 100);

@@ -1,6 +1,7 @@
-import { useState } from 'react';
 import { Button, ErrorState, ListSkeleton } from '../../app/ui';
 import { useT, type MessageKey } from '../../i18n';
+import type { DetailTarget } from '../detail/detailMemory';
+import { useItemOpener } from '../home/useItemOpener';
 import { useFirstLibrary, type CatalogItem, type LibraryKind } from './queries';
 
 const NO_LIBRARY_TEXT: Record<LibraryKind, MessageKey> = {
@@ -16,24 +17,17 @@ const NO_LIBRARY_TEXT: Record<LibraryKind, MessageKey> = {
 export function TitleList({
   kind = 'video',
   onPlay,
+  onOpenDetail,
 }: {
   kind?: LibraryKind;
   /** Opens the player for a title; the screen stack keeps the shell underneath. */
   onPlay: (item: CatalogItem) => void;
+  /** Opens the detail page of a movie or series. */
+  onOpenDetail: (target: DetailTarget) => void;
 }) {
   const t = useT();
   const { library, items, isLoading, isError, noLibrary, retry } = useFirstLibrary(kind);
-  const [seriesNote, setSeriesNote] = useState(false);
-
-  const open = (item: CatalogItem) => {
-    // Series are not directly playable; their episodes come with Phase 2.
-    if (item.type.trim().toLowerCase() === 'series') {
-      setSeriesNote(true);
-      return;
-    }
-    setSeriesNote(false);
-    onPlay(item);
-  };
+  const { open } = useItemOpener({ onPlay, onOpenDetail });
 
   let body;
   if (isLoading) {
@@ -66,11 +60,6 @@ export function TitleList({
   return (
     <section data-testid="library-screen">
       <h2 className="section-title">{library?.name ?? t('library.title')}</h2>
-      {seriesNote ? (
-        <p role="status" className="note toast" data-testid="series-note">
-          {t('library.seriesLater')}
-        </p>
-      ) : null}
       {body}
     </section>
   );

@@ -63,12 +63,18 @@ function signedIn(token = ACCESS_TOKEN) {
   return session;
 }
 
-function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN) {
+function render(options: PlaybackServerOptions = {}, token = ACCESS_TOKEN, startPosition?: number) {
   const calls = servePlayback(server, options);
   const onExit = vi.fn();
-  const view = renderWithSilo(<PlayerScreen contentId="m1" title="First Title" onExit={onExit} />, {
-    session: signedIn(token),
-  });
+  const view = renderWithSilo(
+    <PlayerScreen
+      contentId="m1"
+      title="First Title"
+      startPosition={startPosition}
+      onExit={onExit}
+    />,
+    { session: signedIn(token) },
+  );
   const currentVideo = () => view.container.querySelector('video');
   return { calls, onExit, view, currentVideo };
 }
@@ -466,6 +472,21 @@ describe('PlayerScreen resume prompt', () => {
     expect(screen.getByRole('button', { name: 'Start over' })).toHaveFocus();
     await pressKey(KEY.enter);
     await screen.findByTestId('player');
+    expect(calls.start[0]?.body.start_position).toBe(0);
+  });
+
+  it('starts at the position the detail page chose and skips the prompt', async () => {
+    const { calls } = render(resumable, ACCESS_TOKEN, 754);
+    await screen.findByTestId('player');
+    expect(screen.queryByTestId('resume-prompt')).not.toBeInTheDocument();
+    expect(calls.start).toHaveLength(1);
+    expect(calls.start[0]?.body.start_position).toBe(754);
+  });
+
+  it('starts from the beginning without asking when the detail page chose 0', async () => {
+    const { calls } = render(resumable, ACCESS_TOKEN, 0);
+    await screen.findByTestId('player');
+    expect(screen.queryByTestId('resume-prompt')).not.toBeInTheDocument();
     expect(calls.start[0]?.body.start_position).toBe(0);
   });
 

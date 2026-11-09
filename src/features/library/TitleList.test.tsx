@@ -31,9 +31,13 @@ function signedIn() {
 
 function setup(kind?: LibraryKind) {
   const onPlay = vi.fn();
+  const onOpenDetail = vi.fn();
   const session = signedIn();
-  const view = renderWithSilo(<TitleList kind={kind} onPlay={onPlay} />, { session });
-  return { onPlay, ...view };
+  const view = renderWithSilo(
+    <TitleList kind={kind} onPlay={onPlay} onOpenDetail={onOpenDetail} />,
+    { session },
+  );
+  return { onPlay, onOpenDetail, ...view };
 }
 
 const titles = [
@@ -106,22 +110,22 @@ describe('TitleList', () => {
     expect(seen.headers[0]?.get('X-Profile-Id')).toBe('p1');
   });
 
-  it('hands a selected movie to onPlay and does not render a player itself', async () => {
+  it('opens the detail page of a selected movie and does not render a player itself', async () => {
     serve();
-    const { onPlay } = setup();
+    const { onPlay, onOpenDetail } = setup();
     fireEvent.click(await screen.findByRole('button', { name: /Second Title/ }));
-    expect(onPlay).toHaveBeenCalledTimes(1);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'm2' }));
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 'm2' });
+    expect(onPlay).not.toHaveBeenCalled();
     expect(screen.queryByTestId('player')).not.toBeInTheDocument();
   });
 
-  it('says episodes come later for a series and does not start playback', async () => {
+  it('opens the detail page of a series and does not start playback', async () => {
     serve([library()], [catalogItem({ content_id: 's1', title: 'A Series', type: 'series' })]);
     const calls = servePlayback(server);
-    const { onPlay } = setup();
-    expect(screen.queryByTestId('series-note')).not.toBeInTheDocument();
+    const { onPlay, onOpenDetail } = setup();
     fireEvent.click(await screen.findByRole('button', { name: /A Series/ }));
-    expect(screen.getByTestId('series-note')).toHaveTextContent('Episodes come in Phase 2.');
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 's1' });
     expect(onPlay).not.toHaveBeenCalled();
     expect(calls.start).toHaveLength(0);
     expect(calls.capabilities).toBe(0);

@@ -8,8 +8,9 @@ import { distIndexUrl } from './paths.ts';
 // It speaks just enough of /api/v2 for the first flow: server check, device-code sign-in that is
 // approved on the second poll (or, per option, password sign-in only), one profile without a PIN,
 // the Home sections (Continue Watching, and Recently Added with more titles than its row shows),
-// one library with two titles, and the playback protocol up to a plan whose media never answers
-// (the loading cue stays). Every instance has its own origin (its own port), which is what the
+// one library with two titles, the detail pages of a movie (half way through) and a series with
+// two seasons, and the playback protocol up to a plan whose media never answers (the loading cue
+// stays). Every instance has its own origin (its own port), which is what the
 // app keys servers and sessions by.
 
 interface Seen {
@@ -33,6 +34,8 @@ interface FakeOptions {
   password?: boolean;
   /** The household's profiles; one primary profile without a PIN when omitted. */
   profiles?: FakeProfile[];
+  /** Puts a series ("A Show") first in the Recently Added row. */
+  series?: boolean;
 }
 
 interface FakeProfile {
@@ -47,6 +50,7 @@ const servers: Server[] = [];
 
 async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: string; seen: Seen[] }> {
   const { name = 'E2E Silo', token = 'fake-access', code = true, password = false } = options;
+  const withSeries = options.series === true;
   const profiles: FakeProfile[] = [
     ...(options.profiles ?? [
       { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
@@ -77,7 +81,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         authorization: req.headers.authorization,
         profileId: req.headers['x-profile-id'] as string | undefined,
         body:
-          url.pathname === '/api/v2/auth/login' || url.pathname === '/api/v2/profiles'
+          url.pathname === '/api/v2/auth/login' ||
+          url.pathname === '/api/v2/profiles' ||
+          url.pathname === '/api/v2/playback/start'
             ? requestBody
             : '',
       });
@@ -91,6 +97,91 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         expires_in: 3600,
         user: { id: 'user-1', username: 'viewer', role: 'user' },
       };
+      // The detail pages: a movie that is half way through, and a series with two seasons.
+      const baseItem = {
+        genres: [],
+        keywords: [],
+        status: 'matched',
+        cast: [],
+        crew: [],
+        versions: [],
+        ratings: [],
+        subtitles: [],
+      };
+      const detail = /^\/api\/v2\/catalog\/items\/(m2|s1)$/.exec(url.pathname);
+      if (req.method === 'GET' && detail) {
+        return send(
+          200,
+          detail[1] === 'm2'
+            ? {
+                ...baseItem,
+                content_id: 'm2',
+                type: 'movie',
+                title: 'Second Title',
+                year: 2021,
+                runtime: 90,
+                overview: 'The second title, half way through.',
+                user_data: {
+                  position_seconds: 1350,
+                  duration_seconds: 5400,
+                  played: false,
+                  watched_count: 0,
+                  unplayed_count: 1,
+                  in_progress_count: 1,
+                },
+              }
+            : {
+                ...baseItem,
+                content_id: 's1',
+                type: 'series',
+                title: 'A Show',
+                year: 2020,
+                season_count: 2,
+                overview: 'A show with two seasons.',
+                play_content_id: 'e11',
+                play_season_number: 1,
+              },
+        );
+      }
+      if (req.method === 'GET' && url.pathname === '/api/v2/catalog/series/s1/seasons') {
+        return send(200, {
+          items: [1, 2].map((n) => ({
+            content_id: `season-${n}`,
+            season_number: n,
+            title: `Season ${n}`,
+            episode_count: 2,
+          })),
+        });
+      }
+      const episodes = /^\/api\/v2\/catalog\/series\/s1\/seasons\/(\d+)\/episodes$/.exec(
+        url.pathname,
+      );
+      if (req.method === 'GET' && episodes) {
+        const season = Number(episodes[1]);
+        return send(200, {
+          items: [1, 2].map((n) => ({
+            content_id: `e${season}${n}`,
+            season_number: season,
+            episode_number: n,
+            title: `Episode ${season}.${n}`,
+            runtime: 45,
+            overview: `Synopsis of ${season}.${n}.`,
+          })),
+        });
+      }
+      if (req.method === 'GET' && url.pathname.startsWith('/api/v2/recommendations/similar/')) {
+        return send(200, { items: [] });
+      }
+      const watch = /^\/api\/v2\/watch\/(.+)$/.exec(url.pathname);
+      if (req.method === 'GET' && watch) {
+        return send(200, {
+          content_id: watch[1],
+          title: 'Played',
+          type: 'movie',
+          subtitles: [],
+          versions: [{ file_id: `file-${watch[1]}` }],
+        });
+      }
       switch (`${req.method} ${url.pathname}`) {
         case 'GET /api/v2/system/info':
           return send(200, { api_major: 2, server_version: 'fake' });
@@ -171,14 +262,6 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             deliveries: [],
             revision: 'r',
           });
-        case 'GET /api/v2/watch/m2':
-          return send(200, {
-            content_id: 'm2',
-            title: 'Second Title',
-            type: 'movie',
-            subtitles: [],
-            versions: [{ file_id: 'file-2' }],
-          });
         case 'POST /api/v2/playback/start':
           return send(201, {
             outcome: 'playable',
@@ -236,6 +319,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 section_type: 'recently_added',
                 title: 'Neu hinzugefügt',
                 items: [
+                  ...(withSeries
+                    ? [{ content_id: 's1', title: 'A Show', type: 'series', year: 2020 }]
+                    : []),
                   { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
                   { content_id: 'm3', title: 'Third Title', type: 'movie', year: 2020 },
                 ],
@@ -349,15 +435,28 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
 
-  // Up to Continue Watching: OK on its card starts the playback (tapped, not held).
+  // Up to Continue Watching: OK on the movie opens its page (tapped, not held), which offers to
+  // resume where the profile stopped.
   await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByTestId('detail-meta')).toHaveText('2021 · 1 Std. 30 Min.');
+  await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Von vorn' })).toBeVisible();
+  // Resume starts the playback at that position without asking again.
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
   await expect(page.getByTestId('player-cue')).toBeVisible();
   await expect.poll(() => seen.some((e) => e.path === '/api/v2/playback/start')).toBe(true);
+  const resumeStart = seen.find((e) => e.path === '/api/v2/playback/start');
+  expect(JSON.parse(resumeStart?.body ?? '{}')).toMatchObject({ start_position: 1350 });
 
-  // Back leaves the player: the session is stopped and Home has its focus on that card.
+  // Back leaves the player: the session is stopped and the page has its focus on Resume again.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
+  // Back again returns to Home, on the card that opened the page.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
@@ -422,6 +521,68 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByTestId('tab-home')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveText(/App beenden?/);
+});
+
+test('Home to a series, season 2, play an episode and Back to the same episode, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+
+  // Down to Recently Added; its first card is the series, OK opens its page.
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
+  // The server's play target (S1 E1) is on Play; the seasons come in order, season 1 selected.
+  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  await expect(page.getByRole('tab')).toHaveText(['Staffel 1', 'Staffel 2']);
+  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByTestId('episode-title')).toHaveText([
+    'E1 · Episode 1.1',
+    'E2 · Episode 1.2',
+  ]);
+
+  // Down to the pills, Right onto season 2: it shows after the focus has rested there.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toBeFocused();
+  await expect(page.getByTestId('episode-title').first()).toHaveText('E1 · Episode 2.1');
+  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  // Down into the episodes, Right to the second one, OK plays it.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 2.1/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Episode 2.2/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/watch/e22')).toBe(true);
+
+  // Back: the page is on season 2 and the same episode has the focus.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
+  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: /Episode 2.2/ })).toBeFocused();
+  // Back once more is Home, on the series card.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
 });
 
 test('profiles: picker with a PIN profile, create a kids profile, choose it, open it automatically on the next start', async ({

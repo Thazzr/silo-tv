@@ -28,5 +28,8 @@
   { "path": "/api/v2/home/sections/{id}/items", "method": "get" },
   { "path": "/api/v2/home/dismissals/{surface}/{item_id}", "method": "put" },
   { "path": "/api/v2/theme/branding", "method": "get" },
-  { "path": "/api/v2/theme/capabilities", "method": "get" }
+  { "path": "/api/v2/theme/capabilities", "method": "get" },
+  { "path": "/api/v2/catalog/series/{id}/seasons", "method": "get" },
+  { "path": "/api/v2/catalog/series/{id}/seasons/{num}/episodes", "method": "get" },
+  { "path": "/api/v2/recommendations/similar/{item_id}", "method": "get" }
 ]

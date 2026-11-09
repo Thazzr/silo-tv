@@ -10,6 +10,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { FocusIndexMemory, cardFocusKey, type CatalogItem } from '../../ui/media';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
+import type { DetailTarget } from '../detail/detailMemory';
 import { HERO_REST_MS } from './Hero';
 import { HomeScreen, LONG_PRESS_MS } from './HomeScreen';
 
@@ -34,12 +35,18 @@ function signedIn() {
 
 function setup(memory = new FocusIndexMemory()) {
   const onPlay = vi.fn<(item: CatalogItem) => void>();
+  const onOpenDetail = vi.fn<(target: DetailTarget) => void>();
   const onExploreSection = vi.fn();
   const view = renderWithSilo(
-    <HomeScreen rowMemory={memory} onPlay={onPlay} onExploreSection={onExploreSection} />,
+    <HomeScreen
+      rowMemory={memory}
+      onPlay={onPlay}
+      onOpenDetail={onOpenDetail}
+      onExploreSection={onExploreSection}
+    />,
     { session: signedIn() },
   );
-  return { onPlay, onExploreSection, memory, ...view };
+  return { onPlay, onOpenDetail, onExploreSection, memory, ...view };
 }
 
 const key = (row: string, id: string) => cardFocusKey(row, id);
@@ -241,16 +248,17 @@ describe('HomeScreen: hero', () => {
 });
 
 describe('HomeScreen: opening a card', () => {
-  it('plays a movie with OK', async () => {
+  it('opens the detail page of a movie with OK', async () => {
     serveHome(server, { sections: [homeSection('a', 2)] });
-    const { onPlay } = setup();
+    const { onPlay, onOpenDetail } = setup();
     await focusKeyIs(key('a', 'a-1'));
     await pressKey(KEY.right);
     await pressKey(KEY.enter);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'a-2' }));
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 'a-2' });
+    expect(onPlay).not.toHaveBeenCalled();
   });
 
-  it('only shows the series note for a series', async () => {
+  it('opens the detail page of a series with OK', async () => {
     serveHome(server, {
       sections: [
         homeSection('a', 1, {
@@ -258,11 +266,11 @@ describe('HomeScreen: opening a card', () => {
         }),
       ],
     });
-    const { onPlay } = setup();
+    const { onPlay, onOpenDetail } = setup();
     await focusKeyIs(key('a', 's1'));
     await pressKey(KEY.enter);
+    expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 's1' });
     expect(onPlay).not.toHaveBeenCalled();
-    expect(await screen.findByTestId('series-note')).toHaveTextContent('Episodes come in Phase 2.');
   });
 });
 

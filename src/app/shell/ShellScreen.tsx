@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBranding } from '../../features/branding/queries';
+import type { DetailTarget } from '../../features/detail/detailMemory';
 import { HomeScreen } from '../../features/home/HomeScreen';
 import { keepAtOrigin } from '../../ui/media';
 import { TitleList } from '../../features/library/TitleList';
@@ -35,6 +36,8 @@ export interface ShellScreenProps {
   memory: ShellMemory;
   /** Opens the player for a title; the screen stack keeps the shell underneath. */
   onPlay: (item: CatalogItem) => void;
+  /** Opens the detail page of a movie or series; the screen stack keeps the shell underneath. */
+  onOpenDetail: (target: DetailTarget) => void;
   /** Opens the full list of a Home row ("Explore all") as a screen of its own. */
   onExploreSection?: (section: { id: string; title: string }) => void;
   onSwitchProfile: () => void;
@@ -52,24 +55,31 @@ function TabContent({
   tab,
   memory,
   onPlay,
+  onOpenDetail,
   onExploreSection,
   onHome,
 }: {
   tab: TabId;
   memory: ShellMemory;
   onPlay: (item: CatalogItem) => void;
+  onOpenDetail: (target: DetailTarget) => void;
   onExploreSection: (section: { id: string; title: string }) => void;
   onHome: () => void;
 }) {
   switch (tab) {
     case 'home':
       return (
-        <HomeScreen rowMemory={memory.rows} onPlay={onPlay} onExploreSection={onExploreSection} />
+        <HomeScreen
+          rowMemory={memory.rows}
+          onPlay={onPlay}
+          onOpenDetail={onOpenDetail}
+          onExploreSection={onExploreSection}
+        />
       );
     case 'movies':
-      return <TitleList kind="movie" onPlay={onPlay} />;
+      return <TitleList kind="movie" onPlay={onPlay} onOpenDetail={onOpenDetail} />;
     case 'series':
-      return <TitleList kind="series" onPlay={onPlay} />;
+      return <TitleList kind="series" onPlay={onPlay} onOpenDetail={onOpenDetail} />;
     default:
       // For You, Calendar and Search come with Phase 2.
       return <ComingSoon onHome={onHome} />;
@@ -89,6 +99,7 @@ function TabContent({
 export function ShellScreen({
   memory,
   onPlay,
+  onOpenDetail,
   onExploreSection = () => undefined,
   onSwitchProfile,
   onSwitchServer,
@@ -231,6 +242,7 @@ export function ShellScreen({
               tab={selected}
               memory={memory}
               onPlay={onPlay}
+              onOpenDetail={onOpenDetail}
               onExploreSection={onExploreSection}
               onHome={goHome}
             />

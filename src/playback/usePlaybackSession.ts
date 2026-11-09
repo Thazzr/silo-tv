@@ -69,6 +69,8 @@ interface Deps {
   baseUrl: string;
   session: Session;
   contentId: string;
+  /** Where to start; set when the viewer already chose (the detail page), else the resume prompt decides. */
+  startPosition?: number;
   onState(state: SessionState): void;
   onMediaError(failure: MediaFailure | null): void;
 }
@@ -135,6 +137,10 @@ export class PlaybackController {
       if (this.disposed) return;
       this.installationId = installationId;
       this.fileId = watch.fileId;
+      if (this.deps.startPosition !== undefined) {
+        await this.start(this.deps.startPosition);
+        return;
+      }
       if (watch.resume > 0) {
         this.set({ kind: 'prompt', positionSeconds: watch.resume });
         return;
@@ -436,7 +442,7 @@ export interface PlaybackSession {
   stop(): Promise<void>;
 }
 
-export function usePlaybackSession(contentId: string): PlaybackSession {
+export function usePlaybackSession(contentId: string, startPosition?: number): PlaybackSession {
   const { client, baseUrl, session } = useSilo();
   const [state, setState] = useState<SessionState>({ kind: 'loading' });
   const [mediaError, setMediaError] = useState<MediaFailure | null>(null);
@@ -448,6 +454,7 @@ export function usePlaybackSession(contentId: string): PlaybackSession {
       baseUrl,
       session,
       contentId,
+      startPosition,
       onState: setState,
       onMediaError: setMediaError,
     });
@@ -457,7 +464,7 @@ export function usePlaybackSession(contentId: string): PlaybackSession {
       created.dispose();
       controller.current = null;
     };
-  }, [client, baseUrl, session, contentId]);
+  }, [client, baseUrl, session, contentId, startPosition]);
 
   const choose = useCallback((position: number) => void controller.current?.start(position), []);
   const bindPlayer = useCallback(

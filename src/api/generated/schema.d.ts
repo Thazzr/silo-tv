@@ -194,6 +194,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/catalog/series/{id}/seasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The seasons of a series with the viewer's rollups. */
+        get: operations["listSeriesSeasons"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/series/{id}/seasons/{num}/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The episodes of one season of a series by number. */
+        get: operations["listSeasonEpisodes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/home/capabilities": {
         parameters: {
             query?: never;
@@ -396,6 +430,23 @@ export interface paths {
          * @description Wrong PINs are counted per profile, Jellyfin password#PIN sign-ins included. Redis shares the count across server nodes; without Redis, each process counts its own attempts. Up to five attempts are allowed; the fifth wrong one locks the profile for five minutes, during which every check, even with the right PIN, is refused with 429 rate_limited and a Retry-After header giving the seconds left. A correct PIN while not locked clears the count, and an unlocked count expires five minutes after its first attempt. Each check affects the count and must not be automatically retried.
          */
         post: operations["verifyProfilePIN"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/recommendations/similar/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cards similar to the item by content; personalised only by the acting profile's access and by leaving out the titles it marked Not interested. */
+        get: operations["listSimilar"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -975,6 +1026,12 @@ export interface components {
              * @example 1995
              */
             year?: number;
+        };
+        CatalogItemCollection: {
+            /** @description The page's items; empty, never null */
+            items: components["schemas"]["CatalogItem"][];
+            /** @description Cursor state; absent for bounded unpaginated collections */
+            page?: components["schemas"]["PageInfo"];
         };
         CatalogItemDetail: {
             /**
@@ -1706,6 +1763,69 @@ export interface components {
             container_track_id?: string;
             /** Format: int64 */
             stream_index: number;
+        };
+        Episode: {
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            air_date?: string;
+            /** @example episode:severance-s01e01 */
+            content_id: string;
+            /** Format: int64 */
+            episode_number: number;
+            files?: components["schemas"]["EpisodeFile"][];
+            imdb_id?: string;
+            /** @description Localized fields whose text was machine-translated by AI; absent when none were */
+            machine_translated_fields?: "overview"[];
+            overlay_summary?: components["schemas"]["CatalogItemOverlay"];
+            overview?: string;
+            /** @description The language (BCP 47 tag, such as en or pt-BR) this profile reads here (its metadata language, or the library's when it sets none) when the episode's description is not available in it yet; translating the episode's season fills it */
+            pending_translation_language?: string;
+            /** @description The episode's IMDb and TMDB ratings, in the shape a title page's ratings use. Absent when the episode has no rating. */
+            ratings?: components["schemas"]["CatalogRating"][];
+            /**
+             * Format: int64
+             * @description Minutes
+             */
+            runtime: number;
+            /** Format: int64 */
+            season_number: number;
+            /** @description Whether still_url is an episode still. False when series artwork is used as a fallback; absent when provenance is unavailable. */
+            still_is_episode_still?: boolean;
+            still_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned, short-lived
+             */
+            still_url?: string;
+            title: string;
+            tmdb_id?: string;
+            tvdb_id?: string;
+            user_data?: components["schemas"]["WatchRollup"];
+        };
+        EpisodeCollection: {
+            /** @description The page's items; empty, never null */
+            items: components["schemas"]["Episode"][];
+            /** @description Cursor state; absent for bounded unpaginated collections */
+            page?: components["schemas"]["PageInfo"];
+        };
+        EpisodeFile: {
+            /** Format: int64 */
+            audio_channels?: number;
+            codec_video?: string;
+            container?: string;
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            file_id: string;
+            /** Format: int64 */
+            file_size: number;
+            hdr: boolean;
+            resolution?: string;
+            /** @description Present and true when the server could not read the file (empty, corrupt, or truncated). Playback of it falls back to another version of the episode the viewer may play; if no such version is available, playback returns the terminal reason source_unreadable until the file is replaced and a scan reads it successfully. */
+            unreadable?: boolean;
         };
         FailureV3: {
             classification: string;
@@ -2663,6 +2783,40 @@ export interface components {
              * @example eyJhbGciOi...
              */
             refresh_token: string;
+        };
+        Season: {
+            /**
+             * Format: date
+             * @description Calendar date, YYYY-MM-DD
+             */
+            air_date?: string;
+            /** @example series:severance-S01 */
+            content_id: string;
+            /** Format: int64 */
+            episode_count: number;
+            is_specials?: boolean;
+            /** @description Localized fields whose text was machine-translated by AI; absent when none were */
+            machine_translated_fields?: "overview"[];
+            overview?: string;
+            /** @description The episode to play next */
+            play_content_id?: string;
+            poster_thumbhash?: string;
+            /**
+             * Format: uri-reference
+             * @description Presigned, short-lived
+             */
+            poster_url?: string;
+            /** Format: int64 */
+            season_number: number;
+            /** @example Season 1 */
+            title: string;
+            user_data?: components["schemas"]["WatchRollup"];
+        };
+        SeasonCollection: {
+            /** @description The page's items; empty, never null */
+            items: components["schemas"]["Season"][];
+            /** @description Cursor state; absent for bounded unpaginated collections */
+            page?: components["schemas"]["PageInfo"];
         };
         Section: {
             /** @example false */
@@ -4621,6 +4775,258 @@ export interface operations {
             };
         };
     };
+    listSeriesSeasons: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+                /** @description The library the series is being viewed in */
+                library_id?: string;
+                /** @description Include poster URLs and thumbhashes; false skips poster preparation */
+                include_artwork?: boolean;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Series content id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeasonCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSeasonEpisodes: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+                /** @description The library the series is being viewed in */
+                library_id?: string;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description Series content id */
+                id: string;
+                /** @description Season number; 0 is specials */
+                num: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EpisodeCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getHomeCapabilities: {
         parameters: {
             query?: never;
@@ -6456,6 +6862,130 @@ export interface operations {
             };
             /** @description Unsupported Media Type */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSimilar: {
+        parameters: {
+            query?: {
+                /** @description Cards to answer; default 20, maximum 50 */
+                limit?: number;
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header: {
+                /** @description The household profile acting for this request; it must belong to the authenticated account. */
+                "X-Profile-Id": string;
+                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
+                "X-Profile-Token"?: string;
+            };
+            path: {
+                /** @description The item similar items are drawn from */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItemCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
                 headers: {
                     [name: string]: unknown;
                 };

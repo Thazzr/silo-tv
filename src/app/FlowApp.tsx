@@ -6,6 +6,8 @@ import { getPlatform, type KeyValueStore } from '../platform';
 import { PasswordScreen } from '../features/auth/PasswordScreen';
 import { SignInScreen } from '../features/auth/SignInScreen';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
+import { DetailMemory, type DetailTarget } from '../features/detail/detailMemory';
+import { DetailScreen } from '../features/detail/DetailScreen';
 import { ProfileLaunchPrefs } from '../features/profiles/launchPrefs';
 import { ProfilesScreen } from '../features/profiles/ProfilesScreen';
 import { ServerScreen } from '../features/server/ServerScreen';
@@ -32,7 +34,10 @@ type FlowScreen =
   | { name: 'shell' }
   /** The full list of a Home row ("Explore all"). */
   | { name: 'sectionGrid'; sectionId: string; title: string }
-  | { name: 'player'; contentId: string; title: string };
+  /** A movie or series; the season and episode are set when an episode card opened it. */
+  | ({ name: 'detail' } & DetailTarget)
+  /** A start position skips the resume prompt: the detail page already asked. */
+  | { name: 'player'; contentId: string; title: string; startPosition?: number };
 
 export interface FlowAppProps {
   launch: Launch;
@@ -129,6 +134,8 @@ export function FlowApp({
   const [shellMemory] = useState(() => new ShellMemory());
   /** Where the focus was in each row grid; it survives the player being opened over the grid. */
   const [gridMemory] = useState(() => new FocusIndexMemory());
+  /** What each open detail page remembers (season, focused cards) while the player covers it. */
+  const [detailMemory] = useState(() => new DetailMemory());
   const session = origin ? registry.session(origin) : null;
   const launchRecord = useSyncExternalStore(prefs.subscribe, () => prefs.get(origin ?? ''));
 
@@ -164,6 +171,7 @@ export function FlowApp({
   );
 
   const renderScreen = (screen: FlowScreen, nav: NavApi<FlowScreen>) => {
+    const openDetail = (target: DetailTarget) => nav.push({ name: 'detail', ...target });
     // The server's branding is shown for the active server; without one there is nothing to ask.
     const provide = (content: ReactNode, branded?: 'signIn') =>
       origin && session ? (
@@ -277,6 +285,7 @@ export function FlowApp({
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })
             }
+            onOpenDetail={openDetail}
             onExploreSection={(section) =>
               nav.push({ name: 'sectionGrid', sectionId: section.id, title: section.title })
             }
@@ -286,6 +295,7 @@ export function FlowApp({
               queryClient.removeQueries({ queryKey: ['libraries'] });
               queryClient.removeQueries({ queryKey: ['catalog'] });
               queryClient.removeQueries({ queryKey: ['home'] });
+              queryClient.removeQueries({ queryKey: ['detail'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.
@@ -301,12 +311,35 @@ export function FlowApp({
             onPlay={(item) =>
               nav.push({ name: 'player', contentId: item.content_id, title: item.title })
             }
+            onOpenDetail={openDetail}
+            onBack={nav.pop}
+          />,
+        );
+      case 'detail':
+        return provide(
+          <DetailScreen
+            target={screen}
+            memory={detailMemory.of(screen)}
+            onPlay={(request) =>
+              nav.push({
+                name: 'player',
+                contentId: request.contentId,
+                title: request.title,
+                startPosition: request.startPosition,
+              })
+            }
+            onOpenDetail={openDetail}
             onBack={nav.pop}
           />,
         );
       case 'player':
         return provide(
-          <PlayerScreen contentId={screen.contentId} title={screen.title} onExit={nav.pop} />,
+          <PlayerScreen
+            contentId={screen.contentId}
+            title={screen.title}
+            startPosition={screen.startPosition}
+            onExit={nav.pop}
+          />,
         );
     }
   };

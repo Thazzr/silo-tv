@@ -22,7 +22,8 @@ import {
 import { I18nProvider } from '../i18n';
 import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launchPrefs';
 import { clearInstallationCache } from '../playback/usePlaybackSession';
-import { homeCapabilities, homeSection } from '../test/homeFixtures';
+import { episodeOf, itemDetail, seasonOf, serveDetail } from '../test/detailFixtures';
+import { homeCapabilities, homeSection, resumeEpisode } from '../test/homeFixtures';
 import { servePlayback } from '../test/playbackFixtures';
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
@@ -310,7 +311,7 @@ describe('FlowApp', () => {
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
 
-  it('opens the player over the shell, and Back returns to the title that was played', async () => {
+  it('opens the detail page and then the player over the shell, and Back returns step by step to the title', async () => {
     const items = [
       catalogItem({ content_id: 'm1', title: 'First Title' }),
       catalogItem({ content_id: 'm2', title: 'Second Title' }),
@@ -328,6 +329,9 @@ describe('FlowApp', () => {
       ),
     );
     const calls = servePlayback(server);
+    serveDetail(server, {
+      item: (id) => itemDetail({ content_id: id, title: `Detail of ${id}`, versions: [] }),
+    });
     signedIn(BASE_URL, 'p1');
     flow();
     // The shell opens on the Home tab; Down enters the list.
@@ -337,10 +341,20 @@ describe('FlowApp', () => {
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     expect(screen.getByRole('button', { name: /Third Title/ })).toHaveFocus();
+    // OK opens the title's page; Play on it opens the player.
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('Detail of m3');
+    expect(screen.queryByTestId('home')).not.toBeInTheDocument();
+    expect(calls.start).toHaveLength(0);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toHaveFocus());
     await pressKey(KEY.enter);
     expect(await screen.findByTestId('player')).toBeInTheDocument();
-    expect(screen.queryByTestId('home')).not.toBeInTheDocument();
-    expect(calls.start).toHaveLength(1);
+    await waitFor(() => expect(calls.start).toHaveLength(1));
+    // The viewer chose on the detail page: the player does not ask again.
+    expect(calls.start[0]?.body.start_position).toBe(0);
+    fireEvent.keyDown(window, { keyCode: 461 });
+    expect(await screen.findByTestId('detail-title')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Play' })).toHaveFocus());
     fireEvent.keyDown(window, { keyCode: 461 });
     expect(await screen.findByTestId('home')).toBeInTheDocument();
     // Back lands on the title that was played, not on the first one.
@@ -351,6 +365,94 @@ describe('FlowApp', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
     fireEvent.keyDown(window, { keyCode: 461 });
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
+  });
+
+  it('opens the series of an episode card on its season and episode, and plays a Continue Watching episode directly', async () => {
+    serveData();
+    const plain = catalogItem({
+      content_id: 'e23',
+      type: 'episode',
+      title: 'Episode 2.3',
+      series_title: 'A Show',
+      series_id: 's1',
+      season_number: 2,
+      episode_number: 3,
+    });
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/sections`, () =>
+        HttpResponse.json({
+          sections: [
+            homeSection('cw', 0, {
+              section_type: 'continue_watching',
+              items: [resumeEpisode('e1')],
+              total_count: 1,
+            }),
+            homeSection('added', 0, { items: [plain], total_count: 1 }),
+          ],
+        }),
+      ),
+    );
+    const calls = servePlayback(server);
+    serveDetail(server, {
+      item: () => itemDetail({ content_id: 's1', type: 'series', title: 'A Show', versions: [] }),
+      seasons: [seasonOf(1), seasonOf(2)],
+      episodes: (season) => [1, 2, 3].map((n) => episodeOf(season, n)),
+    });
+    signedIn(BASE_URL, 'p1');
+    flow();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
+    await screen.findByTestId('row-added');
+    // The episode of Continue Watching plays right away (OK tapped: opens on release).
+    await pressKey(KEY.down);
+    fireEvent.keyDown(window, { keyCode: KEY.enter });
+    fireEvent.keyUp(window, { keyCode: KEY.enter });
+    expect(await screen.findByTestId('player')).toBeInTheDocument();
+    await waitFor(() => expect(calls.capabilities).toBe(1));
+    fireEvent.keyDown(window, { keyCode: 461 });
+    await screen.findByTestId('home');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Show e1/ })).toHaveFocus());
+    // Any other episode card opens the series on that season, focused on that episode.
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('A Show');
+    await screen.findByTestId('episode-strip');
+    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() =>
+      expect(document.querySelector('[data-focus-key="episode:e23"]')).toHaveFocus(),
+    );
+  });
+
+  it('drops the detail queries of the old profile when the profile is switched', async () => {
+    serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
+    serveDetail(server, { item: (id) => itemDetail({ content_id: id, versions: [] }) });
+    signedIn(BASE_URL, 'p1');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider lang="en">
+          <FlowApp
+            launch={{ probe: false, transport: null, server: '' }}
+            registry={registry}
+            device={testDevice}
+            storage={storage}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Title of/ }));
+    await screen.findByTestId('detail-hero');
+    fireEvent.keyDown(window, { keyCode: 461 });
+    await screen.findByTestId('home');
+    const detailQueries = () =>
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((q) => q.queryKey[0] === 'detail');
+    expect(detailQueries().length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(detailQueries()).toHaveLength(0);
   });
 
   it('drops the Home queries of the old profile when the profile is switched', async () => {

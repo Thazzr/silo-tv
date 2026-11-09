@@ -20,6 +20,7 @@ import {
   type CatalogItem,
   type FocusIndexMemory,
 } from '../../ui/media';
+import type { DetailTarget } from '../detail/detailMemory';
 import { Hero, HeroSkeleton } from './Hero';
 import {
   ROW_ITEM_LIMIT,
@@ -89,6 +90,8 @@ export interface HomeScreenProps {
   /** Where each row's focus was when Home was last shown; it outlives this screen. */
   rowMemory: FocusIndexMemory;
   onPlay: (item: CatalogItem) => void;
+  /** Opens the detail page of a movie or series (or of the series of an episode). */
+  onOpenDetail: (target: DetailTarget) => void;
   /** "Explore all" of a row: opens its full list. */
   onExploreSection: (section: { id: string; title: string }) => void;
 }
@@ -99,12 +102,12 @@ export interface HomeScreenProps {
  * small error with "Try again" instead. The rows scroll with a transform so the focused row sits
  * just below the hero, and only the rows around it have cards mounted.
  */
-export function HomeScreen({ rowMemory, onPlay, onExploreSection }: HomeScreenProps) {
+export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }: HomeScreenProps) {
   const t = useT();
   const { query, rowLimit } = useHomeSections();
   const readSection = useSectionReader(rowLimit);
   const dismiss = useDismissItem();
-  const { open, note } = useItemOpener(onPlay);
+  const { open } = useItemOpener({ onPlay, onOpenDetail });
 
   const [overrides, setOverrides] = useState<{ stamp: number; map: Record<string, Override> }>({
     stamp: 0,
@@ -383,7 +386,6 @@ export function HomeScreen({ rowMemory, onPlay, onExploreSection }: HomeScreenPr
   return (
     <section className="home" data-testid="home">
       {body}
-      {note}
       {pending?.row.surface ? (
         <RemoveDialog
           surface={pending.row.surface}

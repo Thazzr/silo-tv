@@ -37,11 +37,13 @@ function renderHome() {
   const memory = new ShellMemory();
   const gridMemory = new FocusIndexMemory();
   const onPlay = vi.fn();
+  const onOpenDetail = vi.fn();
   const renderScreen = (screen: Screen, nav: NavApi<Screen>) =>
     screen.name === 'shell' ? (
       <ShellScreen
         memory={memory}
         onPlay={onPlay}
+        onOpenDetail={onOpenDetail}
         onExploreSection={(section) =>
           nav.push({ name: 'grid', sectionId: section.id, title: section.title })
         }
@@ -56,6 +58,7 @@ function renderHome() {
         title={screen.title}
         memory={gridMemory}
         onPlay={onPlay}
+        onOpenDetail={onOpenDetail}
         onBack={nav.pop}
       />
     );
@@ -68,7 +71,7 @@ function renderHome() {
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { onPlay };
+  return { onPlay, onOpenDetail };
 }
 
 function serve(sections: ReturnType<typeof homeSection>[]) {

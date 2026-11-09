@@ -1,7 +1,7 @@
 // The media building blocks every browse screen uses: cards, rows and grids.
 export { Artwork } from './Artwork';
-export { ExploreAllCard, LandscapeCard, PosterCard } from './Cards';
-export type { CardProps } from './Cards';
+export { CardFrame, ExploreAllCard, LandscapeCard, PersonCard, PosterCard } from './Cards';
+export type { CardProps, FrameProps } from './Cards';
 export {
   cardSubtitle,
   episodeLabel,

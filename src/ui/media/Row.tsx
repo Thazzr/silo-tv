@@ -44,6 +44,8 @@ export interface RowProps<T> {
   onExploreFocused?: () => void;
   /** Any card of the row got the focus (for the screen's vertical scroll). */
   onRowFocused?: () => void;
+  /** Left inset of the title and the first card; 80 px on Home, 100 px on the detail pages. */
+  inset?: number;
 }
 
 /**
@@ -65,6 +67,7 @@ export function Row<T>({
   onCardFocused,
   onExploreFocused,
   onRowFocused,
+  inset = ROW_INSET,
 }: RowProps<T>) {
   const count = items.length + (onExploreAll ? 1 : 0);
   const visible = rowVisibleCards(shape);
@@ -101,7 +104,7 @@ export function Row<T>({
       style={{ height: rowHeight(shape) }}
       aria-label={title}
     >
-      <h2 className="row-title" data-testid="row-title">
+      <h2 className="row-title" data-testid="row-title" style={{ paddingLeft: inset }}>
         {title}
       </h2>
       {mounted ? (
@@ -118,7 +121,7 @@ export function Row<T>({
           <div
             className="row-track"
             data-testid="row-track"
-            style={{ transform: `translateX(${-effectiveScroll * step}px)`, left: ROW_INSET }}
+            style={{ transform: `translateX(${-effectiveScroll * step}px)`, left: inset }}
           >
             {indices.map((index) => {
               const item = items[index];

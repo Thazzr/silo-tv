@@ -22,9 +22,11 @@ export interface CardProps {
   autoFocus?: boolean;
 }
 
-interface FrameProps {
+export interface FrameProps {
   focusKey: string;
   variant: 'poster' | 'landscape' | 'grid';
+  /** Extra class on the card, for a caption taller than the two lines the cards share. */
+  className?: string;
   label?: string;
   onClick: () => void;
   onFocused?: () => void;
@@ -38,9 +40,10 @@ interface FrameProps {
  * only fade in, the scale is a transform) and a two-line caption below it. Focus changes only the
  * caption's colour, never its size, so a truncated title does not reflow.
  */
-function CardFrame({
+export function CardFrame({
   focusKey,
   variant,
+  className,
   label,
   onClick,
   onFocused,
@@ -52,7 +55,7 @@ function CardFrame({
     <Focusable
       focusKey={focusKey}
       autoFocus={autoFocus}
-      className={`card card-${variant}`}
+      className={`card card-${variant}${className ? ` ${className}` : ''}`}
       aria-label={label}
       onClick={onClick}
       onFocused={onFocused}
@@ -177,6 +180,52 @@ export function ExploreAllCard({
           </span>
           <span className="explore-label">{t('home.exploreAll')}</span>
         </span>
+      }
+    />
+  );
+}
+
+/**
+ * A person of the cast: the portrait on a poster-sized card with the name over the character.
+ * Without a photo (or when it fails) the card shows the initials on a tile.
+ */
+export function PersonCard({
+  name,
+  role,
+  photo,
+  thumbhash,
+  initials,
+  focusKey,
+  onOpen,
+  onFocused,
+}: {
+  name: string;
+  role?: string;
+  photo?: string;
+  thumbhash?: string;
+  initials: string;
+  focusKey: string;
+  onOpen: () => void;
+  onFocused?: () => void;
+}) {
+  const url = useMediaUrl();
+  return (
+    <CardFrame
+      focusKey={focusKey}
+      variant="poster"
+      label={role ? `${name}, ${role}` : name}
+      onClick={onOpen}
+      onFocused={onFocused}
+      art={<Artwork src={url(photo)} thumbhash={thumbhash} title={initials} />}
+      caption={
+        <>
+          <span className="card-title" data-testid="card-title">
+            {name}
+          </span>
+          <span className="card-sub" data-testid="card-sub">
+            {role ?? ''}
+          </span>
+        </>
       }
     />
   );

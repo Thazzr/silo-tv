@@ -34,14 +34,16 @@ const ERROR_TEXT: Record<SessionFailure, MessageKey> = {
 export interface PlayerScreenProps {
   contentId: string;
   title: string;
+  /** Starts here and skips the resume prompt (0 plays from the beginning). */
+  startPosition?: number;
   onExit: () => void;
 }
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
-export function PlayerScreen({ contentId, title, onExit }: PlayerScreenProps) {
+export function PlayerScreen({ contentId, title, startPosition, onExit }: PlayerScreenProps) {
   const t = useT();
   const { session: auth } = useSilo();
-  const playback = usePlaybackSession(contentId);
+  const playback = usePlaybackSession(contentId, startPosition);
   const { state } = playback;
   const token = auth.get()?.accessToken;
 
