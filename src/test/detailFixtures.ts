@@ -4,6 +4,7 @@ import { HttpResponse, http } from 'msw';
 import type { SetupServer } from 'msw/node';
 import type { components } from '../api/generated/schema';
 import { BASE_URL } from './apiFixtures';
+import { serveSettings, type SettingsServe } from './settingsFixtures';
 
 type S = components['schemas'];
 
@@ -112,6 +113,8 @@ export interface DetailServe {
   capabilities?: Partial<S['CatalogSearchCapabilities']> | 'fail';
   /** The box set a movie page shows; `none` is the plain 200 without one, `fail` a 500. */
   boxSet?: S['CatalogBoxSetDetail'] | 'none' | 'fail';
+  /** What the profile's settings say; the contract defaults (title art on) when omitted. */
+  settings?: SettingsServe;
 }
 
 /** Registers the detail endpoints; the returned object records what the app asked for. */
@@ -125,6 +128,7 @@ export function serveDetail(server: SetupServer, options: DetailServe = {}): Det
     boxSets: [],
   };
   const fail = () => new HttpResponse(null, { status: 500 });
+  serveSettings(server, options.settings);
   server.use(
     http.get(`${BASE_URL}/api/v2/catalog/items/:id`, ({ params }) => {
       const id = String(params.id);

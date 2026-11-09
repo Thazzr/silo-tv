@@ -5,6 +5,7 @@ import type { Session } from '../api/session';
 import { getPlatform, type KeyValueStore } from '../platform';
 import { PasswordScreen } from '../features/auth/PasswordScreen';
 import { SignInScreen } from '../features/auth/SignInScreen';
+import { ProfileSettingsSync } from '../features/settings/profileSettings';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
 import { BoxSetMemory, type BoxSetTarget } from '../features/boxset/boxSetMemory';
 import { BoxSetScreen } from '../features/boxset/BoxSetScreen';
@@ -202,6 +203,7 @@ export function FlowApp({
       origin && session ? (
         <SiloProvider baseUrl={origin} session={session} device={device}>
           <AccentTheme />
+          <ProfileSettingsSync />
           {branded ? <BrandBackdrop /> : null}
           {branded ? <BrandHeader withSubtitle /> : null}
           {content}
@@ -331,6 +333,7 @@ export function FlowApp({
               queryClient.removeQueries({ queryKey: ['person'] });
               queryClient.removeQueries({ queryKey: ['boxset'] });
               queryClient.removeQueries({ queryKey: ['search'] });
+              queryClient.removeQueries({ queryKey: ['settings'] });
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.

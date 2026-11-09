@@ -58,6 +58,11 @@ interface FakeOptions {
   genres?: number;
   /** An older server: the watch-state rules answer 422 (the Status section then stays out). */
   noWatchRules?: boolean;
+  /**
+   * The server speaks the settings contract and the profile's `ui.title_art` is this value; an
+   * older server (the default) does not know the contract and answers 404.
+   */
+  titleArt?: boolean;
 }
 
 interface FakeProfile {
@@ -454,6 +459,20 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       switch (`${req.method} ${url.pathname}`) {
         case 'GET /api/v2/system/info':
           return send(200, { api_major: 2, server_version: 'fake' });
+        case 'GET /api/v2/settings/contract/capabilities':
+          if (options.titleArt === undefined) return send(404, { title: 'not found', status: 404 });
+          return send(200, { state: 'available', allowed: true, manifest_revision: 40 });
+        case 'GET /api/v2/settings/values/effective':
+          if (options.titleArt === undefined) return send(404, { title: 'not found', status: 404 });
+          return send(200, {
+            items: url.searchParams.getAll('keys').map((key) => ({
+              key,
+              value: key === 'ui.title_art' ? options.titleArt : false,
+              source: 'profile',
+              definition_revision: 1,
+            })),
+            revision: 40,
+          });
         case 'GET /api/v2/auth/providers':
           return send(200, {
             items: [
@@ -1759,8 +1778,8 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   });
 });
 
-async function openSeriesDetail(page: Page, tall = false, seasons?: number) {
-  const { origin } = await startFakeSilo({ series: true, tall, seasons });
+async function openSeriesDetail(page: Page, tall = false, seasons?: number, titleArt?: boolean) {
+  const { origin, seen } = await startFakeSilo({ series: true, tall, seasons, titleArt });
   await page.goto(`${distIndexUrl}?server=${origin}`);
   await expect(page.getByLabel('Serveradresse')).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -1770,6 +1789,7 @@ async function openSeriesDetail(page: Page, tall = false, seasons?: number) {
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  return { seen };
 }
 
 test('detail page: focused pills have black content on white, the selected season keeps its style', async ({
@@ -1925,6 +1945,25 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
   await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
   await expect.poll(() => opacity('.detail-text')).toBe('1');
   await expect.poll(pageOffset).toBe(0);
+});
+
+test('detail page: the profile setting ui.title_art decides between the logo and the text title', async ({
+  page,
+}) => {
+  // Off: the text title, and the logo image is never requested.
+  const off = await openSeriesDetail(page, true, undefined, false);
+  await expect(page.getByTestId('detail-title')).toBeVisible();
+  await expect(page.getByTestId('detail-logo')).toHaveCount(0);
+  expect(off.seen.some((entry) => entry.path === '/img/logo.png')).toBe(false);
+  // The settings reads carried the profile and asked for the keys one by one.
+  const read = off.seen.find((entry) => entry.path === '/api/v2/settings/values/effective');
+  expect(read?.profileId).toBe('profile-1');
+  expect(read?.search).toContain('keys=ui.title_art&keys=');
+
+  // On: the logo, and no text title.
+  await openSeriesDetail(page, true, undefined, true);
+  await expect(page.getByTestId('detail-logo')).toBeVisible();
+  await expect(page.getByTestId('detail-title')).toHaveCount(0);
 });
 
 test('detail page: a movie scrolls to the similar row, whose top meets the safe line, and the cast row fades', async ({

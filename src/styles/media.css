@@ -449,6 +449,11 @@
   object-position: left bottom;
 }
 
+.hero-logo-reserve {
+  width: 880px;
+  height: 200px;
+}
+
 .hero-meta {
   margin: 0;
   font-size: var(--fs-small);

@@ -1128,3 +1128,61 @@ describe('DetailScreen: a series', () => {
     expect(screen.getByTestId('detail-credits')).toHaveTextContent('Starring An Actor');
   });
 });
+
+describe('DetailScreen: title art', () => {
+  const LOGO = `${BASE_URL}/img/m1-logo.webp`;
+  const withLogo = () => itemDetail({ logo_url: '/img/m1-logo.webp' });
+  const logoImages = () => document.querySelectorAll(`img[src="${LOGO}"]`);
+  const holdAnswers = () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const release = () =>
+      act(async () => {
+        open();
+        await Promise.resolve();
+      });
+    return { gate, release };
+  };
+
+  it('shows the logo when the profile wants title art', async () => {
+    serveDetail(server, { item: withLogo, settings: { values: { 'ui.title_art': true } } });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(await screen.findByTestId('detail-logo')).toHaveAttribute('src', LOGO);
+    expect(screen.queryByTestId('detail-title')).toBeNull();
+  });
+
+  it('shows the text title and never requests the logo when the profile turned it off', async () => {
+    serveDetail(server, { item: withLogo, settings: { values: { 'ui.title_art': false } } });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('First Title');
+    expect(screen.queryByTestId('detail-logo')).toBeNull();
+    expect(logoImages()).toHaveLength(0);
+  });
+
+  it('reserves the logo box, requests no image and shows no title until the answer is known', async () => {
+    const { gate, release } = holdAnswers();
+    serveDetail(server, { item: withLogo, settings: { gate, values: { 'ui.title_art': false } } });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(screen.getByTestId('detail-logo-reserve')).toHaveClass('detail-logo');
+    expect(logoImages()).toHaveLength(0);
+    expect(screen.queryByTestId('detail-title')).toBeNull();
+    await release();
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('First Title');
+    expect(screen.queryByTestId('detail-logo-reserve')).toBeNull();
+    expect(logoImages()).toHaveLength(0);
+  });
+
+  it('swaps the reserved box for the logo once the answer is yes', async () => {
+    const { gate, release } = holdAnswers();
+    serveDetail(server, { item: withLogo, settings: { gate } });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(screen.getByTestId('detail-logo-reserve')).toBeInTheDocument();
+    await release();
+    await waitFor(() => expect(logoImages()).toHaveLength(1));
+    expect(screen.queryByTestId('detail-logo-reserve')).toBeNull();
+  });
+});

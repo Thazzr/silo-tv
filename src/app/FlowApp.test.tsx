@@ -518,6 +518,36 @@ describe('FlowApp', () => {
     expect(libraryQueries()).toHaveLength(0);
   });
 
+  it('drops the settings the old profile read when the profile is switched', async () => {
+    serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);
+    signedIn(BASE_URL, 'p1');
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider lang="en">
+          <FlowApp
+            launch={{ probe: false, transport: null, server: '' }}
+            registry={registry}
+            device={testDevice}
+            storage={storage}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('button', { name: /Title of/ });
+    queryClient.setQueryData(['settings', 'effective', BASE_URL, 'p1', 'ui.title_art'], {});
+    const settingsQueries = () =>
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((q) => q.queryKey[0] === 'settings');
+    expect(settingsQueries().length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
+    expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
+    expect(settingsQueries()).toHaveLength(0);
+  });
+
   it('empties the profile, library and catalog caches when the session ends', async () => {
     serveData();
     const session = signedIn(BASE_URL, 'p1');

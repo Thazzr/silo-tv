@@ -18,6 +18,10 @@ export interface SiloClientOptions {
   clientVersion?: string;
 }
 
+const SETTINGS_PATH_PREFIX = '/api/v2/settings/';
+/** This app is a TV client on every platform it runs on. */
+const CLIENT_FAMILY = 'tv';
+
 const REFRESH_CODES = new Set(['invalid_token', 'token_refresh_required']);
 
 // Header values must be ISO-8859-1; keep names printable ASCII so a model name cannot break a call.
@@ -34,6 +38,11 @@ function deviceMiddleware(options: SiloClientOptions): Middleware {
       request.headers.set('X-Silo-Device-Platform', getPlatform().siloPlatformId);
       request.headers.set('X-Silo-Client', 'silo-tv');
       request.headers.set('X-Silo-Client-Version', version);
+      // The settings contract resolves the like-client layer (profile_client values) from this
+      // header. Only its own endpoints read it, so no other call carries it.
+      if (new URL(request.url).pathname.startsWith(SETTINGS_PATH_PREFIX)) {
+        request.headers.set('X-Silo-Client-Family', CLIENT_FAMILY);
+      }
       return request;
     },
   };
@@ -137,7 +146,13 @@ export function createSiloClient(options: SiloClientOptions): SiloClient {
     return transport(retryable);
   };
 
-  const client = createClient<paths>({ baseUrl, fetch: fetchWithRefresh });
+  // Silo wants a list parameter once per value (`keys=a&keys=b`), never comma-separated; that is
+  // openapi-fetch's default too, spelled out here because the server rejects the other form.
+  const client = createClient<paths>({
+    baseUrl,
+    fetch: fetchWithRefresh,
+    querySerializer: { array: { style: 'form', explode: true } },
+  });
   client.use(deviceMiddleware(options), authMiddleware(session));
   return client;
 }

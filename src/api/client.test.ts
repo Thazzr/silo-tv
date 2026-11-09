@@ -80,6 +80,30 @@ describe('device headers', () => {
   });
 });
 
+describe('settings requests', () => {
+  it('carry the TV client family, and no other request does', async () => {
+    const { client, seen } = setup();
+    await client.GET('/api/v2/system/info');
+    await client.GET('/api/v2/settings/contract/capabilities', {
+      params: { header: { 'X-Profile-Id': 'p1' } },
+    });
+    await client.GET('/api/v2/settings/values/effective', {
+      params: { header: { 'X-Profile-Id': 'p1' }, query: { keys: ['a'] } },
+    });
+    expect(seen[0]!.headers.get('X-Silo-Client-Family')).toBeNull();
+    expect(seen[1]!.headers.get('X-Silo-Client-Family')).toBe('tv');
+    expect(seen[2]!.headers.get('X-Silo-Client-Family')).toBe('tv');
+  });
+
+  it('send a list parameter once per value, never comma-separated', async () => {
+    const { client, seen } = setup();
+    await client.GET('/api/v2/settings/values/effective', {
+      params: { header: { 'X-Profile-Id': 'p1' }, query: { keys: ['ui.a', 'ui.b'] } },
+    });
+    expect(new URL(seen[0]!.url).search).toBe('?keys=ui.a&keys=ui.b');
+  });
+});
+
 describe('auth headers', () => {
   it('are absent without a session', async () => {
     const { client, seen } = setup();

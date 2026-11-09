@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
+import { useProfileSetting } from '../settings/profileSettings';
 import { cardTitle, episodeLabel, useMediaUrl, type CatalogItem } from '../../ui/media';
 
 /** How long the focus must rest on a card before the hero follows it. */
@@ -53,6 +54,7 @@ export function Hero({
   const t = useT();
   const url = useMediaUrl();
   const shown = useRestedValue(item, restMs);
+  const titleArt = useProfileSetting('ui.title_art');
   const [failed, setFailed] = useState<string | null>(null);
   if (!shown) return <div className="hero" data-testid="hero" />;
 
@@ -62,7 +64,11 @@ export function Hero({
   );
   const logo = url(shown.logo_url);
   const title = cardTitle(shown);
-  const showLogo = logo !== null && failed !== logo;
+  const hasLogo = logo !== null && failed !== logo;
+  // Until the profile's choice is known the logo is neither shown nor requested; its box is
+  // reserved so the text below does not jump once the answer arrives.
+  const showLogo = hasLogo && titleArt.known && titleArt.value;
+  const reserveLogo = hasLogo && !titleArt.known;
   const meta = heroMeta(shown, t);
 
   return (
@@ -79,7 +85,9 @@ export function Hero({
       ) : null}
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-text">
-        {showLogo ? (
+        {reserveLogo ? (
+          <div className="hero-logo hero-logo-reserve" data-testid="hero-logo-reserve" />
+        ) : showLogo ? (
           <img
             className="hero-logo"
             data-testid="hero-logo"

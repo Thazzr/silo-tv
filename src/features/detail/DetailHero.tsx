@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { useMediaUrl } from '../../ui/media';
+import { useProfileSetting } from '../settings/profileSettings';
 import { creditLine, metaLine, qualityBadges, ratingEntries, type ItemDetail } from './info';
 
 /**
@@ -90,7 +91,12 @@ export function DetailHero({
   const url = useMediaUrl();
   const [failed, setFailed] = useState<string | null>(null);
   const logo = url(detail.logo_url);
-  const showLogo = logo !== null && failed !== logo;
+  const titleArt = useProfileSetting('ui.title_art');
+  const hasLogo = logo !== null && failed !== logo;
+  // Until the profile's choice is known the logo is neither shown nor requested; its box is
+  // reserved (same size) so the page does not jump once the answer arrives.
+  const showLogo = hasLogo && titleArt.known && titleArt.value;
+  const reserveLogo = hasLogo && !titleArt.known;
   const meta = metaLine(detail, t);
   const badges = qualityBadges(detail);
   const ratings = ratingEntries(detail);
@@ -99,7 +105,9 @@ export function DetailHero({
   return (
     <div className="detail-hero" data-testid="detail-hero">
       <div className="detail-text" data-faded={faded}>
-        {showLogo ? (
+        {reserveLogo ? (
+          <div className="detail-logo" data-testid="detail-logo-reserve" />
+        ) : showLogo ? (
           <img
             className="detail-logo"
             data-testid="detail-logo"
