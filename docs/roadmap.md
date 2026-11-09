@@ -54,10 +54,10 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe
 - 🟨 Profile settings read from the server (effective values, gated by the settings contract), shared by the features below
 - 🟨 Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (the webOS hand-off is not yet verified on hardware)
-- ⬜ Theme music on detail pages when the profile turns it on
+- 🟨 Theme music on detail pages when the profile turns it on (`ui.theme_music_enabled`, `ui.theme_music_loop`) and the server offers it: quiet, only while the page is on top, stopped at once for the player or any other screen; series use the series' theme (a season's own theme comes later)
 - 🟨 Title art (logo instead of text) following the profile setting `ui.title_art`
 - 🟨 Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes
-- ⬜ AI translation of descriptions when the server offers it
+- 🟨 AI translation of descriptions when the server offers it: automatic or with a "Translate description" pill, as the server's mode says; the item's description and the shown season's episodes; "Translating…" and "Translated by AI" under the synopsis (detail page only for now)
 
 ## Phase 3 – Player (target v0.4.0)
 
