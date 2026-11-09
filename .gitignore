@@ -40,3 +40,6 @@ entities.json
 ## Local profiling output (npm run perf:scroll)
 dist-perf/
 perf-results/
+
+## Playwright MCP browser output (snapshots, screenshots, logs)
+.playwright-mcp/
