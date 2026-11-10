@@ -2,7 +2,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../api/session';
-import { account } from '../test/apiFixtures';
+import { BASE_URL, account } from '../test/apiFixtures';
 import { installFakeMedia } from '../test/fakeVideo';
 import {
   ACCESS_TOKEN,
@@ -60,12 +60,25 @@ async function sourceOptionsFor(stream: Partial<ReturnType<typeof playbackPlan>[
 
 describe('PlayerScreen tells the engine whether the source is HLS', () => {
   it('flags a plan with protocol hls', async () => {
-    expect(await sourceOptionsFor({ protocol: 'hls', url: '/api/v2/stream/x?st=1' })).toEqual({
-      hls: true,
+    expect(await sourceOptionsFor({ protocol: 'hls', url: '/api/v2/stream/x?st=1' })).toMatchObject(
+      {
+        hls: true,
+      },
+    );
+  });
+
+  it('gives an HLS source its token as headers, and the token URL only for the native fallback', async () => {
+    const options = await sourceOptionsFor({ protocol: 'hls', url: '/api/v2/stream/x?st=1' });
+    expect(options.headers?.(`${BASE_URL}/api/v2/stream/x/seg.ts`)).toEqual({
+      Authorization: `Bearer ${ACCESS_TOKEN}`,
+      'X-Profile-Id': 'p1',
     });
+    expect(options.headers?.('https://node.example/seg.ts')).toEqual({});
+    expect(options.nativeUrl?.()).toBe(`${BASE_URL}/api/v2/stream/x?st=1&token=${ACCESS_TOKEN}`);
   });
 
   it('does not flag a progressive plan', async () => {
+    // Direct play keeps the token in the URL and gives the engine no headers.
     expect(await sourceOptionsFor({ protocol: 'http', mime_type: 'video/mp4' })).toEqual({
       hls: false,
     });
@@ -78,6 +91,6 @@ describe('PlayerScreen tells the engine whether the source is HLS', () => {
         mime_type: 'application/vnd.apple.mpegurl',
         url: '/api/v2/stream/x/playlist?st=1',
       }),
-    ).toEqual({ hls: true });
+    ).toMatchObject({ hls: true });
   });
 });

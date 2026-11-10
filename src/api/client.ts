@@ -22,6 +22,9 @@ const SETTINGS_PATH_PREFIX = '/api/v2/settings/';
 /** This app is a TV client on every platform it runs on. */
 const CLIENT_FAMILY = 'tv';
 
+/** An access token this close to its expiry is renewed before the request goes out. */
+const REFRESH_MARGIN_MS = 60_000;
+
 const REFRESH_CODES = new Set(['invalid_token', 'token_refresh_required']);
 
 // Header values must be ISO-8859-1; keep names printable ASCII so a model name cannot break a call.
@@ -53,7 +56,10 @@ function authMiddleware(session: Session): Middleware {
     onRequest({ request }) {
       const current = session.get();
       if (!current) return request;
-      request.headers.set('Authorization', `Bearer ${current.accessToken}`);
+      // After a relaunch there is no access token yet; fetchWithRefresh adds it once the shared
+      // refresh has run. An empty bearer is never sent.
+      if (current.accessToken)
+        request.headers.set('Authorization', `Bearer ${current.accessToken}`);
       if (current.profileId) request.headers.set('X-Profile-Id', current.profileId);
       if (current.profileToken) request.headers.set('X-Profile-Token', current.profileToken);
       return request;
@@ -77,7 +83,8 @@ async function needsRefresh(response: Response): Promise<boolean> {
 
 /**
  * Creates the API client. Every request carries the device headers; authenticated requests also
- * carry the bearer token and profile headers. A 401 `invalid_token` / `token_refresh_required`
+ * carry the bearer token and profile headers. A missing or nearly expired access token is renewed
+ * first (one shared refresh). A 401 `invalid_token` / `token_refresh_required`
  * triggers one shared refresh and one retry of the failed request.
  */
 export function createSiloClient(options: SiloClientOptions): SiloClient {
@@ -125,7 +132,44 @@ export function createSiloClient(options: SiloClientOptions): SiloClient {
     return refreshing;
   }
 
+  /**
+   * Makes sure an authenticated request goes out with a usable access token: none after a relaunch
+   * (the token is memory only) or one about to expire is renewed first, through the shared refresh.
+   * Resolves a response when the request must not be sent (no usable token and the refresh failed).
+   */
+  async function ensureToken(request: Request): Promise<Response | null> {
+    const current = session.get();
+    if (!current) return null;
+    if (!current.accessToken || current.expiresAt - Date.now() < REFRESH_MARGIN_MS) {
+      let failure: Response | null = null;
+      let thrown: unknown;
+      let failed = false;
+      try {
+        failure = await refresh();
+      } catch (error) {
+        failed = true;
+        thrown = error;
+      }
+      if (failure || failed) {
+        // 503 or a network error: an access token that is still valid carries the request.
+        const after = session.get();
+        if (!after || !after.accessToken || after.expiresAt <= Date.now()) {
+          // Nothing to send with: the caller sees the refresh failure as it is.
+          if (failed) throw thrown;
+          // Parallel callers share one failure; each reads its own copy of the body.
+          return failure?.clone() ?? null;
+        }
+      }
+    }
+    // Read again: the refresh (ours or a parallel one) may have replaced the token.
+    const latest = session.get();
+    if (latest?.accessToken) request.headers.set('Authorization', `Bearer ${latest.accessToken}`);
+    return null;
+  }
+
   const fetchWithRefresh = async (request: Request): Promise<Response> => {
+    const unsent = await ensureToken(request);
+    if (unsent) return unsent;
     const sentAuth = request.headers.get('Authorization');
     const retryable = sentAuth ? request.clone() : null;
     const response = await transport(request);
@@ -137,7 +181,7 @@ export function createSiloClient(options: SiloClientOptions): SiloClient {
       const failure = await refresh();
       // A refused refresh signed the user out: the caller sees the original 401. Any other
       // failure (503 with Retry-After) is handed back as is so the caller can retry later.
-      if (failure) return failure.status === 401 ? response : failure;
+      if (failure) return failure.status === 401 ? response : failure.clone();
     }
     const renewed = session.get();
     if (!renewed) return response;

@@ -4,9 +4,10 @@ import type { components } from './generated/schema';
 export type Account = components['schemas']['Account'];
 
 export interface SessionData {
+  /** Memory only, never stored. Empty after a relaunch until the first refresh. */
   accessToken: string;
   refreshToken: string;
-  /** Epoch milliseconds at which the access token expires. */
+  /** Epoch milliseconds at which the access token expires; 0 while there is no access token. */
   expiresAt: number;
   user?: Account;
   profileId?: string;
@@ -15,7 +16,8 @@ export interface SessionData {
 
 export type SessionEvent = 'changed' | 'signedOut';
 
-// Bump when the stored shape changes; an unknown version is treated as "signed out".
+// Bump when the stored shape changes; an unknown version is treated as "signed out". The storage
+// key keeps its name; the record inside carries its own version (`v`).
 const STORAGE_KEY = 'silo-tv.session.v1';
 
 /** Storage key of the session of one server origin: every server keeps its own sign-in. */
@@ -26,8 +28,10 @@ export function sessionStorageKey(origin: string): string {
 /**
  * Holds the signed-in session and mirrors it to localStorage.
  *
- * TODO(LG checklist: tokens are stored as protected as the platform allows): localStorage is
- * plain text. Move the tokens to protected storage before the first store submission.
+ * Only the refresh token and the non-secret session facts are written to localStorage (plain
+ * text). The access token and its expiry live in memory only: it is short-lived and a relaunch
+ * simply refreshes. The refresh token must survive a relaunch, so it stays in storage; encrypting
+ * it with keymanager3 on webOS 24+ is a release item before the store submission.
  */
 export class Session {
   private data: SessionData | null;
@@ -85,25 +89,32 @@ export class Session {
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { v?: unknown; session?: Partial<SessionData> };
       const s = parsed.session;
-      if (
-        parsed.v !== 1 ||
-        !s ||
-        typeof s.accessToken !== 'string' ||
-        typeof s.refreshToken !== 'string' ||
-        typeof s.expiresAt !== 'number'
-      ) {
+      // v1 also stored the access token; v2 does not. Both load without one.
+      if ((parsed.v !== 1 && parsed.v !== 2) || !s || typeof s.refreshToken !== 'string') {
         return null;
       }
-      return s as SessionData;
+      const loaded: SessionData = {
+        accessToken: '',
+        refreshToken: s.refreshToken,
+        expiresAt: 0,
+        user: s.user,
+        profileId: s.profileId,
+        profileToken: s.profileToken,
+      };
+      // Rewrite a v1 record at once so its old access token leaves storage.
+      if (parsed.v === 1) this.save(loaded);
+      return loaded;
     } catch {
       return null;
     }
   }
 
-  private save(): void {
+  private save(data: SessionData | null = this.data): void {
     try {
-      if (this.data) {
-        this.storage?.set(this.storageKey, JSON.stringify({ v: 1, session: this.data }));
+      if (data) {
+        const { refreshToken, user, profileId, profileToken } = data;
+        const stored = { refreshToken, user, profileId, profileToken };
+        this.storage?.set(this.storageKey, JSON.stringify({ v: 2, session: stored }));
       } else {
         this.storage?.remove(this.storageKey);
       }

@@ -93,7 +93,7 @@ function make(options: { intent?: StartIntent; serve?: PlaybackServerOptions } =
     session,
     device: testDevice,
   });
-  return { calls, ...build(client, session, options.intent) };
+  return { calls, session, ...build(client, session, options.intent) };
 }
 
 /** Started, attached to the fake engine and playing. */
@@ -329,6 +329,50 @@ describe('replan', () => {
     expect(ready().plan.plan_id).toBe('plan:3');
     expect(ready().loadId).toBe(first + 1);
     expect(states.length).toBeGreaterThan(count);
+  });
+
+  describe('media URL and the token', () => {
+    const HLS_PATH = `/api/v2/playback/transcode/${SESSION_ID}/master.m3u8?st=signed`;
+    const hlsPlan = (over: Parameters<typeof playbackPlan>[0] = {}) =>
+      playableDecision(
+        playbackPlan({
+          stream: { header_refresh: 'none', headers: {}, protocol: 'hls', url: HLS_PATH },
+          ...over,
+        }),
+      );
+
+    it('hands HLS on the server origin to the engine without a token', async () => {
+      const { ready } = await playing({ serve: { start: [hlsPlan()] } });
+      expect(ready().mediaUrl).toBe(`${BASE_URL}${HLS_PATH}`);
+      expect(ready().mediaUrl).not.toContain('token=');
+    });
+
+    it('does not reload HLS when the access token was refreshed meanwhile', async () => {
+      const { controller, ready, session } = await playing({
+        serve: {
+          start: [hlsPlan()],
+          replan: [hlsPlan({ plan_id: 'plan:2', plan_attempt_key: 'v3:key-2' })],
+        },
+      });
+      const first = ready().loadId;
+      session.update({ accessToken: 'refreshed-fake', expiresAt: Date.now() + 3600_000 });
+      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+      expect(ready().plan.plan_id).toBe('plan:2');
+      expect(ready().loadId).toBe(first);
+      expect(ready().mediaUrl).not.toContain('token=');
+    });
+
+    it('still reloads direct play for a refreshed token, which sits in its URL', async () => {
+      const { controller, ready, session } = await playing({
+        serve: { replan: [playableDecision(playbackPlan({ plan_id: 'plan:2' }))] },
+      });
+      expect(ready().mediaUrl).toContain(`token=${ACCESS_TOKEN}`);
+      const first = ready().loadId;
+      session.update({ accessToken: 'refreshed-fake' });
+      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+      expect(ready().mediaUrl).toContain('token=refreshed-fake');
+      expect(ready().loadId).toBe(first + 1);
+    });
   });
 
   it('reloads after a failure recovery even when the stream URL is unchanged', async () => {

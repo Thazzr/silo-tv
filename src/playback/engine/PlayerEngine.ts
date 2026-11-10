@@ -26,6 +26,18 @@ export type EngineEvent =
 export interface SourceOptions {
   /** The plan says the stream is HLS (protocol or MIME type), so an engine can pick its HLS path. */
   hls: boolean;
+  /**
+   * Headers for a request the engine makes itself (hls.js playlists, keys and segments), computed
+   * per request URL and read at request time, so a refreshed token applies to the next request.
+   * Empty for a URL the account token must not go to. Never used for the element's own loads.
+   */
+  headers?: (url: string) => Record<string, string>;
+  /**
+   * The source URL with the token in it, for when the stream plays through the element's own
+   * player: a media element cannot send headers. Computed only on that path, so the token never
+   * enters a URL hls.js uses. Without it the plain URL is used.
+   */
+  nativeUrl?: () => string;
 }
 
 /** Whether the plan's stream is HLS; from the plan's own facts, never from the URL. */

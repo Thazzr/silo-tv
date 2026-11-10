@@ -30,7 +30,7 @@ function signedInSession() {
   session.set({
     accessToken: 'old',
     refreshToken: 'refresh-old',
-    expiresAt: Date.now() + 1000,
+    expiresAt: Date.now() + 3600_000,
     user: account,
   });
   return session;
@@ -222,29 +222,188 @@ describe('refresh on 401', () => {
   });
 });
 
+describe('proactive refresh', () => {
+  /** A session as after a relaunch: refresh token only, no access token yet. */
+  function relaunched() {
+    localStorage.setItem(
+      'silo-tv.session.v1',
+      JSON.stringify({ v: 2, session: { refreshToken: 'refresh-old', user: account } }),
+    );
+    return new Session(getPlatform().storage);
+  }
+
+  function mockNew() {
+    const calls = { me: [] as (string | null)[], refresh: 0 };
+    server.use(
+      http.get(ME, ({ request }) => {
+        calls.me.push(request.headers.get('Authorization'));
+        return HttpResponse.json(account);
+      }),
+      http.post(REFRESH, async () => {
+        calls.refresh += 1;
+        await delay(20);
+        return HttpResponse.json(newTokens);
+      }),
+    );
+    return calls;
+  }
+
+  it('refreshes once before the first call after a relaunch; parallel calls share it', async () => {
+    const calls = mockNew();
+    const { client } = setup(relaunched());
+    const results = await Promise.all([
+      client.GET('/api/v2/account/me'),
+      client.GET('/api/v2/account/me'),
+      client.GET('/api/v2/account/me'),
+    ]);
+    expect(results.map((r) => r.response.status)).toEqual([200, 200, 200]);
+    expect(calls.refresh).toBe(1);
+    expect(calls.me).toEqual(['Bearer new', 'Bearer new', 'Bearer new']);
+  });
+
+  it('refreshes a token that expires within a minute before sending', async () => {
+    const calls = mockNew();
+    const session = signedInSession();
+    session.update({ expiresAt: Date.now() + 30_000 });
+    await setup(session).client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(1);
+    expect(calls.me).toEqual(['Bearer new']);
+  });
+
+  it('does not refresh a token that is good for more than a minute', async () => {
+    const calls = mockNew();
+    await setup().client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(0);
+    expect(calls.me).toEqual(['Bearer old']);
+  });
+
+  it('hands a 503 back without sending the request when there is no access token', async () => {
+    const calls = { me: 0 };
+    server.use(
+      http.get(ME, () => {
+        calls.me += 1;
+        return HttpResponse.json(account);
+      }),
+      http.post(REFRESH, () => problemJson('dependency_unavailable', 503, { 'Retry-After': '5' })),
+    );
+    const session = relaunched();
+    const { response } = await setup(session).client.GET('/api/v2/account/me');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Retry-After')).toBe('5');
+    expect(calls.me).toBe(0);
+    expect(session.get()?.refreshToken).toBe('refresh-old');
+  });
+
+  it('lets a network failure of the refresh through when there is no access token', async () => {
+    const calls = { me: 0 };
+    server.use(
+      http.get(ME, () => {
+        calls.me += 1;
+        return HttpResponse.json(account);
+      }),
+      http.post(REFRESH, () => HttpResponse.error()),
+    );
+    const session = relaunched();
+    await expect(setup(session).client.GET('/api/v2/account/me')).rejects.toBeInstanceOf(TypeError);
+    expect(calls.me).toBe(0);
+    expect(session.get()?.refreshToken).toBe('refresh-old');
+  });
+
+  it('still sends a near-expiry token when the refresh answers 503', async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      http.get(ME, ({ request }) => {
+        seen.push(request.headers.get('Authorization'));
+        return HttpResponse.json(account);
+      }),
+      http.post(REFRESH, () => problemJson('dependency_unavailable', 503)),
+    );
+    const session = signedInSession();
+    session.update({ expiresAt: Date.now() + 30_000 });
+    const { response } = await setup(session).client.GET('/api/v2/account/me');
+    expect(response.status).toBe(200);
+    expect(seen).toEqual(['Bearer old']);
+    expect(session.get()?.refreshToken).toBe('refresh-old');
+  });
+
+  it('signs out when the proactive refresh is refused', async () => {
+    server.use(http.post(REFRESH, () => problemJson('session_expired', 401)));
+    const session = relaunched();
+    const { response } = await setup(session).client.GET('/api/v2/account/me');
+    expect(response.status).toBe(401);
+    expect(session.get()).toBeNull();
+  });
+});
+
 describe('Session', () => {
-  it('persists under one versioned key and restores', () => {
-    const first = signedInSession();
-    expect(Object.keys({ ...localStorage })).toEqual(['silo-tv.session.v1']);
-    expect(new Session(getPlatform().storage).get()).toEqual(first.get());
+  const STORED = 'silo-tv.session.v1';
+
+  it('stores v2 without the access token or its expiry', () => {
+    signedInSession();
+    expect(Object.keys({ ...localStorage })).toEqual([STORED]);
+    const raw = localStorage.getItem(STORED)!;
+    expect(JSON.parse(raw)).toEqual({
+      v: 2,
+      session: { refreshToken: 'refresh-old', user: account },
+    });
+    expect(raw).not.toContain('accessToken');
+    expect(raw).not.toContain('expiresAt');
+    expect(raw).not.toContain('"old"');
   });
 
-  it('rejects a well-formed record of another or no version', () => {
-    const valid = { accessToken: 'a', refreshToken: 'r', expiresAt: 1 };
-    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 2, session: valid }));
-    expect(new Session(getPlatform().storage).get()).toBeNull();
-    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ session: valid }));
-    expect(new Session(getPlatform().storage).get()).toBeNull();
-    localStorage.setItem('silo-tv.session.v1', JSON.stringify(valid));
-    expect(new Session(getPlatform().storage).get()).toBeNull();
-    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 1, session: valid }));
-    expect(new Session(getPlatform().storage).get()).toEqual(valid);
+  it('loads v2 as a session with no access token yet', () => {
+    signedInSession();
+    expect(new Session(getPlatform().storage).get()).toEqual({
+      accessToken: '',
+      refreshToken: 'refresh-old',
+      expiresAt: 0,
+      user: account,
+    });
   });
 
-  it('ignores stored data of another version or shape', () => {
-    localStorage.setItem('silo-tv.session.v1', JSON.stringify({ v: 2, session: {} }));
+  it('migrates a v1 record: keeps the refresh token and rewrites it as v2 at once', () => {
+    localStorage.setItem(
+      STORED,
+      JSON.stringify({
+        v: 1,
+        session: {
+          accessToken: 'old-access',
+          refreshToken: 'r',
+          expiresAt: 5,
+          user: account,
+          profileId: 'p1',
+          profileToken: 'pt',
+        },
+      }),
+    );
+    const session = new Session(getPlatform().storage);
+    expect(session.get()).toEqual({
+      accessToken: '',
+      refreshToken: 'r',
+      expiresAt: 0,
+      user: account,
+      profileId: 'p1',
+      profileToken: 'pt',
+    });
+    const raw = localStorage.getItem(STORED)!;
+    expect(raw).not.toContain('old-access');
+    expect(JSON.parse(raw)).toEqual({
+      v: 2,
+      session: { refreshToken: 'r', user: account, profileId: 'p1', profileToken: 'pt' },
+    });
+  });
+
+  it('rejects a record of an unknown version or without a refresh token', () => {
+    const valid = { refreshToken: 'r' };
+    localStorage.setItem(STORED, JSON.stringify({ v: 3, session: valid }));
     expect(new Session(getPlatform().storage).get()).toBeNull();
-    localStorage.setItem('silo-tv.session.v1', 'not json');
+    localStorage.setItem(STORED, JSON.stringify({ session: valid }));
+    expect(new Session(getPlatform().storage).get()).toBeNull();
+    localStorage.setItem(STORED, JSON.stringify(valid));
+    expect(new Session(getPlatform().storage).get()).toBeNull();
+    localStorage.setItem(STORED, JSON.stringify({ v: 2, session: {} }));
+    expect(new Session(getPlatform().storage).get()).toBeNull();
+    localStorage.setItem(STORED, 'not json');
     expect(new Session(getPlatform().storage).get()).toBeNull();
   });
 

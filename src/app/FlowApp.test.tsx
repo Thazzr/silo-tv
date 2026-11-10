@@ -813,7 +813,8 @@ describe('FlowApp password sign-in', () => {
     expect(logins).toEqual([{ username: 'test-viewer', password: 'fake-password-0000' }]);
     expect(registry.session(BASE_URL).get()).toMatchObject({ accessToken: 'access-token-1' });
     // The tokens live under this server's own key.
-    expect(storage.get(`silo-tv.session.v1.${BASE_URL}`)).toContain('access-token-1');
+    expect(storage.get(`silo-tv.session.v1.${BASE_URL}`)).toContain('refresh-token-1');
+    expect(storage.get(`silo-tv.session.v1.${BASE_URL}`)).not.toContain('access-token-1');
     expect(storage.get('silo-tv.session.v1')).toBeNull();
   });
 

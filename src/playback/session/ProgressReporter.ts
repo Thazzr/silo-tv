@@ -23,9 +23,17 @@ export interface ProgressDeps {
   onExpired(position: number): void;
 }
 
+/** The one progress request that may be on its way, and the session it belongs to. */
+interface Flight {
+  sessionId: string;
+}
+
 export class ProgressReporter {
   private sequence = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private flight: Flight | null = null;
+  /** The newest report that had to wait for the flight: only its `paused` flag is kept. */
+  private pending: { sessionId: string; paused: boolean } | null = null;
 
   constructor(private readonly deps: ProgressDeps) {}
 
@@ -38,6 +46,9 @@ export class ProgressReporter {
   /** A new session counts from its own start. */
   reset(): void {
     this.sequence = 0;
+    // The old session's answer says nothing about the new one: it starts with a free slot.
+    this.flight = null;
+    this.pending = null;
   }
 
   /** The heartbeat runs while playing and while paused: the server drops a quiet session. */
@@ -47,17 +58,41 @@ export class ProgressReporter {
     }, PROGRESS_INTERVAL_MS);
   }
 
+  /** A report waiting for the flight is not sent any more (the session is over). */
+  dropPending(): void {
+    this.pending = null;
+  }
+
   clearTimer(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
   }
 
+  /**
+   * Reports progress, one request at a time. While one is in flight a new report only marks itself
+   * as pending (the newest wins); when the flight settles, the pending one goes out at once with a
+   * fresh reading and the next sequence, so sent order and sequence order agree. A failed request
+   * is not retried: the next tick sends a fresh sample. The transport's timeout bounds a request
+   * nobody answers, so the slot always frees.
+   */
   send(paused: boolean): void {
-    if (this.deps.isStopped() || !this.deps.sessionId()) return;
+    if (this.deps.isStopped()) return;
+    const sessionId = this.deps.sessionId();
+    if (!sessionId) return;
+    if (this.flight && this.flight.sessionId === sessionId) {
+      this.pending = { sessionId, paused };
+      return;
+    }
+    this.dispatch(sessionId, paused);
+  }
+
+  private dispatch(sessionId: string, paused: boolean): void {
     const reading = this.deps.reading();
     if (!reading) return;
     this.sequence += 1;
-    const sessionId = this.deps.sessionId();
+    const flight: Flight = { sessionId };
+    this.flight = flight;
+    this.pending = null;
     this.deps.client
       .POST('/api/v2/playback/{session_id}/progress', {
         params: { path: { session_id: sessionId }, header: this.deps.header() },
@@ -80,6 +115,16 @@ export class ProgressReporter {
           }
         },
         () => undefined,
-      );
+      )
+      .finally(() => {
+        // A restart gave the slot to another flight; this one's end changes nothing.
+        if (this.flight !== flight) return;
+        this.flight = null;
+        const next = this.pending;
+        this.pending = null;
+        // Dropped after a stop, and for a session that was replaced meanwhile.
+        if (!next || this.deps.isStopped() || next.sessionId !== this.deps.sessionId()) return;
+        this.dispatch(next.sessionId, next.paused);
+      });
   }
 }

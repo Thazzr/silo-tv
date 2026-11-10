@@ -1,3 +1,31 @@
+import type { SessionData } from '../api/session';
+
+/**
+ * The headers a request to `url` carries to authenticate as the signed-in viewer: the bearer token
+ * and the profile headers, only when the URL is on the Silo server's own origin. Every other origin
+ * (a proxy or transcode node) gets none, so the account token never leaves for it. Pass the
+ * session's current data on every call: a refreshed token then applies to the next request.
+ *
+ * The result holds credentials: never log it.
+ */
+export function authHeadersFor(
+  url: string,
+  serverOrigin: string,
+  session: Pick<SessionData, 'accessToken' | 'profileId' | 'profileToken'> | null | undefined,
+): Record<string, string> {
+  if (!session?.accessToken) return {};
+  try {
+    const server = new URL(serverOrigin);
+    if (new URL(url, server).origin !== server.origin) return {};
+  } catch {
+    return {};
+  }
+  const headers: Record<string, string> = { Authorization: `Bearer ${session.accessToken}` };
+  if (session.profileId) headers['X-Profile-Id'] = session.profileId;
+  if (session.profileToken) headers['X-Profile-Token'] = session.profileToken;
+  return headers;
+}
+
 /**
  * The URL a `<video>` loads for a plan. The plan's URL is opaque: nothing is built or edited
  * here except one thing the docs allow. A media element cannot set an Authorization header, so

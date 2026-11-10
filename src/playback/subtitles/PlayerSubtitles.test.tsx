@@ -84,10 +84,12 @@ function signedIn() {
 
 /** Serves the subtitle URL and records each request's URL. */
 function serveSidecar(body = VTT, status = 200) {
-  const urls: string[] = [];
+  const urls: string[] & { auth?: (string | null)[] } = [];
+  urls.auth = [];
   server.use(
     http.get(`${BASE_URL}/api/v2/stream/${SESSION_ID}/subtitles/:name`, ({ request }) => {
       urls.push(request.url);
+      urls.auth!.push(request.headers.get('Authorization'));
       return new HttpResponse(body, { status, headers: { 'content-type': 'text/vtt' } });
     }),
   );
@@ -118,11 +120,12 @@ async function playing(start: Plan, values: Record<string, unknown> = {}) {
 }
 
 describe('Player subtitles', () => {
-  it('shows the cue of the source time, fetched with the token on the server origin', async () => {
+  it('shows the cue of the source time, fetched with the token in a header on the server origin', async () => {
     const urls = serveSidecar();
     const { at } = await playing(plan(sidecar()));
     await waitFor(() => expect(urls).toHaveLength(1));
-    expect(urls[0]).toBe(`${BASE_URL}${SUBTITLE_URL}&token=${ACCESS_TOKEN}`);
+    expect(urls[0]).toBe(`${BASE_URL}${SUBTITLE_URL}`);
+    expect(urls.auth).toEqual([`Bearer ${ACCESS_TOKEN}`]);
 
     at(5);
     expect(screen.queryByTestId('player-subtitles')).not.toBeInTheDocument();

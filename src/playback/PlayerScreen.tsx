@@ -24,6 +24,7 @@ import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import type { StartIntent } from './resume';
 import { isHlsStream } from './engine/PlayerEngine';
+import { authHeadersFor, mediaUrlWithToken } from './mediaUrl';
 import { getTimeMode } from './timeDisplay';
 import { usePlaybackSession, type PlaybackSession } from './usePlaybackSession';
 import type { Heading, MediaFacts, PreviewFacts, Plan, SessionFailure } from './session/types';
@@ -223,6 +224,7 @@ function PlayingView({
   onExit: () => void;
 }) {
   const t = useT();
+  const { baseUrl, session } = useSilo();
   const {
     attachEngine,
     reading,
@@ -383,12 +385,25 @@ function PlayingView({
         onMediaError({ code: error?.code ?? 0, message: error?.message ?? '' });
       }),
     ];
-    engine.setSource(mediaUrl, { hls });
+    // hls.js authenticates with headers read per request; the native fallback needs the token in
+    // the URL (a media element cannot send headers), built only if that path is taken.
+    engine.setSource(
+      mediaUrl,
+      hls
+        ? {
+            hls,
+            headers: (url) => authHeadersFor(url, baseUrl, session.get()),
+            nativeUrl: () => mediaUrlWithToken(mediaUrl, baseUrl, session.get()?.accessToken),
+          }
+        : { hls },
+    );
     return () => off.forEach((unsubscribe) => unsubscribe());
   }, [
     engine,
     mediaUrl,
     hls,
+    baseUrl,
+    session,
     autoplay,
     reading,
     onStarted,

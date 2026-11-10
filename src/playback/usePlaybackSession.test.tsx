@@ -633,6 +633,62 @@ describe('stop', () => {
   });
 });
 
+describe('progress in single flight', () => {
+  it('sends a report that waited for a slow one, and drops it when the session stops first', async () => {
+    const calls = servePlayback(server);
+    const sequences: number[] = [];
+    server.use(
+      http.post(`${BASE_URL}/api/v2/playback/:sessionId/progress`, async ({ request }) => {
+        const body = (await request.json()) as { sequence: number };
+        sequences.push(body.sequence);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        return HttpResponse.json({ outcome: 'applied' });
+      }),
+    );
+    const hook = setup();
+    await ready(hook);
+    hook.result.current.bindPlayer(player(50).read);
+    act(() => hook.result.current.onPlaying());
+
+    // The pause report is slow; the resume report has to wait behind it.
+    act(() => hook.result.current.onPause());
+    await until(() => sequences.length === 1);
+    act(() => hook.result.current.onPlaying());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sequences).toEqual([1]);
+
+    // The stop ends the session: the waiting report must never be sent.
+    await act(() => hook.result.current.stop());
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(sequences).toEqual([1]);
+    expect(calls.stop).toHaveLength(1);
+    // The stop continues the count after the one report that went out.
+    expect(calls.stop[0]?.body.sequence).toBe(2);
+  });
+
+  it('sends the waiting report once the slow one answers while the session lives on', async () => {
+    servePlayback(server);
+    const sequences: { sequence: number; is_paused: boolean }[] = [];
+    server.use(
+      http.post(`${BASE_URL}/api/v2/playback/:sessionId/progress`, async ({ request }) => {
+        sequences.push((await request.json()) as { sequence: number; is_paused: boolean });
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return HttpResponse.json({ outcome: 'applied' });
+      }),
+    );
+    const hook = setup();
+    await ready(hook);
+    hook.result.current.bindPlayer(player(50).read);
+    act(() => hook.result.current.onPlaying());
+    act(() => hook.result.current.onPause());
+    await until(() => sequences.length === 1);
+    act(() => hook.result.current.onPlaying());
+    await until(() => sequences.length === 2);
+    expect(sequences.map((s) => s.sequence)).toEqual([1, 2]);
+    expect(sequences[1]!.is_paused).toBe(false);
+  });
+});
+
 describe('failure-driven replan', () => {
   const failure = { code: 3, message: 'decode failed' };
 

@@ -22,7 +22,7 @@ export function useSubtitleCues(plan: Plan): Cue[] {
     let current = true;
     void loadSubtitleCues(plan.subtitle, {
       baseUrl,
-      token: session.get()?.accessToken,
+      session,
       transport: currentTransport,
       signal: abort.signal,
     }).then((cues) => {

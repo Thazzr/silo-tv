@@ -8,7 +8,7 @@
 import type { SiloClient } from '../../api/client';
 import type { Session } from '../../api/session';
 import type { ClientCapabilities, PlaybackContext } from '../deviceProfile';
-import type { PlayerEngine } from '../engine/PlayerEngine';
+import { isHlsStream, type PlayerEngine } from '../engine/PlayerEngine';
 import { mediaUrlWithToken } from '../mediaUrl';
 import { rewound, type StartIntent } from '../resume';
 import { getResumeRewind } from '../resumeRewind';
@@ -229,6 +229,7 @@ export class PlaybackController {
     if (this.stopped) return;
     this.stopped = true;
     this.progress.clearTimer();
+    this.progress.dropPending();
     this.recovery.cancelWait();
     this.fail('sessionEnded');
   }
@@ -339,10 +340,13 @@ export class PlaybackController {
     options: { forceReload?: boolean; autoplay?: boolean } = {},
   ): void {
     const previous = this.plan;
+    // HLS plays through hls.js, which authenticates with headers: its URL carries no token, so a
+    // token refresh never changes it and never reloads the stream. (The screen builds the token
+    // URL itself on the native fallback.) Direct play needs the token in the URL.
     const url = mediaUrlWithToken(
       plan.stream.url,
       this.deps.baseUrl,
-      this.deps.session.get()?.accessToken,
+      isHlsStream(plan.stream) ? undefined : this.deps.session.get()?.accessToken,
     );
     const reload =
       !previous ||
@@ -535,6 +539,7 @@ export class PlaybackController {
     if (this.stopped) return Promise.resolve();
     this.stopped = true;
     this.progress.clearTimer();
+    this.progress.dropPending();
     this.recovery.cancelWait();
     this.watchdog.disarm();
     // The final reading first, then the unload, then (later) the stop: see STOP_AFTER_UNLOAD_MS.

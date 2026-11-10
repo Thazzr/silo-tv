@@ -44,13 +44,24 @@ export class HtmlVideoEngine implements PlayerEngine {
     this.destroyHls();
     this.hlsError = null;
     // Server HLS can use EXT-X-DEFINE, which webOS's native player rejects; hls.js over MSE
-    // handles it. The URL is opaque and goes to hls.js untouched.
+    // handles it. The URL is opaque and goes to hls.js untouched; its requests authenticate with
+    // headers, so the URL carries no token.
     if (options.hls && Hls.isSupported()) {
+      const headersFor = options.headers;
       const hls = new Hls({
         enableWorker: true, // hls.js falls back to the main thread when a worker cannot start
         lowLatencyMode: false,
         maxBufferLength: 30,
         backBufferLength: 30,
+        // Runs for every playlist, key and segment request, so each one carries the current token.
+        ...(headersFor
+          ? {
+              xhrSetup: (xhr: XMLHttpRequest, requestUrl: string) => {
+                const headers = headersFor(requestUrl);
+                for (const name of Object.keys(headers)) xhr.setRequestHeader(name, headers[name]!);
+              },
+            }
+          : {}),
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         // Non-fatal errors are hls.js's own to recover from.
@@ -69,7 +80,8 @@ export class HtmlVideoEngine implements PlayerEngine {
       hls.loadSource(url);
       return;
     }
-    this.el.src = url;
+    // The element's own player cannot send headers: HLS that falls back to it needs the token URL.
+    this.el.src = options.hls && options.nativeUrl ? options.nativeUrl() : url;
   }
 
   private destroyHls(): void {

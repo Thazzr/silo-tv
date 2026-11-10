@@ -105,6 +105,87 @@ describe('HtmlVideoEngine source path', () => {
   });
 });
 
+describe('HtmlVideoEngine authentication', () => {
+  type XhrSetup = (xhr: XMLHttpRequest, url: string) => void;
+  const SERVER = 'https://media.example';
+
+  /** An XHR stand-in that records the headers set on it. */
+  function recordingXhr() {
+    const headers: Record<string, string> = {};
+    const xhr = {
+      setRequestHeader: (name: string, value: string) => {
+        headers[name] = value;
+      },
+    } as unknown as XMLHttpRequest;
+    return { xhr, headers };
+  }
+
+  function xhrSetupOf(hls: InstanceType<typeof FakeHls>): XhrSetup {
+    return (hls.config as { xhrSetup: XhrSetup }).xhrSetup;
+  }
+
+  it('sets the headers on hls.js requests, per request URL and only where the callback allows', () => {
+    const { engine } = setup();
+    let token = 'first';
+    engine.setSource(URL, {
+      hls: true,
+      headers: (url): Record<string, string> =>
+        url.startsWith(SERVER) ? { Authorization: `Bearer ${token}`, 'X-Profile-Id': 'p1' } : {},
+    });
+    const setupXhr = xhrSetupOf(FakeHls.instances[0]!);
+
+    const own = recordingXhr();
+    setupXhr(own.xhr, `${SERVER}/api/v2/stream/x/seg1.ts`);
+    expect(own.headers).toEqual({ Authorization: 'Bearer first', 'X-Profile-Id': 'p1' });
+
+    // Read at request time: a refreshed token applies to the next request, no reload.
+    token = 'second';
+    const next = recordingXhr();
+    setupXhr(next.xhr, `${SERVER}/api/v2/stream/x/seg2.ts`);
+    expect(next.headers.Authorization).toBe('Bearer second');
+    expect(FakeHls.instances).toHaveLength(1);
+
+    const other = recordingXhr();
+    setupXhr(other.xhr, 'https://node.example/seg3.ts');
+    expect(other.headers).toEqual({});
+  });
+
+  it('gives hls.js the URL it was handed, with no token added', () => {
+    const { engine } = setup();
+    engine.setSource(URL, {
+      hls: true,
+      headers: () => ({ Authorization: 'Bearer secret-fake' }),
+      nativeUrl: () => `${URL}&token=secret-fake`,
+    });
+    expect(FakeHls.instances[0]!.loadSource).toHaveBeenCalledWith(URL);
+    expect(JSON.stringify(FakeHls.instances[0]!.loadSource.mock.calls)).not.toContain('token=');
+  });
+
+  it('adds no xhrSetup when there are no headers to send', () => {
+    const { engine } = setup();
+    engine.setSource(URL, { hls: true });
+    expect(FakeHls.instances[0]!.config).not.toHaveProperty('xhrSetup');
+  });
+
+  it('falls back to the token URL on the element when hls.js is not supported', () => {
+    FakeHls.supported = false;
+    const { el, engine } = setup();
+    const nativeUrl = vi.fn(() => `${URL}&token=secret-fake`);
+    engine.setSource(URL, { hls: true, headers: () => ({}), nativeUrl });
+    expect(el.src).toBe(`${URL}&token=secret-fake`);
+  });
+
+  it('never asks for the token URL while hls.js plays, nor for a progressive file', () => {
+    const { el, engine } = setup();
+    const nativeUrl = vi.fn(() => `${URL}&token=secret-fake`);
+    engine.setSource(URL, { hls: true, nativeUrl });
+    expect(nativeUrl).not.toHaveBeenCalled();
+    engine.setSource('https://media.example/file.mkv', { hls: false, nativeUrl });
+    expect(nativeUrl).not.toHaveBeenCalled();
+    expect(el.src).toBe('https://media.example/file.mkv');
+  });
+});
+
 describe('HtmlVideoEngine decoder and bandwidth', () => {
   it('names hls.js while it plays HLS, and the native player otherwise', () => {
     const { engine } = setup();

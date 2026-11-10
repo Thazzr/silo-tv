@@ -36,10 +36,13 @@ export class FakeEngine implements PlayerEngine {
 
   /** The `hls` flag of the last setSource call. */
   sourceIsHls = false;
+  /** The options of the last setSource call. */
+  sourceOptions: SourceOptions = { hls: false };
 
   setSource(url: string, options: SourceOptions = { hls: false }): void {
     this.source = url;
     this.sourceIsHls = options.hls;
+    this.sourceOptions = options;
   }
 
   seek(seconds: number): void {

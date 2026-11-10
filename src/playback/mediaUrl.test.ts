@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mediaUrlWithToken } from './mediaUrl';
+import { authHeadersFor, mediaUrlWithToken } from './mediaUrl';
 
 const SERVER = 'https://silo.example.test';
 
@@ -48,5 +48,45 @@ describe('mediaUrlWithToken', () => {
     expect(mediaUrlWithToken('/api/v2/stream/s1?st=x', SERVER, undefined)).toBe(
       `${SERVER}/api/v2/stream/s1?st=x`,
     );
+  });
+});
+
+describe('authHeadersFor', () => {
+  const session = { accessToken: 'abc', profileId: 'p1', profileToken: 'pt' };
+
+  it('gives the bearer token and the profile headers for a URL on the server origin', () => {
+    expect(authHeadersFor(`${SERVER}/api/v2/stream/s1/seg1.ts?st=x`, SERVER, session)).toEqual({
+      Authorization: 'Bearer abc',
+      'X-Profile-Id': 'p1',
+      'X-Profile-Token': 'pt',
+    });
+  });
+
+  it('leaves out the profile headers that are not set', () => {
+    expect(authHeadersFor(`${SERVER}/a`, SERVER, { accessToken: 'abc' })).toEqual({
+      Authorization: 'Bearer abc',
+    });
+  });
+
+  it('treats a relative URL as the server origin', () => {
+    expect(authHeadersFor('/api/v2/stream/s1/index.m3u8', SERVER, session)).toMatchObject({
+      Authorization: 'Bearer abc',
+    });
+  });
+
+  it('gives nothing for another origin, scheme or port', () => {
+    expect(authHeadersFor('https://proxy.example.test/stream/s1', SERVER, session)).toEqual({});
+    expect(authHeadersFor('http://silo.example.test/stream/s1', SERVER, session)).toEqual({});
+    expect(authHeadersFor('https://silo.example.test:8443/s1', SERVER, session)).toEqual({});
+  });
+
+  it('gives nothing without a session or without an access token', () => {
+    expect(authHeadersFor(`${SERVER}/a`, SERVER, null)).toEqual({});
+    expect(authHeadersFor(`${SERVER}/a`, SERVER, undefined)).toEqual({});
+    expect(authHeadersFor(`${SERVER}/a`, SERVER, { ...session, accessToken: '' })).toEqual({});
+  });
+
+  it('gives nothing when the server origin is not a URL', () => {
+    expect(authHeadersFor(`${SERVER}/a`, 'not a url', session)).toEqual({});
   });
 });

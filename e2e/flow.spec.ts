@@ -603,6 +603,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           });
         case 'POST /api/v2/auth/login':
           return send(200, tokens);
+        case 'POST /api/v2/auth/refresh':
+          // After a relaunch the app holds only the refresh token and asks for an access token.
+          return send(200, tokens);
         case 'POST /api/v2/auth/logout':
           res.writeHead(204, cors);
           return res.end();

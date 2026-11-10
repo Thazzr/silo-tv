@@ -1,6 +1,7 @@
 import type { components } from '../../api/generated/schema';
+import type { Session } from '../../api/session';
 import type { Transport } from '../../api/transport';
-import { mediaUrlWithToken } from '../mediaUrl';
+import { authHeadersFor, mediaUrlWithToken } from '../mediaUrl';
 import { parseWebVtt, type Cue } from './webvtt';
 
 type Subtitle = components['schemas']['SubtitleDecisionV3'];
@@ -13,15 +14,15 @@ export function sidecarUrl(subtitle: Subtitle | undefined): string | null {
 
 export interface LoadOptions {
   baseUrl: string;
-  token: string | undefined;
+  /** Read per load, so the sidecar request carries the current token. */
+  session: Pick<Session, 'get'>;
   transport: Transport;
   signal?: AbortSignal;
 }
 
 /**
- * Fetches one WebVTT sidecar through the transport and parses it. The URL is opaque; as for
- * media it gets the account token only on the Silo server's own origin. It is a credential in URL
- * form, so it is never logged. Any failure means no cues: subtitles are optional and the player
+ * Fetches one WebVTT sidecar through the transport and parses it. The URL is opaque and stays
+ * token-free; the request authenticates with headers, only on the Silo server's own origin. Any failure means no cues: subtitles are optional and the player
  * shows no error for them.
  *
  * Cue times are absolute source time (`timing_origin_seconds` 0); a plan that names another
@@ -31,8 +32,13 @@ export async function loadSubtitleCues(subtitle: Subtitle, options: LoadOptions)
   const path = sidecarUrl(subtitle);
   if (!path) return [];
   try {
-    const url = mediaUrlWithToken(path, options.baseUrl, options.token);
-    const request = new Request(url, { method: 'GET', signal: options.signal ?? null });
+    // Resolved against the server: the app itself runs from file://, so a relative URL needs it.
+    const url = mediaUrlWithToken(path, options.baseUrl, undefined);
+    const request = new Request(url, {
+      method: 'GET',
+      headers: authHeadersFor(url, options.baseUrl, options.session.get()),
+      signal: options.signal ?? null,
+    });
     const response = await options.transport(request);
     if (!response.ok) return [];
     const cues = parseWebVtt(await response.text());

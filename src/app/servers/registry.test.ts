@@ -96,12 +96,12 @@ describe('ServerRegistry', () => {
     expect(registry.session(A)).toBe(registry.session(A));
     expect(registry.session(A).get()?.accessToken).toBe('token-a');
     expect(registry.session(B).get()?.accessToken).toBe('token-b');
-    expect(storage.get(`silo-tv.session.v1.${A}`)).toContain('token-a');
-    expect(storage.get(`silo-tv.session.v1.${B}`)).toContain('token-b');
+    expect(storage.get(`silo-tv.session.v1.${A}`)).toContain('token-a-refresh');
+    expect(storage.get(`silo-tv.session.v1.${B}`)).toContain('token-b-refresh');
     // They survive a restart, still separated.
     const again = reopen();
-    expect(again.session(A).get()?.accessToken).toBe('token-a');
-    expect(again.session(B).get()?.accessToken).toBe('token-b');
+    expect(again.session(A).get()?.refreshToken).toBe('token-a-refresh');
+    expect(again.session(B).get()?.refreshToken).toBe('token-b-refresh');
   });
 
   it('signing out of one server keeps the session of the other', () => {
