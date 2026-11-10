@@ -430,6 +430,7 @@
   "settings.subtitles.sample1": "So sehen deine Untertitel aus.",
   "settings.subtitles.sample2": "Und so eine zweite Zeile.",
   "settings.subtitles.saveFailed": "Konnte nicht gespeichert werden",
+  "settings.subtitles.saveRetrying": "Konnte nicht gespeichert werden. Neuer Versuch läuft …",
   "settings.subtitles.reset": "Zurücksetzen",
   "settings.subtitles.percent": "{percent} %",
   "settings.subtitles.row.size": "Schriftgröße",

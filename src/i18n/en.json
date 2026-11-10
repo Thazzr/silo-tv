@@ -430,6 +430,7 @@
   "settings.subtitles.sample1": "This is how your subtitles look.",
   "settings.subtitles.sample2": "And this is a second line.",
   "settings.subtitles.saveFailed": "Could not be saved",
+  "settings.subtitles.saveRetrying": "Could not be saved. Trying again …",
   "settings.subtitles.reset": "Reset",
   "settings.subtitles.percent": "{percent} %",
   "settings.subtitles.row.size": "Font size",

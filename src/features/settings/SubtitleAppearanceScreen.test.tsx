@@ -2,7 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Navigator, useNavigator } from '../../app/nav';
 import { SiloProvider } from '../../app/SiloContext';
 import { Session } from '../../api/session';
@@ -12,7 +12,11 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, renderWithSilo, testDevice } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import { DEFAULT_SUBTITLE_APPEARANCE, type SubtitleAppearance } from './profileSettings';
-import { SAVE_DELAY_MS, SubtitleAppearanceScreen } from './SubtitleAppearanceScreen';
+import {
+  RETRY_DELAYS_MS,
+  SAVE_DELAY_MS,
+  SubtitleAppearanceScreen,
+} from './SubtitleAppearanceScreen';
 import { SettingsScreen } from './SettingsScreen';
 
 const server = setupServer();
@@ -47,15 +51,20 @@ interface Write {
   value?: unknown;
 }
 
+/** A status, or 'network' for a request that never gets an answer. */
+type PutAnswer = number | 'network';
+
 interface Serve {
   /** The stored values of the profile; a DELETE removes the subtitle key from it. */
   values?: Record<string, unknown>;
   /** The status the PUT answers with. */
-  put?: number | (() => number);
+  put?: PutAnswer | (() => PutAnswer);
   /** The PUT is answered only once this has settled (it is recorded when it arrives). */
   putGate?: Promise<void>;
   /** The status the DELETE answers with (a real removal happens for 204 only). */
   del?: number;
+  /** The DELETE is answered only once this has settled (it is recorded when it arrives). */
+  delGate?: Promise<void>;
 }
 
 /** The settings reads plus a PUT and a DELETE that record what they were sent. */
@@ -75,6 +84,7 @@ function serve(options: Serve = {}) {
       });
       await options.putGate;
       const status = typeof options.put === 'function' ? options.put() : (options.put ?? 200);
+      if (status === 'network') return HttpResponse.error();
       if (status !== 200) return new HttpResponse(null, { status });
       values[String(params.key)] = body.value;
       return HttpResponse.json({
@@ -84,13 +94,14 @@ function serve(options: Serve = {}) {
         revision: 1,
       });
     }),
-    http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ request, params }) => {
+    http.delete(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
       writes.push({
         method: 'DELETE',
         key: String(params.key),
         scope: new URL(request.url).searchParams.get('scope'),
         profile: request.headers.get('X-Profile-Id'),
       });
+      await options.delGate;
       const status = options.del ?? 204;
       if (status === 204) delete values[String(params.key)];
       return new HttpResponse(null, { status });
@@ -732,6 +743,234 @@ describe('SubtitleAppearanceScreen timing of the write', () => {
     await pressKey(KEY.enter);
     await waitFor(() => expect(screen.queryByTestId('subtitle-save-error')).toBeNull());
     expect(valueOf('size')).toBe('Large');
+  });
+});
+
+describe('SubtitleAppearanceScreen reset while a change is made', () => {
+  const chevron = (id: string, at: 0 | 1) =>
+    row(id).querySelectorAll<HTMLElement>('.subtitle-chevron')[at]!;
+  const resetButton = () => screen.getByRole('button', { name: 'Reset' });
+  const methods = (writes: Write[]) => writes.map((w) => w.method);
+
+  it('keeps a change made while the delete is in flight, and the next press builds on it', async () => {
+    let release!: () => void;
+    const delGate = new Promise<void>((resolve) => (release = resolve));
+    const { writes } = serve({ delGate });
+    await open();
+    fireEvent.click(chevron('size', 1)); // large -> xlarge, dropped by the reset
+    fireEvent.click(resetButton());
+    await waitFor(() => expect(methods(writes)).toEqual(['DELETE']));
+    fireEvent.click(chevron('font', 1)); // standard -> serif, while the delete is in flight
+    fireEvent.click(chevron('size', 1)); // builds on the shown look: xlarge -> xxlarge
+    expect(valueOf('size')).toBe('Huge');
+    release();
+    // The finished reset did not throw the newer look away (checked before its own write lands
+    // and puts the same look into the cache).
+    await pause(200);
+    expect(methods(writes)).toEqual(['DELETE']);
+    expect(valueOf('size')).toBe('Huge');
+    expect(valueOf('font')).toBe('Serif');
+    await waitFor(() => expect(methods(writes)).toEqual(['DELETE', 'PUT']));
+    expect(writes[1]!.value).toEqual(look({ fontSize: 'xxlarge', fontFamily: 'serif' }));
+  });
+
+  it('builds a press made after the delete finished on the newer look, not on the effective value', async () => {
+    let release!: () => void;
+    const delGate = new Promise<void>((resolve) => (release = resolve));
+    const { writes } = serve({ delGate });
+    await open();
+    fireEvent.click(resetButton());
+    await waitFor(() => expect(methods(writes)).toEqual(['DELETE']));
+    fireEvent.click(chevron('size', 1)); // large -> xlarge
+    release();
+    await pause(100);
+    fireEvent.click(chevron('size', 1)); // xlarge -> xxlarge, not large -> xlarge
+    expect(valueOf('size')).toBe('Huge');
+    await waitFor(() => expect(methods(writes)).toEqual(['DELETE', 'PUT']));
+    expect(writes[1]!.value).toEqual(look({ fontSize: 'xxlarge' }));
+  });
+
+  it('follows the effective value after a reset when nothing was changed meanwhile', async () => {
+    let release!: () => void;
+    const delGate = new Promise<void>((resolve) => (release = resolve));
+    const { writes } = serve({ delGate, values: { [STORED_KEY]: look({ fontSize: 'small' }) } });
+    await open();
+    expect(valueOf('size')).toBe('Small');
+    fireEvent.click(resetButton());
+    await waitFor(() => expect(methods(writes)).toEqual(['DELETE']));
+    release();
+    await waitFor(() => expect(valueOf('size')).toBe('Large'));
+    await settle();
+    expect(writes).toHaveLength(1);
+  });
+});
+
+describe('SubtitleAppearanceScreen failed saves', () => {
+  const realTimeout = globalThis.setTimeout;
+  const realTick = () => new Promise<void>((resolve) => realTimeout(resolve, 5));
+  const chevron = () => row('size').querySelectorAll<HTMLElement>('.subtitle-chevron')[1]!;
+  const alertText = () => screen.queryByTestId('subtitle-save-error')?.textContent ?? null;
+  const sizes = (writes: Write[]) => writes.map((w) => (w.value as SubtitleAppearance).fontSize);
+
+  /** Moves the fake clock and lets the answers of the mocked server arrive on the way. */
+  async function advance(ms: number) {
+    for (let left = ms; left > 0; left -= 500) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(Math.min(500, left));
+        await realTick();
+      });
+    }
+  }
+  async function until(condition: () => boolean) {
+    for (let i = 0; i < 400 && !condition(); i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+        await realTick();
+      });
+    }
+    expect(condition()).toBe(true);
+  }
+
+  /** Opens the page with real timers, then fakes the clock; presses are clicks (pressKey waits on timers). */
+  async function openOnFakeClock() {
+    const view = await open();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    return view;
+  }
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries after 2 s, 5 s and 15 s, shows the retry line meanwhile, and a success removes it', async () => {
+    expect(RETRY_DELAYS_MS).toEqual([2000, 5000, 15000]);
+    const answers: PutAnswer[] = ['network', 503, 503, 200];
+    const { writes } = serve({ put: () => answers.shift() ?? 200 });
+    await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await until(() => alertText() !== null);
+    expect(alertText()).toBe('Could not be saved. Trying again …');
+    expect(valueOf('size')).toBe('Extra large');
+    await advance(1500);
+    expect(writes).toHaveLength(1);
+    await advance(1000);
+    await until(() => writes.length === 2);
+    await advance(4000);
+    expect(writes).toHaveLength(2);
+    await advance(1500);
+    await until(() => writes.length === 3);
+    expect(alertText()).toBe('Could not be saved. Trying again …');
+    await advance(13000);
+    expect(writes).toHaveLength(3);
+    await advance(3000);
+    await until(() => writes.length === 4);
+    await until(() => alertText() === null);
+    expect(sizes(writes)).toEqual(['xlarge', 'xlarge', 'xlarge', 'xlarge']);
+    await advance(30000);
+    expect(writes).toHaveLength(4);
+  });
+
+  it('gives up after the last retry and then shows the final text', async () => {
+    const { writes } = serve({ put: 503 });
+    await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await advance(2100);
+    await advance(5100);
+    await advance(15100);
+    await until(() => writes.length === 4);
+    await until(() => alertText() === 'Could not be saved');
+    await advance(60000);
+    expect(writes).toHaveLength(4);
+    expect(valueOf('size')).toBe('Extra large');
+  });
+
+  it.each([400, 422])('does not retry a %i answer and shows the final text', async (status) => {
+    const { writes } = serve({ put: status });
+    await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await until(() => alertText() !== null);
+    expect(alertText()).toBe('Could not be saved');
+    await advance(30000);
+    expect(writes).toHaveLength(1);
+  });
+
+  it.each([408, 429])('retries a %i answer', async (status) => {
+    const answers: PutAnswer[] = [status, 200];
+    const { writes } = serve({ put: () => answers.shift() ?? 200 });
+    await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await advance(2100);
+    await until(() => writes.length === 2);
+  });
+
+  it('cancels a scheduled retry on a new change, sends the newest look after the debounce and counts again', async () => {
+    const answers: PutAnswer[] = [503, 503, 200];
+    const { writes } = serve({ put: () => answers.shift() ?? 200 });
+    await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await advance(1000);
+    fireEvent.click(chevron()); // xlarge -> xxlarge, while the retry is scheduled
+    await advance(700);
+    await until(() => writes.length === 2);
+    expect(sizes(writes)).toEqual(['xlarge', 'xxlarge']);
+    // The retry count started again: the next try comes after 2 s, not 5 s.
+    await advance(1500);
+    expect(writes).toHaveLength(2);
+    await advance(1000);
+    await until(() => writes.length === 3);
+    expect(sizes(writes)).toEqual(['xlarge', 'xxlarge', 'xxlarge']);
+    await advance(30000);
+    expect(writes).toHaveLength(3);
+  });
+
+  it('sends the unsaved look once more when the page is left after a failed save', async () => {
+    const answers: PutAnswer[] = [503, 200];
+    const { writes } = serve({ put: () => answers.shift() ?? 200 });
+    const view = await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    await until(() => alertText() !== null);
+    view.unmount();
+    await until(() => writes.length === 2);
+    expect(writes[1]!.value).toEqual(look({ fontSize: 'xlarge' }));
+    // The scheduled retry died with the page.
+    await advance(30000);
+    expect(writes).toHaveLength(2);
+  });
+
+  it('does not retry after the page is left while a write fails', async () => {
+    let release!: () => void;
+    const putGate = new Promise<void>((resolve) => (release = resolve));
+    const { writes } = serve({ put: 503, putGate });
+    const view = await openOnFakeClock();
+    fireEvent.click(chevron());
+    await until(() => writes.length === 1);
+    view.unmount();
+    release();
+    await advance(30000);
+    expect(writes).toHaveLength(1);
+  });
+
+  it('lets a newer look win over a failed older one', async () => {
+    let release!: () => void;
+    const putGate = new Promise<void>((resolve) => (release = resolve));
+    const answers: PutAnswer[] = [503, 200];
+    const { writes } = serve({ put: () => answers.shift() ?? 200, putGate });
+    await openOnFakeClock();
+    fireEvent.click(chevron()); // xlarge
+    await until(() => writes.length === 1);
+    fireEvent.click(chevron()); // xxlarge, while the first write is in flight
+    release(); // the first write fails now
+    await advance(700);
+    await until(() => writes.length === 2);
+    expect(sizes(writes)).toEqual(['xlarge', 'xxlarge']);
+    await advance(30000);
+    expect(writes).toHaveLength(2);
+    await until(() => alertText() === null);
   });
 });
 

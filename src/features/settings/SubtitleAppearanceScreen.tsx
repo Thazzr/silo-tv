@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FocusGroup, Focusable, moveFocusTo, type ArrowHandler } from '../../app/nav';
 import { Button, ListSkeleton, Screen } from '../../app/ui';
 import { useT, type MessageKey } from '../../i18n';
+import { SiloApiError } from '../../api/problem';
 import { subtitleStyles, type SubtitleFrame } from '../../playback/subtitles/appearance';
 import {
   useProfileSettings,
@@ -29,6 +30,16 @@ const KEY = 'playback.subtitle_appearance';
 
 /** One change or a burst of them is written this long after the last press. */
 export const SAVE_DELAY_MS = 600;
+
+/** A failed write is tried again after these pauses while the page is open; then it stays failed. */
+export const RETRY_DELAYS_MS: readonly number[] = [2000, 5000, 15000];
+
+/** No answer at all (network, timeout), a 5xx, a 408 or a 429 may pass on a later try; other 4xx will not. */
+function worthRetrying(error: unknown): boolean {
+  if (!(error instanceof SiloApiError)) return true;
+  const { status } = error;
+  return status >= 500 || status === 408 || status === 429;
+}
 
 /** The preview is a 16:9 box in the 1080p layout, half the size of the screen. */
 const FRAME: SubtitleFrame = { width: 960, height: 540 };
@@ -150,7 +161,8 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
 
   // Null follows the effective value; a change makes this page's own copy the one that is shown.
   const [draft, setDraft] = useState<Look | null>(null);
-  const [failed, setFailed] = useState(false);
+  // 'retrying': the look is unsaved and another try is scheduled; 'final': it is unsaved and stays so.
+  const [failed, setFailed] = useState<'retrying' | 'final' | null>(null);
   const look = draft ?? values[KEY];
 
   const pending = useRef<Look | null>(null);
@@ -158,6 +170,12 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
   // Writes and the reset run one after another, so a slow write cannot land after a reset.
   const queue = useRef<Promise<void>>(Promise.resolve());
   const alive = useRef(true);
+  // Counts the changes; a reset that finishes after a newer change must not undo it.
+  const generation = useRef(0);
+  // How many retries the current look has used.
+  const attempts = useRef(0);
+  // The newest flush: a retry timer and the unmount cleanup call it without being rebuilt.
+  const flushLatest = useRef<() => void>(() => undefined);
 
   const enqueue = useCallback((task: () => Promise<void>) => {
     queue.current = queue.current.then(task);
@@ -172,15 +190,31 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
     enqueue(async () => {
       try {
         await setSetting(KEY, next);
-        if (alive.current) setFailed(false);
-      } catch {
-        if (alive.current) setFailed(true);
+        attempts.current = 0;
+        if (alive.current) setFailed(null);
+      } catch (error) {
+        // After the page is gone nothing is kept or retried.
+        if (!alive.current) return;
+        if (pending.current !== null) {
+          // A newer look is already waiting for its write and wins over this one.
+          setFailed('retrying');
+          return;
+        }
+        // The look stays unsaved: leaving the page sends it once more.
+        pending.current = next;
+        const delay = RETRY_DELAYS_MS[attempts.current];
+        if (worthRetrying(error) && delay !== undefined) {
+          attempts.current += 1;
+          timer.current = setTimeout(() => flushLatest.current(), delay);
+          setFailed('retrying');
+        } else {
+          setFailed('final');
+        }
       }
     });
   }, [enqueue, setSetting]);
 
   // Leaving the page sends a write that is still waiting for its quiet moment.
-  const flushLatest = useRef(flush);
   useEffect(() => {
     flushLatest.current = flush;
   });
@@ -193,6 +227,8 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
   }, []);
 
   const change = (next: Look) => {
+    generation.current += 1;
+    attempts.current = 0;
     setDraft(next);
     pending.current = next;
     if (timer.current !== null) clearTimeout(timer.current);
@@ -209,14 +245,17 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
     pending.current = null;
+    attempts.current = 0;
+    const started = generation.current;
     enqueue(async () => {
       try {
         await resetSetting(KEY);
-        if (!alive.current) return;
+        // A change made meanwhile stays shown; its own write follows this one.
+        if (!alive.current || generation.current !== started) return;
         setDraft(null);
-        setFailed(false);
+        setFailed(null);
       } catch {
-        if (alive.current) setFailed(true);
+        if (alive.current) setFailed('final');
       }
     });
   };
@@ -247,7 +286,11 @@ export function SubtitleAppearanceScreen({ onBack }: { onBack: () => void }) {
           <Preview look={look} />
           {failed ? (
             <p role="alert" className="error" data-testid="subtitle-save-error">
-              {t('settings.subtitles.saveFailed')}
+              {t(
+                failed === 'retrying'
+                  ? 'settings.subtitles.saveRetrying'
+                  : 'settings.subtitles.saveFailed',
+              )}
             </p>
           ) : null}
         </div>
