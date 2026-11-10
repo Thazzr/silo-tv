@@ -3,6 +3,8 @@ dist-perf/
 perf-results/
 out/
 coverage/
+reports/
+playwright-report/
 package-lock.json
 src/api/generated/
 openapi/silo-v2.json

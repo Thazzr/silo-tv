@@ -11,6 +11,11 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 // it. Silo sends no CORS headers, so a browser on localhost could not call it directly.
 const siloServer = process.env.SILO_SERVER;
 
+// On CI (GitHub Actions sets CI=true) the unit tests also write a JUnit file and a coverage report
+// for tools/ci-summary.mjs and the uploaded artifacts. Locally the run stays as it is;
+// `npm run test:coverage` asks for coverage explicitly.
+const ci = Boolean(process.env.CI);
+
 export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [react(), webosHtml()],
@@ -45,6 +50,18 @@ export default defineConfig(({ mode }) => ({
       'scripts/**/*.test.{ts,mjs}',
       'build/**/*.test.ts',
       'tests/**/*.test.{js,ts}',
+      'tools/**/*.test.{ts,mjs}',
     ],
+    ...(ci
+      ? { reporters: ['default', 'junit'], outputFile: { junit: 'reports/vitest-junit.xml' } }
+      : {}),
+    coverage: {
+      provider: 'v8',
+      enabled: ci,
+      reportsDirectory: 'reports/coverage',
+      reporter: ['text-summary', 'json-summary', 'html'],
+      include: ['src/**'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/api/generated/**', 'src/**/*.d.ts'],
+    },
   },
 }));

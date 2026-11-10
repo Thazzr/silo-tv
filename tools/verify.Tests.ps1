@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 # Tests of the error logic in tools/verify.ps1: when does the gate say "failed", and does it stay red.
 #
-# Without Pester, using a fake npm (a .cmd in the temp folder) whose exit code per script name is controlled
+# Without Pester, using a fake npm (a .cmd on Windows, a shell script elsewhere, in the temp folder) whose exit code per script name is controlled
 # through FAKE_NPM_FAIL ("lint,build"). Each case starts a gate as its own process and checks the exit code,
 # the table, and the list of scripts the fake npm was actually called with.
 #
@@ -14,17 +14,33 @@ $pwsh = (Get-Process -Id $PID).Path
 
 $tempDir = Join-Path ([System.IO.Path]::GetTempPath()) "silo-tv-verify-tests-$PID"
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-$fakeNpm = Join-Path $tempDir "fake-npm.cmd"
 $fakeLog = Join-Path $tempDir "calls.log"
-# %2 is the script name in `npm run <name>`.
-$fakeScript = @(
-    "@echo off",
-    '>>"%FAKE_NPM_LOG%" echo %2',
-    "echo fake npm %*",
-    'echo ,%FAKE_NPM_FAIL%, | findstr /C:",%2," >nul && exit /b 1',
-    "exit /b 0"
-)
-Set-Content -LiteralPath $fakeNpm -Encoding ascii -Value $fakeScript
+$reportDir = Join-Path $tempDir "reports"
+# The script name is the second argument in `npm run <name>`.
+if ($IsWindows) {
+    $fakeNpm = Join-Path $tempDir "fake-npm.cmd"
+    $fakeScript = @(
+        "@echo off",
+        '>>"%FAKE_NPM_LOG%" echo %2',
+        "echo fake npm %*",
+        'echo ,%FAKE_NPM_FAIL%, | findstr /C:",%2," >nul && exit /b 1',
+        "exit /b 0"
+    )
+    Set-Content -LiteralPath $fakeNpm -Encoding ascii -Value $fakeScript
+}
+else {
+    $fakeNpm = Join-Path $tempDir "fake-npm.sh"
+    $fakeScript = @(
+        "#!/bin/sh",
+        'echo "$2" >> "$FAKE_NPM_LOG"',
+        'echo "fake npm $*"',
+        'case ",$FAKE_NPM_FAIL," in *",$2,"*) exit 1;; esac',
+        "exit 0"
+    )
+    # LF line endings, or the shebang line breaks.
+    [System.IO.File]::WriteAllText($fakeNpm, (($fakeScript -join "`n") + "`n"))
+    chmod +x $fakeNpm
+}
 
 $allCalls = "typecheck,lint,test,build,check:bundle,test:e2e,package"
 
@@ -36,7 +52,8 @@ function Invoke-Gate {
     $env:FAKE_NPM_LOG = $fakeLog
     $env:FAKE_NPM_FAIL = $Fail
     $env:VERIFY_SCRIPT_TESTS_RUNNING = "1"
-    $output = & $pwsh -NoProfile -File $verify -NpmCommand $fakeNpm @GateArgs 2>&1 | ForEach-Object { "$_" }
+    # -ReportDir: with CI set, a gate run by the tests must not overwrite the real reports/gate.txt.
+    $output = & $pwsh -NoProfile -File $verify -NpmCommand $fakeNpm -ReportDir $reportDir @GateArgs 2>&1 | ForEach-Object { "$_" }
     $exit = $LASTEXITCODE
     $calls = if (Test-Path -LiteralPath $fakeLog) { @(Get-Content -LiteralPath $fakeLog | Where-Object { $_ }) } else { @() }
     [pscustomobject]@{ Exit = $exit; Output = @($output); Calls = $calls }
@@ -125,6 +142,44 @@ $cases["recursion guard -> 'verify script tests' is skipped, not run"] = {
     if ($r -notlike "skipped*") { $problems += "'verify script tests' is '$r', expected skipped" }
     if ($run.Output -contains "==> verify script tests") { $problems += "the step header was printed, so it started" }
     $problems
+}
+
+$cases["CI set -> the table is also written to <ReportDir>/gate.txt, with the failures in it"] = {
+    $before = $env:CI
+    try {
+        $env:CI = "true"
+        $run = Invoke-Gate -Fail "lint"
+    }
+    finally {
+        $env:CI = $before
+    }
+    $problems = @()
+    $file = Join-Path $reportDir "gate.txt"
+    if (-not (Test-Path -LiteralPath $file)) { return @("$file was not written") }
+    $text = [System.IO.File]::ReadAllText($file)
+    $lines = $text -split "`n"
+    if ($lines[0] -ne "==> summary") { $problems += "first line is '$($lines[0])', expected '==> summary'" }
+    if ($text.Contains("`r")) { $problems += "the file contains CR characters" }
+    if (-not ($lines | Where-Object { $_ -match "^lint\s+\S+\s+failed \(exit 1\)$" })) { $problems += "no failed lint line in the file" }
+    if (-not ($lines | Where-Object { $_ -match "^Total: " })) { $problems += "no Total line in the file" }
+    # The file has the same step lines as the console table.
+    $summaryAt = [array]::IndexOf($run.Output, "==> summary")
+    $console = @($run.Output[($summaryAt + 1)..($run.Output.Count - 1)] | Where-Object { $_ -notlike "Verification failed*" })
+    if (($console -join "`n") -ne (($lines | Select-Object -Skip 1 | Where-Object { $_ }) -join "`n")) { $problems += "file and console table differ" }
+    $problems
+}
+
+$cases["CI not set -> no report file is written"] = {
+    Remove-Item -LiteralPath $reportDir -Recurse -Force -ErrorAction SilentlyContinue
+    $before = $env:CI
+    try {
+        $env:CI = $null
+        $null = Invoke-Gate -GateArgs @("-Only", "lint")
+    }
+    finally {
+        $env:CI = $before
+    }
+    if (Test-Path -LiteralPath (Join-Path $reportDir "gate.txt")) { return @("gate.txt was written without CI") }
 }
 
 $failed = 0

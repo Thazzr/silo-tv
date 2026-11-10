@@ -12,6 +12,8 @@ out/
 ## Test output
 test-results/
 playwright-report/
+# CI reports: JUnit files, coverage, the gate table (npm run test:coverage, CI=true)
+reports/
 blob-report/
 
 ## Local configuration and credentials (filled in by the user only, never committed)

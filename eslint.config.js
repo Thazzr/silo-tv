@@ -53,6 +53,8 @@ export default tseslint.config(
       'dist-perf/',
       'out/',
       'coverage/',
+      'reports/',
+      'playwright-report/',
       'src/api/generated/',
       '.claude/worktrees/',
       '.playwright-mcp/',

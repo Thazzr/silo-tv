@@ -21,6 +21,7 @@
     "playwright.perf.config.ts",
     "build",
     "scripts",
+    "tools",
     "e2e",
     "tests"
   ]

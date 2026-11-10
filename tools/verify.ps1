@@ -9,7 +9,10 @@
 param(
     [string[]]$Only,
     # Replaceable so that tools/verify.Tests.ps1 can substitute a fake npm.
-    [string]$NpmCommand = "npm"
+    [string]$NpmCommand = "npm",
+    # Where the table is also written when CI is set (tools/ci-summary.mjs reads it). Relative paths are
+    # relative to the repository root. Replaceable so that the tests do not touch the real reports.
+    [string]$ReportDir = "reports"
 )
 
 $ErrorActionPreference = "Stop"
@@ -142,6 +145,27 @@ function Invoke-Step {
     }
 }
 
+# The table as lines: header, one line per step, total. Shared by the console output and the CI report file.
+function Get-SummaryLines {
+    param(
+        [object[]]$Results,
+        [TimeSpan]$Total
+    )
+
+    $nameWidth = [math]::Max("Step".Length, [int]($Results | ForEach-Object { $_.Step.Length } | Measure-Object -Maximum).Maximum)
+    $lines = @([pscustomobject]@{ Text = ("{0,-$nameWidth} {1,6}  {2}" -f "Step", "Time", "Result"); Failed = $false })
+    foreach ($result in $Results) {
+        $text = $result.Result
+        if ($result.Reason) { $text += " ($($result.Reason))" }
+        $lines += [pscustomobject]@{
+            Text   = ("{0,-$nameWidth} {1,6}  {2}" -f $result.Step, $result.Duration, $text)
+            Failed = $result.Result -eq "failed"
+        }
+    }
+    $lines += [pscustomobject]@{ Text = ("Total: {0}" -f (Format-Duration $Total)); Failed = $false }
+    $lines
+}
+
 function Write-Summary {
     param(
         [object[]]$Results,
@@ -150,15 +174,22 @@ function Write-Summary {
 
     Write-Host ""
     Write-Host "==> summary" -ForegroundColor Cyan
-    $nameWidth = [math]::Max("Step".Length, [int]($Results | ForEach-Object { $_.Step.Length } | Measure-Object -Maximum).Maximum)
-    Write-Host ("{0,-$nameWidth} {1,6}  {2}" -f "Step", "Time", "Result")
-    foreach ($result in $Results) {
-        $text = $result.Result
-        if ($result.Reason) { $text += " ($($result.Reason))" }
-        $line = "{0,-$nameWidth} {1,6}  {2}" -f $result.Step, $result.Duration, $text
-        if ($result.Result -eq "failed") { Write-Host $line -ForegroundColor Red } else { Write-Host $line }
+    foreach ($line in (Get-SummaryLines -Results $Results -Total $Total)) {
+        if ($line.Failed) { Write-Host $line.Text -ForegroundColor Red } else { Write-Host $line.Text }
     }
-    Write-Host ("Total: {0}" -f (Format-Duration $Total))
+}
+
+# Only on CI: the same table as a plain file for tools/ci-summary.mjs. LF line endings on every platform.
+function Write-SummaryFile {
+    param(
+        [object[]]$Results,
+        [TimeSpan]$Total,
+        [string]$Directory
+    )
+
+    New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+    $lines = @("==> summary") + @(Get-SummaryLines -Results $Results -Total $Total | ForEach-Object { $_.Text })
+    [System.IO.File]::WriteAllText((Join-Path $Directory "gate.txt"), (($lines -join "`n") + "`n"))
 }
 
 # When dot-sourced (`. tools/verify.ps1`), the script only defines its functions and is done: the gate runs only
@@ -198,6 +229,10 @@ try {
     }
     $watch.Stop()
     Write-Summary -Results $results -Total $watch.Elapsed
+    if ($env:CI) {
+        $reportPath = if ([System.IO.Path]::IsPathRooted($ReportDir)) { $ReportDir } else { Join-Path $repoRoot $ReportDir }
+        Write-SummaryFile -Results $results -Total $watch.Elapsed -Directory $reportPath
+    }
 
     foreach ($failure in (Get-FailedResults $results)) {
         Write-Host ("Verification failed at '{0}': {1}." -f $failure.Step, $failure.Reason) -ForegroundColor Red
