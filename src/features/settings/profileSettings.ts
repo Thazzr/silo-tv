@@ -222,6 +222,14 @@ function useManifestRevision(profileId: string) {
   });
 }
 
+/** Whether the server's settings contract knows this key; false until it answered, or when it has no contract. */
+export function useServerKnowsSetting(key: ProfileSettingKey): boolean {
+  const { session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  const revision = useManifestRevision(profileId).data ?? null;
+  return revision !== null && keysKnownAt(revision).includes(key);
+}
+
 /**
  * The effective values of the registry keys for the active profile, and whether the server's
  * answer is settled (`known`). Every consumer shares one capability read and one value read. A
@@ -304,6 +312,35 @@ export function useSetProfileDeviceSetting() {
         { queryKey: ['settings', 'effective', baseUrl, profileId] },
         (old) => (old ? { ...old, [key]: stored } : old),
       );
+    },
+    [client, baseUrl, session, queryClient],
+  );
+}
+
+/**
+ * Removes this TV's own value of one setting, so the profile's value (or the default) applies
+ * again, and reads the effective values anew. A 404 (there was no device value) counts as done.
+ * Rejects when the delete fails.
+ */
+export function useResetProfileDeviceSetting() {
+  const { client, baseUrl, session } = useSilo();
+  const queryClient = useQueryClient();
+  return useCallback(
+    async (key: DeviceSettingKey): Promise<void> => {
+      const profileId = session.get()?.profileId ?? '';
+      if (profileId === '') throw new Error('No profile is open');
+      const { error, response } = await client.DELETE('/api/v2/settings/values/{key}', {
+        params: {
+          header: { 'X-Profile-Id': profileId },
+          path: { key },
+          query: { scope: 'profile_device' },
+        },
+      });
+      if (!response.ok && response.status !== 404) throw toApiError(error, response);
+      // Resolves once the active reads have answered, so the caller can show the effective value.
+      await queryClient.invalidateQueries({
+        queryKey: ['settings', 'effective', baseUrl, profileId],
+      });
     },
     [client, baseUrl, session, queryClient],
   );

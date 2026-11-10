@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode } from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
@@ -6,12 +7,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Session } from '../../api/session';
 import { SectionGridScreen } from '../../features/home/SectionGridScreen';
 import { SettingsScreen } from '../../features/settings/SettingsScreen';
+import { SubtitleAppearanceScreen } from '../../features/settings/SubtitleAppearanceScreen';
 import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { branding, catalogPage, profile, profileCollection } from '../../test/flowFixtures';
 import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
+import { serveSettings } from '../../test/settingsFixtures';
 import { cardFocusKey, FocusIndexMemory, gridCardKey } from '../../ui/media';
 import { getCurrentFocusKey, Navigator, type NavApi } from '../nav';
 import { SiloProvider } from '../SiloContext';
@@ -24,10 +27,13 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 type Screen =
-  { name: 'shell' } | { name: 'settings' } | { name: 'grid'; sectionId: string; title: string };
+  | { name: 'shell' }
+  | { name: 'settings' }
+  | { name: 'subtitles' }
+  | { name: 'grid'; sectionId: string; title: string };
 
 /** The shell with Home and the row grid on a screen stack, like the app flow has them. */
-function renderHome() {
+function renderHome({ strict = false }: { strict?: boolean } = {}) {
   const session = new Session(memoryStorage());
   session.set({
     accessToken: 'a',
@@ -56,7 +62,12 @@ function renderHome() {
         onLaunchMode={() => undefined}
       />
     ) : screen.name === 'settings' ? (
-      <SettingsScreen onBack={nav.pop} />
+      <SettingsScreen
+        onBack={nav.pop}
+        onOpenSubtitleAppearance={() => nav.push({ name: 'subtitles' })}
+      />
+    ) : screen.name === 'subtitles' ? (
+      <SubtitleAppearanceScreen onBack={nav.pop} />
     ) : (
       <SectionGridScreen
         sectionId={screen.sectionId}
@@ -67,15 +78,17 @@ function renderHome() {
         onBack={nav.pop}
       />
     );
-  render(
+  const app = (
     <QueryClientProvider client={newQueryClient()}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
           <Navigator<Screen> initial={{ name: 'shell' }} renderScreen={renderScreen} />
         </SiloProvider>
       </I18nProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  // The development build of the app runs in StrictMode, which runs every effect twice.
+  render(strict ? <StrictMode>{app}</StrictMode> : app);
   return { onPlay, onOpenDetail };
 }
 
@@ -109,6 +122,53 @@ const homeTab = () => screen.getByRole('button', { name: 'Home' });
 const key = (row: string, id: string) => cardFocusKey(row, id);
 
 describe('Home in the shell', () => {
+  it.each([false, true])(
+    'Back from the subtitle appearance page lands on its row in Settings, not on the first row (StrictMode %s)',
+    async (strict) => {
+      serve([homeSection('a', 2)]);
+      serveSettings(server);
+      server.use(
+        http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request }) =>
+          HttpResponse.json({
+            key: 'playback.subtitle_appearance',
+            scope: 'profile_device',
+            value: ((await request.json()) as { value: unknown }).value,
+            revision: 1,
+          }),
+        ),
+      );
+      renderHome({ strict });
+      await screen.findByTestId('row-a', {}, { timeout: 10_000 });
+      await waitFor(() => expect(homeTab()).toHaveFocus());
+      for (let i = 0; i < 6; i += 1) await pressKey(KEY.right);
+      await pressKey(KEY.enter);
+      await screen.findByTestId('avatar-menu');
+      await pressKey(KEY.down);
+      await pressKey(KEY.down);
+      await pressKey(KEY.enter);
+      const opener = await screen.findByTestId('settings-subtitles');
+      for (let i = 0; i < 3; i += 1) await pressKey(KEY.down);
+      expect(opener).toHaveFocus();
+      await pressKey(KEY.enter);
+      await screen.findByTestId('subtitle-row-size');
+      await pressKey(KEY.right);
+      // The language pill takes the focus on a fresh Settings screen; coming back must not touch it.
+      const focused: (string | null)[] = [];
+      const onFocusIn = (e: FocusEvent) => {
+        focused.push((e.target as HTMLElement).getAttribute('data-focus-key'));
+      };
+      document.addEventListener('focusin', onFocusIn);
+      await pressKey(KEY.back);
+      await screen.findByTestId('settings-screen');
+      await waitFor(() => expect(screen.getByTestId('settings-subtitles')).toHaveFocus());
+      // And it stays there once the screen has settled.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      document.removeEventListener('focusin', onFocusIn);
+      expect(focused.filter((k) => k?.startsWith('settings-language'))).toEqual([]);
+      expect(screen.getByTestId('settings-subtitles')).toHaveFocus();
+    },
+  );
+
   it('opens Settings from the avatar menu, and Back returns to the shell with the avatar focused', async () => {
     serve([homeSection('a', 2)]);
     renderHome();

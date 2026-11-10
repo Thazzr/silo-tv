@@ -36,8 +36,23 @@ const RING: readonly (readonly [number, number])[] = [
   [2, 2],
 ];
 
-function ring(color: string): string[] {
-  return RING.map(([x, y]) => `${x}px ${y}px 0 ${color}`);
+/** A length in CSS pixels at the given scale, rounded so a scaled value stays free of float noise. */
+function px(value: number, scale: number): string {
+  return `${Math.round(value * scale * 100) / 100}px`;
+}
+
+function ring(color: string, scale: number): string[] {
+  return RING.map(([x, y]) => `${px(x, scale)} ${px(y, scale)} 0 ${color}`);
+}
+
+/**
+ * A box the subtitles are drawn into instead of the screen (the appearance preview), in CSS
+ * pixels. Sizes and offsets scale with its height against the 1080p layout, and the positions
+ * are measured in the box, not in `vh` or the screen's safe area.
+ */
+export interface SubtitleFrame {
+  width: number;
+  height: number;
 }
 
 export interface SubtitleStyles {
@@ -47,29 +62,43 @@ export interface SubtitleStyles {
   line: CSSProperties;
 }
 
-export function subtitleStyles(appearance: SubtitleAppearance, lifted: boolean): SubtitleStyles {
+export function subtitleStyles(
+  appearance: SubtitleAppearance,
+  lifted: boolean,
+  frame?: SubtitleFrame,
+): SubtitleStyles {
+  const scale = frame ? frame.height / 1080 : 1;
   const effect = rgba(appearance.backgroundColor, appearance.backgroundOpacity);
   const shadows: string[] = [];
   if (appearance.backgroundStyle === 'shadow') {
-    shadows.push(`0 3px 8px ${effect}`, `0 0 4px ${effect}`);
+    shadows.push(`0 ${px(3, scale)} ${px(8, scale)} ${effect}`, `0 0 ${px(4, scale)} ${effect}`);
   } else if (appearance.backgroundStyle === 'outline') {
-    shadows.push(...ring(effect));
+    shadows.push(...ring(effect, scale));
   }
-  if (appearance.textOutline) shadows.push(...ring(appearance.textOutlineColor));
+  if (appearance.textOutline) shadows.push(...ring(appearance.textOutlineColor, scale));
 
   const line: CSSProperties = {
     fontFamily: `${appearance.fontFamily}, sans-serif`,
-    fontSize: `${FONT_SIZES_PX[appearance.fontSize]}px`,
+    fontSize: px(FONT_SIZES_PX[appearance.fontSize], scale),
     color: rgba(appearance.fontColor, appearance.textOpacity),
     textShadow: shadows.length > 0 ? shadows.join(', ') : 'none',
     backgroundColor: appearance.backgroundStyle === 'box' ? effect : 'transparent',
   };
+  // The line's padding comes from the stylesheet on screen; a frame scales it with the rest.
+  if (frame) line.padding = `${px(2, scale)} ${px(14, scale)}`;
 
   const block: CSSProperties = {};
-  if (appearance.position === 'top') block.top = 'var(--safe-y)';
+  if (frame) {
+    const safe = px(frame.height * 0.05, 1);
+    if (appearance.position === 'top') block.top = safe;
+    else if (appearance.position === 'lower-third') block.bottom = px(frame.height * 0.22, 1);
+    else block.bottom = safe;
+  } else if (appearance.position === 'top') block.top = 'var(--safe-y)';
   else if (appearance.position === 'lower-third') block.bottom = '22vh';
   else block.bottom = 'var(--safe-y)';
   // Only the bottom positions can collide with the controls.
-  if (lifted && appearance.position !== 'top') block.transform = LIFT;
+  if (lifted && appearance.position !== 'top') {
+    block.transform = frame ? `translateY(-${px(frame.height * 0.46, 1)})` : LIFT;
+  }
   return { block, line };
 }

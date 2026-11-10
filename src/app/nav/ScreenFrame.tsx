@@ -43,6 +43,7 @@ export function ScreenFrame({
   const frameKey = `screen:${entryId}`;
   const pending = useRef<string | null>(restoreKey);
   const claim = useRef<Claim | null>(null);
+  const restored = useRef<string | null>(null);
 
   const api = useMemo<FrameApi>(
     () => ({
@@ -51,11 +52,33 @@ export function ScreenFrame({
           pending.current = null;
           claim.current = { kind: 'strong', key };
           void setFocus(key);
+          // Remembered until this commit's effects are done (a microtask), not longer: React's
+          // StrictMode (development) undoes the effects and runs them again within that flush, see
+          // `onUnmounted`. A card that is really remounted later must not take the focus back.
+          restored.current = key;
+          void Promise.resolve().then(() => {
+            if (restored.current === key) restored.current = null;
+          });
           return;
         }
         if (autoFocus) {
           if (claim.current?.kind === 'strong') return;
-          if (pending.current && doesFocusableExist(pending.current)) return;
+          if (pending.current) {
+            if (doesFocusableExist(pending.current)) return;
+            // The element the viewer came from may mount a moment later in this same commit
+            // (it comes after this one in the tree). Claiming now would start a second focus
+            // move that can finish after the restore and win, so decide once the commit is done.
+            // The plain claim keeps the elements that mount after this one from taking the focus.
+            claim.current = { kind: 'plain', key };
+            void Promise.resolve().then(() => {
+              // Another claim (the restored element) or an unmount has taken over meanwhile.
+              if (claim.current?.kind !== 'plain' || claim.current.key !== key) return;
+              if (pending.current && doesFocusableExist(pending.current)) return;
+              claim.current = { kind: 'strong', key };
+              void setFocus(key);
+            });
+            return;
+          }
           claim.current = { kind: 'strong', key };
           void setFocus(key);
           return;
@@ -65,6 +88,9 @@ export function ScreenFrame({
         void setFocus(key);
       },
       onUnmounted(key) {
+        // The element that was just restored is undone before the commit ends: its effects will
+        // run again, and the second run must find the target as the first one did.
+        if (restored.current === key) pending.current = key;
         if (claim.current?.key === key) claim.current = null;
       },
     }),

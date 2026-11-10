@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { FocusGroup, Focusable } from '../../app/nav';
-import { Screen } from '../../app/ui';
+import { Button, Screen } from '../../app/ui';
 import { useT, type MessageKey } from '../../i18n';
 import {
   LANGUAGE_CHOICES,
@@ -11,6 +11,8 @@ import {
 } from '../../i18n/languageSetting';
 import { REWIND_CHOICES, getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
 import { TIME_MODES, getTimeMode, setTimeMode, type TimeMode } from '../../playback/timeDisplay';
+import { useProfileSettings, useServerKnowsSetting } from './profileSettings';
+import { summarizeAppearance } from './subtitleOptions';
 
 interface Choice<V> {
   value: V;
@@ -121,8 +123,17 @@ const LANGUAGE_TEXT: Record<LanguageSetting, MessageKey> = {
  * shows and how far playback jumps back when it resumes. All are kept on this device only (see `resumeRewind`, `timeDisplay`,
  * `languageSetting`).
  */
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen({
+  onBack,
+  onOpenSubtitleAppearance,
+}: {
+  onBack: () => void;
+  onOpenSubtitleAppearance: () => void;
+}) {
   const t = useT();
+  // The row only exists where the server knows the setting it edits.
+  const knowsSubtitles = useServerKnowsSetting('playback.subtitle_appearance');
+  const { values } = useProfileSettings();
   const [rewind, setRewind] = useState(getResumeRewind);
   const [timeMode, setMode] = useState(getTimeMode);
   const language = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
@@ -173,6 +184,19 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             setRewind(seconds);
           }}
         />
+        {knowsSubtitles ? (
+          <Button
+            focusKey="settings-subtitles"
+            className="settings-link"
+            data-testid="settings-subtitles"
+            onClick={onOpenSubtitleAppearance}
+          >
+            <span>{t('settings.subtitles.title')}</span>
+            <span className="settings-link-value" data-testid="settings-subtitles-summary">
+              {summarizeAppearance(values['playback.subtitle_appearance'], t)}
+            </span>
+          </Button>
+        ) : null}
       </SettingsSection>
     </Screen>
   );

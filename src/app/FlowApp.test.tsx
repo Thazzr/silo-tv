@@ -25,6 +25,7 @@ import { clearInstallationCache } from '../playback/session/startSession';
 import { episodeOf, itemDetail, seasonOf, serveDetail } from '../test/detailFixtures';
 import { homeCapabilities, homeSection, resumeEpisode } from '../test/homeFixtures';
 import { servePlayback } from '../test/playbackFixtures';
+import { serveSettings } from '../test/settingsFixtures';
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { FlowApp } from './FlowApp';
@@ -516,6 +517,24 @@ describe('FlowApp', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Switch profile' }));
     expect(await screen.findByTestId('profile-list')).toBeInTheDocument();
     expect(libraryQueries()).toHaveLength(0);
+  });
+
+  it('opens the subtitle appearance page from Settings and Back returns to Settings', async () => {
+    serveData();
+    serveSettings(server);
+    signedIn(BASE_URL, 'p1');
+    flow();
+    await screen.findByRole('button', { name: /Title of/ });
+    fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Subtitle appearance/ }));
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Subtitle appearance' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-screen')).toBeNull();
+    await pressKey(KEY.back);
+    expect(await screen.findByTestId('settings-screen')).toBeInTheDocument();
+    expect(screen.queryByTestId('subtitle-appearance-screen')).toBeNull();
   });
 
   it('drops the settings the old profile read when the profile is switched', async () => {

@@ -83,6 +83,12 @@ interface FakeOptions {
    */
   themeMusic?: boolean;
   /**
+   * The server speaks the settings contract and nothing else is stored, so the subtitle
+   * appearance is the default (large, white, box). Writes to `playback.subtitle_appearance` are
+   * recorded with their body.
+   */
+  subtitles?: boolean;
+  /**
    * The server offers viewer-triggered AI translation in this mode. "Second Title" (m2) then
    * reports its description as pending in German until the translate request came in; afterwards
    * it carries the translated text, marked as machine-translated.
@@ -195,7 +201,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const settingsUnknown =
     options.titleArt === undefined &&
     options.spoilers === undefined &&
-    options.themeMusic === undefined;
+    options.themeMusic === undefined &&
+    options.subtitles === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -238,7 +245,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
     const url = new URL(req.url ?? '/', 'http://localhost');
     const cors = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] ?? '*',
     };
     if (req.method === 'OPTIONS') {
@@ -261,7 +268,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           url.pathname === '/api/v2/profiles' ||
           url.pathname === '/api/v2/playback/start' ||
           (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/')) ||
-          url.pathname.endsWith('/translate-description')
+          url.pathname.endsWith('/translate-description') ||
+          url.pathname === '/api/v2/settings/values/playback.subtitle_appearance'
             ? requestBody
             : '',
       });
@@ -575,6 +583,13 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               definition_revision: 1,
             })),
             revision: 40,
+          });
+        case 'PUT /api/v2/settings/values/playback.subtitle_appearance':
+          return send(200, {
+            key: 'playback.subtitle_appearance',
+            scope: 'profile_device',
+            value: JSON.parse(requestBody).value,
+            revision: 1,
           });
         case 'GET /api/v2/catalog/themes/capabilities':
           return send(200, {
@@ -1192,6 +1207,72 @@ test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewat
       return start ? (JSON.parse(start.body) as { start_position?: number }).start_position : null;
     })
     .toBe(585);
+});
+
+test('Settings: subtitle appearance from the avatar menu, change the size, Back lands on its row and the change was written', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ rewatch: true, subtitles: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Einstellungen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+
+  // Language, time and rewind rows, then the subtitle row with its one-line summary.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  const opener = page.getByTestId('settings-subtitles');
+  await expect(opener).toBeFocused();
+  await expect(opener).toContainText('Groß · Weiß · Kasten');
+  await page.keyboard.press('Enter');
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Untertitel-Aussehen' })).toBeVisible();
+  const size = page.getByTestId('subtitle-row-size');
+  await expect(size).toBeFocused();
+  await expect(page.getByTestId('subtitle-row-size-value')).toHaveText('Groß');
+  const sample = page.getByText('So sehen deine Untertitel aus.');
+  await expect(sample).toBeVisible();
+  // Large is 52 px at 1080p; the preview frame is half the height.
+  await expect(sample).toHaveCSS('font-size', '26px');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('subtitle-row-size-value')).toHaveText('Sehr groß');
+  await expect(sample).toHaveCSS('font-size', '31px');
+  // Move on to the font colour and change it too, as a viewer would before leaving.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('subtitle-row-fontColor-value')).toHaveText('Gelb');
+
+  // Back lands on the row that opened the page, and the change was written for this device.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+  await expect(opener).toBeFocused();
+  await expect(opener).toContainText('Sehr groß · Gelb · Kasten');
+  await expect
+    .poll(() => {
+      const write = seen.find(
+        (e) =>
+          e.method === 'PUT' && e.path === '/api/v2/settings/values/playback.subtitle_appearance',
+      );
+      return write
+        ? write.search +
+            ' ' +
+            (JSON.parse(write.body) as { value: { fontSize: string } }).value.fontSize
+        : null;
+    })
+    .toBe('?scope=profile_device xlarge');
 });
 
 test('Home to a series, season 2, play an episode and Back to the same episode, keyboard only', async ({

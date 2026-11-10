@@ -62,6 +62,15 @@ function overshoot(innerStart: number, innerEnd: number, outerStart: number, out
  */
 const EDGE_MARGIN = 24;
 
+/**
+ * The room to keep on one side of a focused element: `EDGE_MARGIN`, or more when the stylesheet
+ * asks for it with `scroll-margin` (a list whose last rows must stay inside the safe area).
+ */
+function edgeMargin(node: HTMLElement, side: 'Top' | 'Bottom'): number {
+  const asked = parseFloat(getComputedStyle(node)[`scrollMargin${side}`]);
+  return Math.max(EDGE_MARGIN, Number.isFinite(asked) ? asked : 0);
+}
+
 function canScroll(el: HTMLElement): boolean {
   if (el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth) return false;
   const style = getComputedStyle(el);
@@ -79,7 +88,12 @@ export function scrollFocusedIntoView(node: HTMLElement): void {
     const box = el.getBoundingClientRect();
     const rect = node.getBoundingClientRect();
     const m = EDGE_MARGIN;
-    el.scrollTop += overshoot(rect.top, rect.bottom, box.top + m, box.bottom - m);
+    el.scrollTop += overshoot(
+      rect.top,
+      rect.bottom,
+      box.top + edgeMargin(node, 'Top'),
+      box.bottom - edgeMargin(node, 'Bottom'),
+    );
     el.scrollLeft += overshoot(rect.left, rect.right, box.left + m, box.right - m);
   }
   const root = document.scrollingElement;
@@ -87,7 +101,7 @@ export function scrollFocusedIntoView(node: HTMLElement): void {
   // The document: the same, inside the window minus its scroll padding.
   const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
   const rect = node.getBoundingClientRect();
-  const dy = overshoot(rect.top, rect.bottom, pad, window.innerHeight - EDGE_MARGIN);
+  const dy = overshoot(rect.top, rect.bottom, pad, window.innerHeight - edgeMargin(node, 'Bottom'));
   if (dy !== 0) root.scrollTop += dy;
 }
 

@@ -176,6 +176,67 @@ describe('scrollFocusedIntoView', () => {
   });
 });
 
+describe('scroll-margin of the focused element', () => {
+  /** jsdom resolves no `scroll-margin`; this answers it for one node and the rest as usual. */
+  function withScrollMargin(node: HTMLElement, bottom: string) {
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+      const style = real(el, pseudo);
+      return el === node
+        ? new Proxy(style, {
+            get: (target, prop) =>
+              prop === 'scrollMarginBottom' ? bottom : Reflect.get(target, prop),
+          })
+        : style;
+    });
+  }
+
+  it('keeps the element that far from the bottom of the window when the document scrolls', () => {
+    const host = html('<button id="c">c</button>');
+    const node = host.querySelector<HTMLElement>('#c')!;
+    node.getBoundingClientRect = () => ({ top: 1000, bottom: 1070, left: 0, right: 50 }) as DOMRect;
+    withScrollMargin(node, '54px');
+    const root = fakeRoot();
+    try {
+      scrollFocusedIntoView(node);
+      expect(root.scrollTop).toBe(1070 - (window.innerHeight - 54));
+    } finally {
+      Reflect.deleteProperty(document, 'scrollingElement');
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('keeps the element that far from the bottom of a scrolling list', () => {
+    const host = html('<div id="list" style="overflow-y:auto"><button id="c">c</button></div>');
+    const list = host.querySelector<HTMLElement>('#list')!;
+    const state = layoutBox(list, { top: 100, bottom: 400, scrollHeight: 900 });
+    const node = host.querySelector<HTMLElement>('#c')!;
+    node.getBoundingClientRect = () => ({ top: 300, bottom: 380, left: 0, right: 50 }) as DOMRect;
+    withScrollMargin(node, '54px');
+    try {
+      scrollFocusedIntoView(node);
+      expect(state.scrollTop).toBe(380 - (400 - 54));
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('never keeps less than the usual edge room', () => {
+    const host = html('<button id="c">c</button>');
+    const node = host.querySelector<HTMLElement>('#c')!;
+    node.getBoundingClientRect = () => ({ top: 1000, bottom: 1070, left: 0, right: 50 }) as DOMRect;
+    withScrollMargin(node, '4px');
+    const root = fakeRoot();
+    try {
+      scrollFocusedIntoView(node);
+      expect(root.scrollTop).toBe(1070 - (window.innerHeight - 24));
+    } finally {
+      Reflect.deleteProperty(document, 'scrollingElement');
+      vi.restoreAllMocks();
+    }
+  });
+});
+
 describe('scrolling and the pointer', () => {
   it('brings a focused element into view with keys but leaves the scroll box alone for a hovered one', async () => {
     const host = html('<div id="box" style="overflow:auto"><button id="far">far</button></div>');

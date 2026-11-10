@@ -6,7 +6,7 @@ import { HttpResponse, http } from 'msw';
 import { Session } from '../../api/session';
 import { getPlatform, setPlatformForTests } from '../../platform';
 import { account, BASE_URL } from '../../test/apiFixtures';
-import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { memoryStorage, newQueryClient, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import {
   DEFAULT_SUBTITLE_APPEARANCE,
@@ -17,6 +17,8 @@ import {
   settingValuesFrom,
   useProfileSetting,
   useProfileSettings,
+  useResetProfileDeviceSetting,
+  useServerKnowsSetting,
   useSetProfileDeviceSetting,
 } from './profileSettings';
 
@@ -665,5 +667,167 @@ describe('useSetProfileDeviceSetting', () => {
     await shows('seconds', '60');
     fireEvent.click(screen.getByText('set'));
     await shows('seconds', '45');
+  });
+});
+
+describe('useServerKnowsSetting', () => {
+  function Knows({ name }: { name: 'playback.subtitle_appearance' | 'ui.title_art' }) {
+    return <div data-testid="knows">{String(useServerKnowsSetting(name))}</div>;
+  }
+
+  it('is true once the manifest revision covers the key, and false below it', async () => {
+    serveSettings(server, { manifestRevision: 1 });
+    renderWithSilo(<Knows name="playback.subtitle_appearance" />, { session: sessionOf() });
+    await shows('knows', 'true');
+    cleanup();
+    renderWithSilo(<Knows name="ui.title_art" />, { session: sessionOf() });
+    // ui.title_art came with revision 16.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId('knows')).toHaveTextContent('false');
+  });
+
+  it('is false while unanswered, without a contract, and without a profile', async () => {
+    serveSettings(server, { capabilities: { state: 'unsupported' } });
+    renderWithSilo(<Knows name="playback.subtitle_appearance" />, { session: sessionOf() });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId('knows')).toHaveTextContent('false');
+    cleanup();
+    renderWithSilo(<Knows name="playback.subtitle_appearance" />, { session: sessionOf(null) });
+    expect(screen.getByTestId('knows')).toHaveTextContent('false');
+  });
+});
+
+describe('useResetProfileDeviceSetting', () => {
+  interface Delete {
+    key: string;
+    scope: string | null;
+    profile: string | null;
+  }
+
+  function Reset({ onDone }: { onDone?: (error: unknown) => void }) {
+    const { value } = useProfileSetting('playback.next_up_prompt_seconds');
+    const reset = useResetProfileDeviceSetting();
+    return (
+      <div>
+        <div data-testid="seconds">{value}</div>
+        <button
+          onClick={() =>
+            reset('playback.next_up_prompt_seconds').then(
+              () => onDone?.(null),
+              (error) => onDone?.(error),
+            )
+          }
+        >
+          reset
+        </button>
+      </div>
+    );
+  }
+
+  it('deletes the profile_device value and reads the effective values again', async () => {
+    const values: Record<string, unknown> = { 'playback.next_up_prompt_seconds': 60 };
+    const calls = serveSettings(server, { values });
+    const deletes: Delete[] = [];
+    server.use(
+      http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ request, params }) => {
+        deletes.push({
+          key: String(params.key),
+          scope: new URL(request.url).searchParams.get('scope'),
+          profile: request.headers.get('X-Profile-Id'),
+        });
+        delete values[String(params.key)];
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderWithSilo(<Reset />, { session: sessionOf() });
+    await shows('seconds', '60');
+    fireEvent.click(screen.getByText('reset'));
+    // The default (30) is back once the answer of the second read is in.
+    await shows('seconds', '30');
+    expect(deletes).toEqual([
+      { key: 'playback.next_up_prompt_seconds', scope: 'profile_device', profile: 'p1' },
+    ]);
+    expect(calls.effective).toHaveLength(2);
+  });
+
+  it('has the effective value in the cache when the reset resolves, even if the read is slow', async () => {
+    const values: Record<string, unknown> = { 'playback.next_up_prompt_seconds': 60 };
+    serveSettings(server, { values });
+    server.use(
+      http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ params }) => {
+        delete values[String(params.key)];
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const seen: unknown[] = [];
+    const client = newQueryClient();
+    const onDone = () => {
+      const [entry] = client.getQueriesData<Record<string, unknown>>({
+        queryKey: ['settings', 'effective'],
+      });
+      seen.push(entry?.[1]?.['playback.next_up_prompt_seconds']);
+    };
+    renderWithSilo(<Reset onDone={onDone} />, { session: sessionOf(), queryClient: client });
+    await shows('seconds', '60');
+    // From now on the effective read takes a while.
+    server.use(
+      http.get(`${BASE_URL}/api/v2/settings/values/effective`, async ({ request }) => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const keys = new URL(request.url).searchParams.getAll('keys');
+        return HttpResponse.json({
+          items: keys.map((key) => ({
+            key,
+            value: key === 'playback.next_up_prompt_seconds' ? 30 : undefined,
+            source: 'default',
+            definition_revision: 1,
+          })),
+          revision: 40,
+        });
+      }),
+    );
+    fireEvent.click(screen.getByText('reset'));
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]).toBe(30);
+  });
+
+  it('rejects without a request when no profile is open', async () => {
+    serveSettings(server);
+    const sent: string[] = [];
+    server.use(
+      http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ params }) => {
+        sent.push(String(params.key));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const results: unknown[] = [];
+    renderWithSilo(<Reset onDone={(error) => results.push(error)} />, {
+      session: sessionOf(null),
+    });
+    fireEvent.click(screen.getByText('reset'));
+    await waitFor(() => expect(results).toHaveLength(1));
+    expect(results[0]).toBeInstanceOf(Error);
+    expect((results[0] as Error).message).toBe('No profile is open');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(sent).toEqual([]);
+  });
+
+  it('counts a 404 as done and rejects on any other failure', async () => {
+    serveSettings(server);
+    let status = 404;
+    server.use(
+      http.delete(
+        `${BASE_URL}/api/v2/settings/values/:key`,
+        () => new HttpResponse(null, { status }),
+      ),
+    );
+    const results: unknown[] = [];
+    renderWithSilo(<Reset onDone={(error) => results.push(error)} />, { session: sessionOf() });
+    await shows('seconds', '30');
+    fireEvent.click(screen.getByText('reset'));
+    await waitFor(() => expect(results).toEqual([null]));
+    status = 500;
+    fireEvent.click(screen.getByText('reset'));
+    await waitFor(() => expect(results).toHaveLength(2));
+    expect(results[1]).toBeInstanceOf(Error);
   });
 });

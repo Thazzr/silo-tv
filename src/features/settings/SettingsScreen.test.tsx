@@ -1,10 +1,14 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLanguageSetting, setLanguageSetting } from '../../i18n/languageSetting';
 import { getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
 import { getTimeMode, setTimeMode } from '../../playback/timeDisplay';
+import { Session } from '../../api/session';
+import { account } from '../../test/apiFixtures';
 import { KEY, pressKey } from '../../test/keys';
-import { renderWithSilo } from '../../test/renderFlow';
+import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
+import { serveSettings } from '../../test/settingsFixtures';
 import { SettingsScreen } from './SettingsScreen';
 
 beforeEach(() => {
@@ -14,7 +18,10 @@ beforeEach(() => {
 
 function setup() {
   const onBack = vi.fn();
-  const view = renderWithSilo(<SettingsScreen onBack={onBack} />, { lang: undefined });
+  const view = renderWithSilo(
+    <SettingsScreen onBack={onBack} onOpenSubtitleAppearance={() => undefined} />,
+    { lang: undefined },
+  );
   return { onBack, ...view };
 }
 
@@ -282,5 +289,87 @@ describe('SettingsScreen language row', () => {
     setLanguageSetting('en');
     setup();
     expect(pill('English')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+describe('SettingsScreen subtitle appearance row', () => {
+  const server = setupServer();
+  beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
+
+  function signedIn(): Session {
+    const session = new Session(memoryStorage());
+    session.set({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: Date.now() + 3600_000,
+      user: account,
+      profileId: 'p1',
+    });
+    return session;
+  }
+
+  function open(onOpen = vi.fn()) {
+    renderWithSilo(<SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={onOpen} />, {
+      lang: undefined,
+      session: signedIn(),
+    });
+    return onOpen;
+  }
+
+  it('shows when the server knows the key, with a summary of the current look', async () => {
+    serveSettings(server, {
+      values: { 'playback.subtitle_appearance': { fontSize: 'xlarge', fontColor: '#ffff00' } },
+    });
+    open();
+    const row = await screen.findByRole('button', { name: /Subtitle appearance/ });
+    await waitFor(() => expect(row).toHaveTextContent('Extra large · Yellow · Box'));
+    expect(within(screen.getByTestId('settings-device')).getByTestId('settings-subtitles')).toBe(
+      row,
+    );
+  });
+
+  it('summarizes the default look, and in German', async () => {
+    serveSettings(server);
+    setLanguageSetting('de');
+    open();
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-subtitles-summary')).toHaveTextContent(
+        'Groß · Weiß · Kasten',
+      ),
+    );
+    expect(screen.getByRole('button', { name: /Untertitel-Aussehen/ })).toBeInTheDocument();
+  });
+
+  it('is operated by keyboard: Down from the rewind row, OK opens the page', async () => {
+    serveSettings(server);
+    const onOpen = open();
+    const row = await screen.findByTestId('settings-subtitles');
+    await toRewind();
+    await pressKey(KEY.down);
+    expect(row).toHaveFocus();
+    await pressKey(KEY.enter);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('is hidden when the server is older than the key', async () => {
+    serveSettings(server, { manifestRevision: 0 });
+    open();
+    await waitFor(() => expect(screen.getByTestId('settings-device')).toBeInTheDocument());
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(screen.queryByTestId('settings-subtitles')).toBeNull();
+  });
+
+  it('is hidden when the capabilities fail or the server has no contract', async () => {
+    serveSettings(server, { capabilities: 'fail' });
+    open();
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(screen.queryByTestId('settings-subtitles')).toBeNull();
+  });
+
+  it('is hidden without a profile (nothing is asked)', () => {
+    setup();
+    expect(screen.queryByTestId('settings-subtitles')).toBeNull();
   });
 });

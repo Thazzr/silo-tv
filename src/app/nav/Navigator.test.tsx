@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
@@ -193,6 +193,52 @@ describe('Navigator focus memory', () => {
     // The static element mounts first and takes the focus; the remembered one wins once it is there.
     await waitFor(() => expect(screen.getByText('late 1')).toHaveFocus());
   });
+
+  it.each([false, true])(
+    'never moves the focus to the autofocus element when the remembered one mounts in the same commit (StrictMode %s)',
+    async (strict) => {
+      // Two focus moves racing (the autofocus one first, the restore after it) can finish in either
+      // order; only one may be started, so the autofocus element never holds the focus at all.
+      const app = (
+        <I18nProvider lang="en">
+          <Navigator<TestScreen>
+            initial={{ name: 'home' }}
+            renderScreen={(s) =>
+              s.name === 'home' ? (
+                <main data-testid="home">
+                  <Focusable focusKey="first" autoFocus>
+                    first
+                  </Focusable>
+                  <Focusable focusKey="second">second</Focusable>
+                  <Focusable focusKey="third">third</Focusable>
+                </main>
+              ) : (
+                <main data-testid="list" />
+              )
+            }
+          >
+            <Capture />
+          </Navigator>
+        </I18nProvider>
+      );
+      render(strict ? <StrictMode>{app}</StrictMode> : app);
+      await waitFor(() => expect(screen.getByText('first')).toHaveFocus());
+      await pressKey(KEY.down);
+      await pressKey(KEY.down);
+      expect(screen.getByText('third')).toHaveFocus();
+      act(() => nav().push({ name: 'list' }));
+      const focused: (string | null)[] = [];
+      const onFocusIn = (e: FocusEvent) =>
+        focused.push((e.target as HTMLElement).getAttribute('data-focus-key'));
+      document.addEventListener('focusin', onFocusIn);
+      act(() => nav().pop());
+      await waitFor(() => expect(screen.getByText('third')).toHaveFocus());
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+      document.removeEventListener('focusin', onFocusIn);
+      expect(screen.getByText('third')).toHaveFocus();
+      expect(focused).not.toContain('first');
+    },
+  );
 });
 
 describe('Navigator Back', () => {
