@@ -14,25 +14,25 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Install and launch the app on the TV (webOS 24, 2026-11-08)
 - ✅ CORS test on the TV: webOS does not enforce CORS for the packaged app, so the app talks to Silo directly; the JS service works as a fallback (Node v16 on webOS 24)
 - ✅ Generated API client from Silo's OpenAPI, transport layer, required headers, token refresh
-- 🟨 Check a server address (`/system/info`, `api_major == 2`)
-- 🟨 Sign-in by code/QR (device login)
-- 🟨 One title through playback protocol v3: direct play and HLS, progress every 10 s, stop
+- ✅ Check a server address (`/system/info`, `api_major == 2`)
+- ✅ Sign-in by code/QR (device login)
+- ✅ One title through playback protocol v3: direct play and HLS, progress every 10 s, stop (TV 2026-11-10 on webOS 26: MKV direct play, HLS remux and transcode through hls.js)
 - 🟨 Device profile probe: which codecs, containers and HDR formats the TV really supports (probed on webOS 24: H.264, HEVC Main10, VP9, AV1, Dolby Vision 5/8, DTS, E-AC-3; turning it into Silo's device profile comes with playback)
-- 🟨 Diagnostics overlay with plan, route and player state, without secrets
+- ✅ Diagnostics overlay with plan, route and player state, without secrets (replaced in Phase 3 by the player's Info panel)
 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
 - 🟨 Platform adapter: everything webOS-specific (Luna calls, device info, key codes, exit, launch parameters, secure storage, later the player) behind one `Platform` interface with a webOS and a browser implementation, so a Samsung Tizen port (Phase 6) adds an adapter instead of touching the app
 - 🟨 Save several servers and switch between them; each keeps its sign-in
-- 🟨 Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out
-- 🟨 Profiles: picker, PIN, child profiles, create a profile
+- ✅ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out (TV 2026-11-09)
+- ✅ Profiles: picker, PIN, child profiles, create a profile (TV 2026-11-10); the PIN entry is centred like the picker and its delete key is a backspace icon
 - 🟨 Profile at launch: automatic, every time, after 1 hour, after 12 hours
 - 🟨 Switch profile and server
 - 🟨 App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu (the tabs show the Phase 0 title list or "Coming soon" until Phase 2 and 4 fill them)
 - 🟨 Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen
 - 🟨 Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
 - 🟨 Loading, empty and error states
-- 🟨 German and English following the TV's language
+- 🟨 German and English following the TV's language (a language choice in the app's settings comes with Phase 3: automatic, German, English)
 
 ## Phase 2 – Browse (target v0.3.0)
 
@@ -43,19 +43,24 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - Browse grid with sort, filters (genre, decade, content rating, and watch state – unwatched, watched, in progress – when a silent probe shows the server accepts its rules) and an alphabet rail
   - Collections
 - 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
-- 🟨 Search with an on-screen keyboard of our own (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
+- ✅ Search with an on-screen keyboard of our own (TV 2026-11-09) (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
 - 🟨 Movie detail page: hero, description, credit line, external ratings, quality badges
 - 🟨 Series detail page with seasons and episodes, cast, recommendations
 - 🟨 Similar titles
-- 🟨 Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series
+- ✅ Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series (TV 2026-11-09)
 - 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages
 - 🟨 Long synopses and biographies scroll in the text dialog
 - 🟨 Smooth scrolling on TV hardware: memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
-- 🟨 The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe
+- ✅ The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe (TV 2026-11-09)
+- ✅ The Magic Remote pointer moves the focus but never scrolls the page at the screen edge (TV 2026-11-10)
+- ⬜ Featured hero carousel, as in Silo's web app, on Home and on the Movies and Series tabs (user decision 2026-11-10):
+  - it shows the featured section of the home layout or of the library ("Featured — No. 01", title, meta, synopsis, Play and More Info, a "01 — 09" indicator); a mixed library shows only the tab's kind
+  - it turns every 8 s while the focus is elsewhere; Left/Right on the focusable indicator pages, OK pauses
+  - in the rows below, the hero shows the focused card as before; the featured section is no longer a row of its own
 - 🟨 Profile settings read from the server (effective values, gated by the settings contract), shared by the features below
-- 🟨 Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (the webOS hand-off is not yet verified on hardware)
+- 🟨 Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (hand-off verified on webOS 26, 2026-11-10; an embedded YouTube player is not possible from `file://`, YouTube answers error 153)
 - 🟨 Theme music on detail pages when the profile turns it on (`ui.theme_music_enabled`, `ui.theme_music_loop`) and the server offers it: quiet, only while the page is on top, stopped at once for the player or any other screen; series use the series' theme (a season's own theme comes later)
-- 🟨 Title art (logo instead of text) following the profile setting `ui.title_art`
+- ✅ Title art (logo instead of text) following the profile setting `ui.title_art` (TV 2026-11-10)
 - 🟨 Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes
 - 🟨 AI translation of descriptions when the server offers it: automatic or with a "Translate description" pill, as the server's mode says; the item's description and the shown season's episodes; "Translating…" and "Translated by AI" under the synopsis (detail page only for now)
 
@@ -63,25 +68,37 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ✅ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly (TV 2026-11-09)
 - ✅ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen (TV 2026-11-09)
-- ⬜ Choose version, audio track and subtitle on the detail page beforehand: three round buttons after Play and Start over, with a line above them showing the current choice. Audio and subtitle picks are saved as the title's server preferences; the version holds while the page is open (Silo keeps no version preference: the version played last is the next default)
-- 🟨 Playback core on protocol v3: an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
-- ⬜ Direct play, HLS remux and transcode verified on the TV
-  - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
-- 🟨 Controls (keys confirmed on the TV 2026-11-10 on webOS 26):
+- ⬜ Choose version, audio track and subtitle on the detail page beforehand, as pills under the action row like Silo's web app ("Audio Auto: German · EAC3 · 5.1", "Subtitles Auto: …"; a Version pill only when the title has several versions). Audio and subtitle picks are saved as the title's server preferences; the version holds while the page is open (Silo keeps no version preference: the version played last is the next default)
+- ✅ Playback core on protocol v3 (TV 2026-11-10 on webOS 26):
+  - an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
+  - the session stop goes out 2 s after the video is unloaded: on webOS 26 a stop that aborts a stream the media stack still reads makes every later direct-play MKV hang
+  - a load that brings neither metadata nor an error within 20 s asks the server for another route
+  - implausible times from webOS (INT64_MAX nanoseconds, "unknown") never reach the overlay or the progress report
+- ✅ Direct play, HLS remux and transcode verified on the TV (webOS 26, 2026-11-10)
+  - HLS plays through hls.js over Media Source Extensions: Silo's transcode playlists use HLS variable substitution (`EXT-X-DEFINE`), which webOS's own HLS player cannot read; direct play stays on the native element
+  - 🟨 device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them (HDR and Dolby Vision titles still to be checked)
+- ✅ Controls (TV 2026-11-10 on webOS 26):
   - overlay that hides after 5 s
   - play/pause, skips by the profile's steps (taps add up), scrubbing at 2–16× by holding or with Rewind/Fast Forward
-  - scrub previews from the server's trickplay sheets, chapter marks on the scrubber
-- ⬜ Overlay in the layout of Silo's web player, adapted to the TV (user decision 2026-11-10):
-  - Exit at the top left
-  - a full-width scrubber; below it the title, the episode line and "elapsed / total"
-  - in the middle: skip back, play/pause, skip forward and the next episode
-  - on the right, menu buttons that open their menu above them: Audio, Chapters, Subtitles, a gear for quality (later speed, and auto-play next for episodes) and Info
-  - left out on the TV: volume, marker editing, pop-out, fullscreen and the subtitle appearance editor (it comes from the profile)
-- 🟨 Quality menu (built as a side panel, moving into the gear menu): Auto plus the plan's qualities; a change replans and holds for the current title only. Info and the chapter picker are built too.
+  - scrub previews from the server's trickplay sheets, chapter marks on the scrubber, intro, recap, credits and previews coloured on the track as in the web player
+- ✅ Overlay in the layout of Silo's web player, adapted to the TV (user decision 2026-11-10; TV 2026-11-10):
+  - Exit at the top left; a full-width scrubber with the buffer
+  - below it the title and the episode line; in the middle skip back, play/pause, skip forward (the next episode joins with Up Next)
+  - on the right, menu buttons that open their menu above them: Chapters, a gear for quality and auto-play next, and Info (Audio and Subtitles join with their menus)
+  - left out on the TV: volume, marker editing, pop-out, fullscreen
+- ✅ Quality menu: Auto plus the plan's qualities with bitrates; a change replans and holds for the current title only (TV 2026-11-10: 720p through hls.js)
+- 🟨 A quality change that does not play falls back to the quality before it, at the same position, with a short hint
+- ⬜ Player polish (user decisions 2026-11-10, in progress):
+  - the gear menu closes after a successful pick
+  - one Info panel in two columns ("Now" and "Source file", with live buffer, bandwidth and dropped frames), also on the blue key; the old diagnostics window goes; the error page shows short details only
+  - a slim scrub preview card like the web's, without the chapter title
+  - the time moves above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at
+- ⬜ The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
 - ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
-- 🟨 Skip intro, recap, credits and previews; automatic skipping following the profile settings
+- ⬜ Subtitle appearance for this TV in the app's settings, with a live preview: size, font, colours, opacity, background style, outline, position; stored per profile for this TV (`playback.subtitle_appearance` at `profile_device`)
+- ✅ Skip intro, recap, credits and previews; automatic skipping following the profile settings (TV 2026-11-10)
 - ⬜ Up Next for episodes: a card in the corner, opened `playback.next_up_prompt_seconds` before the end, with a countdown to the next episode when `playback.auto_play_next` is on
   - skipping credits that run to the end opens the card at once, with a 10 s countdown
   - an Up Next button on the overlay opens it without a countdown
@@ -103,9 +120,12 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - request, cancel, notify me
   - My Requests
   - request search for missing titles
-- ⬜ Profile settings, in the settings screen that Phase 3 opens with the device settings:
-  - playback, subtitle appearance, interface, home screen
-  - metadata language, profile picker at launch
+- ⬜ Profile settings, in the settings screen that Phase 3 opens with its section "This TV" (user decisions 2026-11-10):
+  - the profile sections go above "This TV", each with a note that it applies to the profile on all devices; a change on the TV is written for the whole profile
+  - playback: preferred quality, maximum bitrate, lower quality when buffering, skip intros, auto-skip recaps and credits, start next at preview, auto-play next, the video skip intervals
+  - language and subtitles: audio and subtitle language, subtitle appearance
+  - left out on the TV: marker confidence and source, audiobook intervals, browser decoding; a connection speed test maybe later
+  - interface, home screen, metadata language, profile picker at launch
   - account and signed-in devices
 
 ## Phase 5 – Extras (from v0.6.0)

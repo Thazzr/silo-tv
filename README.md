@@ -31,7 +31,12 @@ It works with any Silo server (API v2). You enter the server's address on the TV
 - **Movies and Series:** recommended rows, collections, and a browse grid with sort, filters (genre, decade, content rating, watch state) and a letter rail.
 - **Detail pages:** title art, ratings, quality badges, seasons and episodes, cast, similar titles, box sets, and person pages with filmography.
 - **Search** while you type, with box sets, people, movies, series and episodes. The keyboard has ä, ö, ü and ß.
-- **Playback** through Silo's playback protocol v3, with direct play and HLS, resume and start over. Continue Watching resumes directly, with an optional rewind on resume.
+- **Playback** through Silo's playback protocol v3: direct play, and HLS remux and transcode through hls.js. Resume and start over; Continue Watching resumes directly, with an optional rewind on resume.
+- **A player in the layout of Silo's web player:**
+  - a scrubber with buffer, trickplay previews, chapter marks and coloured intro, recap and credits segments;
+  - skips by your profile's steps, scrubbing at up to 16×, skip intro, recap and credits as your profile says;
+  - a quality menu (a quality that does not play falls back to the one before), chapters and playback info;
+  - subtitles drawn by the app in your profile's appearance.
 - **Extras:**
   - Trailers & More: local extras play in the app, YouTube trailers open in the TV's YouTube app.
   - Theme music, spoiler protection for unwatched episodes, and AI translation of descriptions, each when your profile and your server turn it on.
@@ -39,14 +44,15 @@ It works with any Silo server (API v2). You enter the server's address on the TV
 - **Your server's look:** its name, logo, sign-in background and accent colour.
 - **German and English**, following the TV's language.
 
-Next up is the full player: audio and subtitle selection, skip intro and credits, trickplay and Up Next. After that come watchlist, For You, calendar and requests. The whole plan is in [`docs/roadmap.md`](docs/roadmap.md), the look in [`docs/design.md`](docs/design.md).
+Next up in the player: audio and subtitle menus, Up Next, shuffle, subtitle search and subtitle appearance on the TV; then a featured hero on Home and the library tabs. After that come watchlist, For You, calendar, requests and the profile settings. The whole plan is in [`docs/roadmap.md`](docs/roadmap.md), the look in [`docs/design.md`](docs/design.md).
 
 ## Status
 
 Early development; there is no release yet.
 
-- Phase 0 (feasibility) and Phase 1 (servers, sign-in, profiles, app shell, TV navigation) run on the first test TV.
-- Phase 2 (browse) is built and tested in the browser. Home, the library tabs, the detail pages and resuming are already checked on the TV. The remaining features of the phase wait for the device test that closes it.
+- Phase 0 (feasibility) and Phase 1 (servers, sign-in, profiles, app shell, TV navigation) run on the test TV.
+- Phase 2 (browse) runs on the test TV; a few items are still open (a featured hero, two servers).
+- Phase 3 (the player) is in progress. Direct play, HLS, the overlay, skips and the quality menu are checked on the test TV (webOS 26).
 
 The goal is a listing in the LG Content Store. Until then, the app can be installed on a TV in Developer Mode.
 
@@ -117,7 +123,7 @@ In the browser the same parameters work as query strings, e.g. `?probe` or `?ser
 | Language | TypeScript |
 | UI | React with Vite, built for Chromium 79 (webOS 6) as one classic script |
 | Data | TanStack Query; API client generated from Silo's OpenAPI (`/api/v2`) |
-| Playback | the native `<video>` element with the TV's media pipeline; Silo playback protocol v3 |
+| Playback | the native `<video>` element for direct play, [hls.js](https://github.com/video-dev/hls.js) over Media Source Extensions for HLS; Silo playback protocol v3 |
 | Tests | Vitest, React Testing Library, MSW, Playwright |
 | TV tooling | `@webos-tools/cli` (`ares-package`, `ares-install`, `ares-launch`, `ares-inspect`) |
 | Process tooling | PowerShell (`tools/`), git-cliff for the changelog |
