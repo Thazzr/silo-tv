@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { translate, type MessageKey } from '../../i18n';
-import { bufferedUntil, clampTime, headingLines, stepRate } from './timing';
+import { bufferedUntil, clampTime, stepRate, titleBlock } from './timing';
 
 describe('stepRate', () => {
   it('starts at 2x and steps up to 16x, where it stays', () => {
@@ -47,16 +47,28 @@ describe('bufferedUntil', () => {
   });
 });
 
-describe('headingLines', () => {
-  it('shows the series above an episode and numbers before its title', () => {
+describe('titleBlock', () => {
+  it('shows the series as the title and the numbers and episode title in capitals below it', () => {
     expect(
-      headingLines({ title: 'Pilot', seriesTitle: 'Show', seasonNumber: 1, episodeNumber: 2 }, 'x'),
-    ).toEqual({ series: 'Show', title: 'S1 · E2 · Pilot' });
+      titleBlock(
+        { title: 'Pilot', seriesTitle: 'Show', seasonNumber: 1, episodeNumber: 2 },
+        'x',
+        2020,
+      ),
+    ).toEqual({ title: 'Show', detail: 'S1 · E2 — PILOT' });
   });
 
-  it('shows a movie by its title alone, and falls back before the title is known', () => {
-    expect(headingLines({ title: 'Film' }, 'x')).toEqual({ series: null, title: 'Film' });
-    expect(headingLines(null, 'Given')).toEqual({ series: null, title: 'Given' });
+  it('leaves out the numbers an episode does not have', () => {
+    expect(titleBlock({ title: 'Pilot', seriesTitle: 'Show' }, 'x', undefined)).toEqual({
+      title: 'Show',
+      detail: 'PILOT',
+    });
+  });
+
+  it('shows a movie by its title and its year, and falls back before the title is known', () => {
+    expect(titleBlock({ title: 'Film' }, 'x', 1999)).toEqual({ title: 'Film', detail: '1999' });
+    expect(titleBlock({ title: 'Film' }, 'x', undefined)).toEqual({ title: 'Film', detail: '' });
+    expect(titleBlock(null, 'Given', 2001)).toEqual({ title: 'Given', detail: '2001' });
   });
 });
 
@@ -66,7 +78,7 @@ describe('overlay texts', () => {
     'player.osd.skipForward',
     'player.osd.play',
     'player.osd.pause',
-    'player.osd.close',
+    'player.osd.exit',
     'player.osd.position',
     'player.osd.scrubbing',
   ];

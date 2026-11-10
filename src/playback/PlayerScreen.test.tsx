@@ -275,12 +275,12 @@ describe('PlayerScreen playback', () => {
     expect(state.currentTime).toBe(7);
   });
 
-  it('shows the elapsed time and the time remaining', async () => {
+  it('shows the elapsed time and the total time', async () => {
     const { video, state } = await playing();
     state.currentTime = 75;
     fireEvent.timeUpdate(video);
     expect(screen.getByTestId('player-time')).toHaveTextContent('1:15');
-    expect(screen.getByTestId('player-remaining')).toHaveTextContent('−1:28:45');
+    expect(screen.getByTestId('player-total')).toHaveTextContent('1:30:00');
   });
 
   it('lets the video load its metadata even when it does not autoplay', async () => {
@@ -308,10 +308,8 @@ describe('PlayerScreen playback', () => {
         episode_number: 2,
       }),
     });
-    expect(screen.getByText('Some Show')).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { hidden: true, name: 'S1 · E2 · The Pilot' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { hidden: true, name: 'Some Show' })).toBeInTheDocument();
+    expect(screen.getByTestId('player-meta')).toHaveTextContent('S1 · E2 — THE PILOT');
   });
 });
 

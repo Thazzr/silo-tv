@@ -1,5 +1,5 @@
-// The Quality section of the Video tab, as pure rules: which rows it lists, which one is checked
-// and whether a pick changes anything. The panel only draws what this decides.
+// The Quality section of the settings menu, as pure rules: which rows it lists, which one is
+// checked and whether a pick changes anything. The menu only draws what this decides.
 import type { Plan } from '../usePlaybackSession';
 
 /** The "Auto" row, which stands for the source (the `auto` preference). */
@@ -16,6 +16,8 @@ export interface QualityRow {
   label: string;
   /** What the row shows: the server's display name, else the label. */
   name: string;
+  /** The rung's bitrate, when the server names one. */
+  bitrateKbps?: number;
 }
 
 export interface QualityMenu {
@@ -23,7 +25,7 @@ export interface QualityMenu {
   rows: QualityRow[];
   /** `AUTO`, a row's label, or null when no row is checked. */
   checked: string | null;
-  /** The preference's own name, for the heading when no row is checked. */
+  /** The preference's own name, for the heading and the gear's label when no row is checked. */
   unmatched: string | null;
 }
 
@@ -44,7 +46,11 @@ export function qualityMenu(
   // The field is required, but a plan without it must not take the panel down: no choice then.
   for (const quality of plan.available_qualities ?? []) {
     if (isSourceAlias(quality.label) || rows.some((row) => row.label === quality.label)) continue;
-    rows.push({ label: quality.label, name: quality.display_name || quality.label });
+    rows.push({
+      label: quality.label,
+      name: quality.display_name || quality.label,
+      ...(quality.bitrate_kbps ? { bitrateKbps: quality.bitrate_kbps } : {}),
+    });
   }
   if (rows.length === 0) return null;
 
@@ -64,4 +70,25 @@ export function qualityMenu(
 export function changesQuality(menu: QualityMenu, preference: string, target: string): boolean {
   if (target === menu.checked) return false;
   return target !== preference && !(target === AUTO && isSourceAlias(preference));
+}
+
+/**
+ * What the settings button says about the quality: Auto, the checked row's name, or the
+ * preference's own name when no row is checked.
+ */
+export function qualityLabel(
+  menu: QualityMenu,
+  preference: string,
+): { kind: 'auto' } | { kind: 'name'; name: string } {
+  if (menu.checked === AUTO) return { kind: 'auto' };
+  const row = menu.rows.find((item) => item.label === menu.checked);
+  return { kind: 'name', name: row ? row.name : preference };
+}
+
+/** "3 Mbps", "3.5 Mbps" or "800 kbps" (decimal comma in German); null when unknown. */
+export function formatBitrate(kbps: number | undefined, decimal = '.'): string | null {
+  if (!kbps || kbps <= 0) return null;
+  if (kbps < 1000) return `${Math.round(kbps)} kbps`;
+  const mbps = Math.round(kbps / 100) / 10;
+  return `${String(mbps).replace('.', decimal)} Mbps`;
 }

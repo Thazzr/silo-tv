@@ -60,64 +60,177 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(parseInt(/height: (\d+)px/.exec(tick)?.[1] ?? '0', 10)).toBeGreaterThan(6);
   });
 
-  it('hides the heading with opacity only, and fills the card nearly opaque', () => {
-    expect(css).toMatch(/\.player-osd-title\[data-covered='true'\][^{]*\{[^}]*opacity: 0/);
-    expect(css).toMatch(/\.player-osd-series,\s*\.player-osd-title \{[^}]*transition: opacity/);
+  it('fills the card nearly opaque', () => {
     expect(rule('.player-preview')).toMatch(/rgba\(21, 23, 28, 0\.9[5-9]\)/);
   });
 });
 
-describe('options panel styles', () => {
-  const options = readFileSync('src/styles/options.css', 'utf-8');
+describe('overlay layout styles', () => {
+  const rule = (selector: string) => {
+    const start = css.indexOf(`${selector} {`);
+    return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
+  };
+
+  it('puts Exit in the top-left, inside the safe area, on a soft gradient and no blur', () => {
+    const top = rule('.player-osd-top');
+    expect(top).toContain('padding: var(--safe-y) var(--safe-x)');
+    expect(top).toContain('linear-gradient(to bottom');
+    expect(top).toContain('top: 0');
+    expect(top).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+    expect(top).toContain('will-change: opacity');
+  });
+
+  it('shows the focused Exit pill like the other buttons: white fill, dark content', () => {
+    const focus = /\.player-exit\[data-focused='true'\][^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(focus).toContain('background: var(--focus-fill)');
+    expect(focus).toContain('color: var(--focus-content)');
+    expect(css).toMatch(/\.player-exit:hover/);
+  });
+
+  it('keeps Exit a pill at least 75 px tall with text of at least 20 px', () => {
+    const exit = rule('.player-exit');
+    expect(exit).toContain('height: var(--target)');
+    expect(exit).toContain('border-radius: calc(var(--target) / 2)');
+    expect(exit).toContain('font-size: var(--fs-tab)');
+  });
+
+  it('gives each segment kind its own colour on the scrubber, without a filter', () => {
+    const colours = ['intro', 'recap', 'credits', 'preview'].map((kind) => {
+      const body = rule(`.player-scrubber-band[data-kind='${kind}']`);
+      expect(body, kind).toMatch(/background: rgba\(\d+, \d+, \d+, 0\.45\)/);
+      expect(body, kind).not.toMatch(/backdrop-filter|filter:|blur\(/);
+      return /background: (rgba\([^)]*\))/.exec(body)![1];
+    });
+    expect(new Set(colours).size).toBe(4);
+    expect(colours).toEqual([
+      'rgba(125, 211, 252, 0.45)',
+      'rgba(196, 181, 253, 0.45)',
+      'rgba(252, 211, 77, 0.45)',
+      'rgba(110, 231, 183, 0.45)',
+    ]);
+    // The buffer is plain grey-white, apart from the bands.
+    expect(rule('.player-scrubber-buffered')).toContain('rgba(255, 255, 255, 0.5)');
+    expect(rule('.player-scrubber-band')).not.toMatch(/backdrop-filter|filter:|blur\(/);
+  });
+
+  it('marks a button whose menu is open with a ring and a wash, not the white fill', () => {
+    const open = rule(".player-btn[data-open='true']");
+    expect(open).toContain('border-color: var(--focus-ring)');
+    expect(open).toContain('background: var(--chrome-selected)');
+    expect(open).not.toContain('--focus-fill');
+    // Before the focus rule, so a focused open button (Info) still shows the focus.
+    expect(css.indexOf(".player-btn[data-open='true']")).toBeLessThan(
+      css.indexOf(".player-btn[data-focused='true']"),
+    );
+  });
+
+  it('lays the row out in three parts, so a long title never pushes the centre', () => {
+    expect(rule('.player-osd-row')).toContain('grid-template-columns: 1fr auto 1fr');
+    expect(rule('.player-osd-titles')).toContain('min-width: 0');
+    const title = rule('.player-osd-title');
+    expect(title).toContain('text-overflow: ellipsis');
+    expect(title).toContain('white-space: nowrap');
+    // Only the detail shrinks, with an ellipsis; the time, with its dot, never does.
+    expect(rule('.player-osd-meta')).toContain('display: flex');
+    const detail = rule('.player-osd-detail');
+    expect(detail).toContain('min-width: 0');
+    expect(detail).toContain('overflow: hidden');
+    expect(detail).toContain('text-overflow: ellipsis');
+    const clock = rule('.player-osd-clock');
+    expect(clock).toContain('flex-shrink: 0');
+    expect(clock).not.toContain('overflow');
+  });
+
+  it('uses no backdrop filter, blur or shadow on the overlay, its buttons and Exit', () => {
+    for (const selector of ['.player-osd', '.player-osd-top', '.player-btn', '.player-exit']) {
+      expect(rule(selector), selector).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+    }
+  });
+
+  it('has no row of the old times and no heading cover', () => {
+    expect(css).not.toContain('.player-osd-times');
+    expect(css).not.toContain('data-covered');
+    expect(css).not.toContain('player-cue-aside');
+  });
+
+  it('draws no text under 20 px in the overlay', () => {
+    const sizes = [...css.matchAll(/\.player-(?:osd|exit|btn)[^{]*\{[^}]*font-size: (\d+)px/g)];
+    for (const match of sizes) expect(Number(match[1])).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe('player menu styles', () => {
+  const menus = readFileSync('src/styles/player-menus.css', 'utf-8');
   const tokens = readFileSync('src/styles/tokens.css', 'utf-8');
   const block = (selector: string) => {
-    const start = options.indexOf(`${selector} {`);
-    return start < 0 ? '' : options.slice(start, options.indexOf('}', start));
+    const start = menus.indexOf(`${selector} {`);
+    return start < 0 ? '' : menus.slice(start, menus.indexOf('}', start));
   };
 
   it('is flat: no blur, no backdrop filter, no shadow', () => {
-    expect(options).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+    expect(menus).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
   });
 
-  it('is a solid column on the right edge, full height, inside the safe area', () => {
-    const panel = block('.player-options');
-    expect(panel).toContain('right: 0');
-    expect(panel).toContain('top: 0');
-    expect(panel).toContain('bottom: 0');
-    expect(panel).toContain('var(--safe-y)');
-    expect(panel).toContain('var(--safe-x)');
-    expect(panel).toContain('background: var(--surface-raised)');
+  it('stands the popover above its button, right-aligned, with a solid rounded surface', () => {
+    const popover = block('.player-popover');
+    expect(popover).toContain('right: 0');
+    expect(popover).toMatch(/bottom: calc\(100% \+ \d+px\)/);
+    const box = block('.player-menu');
+    expect(box).toContain('background: var(--surface-raised)');
+    expect(box).toContain('border-radius: 20px');
     expect(tokens).toMatch(/--surface-raised: #[0-9a-f]{6};/);
   });
 
-  it('shows the focus of a row and of a tab as the white fill with a dark text', () => {
-    for (const selector of ['.player-options-row:focus', '.player-options-tab:focus']) {
-      expect(css + options).toContain(selector);
-    }
+  it('keeps the popover inside the safe area: no wider than the screen less both margins, no taller than the room above the buttons', () => {
+    const box = block('.player-menu');
+    expect(box).toContain('max-width: calc(100vw - 2 * var(--safe-x))');
+    // Top safe margin, bottom safe margin, the 88 px button row and the gap to it.
+    expect(box).toContain('max-height: calc(100vh - 2 * var(--safe-y) - 88px - 16px)');
+    // A longer list scrolls inside it.
+    expect(block('.player-menu-scroll')).toContain('overflow-y: auto');
+  });
+
+  it('shows the focus of a row as the white fill with dark text and a ring', () => {
     const row =
-      /\.player-options-row:focus,\s*\.player-options-row:hover \{([^}]*)\}/.exec(options)?.[1] ??
-      '';
+      /\.player-menu-row:focus,\s*\.player-menu-row:hover \{([^}]*)\}/.exec(menus)?.[1] ?? '';
     expect(row).toContain('background: var(--focus-fill)');
     expect(row).toContain('color: var(--focus-content)');
     expect(row).toContain('var(--focus-ring)');
-    const tab =
-      /\.player-options-tab:focus,\s*\.player-options-tab:hover \{([^}]*)\}/.exec(options)?.[1] ??
-      '';
-    expect(tab).toContain('background: var(--focus-fill)');
-    expect(tab).toContain('transform: scale(');
   });
 
-  it('is 760 px wide at the 1920 layout, and the loading cue centres in what it leaves free', () => {
-    expect(options).toMatch(/:root \{\s*--options-width: 760px;\s*\}/);
-    expect(block('.player-options')).toContain('width: var(--options-width)');
-    const cue = block('.player-cue.player-cue-aside');
-    expect(cue).toContain('left: calc((100% - var(--options-width)) / 2)');
-  });
-
-  it('keeps targets at least 75 px tall and text at least 20 px', () => {
+  it('keeps rows at least 75 px tall and text at least 20 px', () => {
     expect(tokens).toContain('--target: 75px');
-    expect(block('.player-options-row')).toContain('min-height: var(--target)');
-    expect(block('.player-options-tab')).toContain('height: var(--target)');
-    expect(options).not.toMatch(/font-size: (1\d|[0-9])px/);
+    expect(block('.player-menu-row')).toContain('min-height: var(--target)');
+    expect(menus).not.toMatch(/font-size: (1\d|[0-9])px/);
+    expect(block('.player-menu-heading')).toContain('font-size: var(--fs-small)');
+    expect(tokens).toContain('--fs-small: 20px');
+  });
+
+  it('fills the focused row of the playing chapter with the focus fill, like any focused row', () => {
+    const rule =
+      /\.player-menu-row\[data-current='true'\]:focus,\s*\.player-menu-row\[data-current='true'\]:hover \{([^}]*)\}/.exec(
+        menus,
+      )?.[1] ?? '';
+    expect(rule).toContain('background: var(--focus-fill)');
+  });
+
+  it('sets the headings in small letter-spaced capitals', () => {
+    const heading = block('.player-menu-heading');
+    expect(heading).toContain('text-transform: uppercase');
+    expect(heading).toContain('letter-spacing');
+  });
+
+  it('puts the info column on the left inside the safe area, below Exit, and flat', () => {
+    const column = block('.player-info');
+    expect(column).toContain('left: var(--safe-x)');
+    expect(column).toContain('top: calc(var(--safe-y) + var(--target)');
+    expect(column).toContain('bottom: calc(var(--safe-y)');
+    expect(column).toContain('background: var(--surface-raised)');
+    expect(block('.player-info-fact')).toMatch(/font-size: (2\d|[3-9]\d)px/);
+  });
+
+  it('no longer carries the options panel', () => {
+    expect(menus).not.toContain('player-options');
+    expect(menus).not.toContain('--options-width');
   });
 });

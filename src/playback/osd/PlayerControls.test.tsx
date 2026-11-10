@@ -7,7 +7,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { Session } from '../../api/session';
 import { account } from '../../test/apiFixtures';
 import { fakeVideo, installFakeMedia } from '../../test/fakeVideo';
-import { ACCESS_TOKEN, SESSION_ID, servePlayback, until } from '../../test/playbackFixtures';
+import {
+  ACCESS_TOKEN,
+  SESSION_ID,
+  servePlayback,
+  until,
+  watchDetail,
+  type PlaybackServerOptions,
+} from '../../test/playbackFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings, type SettingsServe } from '../../test/settingsFixtures';
 import { PlayerScreen } from '../PlayerScreen';
@@ -59,9 +66,15 @@ function tap(keyCode: number) {
 }
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-async function mount(options: { firstFrame?: boolean; settings?: SettingsServe } = {}) {
+async function mount(
+  options: {
+    firstFrame?: boolean;
+    settings?: SettingsServe;
+    playback?: PlaybackServerOptions;
+  } = {},
+) {
   const { firstFrame = true, settings = {} } = options;
-  const calls = servePlayback(server);
+  const calls = servePlayback(server, options.playback);
   serveSettings(server, settings);
   const session = new Session(memoryStorage());
   session.set({
@@ -123,6 +136,32 @@ describe('overlay visibility', () => {
     advance(1);
     expect(isOpen()).toBe(false);
     expect(anyFocused()).toBe(false);
+  });
+
+  it('moves the focus off the overlay before it becomes aria-hidden, on every hide', async () => {
+    await mount();
+    // What had the focus at the moment each overlay part got aria-hidden.
+    const seen: boolean[] = [];
+    const original = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (this: Element, name: string, value: string) {
+      if (name === 'aria-hidden' && this.classList.contains('player-osd')) {
+        seen.push(this.contains(document.activeElement));
+      }
+      return original.call(this, name, value);
+    };
+    try {
+      tap(K.up);
+      tap(K.down);
+      expect(screen.getByRole('button', { name: 'Pause' })).toHaveFocus();
+      advance(5000);
+    } finally {
+      Element.prototype.setAttribute = original;
+    }
+    expect(isOpen()).toBe(false);
+    expect(seen).toEqual([false]);
+    expect(osd().getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByTestId('player-osd-top').getAttribute('aria-hidden')).toBe('true');
+    expect(osd().contains(document.activeElement)).toBe(false);
   });
 
   it('stays open while paused, and hides 5 s after playing again', async () => {
@@ -468,7 +507,17 @@ describe('buttons', () => {
     expect(focused('scrubber')).toBe(true);
   });
 
-  it('Left and Right walk the buttons and stop at the ends', async () => {
+  it('Down from the scrubber goes to Play/Pause, and Down on a button does nothing', async () => {
+    await mount();
+    tap(K.up);
+    tap(K.down);
+    expect(focused('playPause')).toBe(true);
+    tap(K.down);
+    expect(focused('playPause')).toBe(true);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Left and Right walk the whole row and stop at the ends', async () => {
     await mount();
     tap(K.up);
     tap(K.down);
@@ -479,18 +528,17 @@ describe('buttons', () => {
     tap(K.right);
     tap(K.right);
     expect(focused('skipForward')).toBe(true);
+    // A movie without chapters or a quality choice has only Info after the transport buttons.
     tap(K.right);
-    expect(focused('options')).toBe(true);
+    expect(focused('info')).toBe(true);
     tap(K.right);
-    expect(focused('close')).toBe(true);
-    tap(K.right);
-    expect(focused('close')).toBe(true);
+    expect(focused('info')).toBe(true);
   });
 
   it('every button has an accessible name', async () => {
     await mount();
     tap(K.up);
-    for (const name of ['10 seconds back', 'Pause', '30 seconds forward', 'Options', 'Close']) {
+    for (const name of ['10 seconds back', 'Pause', '30 seconds forward', 'Info', 'Exit']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
   });
@@ -525,19 +573,147 @@ describe('buttons', () => {
     advance(200);
     expect(state.seeks).toEqual([160, 150]);
   });
+});
 
-  it('Close leaves the player and stops the session', async () => {
+describe('Exit', () => {
+  it('stands in the top-left part of the overlay, with its label, apart from the bottom row', async () => {
+    await mount();
+    tap(K.up);
+    const top = screen.getByTestId('player-osd-top');
+    const exit = screen.getByRole('button', { name: 'Exit' });
+    expect(top).toContainElement(exit);
+    expect(exit).toHaveTextContent('Exit');
+    expect(osd()).not.toContainElement(exit);
+    // It shows and hides with the overlay.
+    expect(top).toHaveAttribute('data-visible', 'true');
+    advance(5000);
+    expect(top).toHaveAttribute('data-visible', 'false');
+  });
+
+  it('is reached with Up from the scrubber; Down goes back to the scrubber', async () => {
+    await mount();
+    tap(K.up);
+    tap(K.up);
+    expect(focused('close')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Exit' })).toHaveFocus();
+    tap(K.down);
+    expect(focused('scrubber')).toBe(true);
+  });
+
+  it('does nothing on Left, Right and Up', async () => {
+    const { state, onExit } = await mount();
+    tap(K.up);
+    tap(K.up);
+    for (const code of [K.left, K.right, K.up]) {
+      tap(code);
+      expect(focused('close')).toBe(true);
+    }
+    advance(1000);
+    expect(state.seeks).toEqual([]);
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('Enter on it leaves the player and stops the session', async () => {
     const { onExit, calls } = await mount();
     vi.useRealTimers();
     tap(K.up);
-    tap(K.down);
-    tap(K.right);
-    tap(K.right);
-    tap(K.right);
-    expect(focused('close')).toBe(true);
+    tap(K.up);
     tap(K.ok);
     expect(onExit).toHaveBeenCalledTimes(1);
     await until(() => calls.stop.length === 1);
+  });
+});
+
+describe('the title block', () => {
+  const EPISODE = watchDetail({
+    type: 'episode',
+    title: 'Pilot',
+    series_title: 'Some Show',
+    season_number: 1,
+    episode_number: 1,
+    year: 2020,
+  });
+
+  it('shows the series, then "S1 · E1 — TITLE" with the elapsed and the total time for an episode', async () => {
+    await mount({ playback: { watch: EPISODE } });
+    tap(K.up);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Some Show');
+    expect(screen.getByTestId('player-meta')).toHaveTextContent('S1 · E1 — PILOT · 0:00 / 1:30:00');
+  });
+
+  it('keeps the time whole in its own span after a long episode title, the dot with it', async () => {
+    const long = 'A very long episode title that could never fit on the line next to the time';
+    await mount({ playback: { watch: { ...EPISODE, title: long } } });
+    tap(K.up);
+    expect(screen.getByTestId('player-detail')).toHaveTextContent(
+      `S1 · E1 — ${long.toUpperCase()}`,
+    );
+    const clock = screen.getByTestId('player-clock');
+    expect(clock.textContent).toBe(' · 0:00 / 1:30:00');
+    expect(clock).not.toContainElement(screen.getByTestId('player-detail'));
+  });
+
+  it('shows the year for a movie, then the times', async () => {
+    await mount({ playback: { watch: watchDetail({ year: 1999 }) } });
+    tap(K.up);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('First Title');
+    expect(screen.getByTestId('player-meta')).toHaveTextContent('1999 · 0:00 / 1:30:00');
+  });
+
+  it('leads with the times alone for a movie without a year', async () => {
+    await mount();
+    tap(K.up);
+    expect(screen.getByTestId('player-meta').textContent).toBe('0:00 / 1:30:00');
+  });
+
+  it('has no row of elapsed and remaining time any more', async () => {
+    await mount();
+    tap(K.up);
+    expect(screen.queryByTestId('player-remaining')).not.toBeInTheDocument();
+  });
+
+  it('shows the pending skip target as the elapsed time', async () => {
+    const { state } = await mount({ playback: { watch: EPISODE } });
+    state.currentTime = 100;
+    tap(K.up);
+    tap(K.right);
+    expect(screen.getByTestId('player-meta')).toHaveTextContent('S1 · E1 — PILOT · 2:10 / 1:30:00');
+  });
+});
+
+describe('keys the player owns', () => {
+  it('are prevented while the overlay is open: an arrow and a media key', async () => {
+    await mount();
+    tap(K.up);
+    const arrow = new KeyboardEvent('keydown', { keyCode: K.right, cancelable: true });
+    expect(window.dispatchEvent(arrow)).toBe(false);
+    const forward = new KeyboardEvent('keydown', { keyCode: K.fastForward, cancelable: true });
+    expect(window.dispatchEvent(forward)).toBe(false);
+  });
+
+  it('do not reach another keydown listener on the window', async () => {
+    await mount();
+    const other = vi.fn();
+    window.addEventListener('keydown', other);
+    try {
+      tap(K.up);
+      tap(K.ok);
+      tap(K.right);
+      expect(other).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('keydown', other);
+    }
+  });
+});
+
+describe('with the overlay hidden', () => {
+  it('Down only shows the overlay on the scrubber: it opens no menu', async () => {
+    await mount();
+    tap(K.down);
+    expect(isOpen()).toBe(true);
+    expect(focused('scrubber')).toBe(true);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('player-info')).not.toBeInTheDocument();
   });
 });
 
@@ -558,7 +734,7 @@ describe('Magic Remote pointer', () => {
   it('hovering a button moves the focus to it', async () => {
     await mount();
     tap(K.up);
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Exit' }));
     expect(focused('close')).toBe(true);
     fireEvent.mouseEnter(scrubber());
     expect(focused('scrubber')).toBe(true);
@@ -572,7 +748,7 @@ describe('Magic Remote pointer', () => {
     fireEvent.click(screen.getByRole('button', { name: '30 seconds forward' }));
     advance(200);
     expect(state.seeks).toEqual([160]);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 

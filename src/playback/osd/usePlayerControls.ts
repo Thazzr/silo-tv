@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPlatform } from '../../platform';
 import type { PlayerEngine } from '../engine/PlayerEngine';
-import type { PanelOrigin } from '../options/usePanelState';
-import { OSD_BUTTONS, type OsdButton, type OsdFocus } from './PlayerOsd';
+import { isPopover, type OsdMenu } from '../menus/usePanelState';
+import { buttonRow, type OsdAction, type OsdFocus } from './PlayerOsd';
 import { clampTime, HOLD_GAP_MS, HOLD_MS, HOLD_STEP_MS } from './timing';
 import { useOsdVisibility } from './useOsdVisibility';
 import { useScrub, type ScrubState } from './useScrub';
@@ -25,15 +25,15 @@ interface Args {
   toggleDiagnostics(): void;
   skipBackSeconds: number;
   skipForwardSeconds: number;
+  /** The menu buttons that are present, in the order of the row. */
+  menus: readonly OsdMenu[];
   /**
-   * The options panel, which lives above the player so it survives a reload of the stream. While
-   * it is open the keys are the panel's: only the media keys still act here.
+   * The open menu, which lives above the player so it survives a reload of the stream. While a
+   * popover is open the keys are the menu's: only the media keys still act here.
    */
   panel: {
-    open: boolean;
-    /** How it was opened: from the overlay (Back returns there) or with the overlay hidden. */
-    origin: PanelOrigin;
-    show(origin: PanelOrigin): void;
+    open: OsdMenu | null;
+    show(menu: OsdMenu): void;
     hide(): void;
   };
   /** The skip pill (intro, recap, credits): whether it shows and holds the focus, and its actions. */
@@ -55,21 +55,23 @@ export interface PlayerControls {
   /** A skip is waiting for its commit: `shownPosition` is its target. */
   skipPending: boolean;
   setFocus(focus: OsdFocus): void;
-  action(button: OsdButton): void;
+  action(action: OsdAction): void;
   seekToFraction(fraction: number): void;
   /**
-   * Back: close the options panel, else cancel scrubbing, else dismiss the skip pill, else hide
-   * the overlay, else leave.
+   * Back: close the open menu or Info, else cancel scrubbing, else dismiss the skip pill, else
+   * hide the overlay, else leave.
    */
   back(): void;
+  /** Closes the open menu; the focus lands on its button and the overlay stays. */
+  closeMenu(): void;
   /**
-   * Closes the options panel. It lands where it was opened from (the Options button with the
-   * overlay, or the hidden overlay), or `scrubber` to show the overlay on the scrubber.
+   * Left or Right in an open popover: it closes and the focus moves to the neighbouring button,
+   * without opening that button's menu.
    */
-  closePanel(landing: 'origin' | 'scrubber'): void;
+  menuSide(direction: 'left' | 'right'): void;
   /** Pointer movement over the player. */
   pointerMoved(): void;
-  /** A click on the video itself. */
+  /** A click on the video itself: it closes an open menu, else toggles play. */
   videoClicked(): void;
 }
 
@@ -84,7 +86,8 @@ interface Held {
 /** Everything the player's controls do: overlay visibility and focus, skips, scrubbing, keys. */
 export function usePlayerControls(args: Args): PlayerControls {
   const { engine, started, paused, buffering, position, duration } = args;
-  const [overlayFocus, setFocusState] = useState<OsdFocus>('video');
+  // A player that reloads its stream under an open menu starts with the overlay up on its button.
+  const [overlayFocus, setFocusState] = useState<OsdFocus>(args.panel.open ?? 'video');
 
   const skip = useSkipAccumulator({
     read: args.read,
@@ -92,8 +95,10 @@ export function usePlayerControls(args: Args): PlayerControls {
     commit: args.seekTo,
   });
   const scrub = useScrub(duration);
+  const menuOpen = args.panel.open !== null;
   const osd = useOsdVisibility(
-    paused || buffering || scrub.state !== null || skip.pending !== null,
+    paused || buffering || scrub.state !== null || skip.pending !== null || menuOpen,
+    menuOpen,
   );
   // A hidden overlay (also one that hid by itself when idle) leaves the focus on the video, except
   // for a new skip pill, which holds it for its first seconds. A pill that is gone leaves the
@@ -127,7 +132,7 @@ export function usePlayerControls(args: Args): PlayerControls {
     holdTimer.current = null;
   }, []);
   useEffect(() => clearHoldTimer, [clearHoldTimer]);
-  const visibleRef = useRef(false);
+  const visibleRef = useRef(menuOpen);
   useEffect(() => {
     visibleRef.current = osd.visible;
   }, [osd.visible]);
@@ -142,35 +147,42 @@ export function usePlayerControls(args: Args): PlayerControls {
     setFocusState('video');
   }, []);
 
-  /** Opens the options panel; the overlay gives way and comes back where the panel was opened. */
-  const openPanel = useCallback(
-    (origin: PanelOrigin) => {
+  /** Opens a menu (or Info) from its button; the one that is already open closes instead. */
+  const toggleMenu = useCallback(
+    (menu: OsdMenu) => {
       const { args: a, osd: o } = latest.current;
       clearHoldTimer();
-      a.panel.show(origin);
-      o.hide();
-      if (origin === 'button') setFocusState('options');
+      if (a.panel.open === menu) a.panel.hide();
+      else a.panel.show(menu);
+      setFocusState(menu);
+      o.poke();
     },
     [clearHoldTimer],
   );
 
-  const closePanel = useCallback(
-    (landing: 'origin' | 'scrubber') => {
-      const { args: a, osd: o } = latest.current;
-      const origin = a.panel.origin;
-      a.panel.hide();
-      if (landing === 'scrubber') openOsd();
-      else if (origin === 'button') {
-        setFocusState('options');
-        o.show();
-      } else {
-        setFocusState('video');
-      }
-    },
-    [openOsd],
-  );
+  const closeMenu = useCallback(() => {
+    const { args: a, osd: o } = latest.current;
+    const open = a.panel.open;
+    a.panel.hide();
+    if (open) setFocusState(open);
+    o.show();
+  }, []);
 
-  // A pause shows the overlay, so the state is visible at once (not behind the options panel).
+  /** Closes the open menu and moves the focus to its neighbour in the row (or to the pill). */
+  const menuSide = useCallback((direction: 'left' | 'right') => {
+    const { args: a, osd: o } = latest.current;
+    const open = a.panel.open;
+    if (!open) return;
+    const row = buttonRow(a.menus);
+    // A popover always has both neighbours: the transport buttons on its left and Info, which is
+    // always present and always last, on its right.
+    const neighbour = row[row.indexOf(open) + (direction === 'right' ? 1 : -1)]!;
+    a.panel.hide();
+    setFocusState(neighbour);
+    o.poke();
+  }, []);
+
+  // A pause shows the overlay, so the state is visible at once (not behind a menu).
   useEffect(() => {
     if (started && paused && !visibleRef.current && !latest.current.args.panel.open) openOsd();
   }, [started, paused, openOsd]);
@@ -196,7 +208,7 @@ export function usePlayerControls(args: Args): PlayerControls {
   }, []);
 
   const action = useCallback(
-    (button: OsdButton) => {
+    (button: OsdAction) => {
       const { args: a, skip: s } = latest.current;
       switch (button) {
         case 'skipBack':
@@ -208,15 +220,16 @@ export function usePlayerControls(args: Args): PlayerControls {
         case 'playPause':
           togglePlay();
           break;
-        case 'options':
-          openPanel('button');
-          break;
         case 'close':
           a.leave();
           break;
+        default:
+          // The rest are the menu buttons.
+          toggleMenu(button);
+          break;
       }
     },
-    [togglePlay, openPanel],
+    [togglePlay, toggleMenu],
   );
 
   const seekToFraction = useCallback((fraction: number) => {
@@ -227,21 +240,21 @@ export function usePlayerControls(args: Args): PlayerControls {
 
   const back = useCallback(() => {
     const { scrub: sc, osd: o, args: a } = latest.current;
-    if (a.panel.open) closePanel('origin');
+    if (a.panel.open) closeMenu();
     else if (sc.active()) sc.cancel();
     else if (a.pill.dismiss()) return;
     else if (o.visible) hideOsd();
     else a.leave();
-  }, [hideOsd, closePanel]);
+  }, [hideOsd, closeMenu]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = getPlatform().mapKey(e);
       if (!key || key === 'back') return;
       const { args: a, skip: s, scrub: sc, osd: o, focus: current } = latest.current;
-      if (a.panel.open) {
-        // The panel's own keys (arrows, OK) are left alone; the media keys act as ever, without
-        // bringing the overlay back over the panel.
+      if (isPopover(a.panel.open)) {
+        // The menu's own keys (arrows, OK) are left alone; the media keys act as ever, without
+        // touching the overlay.
         switch (key) {
           case 'playPause':
             e.preventDefault();
@@ -267,6 +280,9 @@ export function usePlayerControls(args: Args): PlayerControls {
         return;
       }
       e.preventDefault();
+      // The player owns these keys. A press that opens a menu must not also reach the menu's first
+      // row, which takes the focus a moment later: the navigation would count it as OK there.
+      e.stopImmediatePropagation();
       // Before the first frame nothing but Back (and the diagnostics) acts.
       if (!a.started) {
         if (key === 'blue') a.toggleDiagnostics();
@@ -305,7 +321,6 @@ export function usePlayerControls(args: Args): PlayerControls {
       // OK on a pill that holds the focus skips; any other key only opens the overlay.
       if (!wasVisible) {
         if (key === 'enter' && current === 'pill') a.pill.activate();
-        else if (key === 'down') openPanel('hidden');
         else openOsd();
         return;
       }
@@ -367,32 +382,53 @@ export function usePlayerControls(args: Args): PlayerControls {
           togglePlay();
         } else if (key === 'down') {
           setFocusState('playPause');
+        } else if (key === 'up') {
+          setFocusState('close');
         }
+        return;
+      }
+
+      // On Exit, top left: Down returns to the scrubber, Enter leaves; nothing else moves.
+      if (current === 'close') {
+        if (key === 'down') setFocusState('scrubber');
+        else if (key === 'enter') a.leave();
         return;
       }
 
       // On the skip pill, which stands right of the last button.
       if (current === 'pill') {
-        if (key === 'left') setFocusState(OSD_BUTTONS[OSD_BUTTONS.length - 1]!);
+        if (key === 'left') setFocusState(buttonRow(a.menus).at(-1)!);
         else if (key === 'up') setFocusState('scrubber');
         else if (key === 'enter') a.pill.activate();
         return;
       }
 
-      // On the buttons.
-      const index = OSD_BUTTONS.indexOf(current as OsdButton);
-      if (key === 'right' && index === OSD_BUTTONS.length - 1 && a.pill.shown) {
-        setFocusState('pill');
-      } else if (key === 'left') {
-        setFocusState(OSD_BUTTONS[Math.max(0, index - 1)]!);
-      } else if (key === 'right') {
-        setFocusState(OSD_BUTTONS[Math.min(OSD_BUTTONS.length - 1, index + 1)]!);
+      // On the button row: the transport buttons, then the menu buttons; the ends hold.
+      const row = buttonRow(a.menus);
+      const index = row.indexOf(current as OsdAction);
+      if (index < 0) {
+        // The button is gone (its menu left with a new stream): back to the scrubber.
+        setFocusState('scrubber');
+        return;
+      }
+      if (key === 'left' || key === 'right') {
+        const step = key === 'right' ? 1 : -1;
+        const target = row[index + step];
+        if (target === undefined) {
+          // Right of the last button: the skip pill when it shows, else the end holds.
+          if (key === 'right' && a.pill.shown) {
+            if (a.panel.open === current) a.panel.hide();
+            setFocusState('pill');
+          }
+          return;
+        }
+        // Leaving the button of an open Info closes it.
+        if (a.panel.open === current) a.panel.hide();
+        setFocusState(target);
       } else if (key === 'up') {
         setFocusState('scrubber');
-      } else if (key === 'down') {
-        openPanel('button');
       } else if (key === 'enter') {
-        action(current as OsdButton);
+        action(current as OsdAction);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -413,10 +449,10 @@ export function usePlayerControls(args: Args): PlayerControls {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [engine, openOsd, openPanel, startScrub, commitScrub, togglePlay, action, clearHoldTimer]);
+  }, [engine, openOsd, startScrub, commitScrub, togglePlay, action, clearHoldTimer]);
 
   const pointerMoved = useCallback(() => {
-    // The panel is open: the overlay stays away until it closes.
+    // A menu is open: the overlay stays up on its own until it closes.
     if (!latest.current.args.started || latest.current.args.panel.open) return;
     if (visibleRef.current) latest.current.osd.poke();
     else openOsd();
@@ -424,9 +460,14 @@ export function usePlayerControls(args: Args): PlayerControls {
 
   const videoClicked = useCallback(() => {
     const { started: playing, panel } = latest.current.args;
-    if (!playing || panel.open || visibleRef.current) return;
+    // A click outside the menu closes it, and is not also a play or pause.
+    if (panel.open) {
+      closeMenu();
+      return;
+    }
+    if (!playing || visibleRef.current) return;
     togglePlay();
-  }, [togglePlay]);
+  }, [togglePlay, closeMenu]);
 
   return {
     visible: osd.visible,
@@ -438,7 +479,8 @@ export function usePlayerControls(args: Args): PlayerControls {
     action,
     seekToFraction,
     back,
-    closePanel,
+    closeMenu,
+    menuSide,
     pointerMoved,
     videoClicked,
   };

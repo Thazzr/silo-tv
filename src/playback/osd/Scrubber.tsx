@@ -80,9 +80,10 @@ export function Scrubber({
         />
         {bands.map((band) => (
           <div
-            key={`${band.start}-${band.end}`}
+            key={`${band.kind}-${band.start}-${band.end}`}
             className="player-scrubber-band"
             data-testid="player-scrubber-band"
+            data-kind={band.kind}
             style={{ left: `${band.start * 100}%`, width: `${(band.end - band.start) * 100}%` }}
           />
         ))}

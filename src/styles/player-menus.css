@@ -1,0 +1,163 @@
+/* The player's menus. A menu is a popover above its button on the overlay's button row (settings,
+   chapters; audio and subtitles later); Info is a column on the left. Everything is flat: no blur
+   and no shadow, so the TV only draws a plain layer over the playing video. Rows and the focus
+   look follow the app's menus (.menu-item). */
+
+/* A menu button's anchor: the popover stands above the button, its right edge on the button's, so
+   it stays inside the safe area (the last button ends at the safe margin). */
+.player-menu-anchor {
+  position: relative;
+}
+
+.player-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 16px);
+  z-index: 2;
+}
+
+/* At most what fits between the top safe margin and the button row (88 px buttons + 16 px gap);
+   a longer list scrolls inside. */
+.player-menu {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 640px;
+  max-width: calc(100vw - 2 * var(--safe-x));
+  max-height: calc(100vh - 2 * var(--safe-y) - 88px - 16px);
+  padding: 16px;
+  background: var(--surface-raised);
+  border: 2px solid var(--hairline);
+  border-radius: 20px;
+}
+
+.player-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.player-menu-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.player-menu-section + .player-menu-section {
+  margin-top: 16px;
+}
+
+/* Section headings: small, letter-spaced capitals. */
+.player-menu-heading {
+  margin: 8px 16px 8px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* A row is at least 75 px tall with 26 px text; the focus fills it and rings it. */
+.player-menu-row {
+  min-height: var(--target);
+  margin-bottom: 4px;
+  border: 2px solid transparent;
+}
+
+.player-menu-row:focus,
+.player-menu-row:hover {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-ring);
+}
+
+.player-menu-row:focus .menu-value,
+.player-menu-row:hover .menu-value {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+/* The chapter that plays is washed lighter. */
+.player-menu-row[data-current='true'] {
+  background: var(--chrome-selected);
+}
+
+.player-menu-row[data-current='true']:focus,
+.player-menu-row[data-current='true']:hover {
+  background: var(--focus-fill);
+}
+
+.player-menu-row .menu-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+/* The slot of the check mark, so the bitrates line up whether or not a row is checked. */
+.player-menu-check {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+}
+
+.player-menu-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-menu-note {
+  margin: 8px 16px 0;
+  font-size: var(--fs-small);
+  color: var(--warning);
+}
+
+/* Playback info: a column on the left, below Exit and above the scrubber. Nothing to focus. */
+.player-info {
+  position: absolute;
+  top: calc(var(--safe-y) + var(--target) + 24px);
+  bottom: calc(var(--safe-y) + 200px);
+  left: var(--safe-x);
+  box-sizing: border-box;
+  width: 560px;
+  padding: 20px 24px;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--surface-raised);
+  border: 2px solid var(--hairline);
+  border-radius: 20px;
+}
+
+.player-info-title {
+  margin: 0 0 4px 16px;
+  font-size: var(--fs-card-title);
+  font-weight: 700;
+}
+
+.player-info-facts {
+  margin: 0;
+}
+
+.player-info-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 22px;
+}
+
+.player-info-fact dt {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.player-info-fact dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

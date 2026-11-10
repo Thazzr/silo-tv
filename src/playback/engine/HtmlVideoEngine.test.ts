@@ -83,7 +83,16 @@ describe('HtmlVideoEngine', () => {
 
   it('forwards the element events until the subscription ends', () => {
     const { el, engine } = setup();
-    const names = ['loadedmetadata', 'timeupdate', 'playing', 'pause', 'waiting', 'ended', 'error'];
+    const names = [
+      'loadedmetadata',
+      'loadeddata',
+      'timeupdate',
+      'playing',
+      'pause',
+      'waiting',
+      'ended',
+      'error',
+    ];
     const seen: string[] = [];
     const offs = names.map((name) =>
       engine.on(name as Parameters<typeof engine.on>[0], () => seen.push(name)),

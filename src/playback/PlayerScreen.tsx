@@ -7,10 +7,14 @@ import { useProfileSetting, useProfileSettings } from '../features/settings/prof
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
-import { OptionsPanel } from './options/OptionsPanel';
-import { usePanelState, type PanelState } from './options/usePanelState';
+import { ChaptersMenu } from './menus/ChaptersMenu';
+import { currentChapter } from './menus/info';
+import { InfoColumn } from './menus/InfoColumn';
+import { qualityLabel, qualityMenu } from './menus/qualityMenu';
+import { SettingsMenu, settingsRowKeys } from './menus/SettingsMenu';
+import { isPopover, MENU_ORDER, usePanelState, type PanelState } from './menus/usePanelState';
 import { PlayerOsd } from './osd/PlayerOsd';
-import { bufferedUntil, headingLines, SPINNER_DELAY_MS, SPINNER_MIN_MS } from './osd/timing';
+import { bufferedUntil, SPINNER_DELAY_MS, SPINNER_MIN_MS, titleBlock } from './osd/timing';
 import { useDelayedFlag } from './osd/useDelayedFlag';
 import { usePlayerControls } from './osd/usePlayerControls';
 import { useTrickplay } from './osd/useTrickplay';
@@ -53,9 +57,15 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   const t = useT();
   const { session: auth } = useSilo();
   const panel = usePanelState();
-  // The player has its own keys; the wheel would only press Up and Down there. The options panel
-  // is a list like any other, so the wheel moves its focus while it is open.
-  useEffect(() => (panel.open ? undefined : suspendWheel()), [panel.open]);
+  // The session has shown its first frame. It lives here, above the playing view: a reload of the
+  // stream (a replan, a seek that needs a new stream) mounts a new view, and the keys must not
+  // go dead until a frame plays again (a paused reload never plays one).
+  const [started, setStarted] = useState(false);
+  const markStarted = useCallback(() => setStarted(true), []);
+  // The player has its own keys; the wheel would only press Up and Down there. An open menu is a
+  // list like any other, so the wheel moves its focus while it is open.
+  const popoverOpen = isPopover(panel.open);
+  useEffect(() => (popoverOpen ? undefined : suspendWheel()), [popoverOpen]);
   // A start with no quality of its own sends the profile's preferred one, once it is known.
   const profileSettings = useProfileSettings();
   const preferredQuality = profileSettings.values['playback.preferred_quality'];
@@ -127,6 +137,8 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       quality={state.quality}
       activeQualityFeature={state.activeQualityFeature}
       panel={panel}
+      started={started}
+      onStarted={markStarted}
       contentId={contentId}
       title={title}
       token={token}
@@ -147,6 +159,8 @@ function PlayingView({
   quality,
   activeQualityFeature,
   panel,
+  started,
+  onStarted,
   contentId,
   title,
   token,
@@ -163,6 +177,8 @@ function PlayingView({
   quality: string;
   activeQualityFeature: boolean;
   panel: PanelState;
+  started: boolean;
+  onStarted(): void;
   contentId: string;
   title: string;
   token: string | undefined;
@@ -187,7 +203,6 @@ function PlayingView({
   const engineRef = useRef<PlayerEngine | null>(null);
   // `showing`: a frame is on screen now; `started`: the first frame has played.
   const [showing, setShowing] = useState(false);
-  const [started, setStarted] = useState(false);
   const [paused, setPaused] = useState(!autoplay);
   const [position, setPosition] = useState(0);
   const [bufferedEnd, setBufferedEnd] = useState(0);
@@ -196,6 +211,29 @@ function PlayingView({
   const skipForward = useProfileSetting('player.video_skip_forward_seconds').value;
   const settings = useProfileSettings();
   const total = plan.source.duration_seconds;
+  const popoverOpen = isPopover(panel.open);
+
+  // The menu buttons the playing file has something for, in the order of the row. Audio and
+  // Subtitles take their places here with their menus.
+  const qualities = useMemo(
+    () => qualityMenu(plan, quality, activeQualityFeature),
+    [plan, quality, activeQualityFeature],
+  );
+  const hasSettings = settingsRowKeys(qualities, media.isEpisode).length > 0;
+  const hasChapters = previews.chapters.length > 0;
+  const menus = useMemo(
+    () =>
+      MENU_ORDER.filter(
+        (id) =>
+          id === 'info' || (id === 'chapters' && hasChapters) || (id === 'settings' && hasSettings),
+      ),
+    [hasChapters, hasSettings],
+  );
+  // A menu the new stream has nothing for (its chapters or choices are gone) closes.
+  const hidePanel = panel.hide;
+  useEffect(() => {
+    if (panel.open && !menus.includes(panel.open)) hidePanel();
+  }, [panel.open, menus, hidePanel]);
 
   // The element is rendered here; everything that controls playback goes through its engine.
   const setRef = useCallback(
@@ -253,6 +291,7 @@ function PlayingView({
     toggleDiagnostics: () => setDiagnostics((on) => !on),
     skipBackSeconds: skipBack,
     skipForwardSeconds: skipForward,
+    menus,
     panel,
     pill: {
       shown: skip.pill !== null,
@@ -272,9 +311,19 @@ function PlayingView({
       engine.on('loadedmetadata', onLoadedMetadata),
       engine.on('playing', () => {
         setShowing(true);
-        setStarted(true);
+        onStarted();
         setPaused(false);
         onPlaying();
+      }),
+      // A paused load (no autoplay) never plays a frame: its first decoded one counts as shown,
+      // so there is no spinner and the keys work.
+      engine.on('loadeddata', () => {
+        // From here the controller's reading is the attempt's start, so the time and the scrubber
+        // show where this load begins instead of 0:00 until playback resumes.
+        setPosition(reading()?.position ?? 0);
+        if (autoplay) return;
+        setShowing(true);
+        onStarted();
       }),
       engine.on('waiting', () => setShowing(false)),
       engine.on('pause', () => {
@@ -297,12 +346,60 @@ function PlayingView({
     ];
     engine.setSource(mediaUrl);
     return () => off.forEach((unsubscribe) => unsubscribe());
-  }, [engine, mediaUrl, reading, onLoadedMetadata, onPlaying, onPause, onEnded, onMediaError]);
+  }, [
+    engine,
+    mediaUrl,
+    autoplay,
+    reading,
+    onStarted,
+    onLoadedMetadata,
+    onPlaying,
+    onPause,
+    onEnded,
+    onMediaError,
+  ]);
 
   // Read once per file, only when the server and this file's version both offer previews.
   const trickplay = useTrickplay(contentId, previews.fileId, previews.trickplay);
   const cue = useDelayedFlag(buffering, SPINNER_DELAY_MS, SPINNER_MIN_MS);
-  const lines = headingLines(heading, title);
+  const block = titleBlock(heading, title, media.year);
+  const qualityInUse = qualities ? qualityLabel(qualities, quality) : null;
+  const qualityText = qualityInUse
+    ? qualityInUse.kind === 'auto'
+      ? t('player.menu.quality.auto')
+      : qualityInUse.name
+    : null;
+
+  /** The popover of the open menu, drawn above its button by the overlay. */
+  let popover = null;
+  if (panel.open === 'settings') {
+    popover = (
+      <SettingsMenu
+        menu={qualities}
+        preference={quality}
+        episode={media.isEpisode}
+        qualityChange={playback.qualityChange}
+        remember={panel.remember}
+        recall={panel.recall}
+        onSide={controls.menuSide}
+      />
+    );
+  } else if (panel.open === 'chapters') {
+    popover = (
+      <ChaptersMenu
+        chapters={previews.chapters}
+        current={currentChapter(previews.chapters, position)}
+        remember={panel.remember}
+        recall={panel.recall}
+        onSide={controls.menuSide}
+        onChoose={(start) => {
+          // The jump shows: the menu closes and the overlay stays on the Chapters button.
+          void seekTo(start);
+          controls.closeMenu();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="player" data-testid="player" onMouseMove={controls.pointerMoved}>
@@ -314,20 +411,18 @@ function PlayingView({
         onClick={controls.videoClicked}
       />
       {cue ? (
-        <p
-          className={`player-cue loading${panel.open ? ' player-cue-aside' : ''}`}
-          role="status"
-          data-testid="player-cue"
-        >
+        <p className="player-cue loading" role="status" data-testid="player-cue">
           <span className="spinner" aria-hidden="true" />
           {t('player.loading')}
         </p>
       ) : null}
       <PlayerSubtitles plan={plan} position={position} lifted={controls.visible} />
+      {/* Before the overlay, so the scrub preview card stands above it. */}
+      {panel.open === 'info' ? <InfoColumn plan={plan} media={media} video={video} /> : null}
       <PlayerOsd
         visible={controls.visible}
-        series={lines.series}
-        title={lines.title}
+        title={block.title}
+        detail={block.detail}
         position={controls.shownPosition}
         duration={duration}
         bufferedEnd={bufferedEnd}
@@ -340,30 +435,15 @@ function PlayingView({
         chapters={previews.chapters}
         bands={bands}
         previews={trickplay}
+        menus={menus}
+        openMenu={panel.open}
+        qualityText={qualityText}
+        popover={popover}
         onFocus={controls.setFocus}
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
       />
-      {panel.open ? (
-        <OptionsPanel
-          panel={panel}
-          plan={plan}
-          media={media}
-          heading={heading}
-          title={title}
-          chapters={previews.chapters}
-          position={position}
-          quality={quality}
-          activeQualityFeature={activeQualityFeature}
-          qualityChange={playback.qualityChange}
-          onChapter={(start) => {
-            // The jump shows: the panel gives way to the overlay on the scrubber.
-            void seekTo(start);
-            controls.closePanel('scrubber');
-          }}
-        />
-      ) : null}
-      {skip.pill && !panel.open ? (
+      {skip.pill && !popoverOpen ? (
         <SkipPillButton
           pill={skip.pill}
           focused={controls.focus === 'pill'}

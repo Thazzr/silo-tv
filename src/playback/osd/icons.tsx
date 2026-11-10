@@ -54,18 +54,37 @@ export const CheckIcon = () => (
   </svg>
 );
 
-/** Three sliders: the options panel. */
-export const OptionsIcon = () => (
-  <Icon>
+/** A cog with eight teeth and a hole: the settings menu. */
+export const GearIcon = () => (
+  <Icon size={40}>
     <path
-      d="M6 12h36M6 24h36M6 36h36"
+      fillRule="evenodd"
+      d="M20.6 9.4 L21.1 3.7 L26.9 3.7 L27.4 9.4 L31.9 11.3 L36.3 7.6 L40.4 11.7 L36.7 16.1 L38.6 20.6 L44.3 21.1 L44.3 26.9 L38.6 27.4 L36.7 31.9 L40.4 36.3 L36.3 40.4 L31.9 36.7 L27.4 38.6 L26.9 44.3 L21.1 44.3 L20.6 38.6 L16.1 36.7 L11.7 40.4 L7.6 36.3 L11.3 31.9 L9.4 27.4 L3.7 26.9 L3.7 21.1 L9.4 20.6 L11.3 16.1 L7.6 11.7 L11.7 7.6 L16.1 11.3Z M31 24a7 7 0 1 0-14 0a7 7 0 1 0 14 0Z"
+    />
+  </Icon>
+);
+
+/** An "i" in a circle: the playback info. */
+export const InfoIcon = () => (
+  <Icon size={40}>
+    <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" />
+    <rect x="21.5" y="21" width="5" height="14" rx="2" />
+    <circle cx="24" cy="14.5" r="3" />
+  </Icon>
+);
+
+/** A list with bullets: the chapters. */
+export const ChaptersIcon = () => (
+  <Icon size={40}>
+    <path
+      d="M18 12h24M18 24h24M18 36h24"
       stroke="currentColor"
       strokeWidth="4"
       strokeLinecap="round"
     />
-    <circle cx="16" cy="12" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
-    <circle cx="32" cy="24" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
-    <circle cx="20" cy="36" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
+    <circle cx="8" cy="12" r="3" />
+    <circle cx="8" cy="24" r="3" />
+    <circle cx="8" cy="36" r="3" />
   </Icon>
 );
 

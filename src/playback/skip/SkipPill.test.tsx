@@ -157,9 +157,8 @@ describe('the skip pill in ask mode', () => {
     tap(K.up); // opens the overlay on the scrubber
     tap(K.down); // play/pause
     tap(K.right); // forward
-    tap(K.right); // options
-    tap(K.right); // close
-    expect(document.querySelector('[data-focus-key="close"]')).toHaveAttribute(
+    tap(K.right); // info, the last button
+    expect(document.querySelector('[data-focus-key="info"]')).toHaveAttribute(
       'data-focused',
       'true',
     );
@@ -168,7 +167,7 @@ describe('the skip pill in ask mode', () => {
     expect(pill()).toHaveFocus();
     tap(K.left);
     expect(pillFocused()).toBe(false);
-    expect(document.querySelector('[data-focus-key="close"]')).toHaveAttribute(
+    expect(document.querySelector('[data-focus-key="info"]')).toHaveAttribute(
       'data-focused',
       'true',
     );
@@ -191,7 +190,7 @@ describe('the skip pill in ask mode', () => {
     tap(K.right);
     tap(K.right);
     tap(K.right);
-    expect(document.querySelector('[data-focus-key="close"]')).toHaveAttribute(
+    expect(document.querySelector('[data-focus-key="info"]')).toHaveAttribute(
       'data-focused',
       'true',
     );
@@ -433,7 +432,7 @@ describe('where the segments come from', () => {
 });
 
 describe('scrubber bands', () => {
-  it('draw intro, recap and credits at their fractions of the track, not the preview', async () => {
+  it('draw every kind, previews included, at their fractions of the track', async () => {
     await mount({
       list: [
         { kind: 'intro', start_seconds: 540, end_seconds: 1080 },
@@ -443,11 +442,19 @@ describe('scrubber bands', () => {
       ],
     });
     const bands = screen.getAllByTestId('player-scrubber-band');
-    expect(bands.map((b) => [b.style.left, b.style.width])).toEqual([
+    // One band per kind, previews included, each carrying its kind for its colour.
+    expect(bands.map((b) => b.getAttribute('data-kind'))).toEqual([
+      'recap',
+      'intro',
+      'preview',
+      'credits',
+    ]);
+    expect(bands.map((b) => [b.style.left, b.style.width]).filter((_, i) => i !== 2)).toEqual([
       ['0%', '5%'],
       ['10%', '10%'],
       ['90%', '10%'],
     ]);
+    expect(Number.parseFloat(bands[2]!.style.left)).toBeCloseTo((2000 / 5400) * 100, 2);
   });
 });
 

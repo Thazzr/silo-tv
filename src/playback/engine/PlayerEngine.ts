@@ -14,7 +14,14 @@ export interface EngineError {
 }
 
 export type EngineEvent =
-  'loadedmetadata' | 'timeupdate' | 'playing' | 'pause' | 'waiting' | 'ended' | 'error';
+  | 'loadedmetadata'
+  | 'loadeddata'
+  | 'timeupdate'
+  | 'playing'
+  | 'pause'
+  | 'waiting'
+  | 'ended'
+  | 'error';
 
 export interface PlayerEngine {
   /** Loads another source; playback starts by itself where the host allows autoplay. */

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { components } from '../../api/generated/schema';
-import { AUTO, changesQuality, isSourceAlias, qualityMenu } from './qualityMenu';
+import {
+  AUTO,
+  changesQuality,
+  formatBitrate,
+  isSourceAlias,
+  qualityLabel,
+  qualityMenu,
+} from './qualityMenu';
 
 type Rung = components['schemas']['AvailableQualityV3'];
 
@@ -122,5 +129,47 @@ describe('whether a pick changes anything', () => {
   it('changes to Auto from a plain resolution the profile prefers, which no row checks', () => {
     const m = menu('2160p')!;
     expect(changesQuality(m, '2160p', AUTO)).toBe(true);
+  });
+});
+
+describe('the bitrate of a row', () => {
+  it('is carried from the rung when the server names one', () => {
+    const rows = menu('auto', {
+      available: [rung('1080p', { bitrate_kbps: 8000 }), rung('720p')],
+    })?.rows;
+    expect(rows).toEqual([
+      { label: '1080p', name: '1080p', bitrateKbps: 8000 },
+      { label: '720p', name: '720p' },
+    ]);
+  });
+});
+
+describe('formatBitrate', () => {
+  it.each([
+    [3000, '.', '3 Mbps'],
+    [3500, '.', '3.5 Mbps'],
+    [3500, ',', '3,5 Mbps'],
+    [800, '.', '800 kbps'],
+    [999, '.', '999 kbps'],
+    [1000, '.', '1 Mbps'],
+    [0, '.', null],
+    [-5, '.', null],
+    [undefined, '.', null],
+  ])('%s kbps is %s', (kbps, decimal, text) => {
+    expect(formatBitrate(kbps, decimal)).toBe(text);
+  });
+});
+
+describe('qualityLabel', () => {
+  it('is Auto while Auto is checked', () => {
+    expect(qualityLabel(menu('auto')!, 'auto')).toEqual({ kind: 'auto' });
+  });
+
+  it("is the checked row's display name", () => {
+    expect(qualityLabel(menu('1080p')!, '1080p')).toEqual({ kind: 'name', name: '1080p (8 Mbps)' });
+  });
+
+  it("is the preference's own name when no row is checked", () => {
+    expect(qualityLabel(menu('2160p')!, '2160p')).toEqual({ kind: 'name', name: '2160p' });
   });
 });

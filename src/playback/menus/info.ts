@@ -1,7 +1,7 @@
-// What the Info tab says about the title and the stream, as pure functions. Nothing here reads or
+// What the Info column says about the title and the stream, as pure functions. Nothing here reads or
 // returns a path, a URL or a token.
 import type { Chapter } from '../osd/previewMath';
-import type { MediaFacts, Plan } from '../usePlaybackSession';
+import type { Heading, MediaFacts, Plan } from '../usePlaybackSession';
 
 export type Route = 'direct' | 'remux' | 'transcode';
 
@@ -86,13 +86,38 @@ export function currentChapter(chapters: readonly Chapter[], position: number): 
   return current;
 }
 
-/** The video line: codec, resolution and HDR, as far as they are known. */
-export function videoText(plan: Plan, media: MediaFacts): string | null {
+/** The video codec, upper-case: the effective recipe's, else the file's. Null when unknown. */
+export function videoCodecText(plan: Plan, media: MediaFacts): string | null {
   const codec = plan.effective_recipe.video_codec ?? media.videoCodec ?? plan.source.video_codec;
-  const text = present([
-    codec ? codec.toUpperCase() : null,
-    media.resolution,
-    media.hdr ? 'HDR' : null,
-  ]);
-  return text.length > 0 ? text.join(' · ') : null;
+  return codec ? codec.toUpperCase() : null;
+}
+
+/** The episode's numbers as "S1 · E2"; null for anything else. */
+export function episodeCode(heading: Heading | null): string | null {
+  const parts: string[] = [];
+  if (heading?.seasonNumber !== undefined) parts.push(`S${heading.seasonNumber}`);
+  if (heading?.episodeNumber !== undefined) parts.push(`E${heading.episodeNumber}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** The stream's kind: a direct play is one progressive file, everything else is HLS. */
+export function streamType(route: Route | null): 'progressive' | 'hls' {
+  return route === 'direct' ? 'progressive' : 'hls';
+}
+
+/**
+ * The source file as far as the plan and the watch data know it: container, resolution and
+ * dynamic range. Null entries are left out by the caller.
+ */
+export function sourceFacts(
+  plan: Plan,
+  media: MediaFacts,
+): { container: string | null; resolution: string | null; hdr: boolean } {
+  const container = plan.source.container?.trim();
+  const height = plan.source.height;
+  return {
+    container: container ? container.toUpperCase() : null,
+    resolution: media.resolution ?? (height ? `${height}p` : null),
+    hdr: media.hdr,
+  };
 }

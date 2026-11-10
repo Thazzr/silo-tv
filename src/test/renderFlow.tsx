@@ -33,13 +33,13 @@ export function newQueryClient(): QueryClient {
  */
 export function renderWithSilo(
   ui: ReactNode,
-  options: { session?: Session; queryClient?: QueryClient } = {},
+  options: { session?: Session; queryClient?: QueryClient; lang?: 'de' | 'en' } = {},
 ) {
   const session = options.session ?? new Session(memoryStorage());
   const queryClient = options.queryClient ?? newQueryClient();
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <I18nProvider lang="en">
+      <I18nProvider lang={options.lang ?? 'en'}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
           <Navigator initial={null} renderScreen={() => ui} />
         </SiloProvider>

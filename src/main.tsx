@@ -14,7 +14,7 @@ import './styles/library.css';
 import './styles/person.css';
 import './styles/boxset.css';
 import './styles/search.css';
-import './styles/options.css';
+import './styles/player-menus.css';
 
 // Before the first render: focusable elements register with the service as they mount.
 initNavigation();

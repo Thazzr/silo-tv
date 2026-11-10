@@ -473,34 +473,56 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-.player-osd-series {
-  margin: 0;
-  font-size: var(--fs-small);
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.player-osd-title {
-  margin: 4px 0 0;
-  font-size: var(--fs-row-title);
-  font-weight: 600;
-  color: var(--text);
-}
-
+/* The preview card stands above the scrubber; only its transform moves, set from the script. */
 .player-osd-scrubwrap {
   position: relative;
+}
+
+/* One row under the scrubber: the title block on the left (it gives way with an ellipsis, so it
+   never pushes the centre), the transport buttons in the middle, the menu buttons on the right. */
+.player-osd-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  column-gap: 32px;
+  align-items: center;
   margin-top: 24px;
 }
 
-/* The preview card stands above the scrubber; only its transform moves, set from the script. */
-.player-osd-series,
-.player-osd-title {
-  transition: opacity var(--transition);
+.player-osd-titles {
+  min-width: 0;
 }
 
-.player-osd-series[data-covered='true'],
-.player-osd-title[data-covered='true'] {
-  opacity: 0;
+.player-osd-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs-row-title);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-osd-meta {
+  display: flex;
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(237, 237, 237, 0.85);
+  white-space: nowrap;
+}
+
+/* The detail (episode title or year) shrinks with an ellipsis; the time never does. */
+.player-osd-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-osd-clock {
+  flex-shrink: 0;
+  white-space: pre;
 }
 
 .player-preview {
@@ -624,25 +646,65 @@ h3 {
   transform: scale(1.75);
 }
 
-.player-osd-times {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  font-size: 22px;
-  color: rgba(237, 237, 237, 0.85);
-}
-
-.player-osd-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 16px;
-}
-
 .player-osd-group {
   display: flex;
   align-items: center;
   gap: 24px;
+}
+
+.player-osd-menus {
+  justify-content: flex-end;
+}
+
+/* Exit, top left, with its own soft gradient behind it (no blur). It shows and hides with the
+   overlay, by opacity only. */
+.player-osd-top {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  padding: var(--safe-y) var(--safe-x) 120px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 100%);
+  opacity: 1;
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 0s;
+  will-change: opacity;
+}
+
+.player-osd-top[data-visible='false'] {
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 200ms ease-out,
+    visibility 0s linear 200ms;
+}
+
+.player-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  height: var(--target);
+  padding: 0 32px 0 24px;
+  font: inherit;
+  font-size: var(--fs-tab);
+  font-weight: 600;
+  color: var(--text);
+  pointer-events: auto;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid var(--chrome-border);
+  border-radius: calc(var(--target) / 2);
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-exit svg {
+  width: 32px;
+  height: 32px;
 }
 
 .player-btn {
@@ -663,22 +725,58 @@ h3 {
   transition: transform var(--transition);
 }
 
+/* A button whose menu is open: a ring and a lighter wash, never the white fill, which only the
+   focused element carries (the focus is in the menu then). It comes before the focus rule, so
+   Info (open and focused at once) still shows the focus. */
+.player-btn[data-open='true'] {
+  background: var(--chrome-selected);
+  border-color: var(--focus-ring);
+}
+
 /* Focus (the pointer moves it too): the light fill with a dark icon, as on every button of the
    app, and a little larger. The DOM focus and data-focused always agree (PlayerOsd). */
 .player-btn[data-focused='true'],
-.player-btn:hover {
+.player-btn:hover,
+.player-exit[data-focused='true'],
+.player-exit:hover {
   color: var(--focus-content);
   background: var(--focus-fill);
   border-color: var(--focus-fill);
   transform: scale(1.1);
 }
 
-/* Intro, recap and credits: a lighter stretch of the track, under the progress. */
+.player-btn-wide {
+  width: auto;
+  gap: 12px;
+  padding: 0 32px 0 24px;
+  font-size: var(--fs-tab);
+  font-weight: 600;
+  border-radius: 44px;
+}
+
+/* Intro, recap, credits and preview: a coloured stretch of the track (as in Silo's web player),
+   under the progress, so a played stretch may hide it. The buffer is plain light grey. */
 .player-scrubber-band {
   position: absolute;
   top: 0;
   bottom: 0;
   background: rgba(255, 255, 255, 0.35);
+}
+
+.player-scrubber-band[data-kind='intro'] {
+  background: rgba(125, 211, 252, 0.45);
+}
+
+.player-scrubber-band[data-kind='recap'] {
+  background: rgba(196, 181, 253, 0.45);
+}
+
+.player-scrubber-band[data-kind='credits'] {
+  background: rgba(252, 211, 77, 0.45);
+}
+
+.player-scrubber-band[data-kind='preview'] {
+  background: rgba(110, 231, 183, 0.45);
 }
 
 /* The skip pill: bottom right inside the safe area; above the controls while they are open. The

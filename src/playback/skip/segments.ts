@@ -57,16 +57,17 @@ export function runsToEnd(segment: Segment, duration: number): boolean {
 }
 
 export interface Band {
+  kind: SegmentKind;
   start: number;
   end: number;
 }
 
-/** The ranges drawn on the scrubber track, as fractions (0-1): intro, recap and credits. */
+/** The ranges drawn on the scrubber track, as fractions (0-1): intro, recap, credits and preview. */
 export function bandFractions(segments: readonly Segment[], duration: number): Band[] {
   if (!(duration > 0)) return [];
   return segments
-    .filter((s) => s.kind !== 'preview')
     .map((s) => ({
+      kind: s.kind,
       start: Math.max(0, Math.min(1, s.start / duration)),
       end: Math.max(0, Math.min(1, s.end / duration)),
     }))

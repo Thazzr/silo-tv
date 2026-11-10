@@ -12,12 +12,13 @@ export interface OsdVisibility {
 
 /**
  * The overlay's visibility: it hides `OSD_HIDE_MS` after the last activity, but never while
- * `holdOpen` is true (paused, buffering, seeking). When the hold ends the countdown starts anew.
+ * `holdOpen` is true (paused, buffering, seeking, a menu open). When the hold ends the countdown
+ * starts anew. `initiallyVisible` is for a player that reloads its stream while a menu is open.
  */
-export function useOsdVisibility(holdOpen: boolean): OsdVisibility {
-  const [visible, setVisible] = useState(false);
+export function useOsdVisibility(holdOpen: boolean, initiallyVisible = false): OsdVisibility {
+  const [visible, setVisible] = useState(initiallyVisible);
   const [activity, setActivity] = useState(0);
-  const visibleRef = useRef(false);
+  const visibleRef = useRef(initiallyVisible);
 
   const hide = useCallback(() => {
     visibleRef.current = false;

@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { playbackPlan } from '../../test/playbackFixtures';
 import type { MediaFacts } from '../usePlaybackSession';
-import { audioText, channelText, currentChapter, routeOf, subtitleText, videoText } from './info';
+import {
+  audioText,
+  channelText,
+  currentChapter,
+  episodeCode,
+  routeOf,
+  sourceFacts,
+  streamType,
+  subtitleText,
+  videoCodecText,
+} from './info';
 
 const media = (overrides: Partial<MediaFacts> = {}): MediaFacts => ({
   fileId: 'file-1',
@@ -138,11 +148,68 @@ describe('subtitleText', () => {
   });
 });
 
-describe('videoText', () => {
-  it('joins codec, resolution and HDR as far as they are known', () => {
+describe('videoCodecText', () => {
+  it('is the codec in capitals, from the recipe, else the media facts, else the source', () => {
     const plan = playbackPlan();
-    expect(videoText(plan, media({ resolution: '2160p', hdr: true }))).toBe('H264 · 2160p · HDR');
-    expect(videoText(plan, media())).toBe('H264');
+    expect(videoCodecText(plan, media())).toBe('H264');
+    const noRecipe = { ...plan, effective_recipe: {} };
+    expect(videoCodecText(noRecipe, media({ videoCodec: 'hevc' }))).toBe('HEVC');
+    expect(videoCodecText(noRecipe, media())).toBe('H264');
+    expect(
+      videoCodecText(
+        { ...plan, effective_recipe: { ...plan.effective_recipe, video_codec: 'av1' } },
+        media(),
+      ),
+    ).toBe('AV1');
+    expect(
+      videoCodecText(
+        { ...plan, effective_recipe: {}, source: { ...plan.source, video_codec: undefined } },
+        media(),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('episodeCode', () => {
+  it('words the numbers as "S1 · E2", and is null without any', () => {
+    expect(episodeCode({ title: 'x', seasonNumber: 1, episodeNumber: 2 })).toBe('S1 · E2');
+    expect(episodeCode({ title: 'x', episodeNumber: 2 })).toBe('E2');
+    // Specials are season 0 and episode 0: no truthiness check may drop them.
+    expect(episodeCode({ title: 'x', seasonNumber: 0, episodeNumber: 0 })).toBe('S0 · E0');
+    expect(episodeCode({ title: 'x', seasonNumber: 0 })).toBe('S0');
+    expect(episodeCode({ title: 'x' })).toBeNull();
+    expect(episodeCode(null)).toBeNull();
+  });
+});
+
+describe('streamType', () => {
+  it('is progressive for a direct play and HLS for everything else', () => {
+    expect(streamType('direct')).toBe('progressive');
+    expect(streamType('remux')).toBe('hls');
+    expect(streamType('transcode')).toBe('hls');
+    expect(streamType(null)).toBe('hls');
+  });
+});
+
+describe('sourceFacts', () => {
+  it('names the container, the resolution and the dynamic range as far as known', () => {
+    const plan = playbackPlan();
+    expect(sourceFacts(plan, media({ resolution: '2160p', hdr: true }))).toEqual({
+      container: 'MP4',
+      resolution: '2160p',
+      hdr: true,
+    });
+    // The watch data's resolution wins over the plan's height.
+    const tall = { ...plan, source: { ...plan.source, height: 720 } };
+    expect(sourceFacts(tall, media({ resolution: '1080p' })).resolution).toBe('1080p');
+    expect(sourceFacts(tall, media()).resolution).toBe('720p');
+    // The container is trimmed, and a blank one is unknown.
+    const padded = { ...plan, source: { ...plan.source, container: '  mkv ' } };
+    expect(sourceFacts(padded, media()).container).toBe('MKV');
+    const blank = { ...plan, source: { ...plan.source, container: '   ' } };
+    expect(sourceFacts(blank, media()).container).toBeNull();
+    const bare = { ...plan, source: { ...plan.source, container: undefined, height: 720 } };
+    expect(sourceFacts(bare, media())).toEqual({ container: null, resolution: '720p', hdr: false });
   });
 });
 

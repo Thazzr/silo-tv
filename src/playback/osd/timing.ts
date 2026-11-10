@@ -1,5 +1,6 @@
 // The player controls' timings and the pure rules behind them, kept apart from React so each can
 // be tested on its own.
+import { episodeCode } from '../menus/info';
 import type { Heading } from '../usePlaybackSession';
 import type { TimeRange } from '../engine/PlayerEngine';
 
@@ -54,15 +55,19 @@ export function bufferedUntil(
   return range ? position + (range.end - engineTime) : position;
 }
 
-/** The overlay's two title lines: the series (or nothing) above the title; episodes carry numbers. */
-export function headingLines(
+/**
+ * The title block under the scrubber. `title` is the series for an episode, else the title.
+ * `detail` leads the small second line (the times follow it): "S1 · E2 — EPISODE TITLE" in capitals
+ * for an episode, the year for a movie; empty when there is nothing to say.
+ */
+export function titleBlock(
   heading: Heading | null,
   fallbackTitle: string,
-): { series: string | null; title: string } {
-  if (!heading) return { series: null, title: fallbackTitle };
-  const numbers: string[] = [];
-  if (heading.seasonNumber !== undefined) numbers.push(`S${heading.seasonNumber}`);
-  if (heading.episodeNumber !== undefined) numbers.push(`E${heading.episodeNumber}`);
-  const title = [...numbers, heading.title].join(' · ');
-  return { series: heading.seriesTitle ?? null, title };
+  year: number | undefined,
+): { title: string; detail: string } {
+  const when = year ? String(year) : '';
+  if (!heading?.seriesTitle) return { title: heading?.title ?? fallbackTitle, detail: when };
+  const code = episodeCode(heading);
+  const detail = [code, heading.title].filter(Boolean).join(' — ');
+  return { title: heading.seriesTitle, detail: detail.toUpperCase() };
 }

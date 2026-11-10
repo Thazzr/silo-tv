@@ -94,7 +94,7 @@ describe('runsToEnd', () => {
 });
 
 describe('bandFractions', () => {
-  it('maps intro, recap and credits to fractions of the track, not the preview', () => {
+  it('maps every kind to fractions of the track and carries the kind', () => {
     expect(
       bandFractions(
         [
@@ -106,9 +106,10 @@ describe('bandFractions', () => {
         5400,
       ),
     ).toEqual([
-      { start: 0, end: 0.1 },
-      { start: 0.1, end: 0.2 },
-      { start: 0.9, end: 1 },
+      { kind: 'recap', start: 0, end: 0.1 },
+      { kind: 'intro', start: 0.1, end: 0.2 },
+      { kind: 'preview', start: 2000 / 5400, end: 2100 / 5400 },
+      { kind: 'credits', start: 0.9, end: 1 },
     ]);
   });
 

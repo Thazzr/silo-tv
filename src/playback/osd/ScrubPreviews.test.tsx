@@ -254,20 +254,6 @@ describe('the preview card', () => {
     expect(card()).not.toBeInTheDocument();
   });
 
-  it('hides the series and title lines while the card shows, and brings them back after', async () => {
-    const { state } = await mount();
-    state.currentTime = 100;
-    tap(K.up);
-    const title = screen.getByRole('heading', { name: 'First Title' });
-    expect(title).toHaveAttribute('data-covered', 'false');
-    tap(K.right);
-    expect(card()).toBeInTheDocument();
-    expect(title).toHaveAttribute('data-covered', 'true');
-    advance(200);
-    expect(card()).not.toBeInTheDocument();
-    expect(title).toHaveAttribute('data-covered', 'false');
-  });
-
   it('is centred on the target and kept within the scrubber at both ends', async () => {
     await mount();
     tap(K.up);
