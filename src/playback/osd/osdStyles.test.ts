@@ -66,3 +66,58 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(rule('.player-preview')).toMatch(/rgba\(21, 23, 28, 0\.9[5-9]\)/);
   });
 });
+
+describe('options panel styles', () => {
+  const options = readFileSync('src/styles/options.css', 'utf-8');
+  const tokens = readFileSync('src/styles/tokens.css', 'utf-8');
+  const block = (selector: string) => {
+    const start = options.indexOf(`${selector} {`);
+    return start < 0 ? '' : options.slice(start, options.indexOf('}', start));
+  };
+
+  it('is flat: no blur, no backdrop filter, no shadow', () => {
+    expect(options).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+  });
+
+  it('is a solid column on the right edge, full height, inside the safe area', () => {
+    const panel = block('.player-options');
+    expect(panel).toContain('right: 0');
+    expect(panel).toContain('top: 0');
+    expect(panel).toContain('bottom: 0');
+    expect(panel).toContain('var(--safe-y)');
+    expect(panel).toContain('var(--safe-x)');
+    expect(panel).toContain('background: var(--surface-raised)');
+    expect(tokens).toMatch(/--surface-raised: #[0-9a-f]{6};/);
+  });
+
+  it('shows the focus of a row and of a tab as the white fill with a dark text', () => {
+    for (const selector of ['.player-options-row:focus', '.player-options-tab:focus']) {
+      expect(css + options).toContain(selector);
+    }
+    const row =
+      /\.player-options-row:focus,\s*\.player-options-row:hover \{([^}]*)\}/.exec(options)?.[1] ??
+      '';
+    expect(row).toContain('background: var(--focus-fill)');
+    expect(row).toContain('color: var(--focus-content)');
+    expect(row).toContain('var(--focus-ring)');
+    const tab =
+      /\.player-options-tab:focus,\s*\.player-options-tab:hover \{([^}]*)\}/.exec(options)?.[1] ??
+      '';
+    expect(tab).toContain('background: var(--focus-fill)');
+    expect(tab).toContain('transform: scale(');
+  });
+
+  it('is 760 px wide at the 1920 layout, and the loading cue centres in what it leaves free', () => {
+    expect(options).toMatch(/:root \{\s*--options-width: 760px;\s*\}/);
+    expect(block('.player-options')).toContain('width: var(--options-width)');
+    const cue = block('.player-cue.player-cue-aside');
+    expect(cue).toContain('left: calc((100% - var(--options-width)) / 2)');
+  });
+
+  it('keeps targets at least 75 px tall and text at least 20 px', () => {
+    expect(tokens).toContain('--target: 75px');
+    expect(block('.player-options-row')).toContain('min-height: var(--target)');
+    expect(block('.player-options-tab')).toContain('height: var(--target)');
+    expect(options).not.toMatch(/font-size: (1\d|[0-9])px/);
+  });
+});

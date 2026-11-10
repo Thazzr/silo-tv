@@ -19,6 +19,7 @@ import {
   until,
   watchDetail,
   watchUserData,
+  watchVersion,
 } from '../test/playbackFixtures';
 import { memoryStorage, testDevice } from '../test/renderFlow';
 import { setResumeRewind } from './resumeRewind';
@@ -28,6 +29,7 @@ import {
   clearInstallationCache,
   usePlaybackSession,
   type PlayerReading,
+  type ProfileQuality,
 } from './usePlaybackSession';
 
 const server = setupServer();
@@ -59,14 +61,18 @@ function signedIn() {
   return session;
 }
 
-function setup(intent?: StartIntent) {
+function setup(intent?: StartIntent, profile?: ProfileQuality) {
   const session = signedIn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
       {children}
     </SiloProvider>
   );
-  const hook = renderHook(() => usePlaybackSession('m1', intent), { wrapper });
+  const hook = renderHook(
+    (props: { profile?: ProfileQuality }) =>
+      usePlaybackSession('m1', intent, undefined, props.profile),
+    { wrapper, initialProps: { profile } },
+  );
   hooks.push(hook);
   return hook;
 }
@@ -140,6 +146,142 @@ describe('start', () => {
     expect(body.client_playback_context).toMatchObject({ protocol_version: 3, form_factor: 'tv' });
     expect(headers.get('X-Profile-Id')).toBe('p1');
     expect(headers.get('Authorization')).toBe(`Bearer ${ACCESS_TOKEN}`);
+  });
+
+  it('sends the preferred quality of the profile as it is when the intent names none', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: true, quality: 'original' });
+    await ready(hook);
+    expect(calls.start[0]?.body.quality_preference).toBe('original');
+    expect(hook.result.current.state).toMatchObject({ quality: 'original' });
+  });
+
+  it('lets the quality of the intent win over the profile quality', async () => {
+    const calls = servePlayback(server);
+    const hook = setup({ kind: 'beginning', quality: '480p' }, { known: true, quality: '1080p' });
+    await ready(hook);
+    expect(calls.start[0]?.body.quality_preference).toBe('480p');
+  });
+
+  it('waits for the profile settings before it starts, and asks for nothing itself', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: false, quality: 'auto' });
+    await until(() => calls.watch === 1);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(calls.start).toHaveLength(0);
+    expect(hook.result.current.state.kind).toBe('starting');
+    hook.rerender({ profile: { known: true, quality: '720p' } });
+    await ready(hook);
+    expect(calls.start).toHaveLength(1);
+    expect(calls.start[0]?.body.quality_preference).toBe('720p');
+  });
+
+  it('starts at once with `auto` when no profile settings are handed in', async () => {
+    const calls = servePlayback(server);
+    await ready(setup());
+    expect(calls.start[0]?.body.quality_preference).toBe('auto');
+  });
+
+  it('exposes the preference, and follows an applied quality change', async () => {
+    servePlayback(server, {
+      capabilities: playbackCapabilities({
+        features: ['playback_plan_v3', 'sequenced_progress_v1', 'plan_active_quality_v1'],
+      }),
+    });
+    const hook = setup(undefined, { known: true, quality: '1080p' });
+    await ready(hook);
+    expect(hook.result.current.state).toMatchObject({
+      quality: '1080p',
+      activeQualityFeature: true,
+    });
+    await act(async () => {
+      expect(await hook.result.current.qualityChange('480p')).toEqual({ kind: 'applied' });
+    });
+    expect(hook.result.current.state).toMatchObject({ quality: '480p' });
+  });
+
+  it('keeps the tracks and facts of the played version, and the series, for the options panel', async () => {
+    servePlayback(server, {
+      watch: watchDetail({
+        type: 'episode',
+        series_id: 'series-1',
+        year: 2021,
+        versions: [
+          watchVersion({
+            file_id: 'file-1',
+            resolution: '2160p',
+            hdr: true,
+            audio_tracks: [{ default: true, language: 'en', codec: 'eac3', channels: 6 }],
+            subtitle_tracks: [
+              { default: false, external: false, forced: false, hearing_impaired: false, index: 3 },
+            ],
+          }),
+          watchVersion({
+            file_id: 'file-2',
+            audio_tracks: [{ default: true, language: 'de', codec: 'aac', channels: 2 }],
+          }),
+        ],
+      }),
+    });
+    const hook = setup();
+    await ready(hook);
+    const state = hook.result.current.state;
+    expect(state.kind === 'ready' && state.media).toEqual({
+      fileId: 'file-1',
+      isEpisode: true,
+      seriesId: 'series-1',
+      year: 2021,
+      videoCodec: 'h264',
+      resolution: '2160p',
+      hdr: true,
+      audioTracks: [{ default: true, language: 'en', codec: 'eac3', channels: 6 }],
+      subtitleTracks: [
+        { default: false, external: false, forced: false, hearing_impaired: false, index: 3 },
+      ],
+    });
+  });
+
+  it('takes the tracks and facts from the version the plan plays, not the picked one', async () => {
+    servePlayback(server, {
+      start: [
+        playableDecision(
+          playbackPlan({ effective_media_file_id: 'file-2', requested_media_file_id: 'file-1' }),
+        ),
+      ],
+      watch: watchDetail({
+        versions: [
+          watchVersion({
+            file_id: 'file-1',
+            codec_video: 'h264',
+            audio_tracks: [{ default: true, language: 'en', codec: 'eac3', channels: 6 }],
+          }),
+          watchVersion({
+            file_id: 'file-2',
+            codec_video: 'hevc',
+            resolution: '720p',
+            audio_tracks: [{ default: true, language: 'de', codec: 'aac', channels: 2 }],
+          }),
+        ],
+      }),
+    });
+    const hook = setup();
+    await ready(hook);
+    const state = hook.result.current.state;
+    expect(state.kind === 'ready' && state.media).toMatchObject({
+      fileId: 'file-2',
+      videoCodec: 'hevc',
+      resolution: '720p',
+      audioTracks: [{ language: 'de', codec: 'aac', channels: 2 }],
+    });
+  });
+
+  it('does not trust the active quality of a server without plan_active_quality_v1', async () => {
+    servePlayback(server);
+    const hook = setup();
+    await ready(hook);
+    expect(hook.result.current.state).toMatchObject({ activeQualityFeature: false });
   });
 
   it('uses a fresh attempt id for every start', async () => {

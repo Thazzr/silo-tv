@@ -40,6 +40,35 @@ export const CloseIcon = () => (
   </Icon>
 );
 
+/** The mark of the checked row in a menu. */
+export const CheckIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <path
+      d="M10 25l9 9 19-20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** Three sliders: the options panel. */
+export const OptionsIcon = () => (
+  <Icon>
+    <path
+      d="M6 12h36M6 24h36M6 36h36"
+      stroke="currentColor"
+      strokeWidth="4"
+      strokeLinecap="round"
+    />
+    <circle cx="16" cy="12" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
+    <circle cx="32" cy="24" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
+    <circle cx="20" cy="36" r="5.5" stroke="currentColor" strokeWidth="3.5" fill="#000" />
+  </Icon>
+);
+
 /** A circular arrow with the skip length inside; `forward` mirrors it. */
 export function SkipIcon({ seconds, forward }: { seconds: number; forward: boolean }) {
   return (

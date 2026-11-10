@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../../i18n';
 import { formatClock } from '../format';
-import { CloseIcon, PauseIcon, PlayIcon, SkipIcon } from './icons';
+import { CloseIcon, OptionsIcon, PauseIcon, PlayIcon, SkipIcon } from './icons';
 import { PreviewCard } from './PreviewCard';
 import { chapterTickFractions, type Chapter } from './previewMath';
 import type { Band } from '../skip/segments';
@@ -9,9 +9,9 @@ import { Scrubber } from './Scrubber';
 import type { TrickplayImages } from './useTrickplay';
 
 export type OsdFocus =
-  'video' | 'scrubber' | 'skipBack' | 'playPause' | 'skipForward' | 'close' | 'pill';
+  'video' | 'scrubber' | 'skipBack' | 'playPause' | 'skipForward' | 'options' | 'close' | 'pill';
 /** The round buttons, left to right as the 5-way keys walk them. */
-export const OSD_BUTTONS = ['skipBack', 'playPause', 'skipForward', 'close'] as const;
+export const OSD_BUTTONS = ['skipBack', 'playPause', 'skipForward', 'options', 'close'] as const;
 export type OsdButton = (typeof OSD_BUTTONS)[number];
 
 export interface PlayerOsdProps {
@@ -169,8 +169,9 @@ export function PlayerOsd(props: PlayerOsdProps) {
               <SkipIcon seconds={props.skipForwardSeconds} forward />,
             )}
           </div>
-          {/* Options and Up Next join here in later packages. */}
+          {/* Up Next joins left of Options in a later package. */}
           <div className="player-osd-group">
+            {button('options', t('player.osd.options'), <OptionsIcon />)}
             {button('close', t('player.osd.close'), <CloseIcon />)}
           </div>
         </div>

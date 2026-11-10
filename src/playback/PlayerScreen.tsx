@@ -1,5 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useBackHandler, useWheelSuspended } from '../app/nav';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { suspendWheel, useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
@@ -7,6 +7,8 @@ import { useProfileSetting, useProfileSettings } from '../features/settings/prof
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
+import { OptionsPanel } from './options/OptionsPanel';
+import { usePanelState, type PanelState } from './options/usePanelState';
 import { PlayerOsd } from './osd/PlayerOsd';
 import { bufferedUntil, headingLines, SPINNER_DELAY_MS, SPINNER_MIN_MS } from './osd/timing';
 import { useDelayedFlag } from './osd/useDelayedFlag';
@@ -22,6 +24,7 @@ import {
   usePlaybackSession,
   type PlaybackSession,
   type Heading,
+  type MediaFacts,
   type PreviewFacts,
   type Plan,
   type SessionFailure,
@@ -47,11 +50,20 @@ export interface PlayerScreenProps {
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
 export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: PlayerScreenProps) {
-  // The player has its own keys; the wheel would only press Up and Down there.
-  useWheelSuspended();
   const t = useT();
   const { session: auth } = useSilo();
-  const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit);
+  const panel = usePanelState();
+  // The player has its own keys; the wheel would only press Up and Down there. The options panel
+  // is a list like any other, so the wheel moves its focus while it is open.
+  useEffect(() => (panel.open ? undefined : suspendWheel()), [panel.open]);
+  // A start with no quality of its own sends the profile's preferred one, once it is known.
+  const profileSettings = useProfileSettings();
+  const preferredQuality = profileSettings.values['playback.preferred_quality'];
+  const profile = useMemo(
+    () => ({ known: profileSettings.known, quality: preferredQuality }),
+    [profileSettings.known, preferredQuality],
+  );
+  const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
   const token = auth.get()?.accessToken;
 
@@ -111,6 +123,10 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       autoplay={state.autoplay}
       heading={state.heading}
       previews={state.previews}
+      media={state.media}
+      quality={state.quality}
+      activeQualityFeature={state.activeQualityFeature}
+      panel={panel}
       contentId={contentId}
       title={title}
       token={token}
@@ -127,6 +143,10 @@ function PlayingView({
   autoplay,
   heading,
   previews,
+  media,
+  quality,
+  activeQualityFeature,
+  panel,
   contentId,
   title,
   token,
@@ -139,6 +159,10 @@ function PlayingView({
   autoplay: boolean;
   heading: Heading | null;
   previews: PreviewFacts;
+  media: MediaFacts;
+  quality: string;
+  activeQualityFeature: boolean;
+  panel: PanelState;
   contentId: string;
   title: string;
   token: string | undefined;
@@ -229,6 +253,7 @@ function PlayingView({
     toggleDiagnostics: () => setDiagnostics((on) => !on),
     skipBackSeconds: skipBack,
     skipForwardSeconds: skipForward,
+    panel,
     pill: {
       shown: skip.pill !== null,
       holdsFocus: skip.focusWindow,
@@ -288,7 +313,11 @@ function PlayingView({
         onClick={controls.videoClicked}
       />
       {cue ? (
-        <p className="player-cue loading" role="status" data-testid="player-cue">
+        <p
+          className={`player-cue loading${panel.open ? ' player-cue-aside' : ''}`}
+          role="status"
+          data-testid="player-cue"
+        >
           <span className="spinner" aria-hidden="true" />
           {t('player.loading')}
         </p>
@@ -314,7 +343,26 @@ function PlayingView({
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
       />
-      {skip.pill ? (
+      {panel.open ? (
+        <OptionsPanel
+          panel={panel}
+          plan={plan}
+          media={media}
+          heading={heading}
+          title={title}
+          chapters={previews.chapters}
+          position={position}
+          quality={quality}
+          activeQualityFeature={activeQualityFeature}
+          qualityChange={playback.qualityChange}
+          onChapter={(start) => {
+            // The jump shows: the panel gives way to the overlay on the scrubber.
+            void seekTo(start);
+            controls.closePanel('scrubber');
+          }}
+        />
+      ) : null}
+      {skip.pill && !panel.open ? (
         <SkipPillButton
           pill={skip.pill}
           focused={controls.focus === 'pill'}

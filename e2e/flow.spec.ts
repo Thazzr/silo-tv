@@ -688,6 +688,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               session_id: 'e2e-session',
               selected_tracks: {},
               effective_recipe: {},
+              // A quality choice, so the options panel has a Video tab.
+              available_qualities: [{ label: '1080p', preserves_source: false }],
               source: { duration_seconds: 5400 },
               stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
               timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
@@ -3129,9 +3131,26 @@ test('player controls: a key opens the overlay on the scrubber, Down reaches the
   await expect(osd).toHaveAttribute('data-visible', 'false');
   await expect(page.getByTestId('player')).toBeVisible();
 
+  // Down with the overlay hidden opens the options panel on its Info tab; Right shows the next tab
+  // at once; Back closes only the panel and the overlay stays hidden.
+  const options = page.getByTestId('player-options');
+  await page.keyboard.press('ArrowDown');
+  await expect(options).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Info' })).toBeFocused();
+  await expect(page.getByTestId('options-info')).toBeVisible();
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Video' })).toBeFocused();
+  await expect(page.getByTestId('options-info')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(options).toHaveCount(0);
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+  await expect(page.getByTestId('player')).toBeVisible();
+
   // Close, reached with the arrow keys, leaves the player and stops the session.
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();

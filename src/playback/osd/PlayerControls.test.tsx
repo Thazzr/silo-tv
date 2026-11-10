@@ -480,6 +480,8 @@ describe('buttons', () => {
     tap(K.right);
     expect(focused('skipForward')).toBe(true);
     tap(K.right);
+    expect(focused('options')).toBe(true);
+    tap(K.right);
     expect(focused('close')).toBe(true);
     tap(K.right);
     expect(focused('close')).toBe(true);
@@ -488,7 +490,7 @@ describe('buttons', () => {
   it('every button has an accessible name', async () => {
     await mount();
     tap(K.up);
-    for (const name of ['10 seconds back', 'Pause', '30 seconds forward', 'Close']) {
+    for (const name of ['10 seconds back', 'Pause', '30 seconds forward', 'Options', 'Close']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument();
     }
   });
@@ -601,9 +603,9 @@ describe('the first key while hidden acts on nothing', () => {
     expect(state.seeks).toEqual([]);
   });
 
-  it('Right, Up and Down only open it: the focus stays on the scrubber and nothing seeks', async () => {
+  it('Right, Up and Left only open it: the focus stays on the scrubber and nothing seeks', async () => {
     const { state } = await mount();
-    for (const code of [K.right, K.up, K.down, K.left]) {
+    for (const code of [K.right, K.up, K.left]) {
       tap(code);
       expect(isOpen()).toBe(true);
       expect(focused('scrubber')).toBe(true);

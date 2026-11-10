@@ -10,6 +10,15 @@ export interface FrameApi {
 
 export const FrameContext = createContext<FrameApi | null>(null);
 
+/**
+ * Content that sets its own focus when it appears (a panel that opens on a remembered row): the
+ * screen does not claim the focus for the first element of it, which would land before the
+ * panel's own choice and fire the focus handlers of an element the viewer never moved to.
+ */
+export function SelfFocusing({ children }: { children: ReactNode }) {
+  return <FrameContext.Provider value={null}>{children}</FrameContext.Provider>;
+}
+
 type Claim = { kind: 'plain' | 'strong'; key: string };
 
 /**

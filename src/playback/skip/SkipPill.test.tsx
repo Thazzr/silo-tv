@@ -64,9 +64,9 @@ interface Options {
   gate?: Promise<void>;
 }
 
-async function mount(options: Options = {}) {
+function renderPlayer(options: Options = {}) {
   const { list = [], singular = {}, capability = true, values = {} } = options;
-  servePlayback(server, {
+  const calls = servePlayback(server, {
     capabilities: playbackCapabilities({
       features: [
         'playback_plan_v3',
@@ -93,17 +93,20 @@ async function mount(options: Options = {}) {
   const view = renderWithSilo(<PlayerScreen contentId="m1" title="First Title" onExit={onExit} />, {
     session,
   });
+  return { calls, view, onExit };
+}
+
+async function mount(options: Options = {}) {
+  const { view, onExit } = renderPlayer(options);
   await screen.findByTestId('player');
   const video = view.container.querySelector('video')!;
   const state = fakeVideo(video);
   state.duration = 5400;
   fireEvent.playing(video);
-  if (!options.gate) {
-    await screen.findByLabelText('15 seconds back');
-    vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
-    });
-  }
+  await screen.findByLabelText('15 seconds back');
+  vi.useFakeTimers({
+    toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+  });
   /** The video is at `seconds`. */
   const at = (seconds: number) => {
     state.currentTime = seconds;
@@ -154,6 +157,7 @@ describe('the skip pill in ask mode', () => {
     tap(K.up); // opens the overlay on the scrubber
     tap(K.down); // play/pause
     tap(K.right); // forward
+    tap(K.right); // options
     tap(K.right); // close
     expect(document.querySelector('[data-focus-key="close"]')).toHaveAttribute(
       'data-focused',
@@ -183,6 +187,7 @@ describe('the skip pill in ask mode', () => {
     await mount({ list: [INTRO] });
     tap(K.up);
     tap(K.down);
+    tap(K.right);
     tap(K.right);
     tap(K.right);
     tap(K.right);
@@ -306,18 +311,27 @@ describe('intro mode', () => {
 });
 
 describe('while the profile settings are unknown', () => {
-  it('neither shows a pill nor skips, then skips once when the settings say always', async () => {
+  it('starts nothing, then skips once when the settings say always', async () => {
     let open!: () => void;
     const gate = new Promise<void>((resolve) => (open = resolve));
-    const { state, at } = await mount({
+    const { calls, view } = renderPlayer({
       list: [INTRO],
       values: { 'playback.intro_skip_mode': 'always' },
       gate,
     });
-    at(20);
-    expect(pill()).toBeNull();
-    expect(state.seeks).toEqual([]);
+    // The start waits for the profile's values (its quality preference), so no frame can play
+    // before the skip modes are known.
+    await screen.findByTestId('player-loading');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls.start).toHaveLength(0);
     open();
+    await screen.findByTestId('player');
+    const video = view.container.querySelector('video')!;
+    const state = fakeVideo(video);
+    state.duration = 5400;
+    fireEvent.playing(video);
+    state.currentTime = 20;
+    fireEvent.timeUpdate(video);
     expect(await screen.findByText('Watch intro')).toBeInTheDocument();
     expect(state.seeks).toEqual([60]);
     expect(screen.queryByText('Skip intro')).toBeNull();

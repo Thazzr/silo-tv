@@ -9,6 +9,7 @@ export { ExitDialog } from './ExitDialog';
 export { Focusable, FocusableInput, FocusTrackerContext } from './Focusable';
 export type { FocusableInputProps, FocusableProps } from './Focusable';
 export { FocusGroup } from './FocusGroup';
+export { SelfFocusing } from './ScreenFrame';
 export type { FocusGroupProps } from './FocusGroup';
 export {
   destroyNavigation,

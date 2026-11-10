@@ -67,6 +67,11 @@ export type SessionState =
       autoplay: boolean;
       heading: Heading | null;
       previews: PreviewFacts;
+      media: MediaFacts;
+      /** The session's quality preference: `auto`, a resolution or a rung label. */
+      quality: string;
+      /** The server lists `plan_active_quality_v1`: the plan's `active_quality` can be trusted. */
+      activeQualityFeature: boolean;
     }
   | {
       kind: 'error';
@@ -86,6 +91,26 @@ export interface PreviewFacts {
   chapters: Chapter[];
   /** Intro, recap, credits and preview of the playing file, in source-time order. */
   segments: Segment[];
+}
+
+/**
+ * What the options panel knows about the item and the version that plays: its tracks (typed from
+ * the watch projection, so the Audio and Subtitles tabs can be built from them) and the facts the
+ * Info tab names. Never a path or URL.
+ */
+export interface MediaFacts {
+  /** The version the plan plays; the lists below are its own. */
+  fileId: string;
+  /** An episode (the "Auto-play next" row is for episodes only). */
+  isEpisode: boolean;
+  /** Owning series of an episode. */
+  seriesId?: string;
+  year?: number;
+  videoCodec?: string;
+  resolution?: string;
+  hdr: boolean;
+  audioTracks: S['WatchAudioTrack'][];
+  subtitleTracks: S['WatchSubtitleTrack'][];
 }
 
 /** What the player reports: the position on the source's timeline, in seconds. */
@@ -119,6 +144,8 @@ interface Installation {
   trickplay: boolean;
   /** `marker_segments_v1`: the versions list every marker occurrence, not one per kind. */
   markerList: boolean;
+  /** `plan_active_quality_v1`: plans name the quality entry they deliver. */
+  activeQuality: boolean;
 }
 
 interface Version {
@@ -126,6 +153,18 @@ interface Version {
   trickplay: boolean;
   chapters: Chapter[];
   markers: MarkerFields;
+  videoCodec: string;
+  resolution: string;
+  hdr: boolean;
+  audioTracks: S['WatchAudioTrack'][];
+  subtitleTracks: S['WatchSubtitleTrack'][];
+}
+
+/** The item itself, from the watch projection. */
+interface Item {
+  isEpisode: boolean;
+  seriesId?: string;
+  year?: number;
 }
 
 interface Deps {
@@ -135,6 +174,11 @@ interface Deps {
   contentId: string;
   /** How to start; without one the player asks when there is something to resume. */
   intent?: StartIntent;
+  /**
+   * The profile's preferred quality, for a start whose intent names none. Resolves once the
+   * profile's settings are settled (`auto` when they could not be read); without it, `auto`.
+   */
+  profileQuality?(): Promise<string>;
   onState(state: SessionState): void;
   onMediaError(failure: MediaFailure | null): void;
   /** The stream played to its end and the session is stopped. */
@@ -212,7 +256,10 @@ export class PlaybackController {
   private trickplayServer = false;
   /** The server lists `marker_segments_v1`. */
   private markerListServer = false;
+  /** The server lists `plan_active_quality_v1`. */
+  private activeQualityServer = false;
   private versions: Version[] = [];
+  private item: Item = { isEpisode: false };
   private attemptId = '';
   private sessionId = '';
   private plan: Plan | null = null;
@@ -232,7 +279,8 @@ export class PlaybackController {
   private replanning = false;
   private reconnecting = false;
   private restarting = false;
-  private quality: string;
+  /** The quality preference; null until a start decides it (the intent's, else the profile's). */
+  private quality: string | null;
   private readonly pinnedFile: boolean;
   private tracks: Tracks;
   private read: (() => PlayerReading | null) | null = null;
@@ -249,7 +297,7 @@ export class PlaybackController {
   private wake: (() => void) | null = null;
 
   constructor(private readonly deps: Deps) {
-    this.quality = deps.intent?.quality ?? 'auto';
+    this.quality = deps.intent?.quality ?? null;
     this.pinnedFile = deps.intent?.fileId !== undefined;
     this.tracks = { audio: deps.intent?.audio, subtitle: deps.intent?.subtitle };
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -292,7 +340,9 @@ export class PlaybackController {
       this.installationId = installationId.id;
       this.trickplayServer = installationId.trickplay;
       this.markerListServer = installationId.markerList;
+      this.activeQualityServer = installationId.activeQuality;
       this.versions = watch.versions;
+      this.item = watch.item;
       this.fileId = watch.fileId;
       this.resumeAt = watch.resume;
       this.heading = watch.heading;
@@ -329,6 +379,7 @@ export class PlaybackController {
       id: data.installation_id,
       trickplay: data.features.includes('trickplay_v1'),
       markerList: data.features.includes('marker_segments_v1'),
+      activeQuality: data.features.includes('plan_active_quality_v1'),
     };
     installations.set(this.deps.baseUrl, known);
     return known;
@@ -339,6 +390,7 @@ export class PlaybackController {
     resume: number | null;
     heading: Heading;
     versions: Version[];
+    item: Item;
   }> {
     const { data, error, response } = await this.deps.client.GET('/api/v2/watch/{id}', {
       params: { path: { id: this.deps.contentId }, header: this.header() },
@@ -367,8 +419,18 @@ export class PlaybackController {
         credits: v.credits,
         preview: v.preview,
       },
+      videoCodec: v.codec_video,
+      resolution: v.resolution,
+      hdr: v.hdr,
+      audioTracks: v.audio_tracks ?? [],
+      subtitleTracks: v.subtitle_tracks ?? [],
     }));
-    return { fileId: version.file_id, resume, heading, versions };
+    const item: Item = {
+      isEpisode: data.type === 'episode',
+      ...(data.series_id ? { seriesId: data.series_id } : {}),
+      ...(data.year !== undefined ? { year: data.year } : {}),
+    };
+    return { fileId: version.file_id, resume, heading, versions, item };
   }
 
   // --- Start ---------------------------------------------------------------------------------
@@ -386,6 +448,10 @@ export class PlaybackController {
     this.set({ kind: 'starting' });
     this.startPosition = position;
     try {
+      // The first start decides the quality: the intent's, else what the profile prefers (the
+      // server does not apply that setting itself). Later starts keep what the viewer picked.
+      this.quality ??= (await this.deps.profileQuality?.()) ?? 'auto';
+      if (this.disposed) return;
       const probe = await collectProfileProbe();
       this.capabilities = buildClientCapabilities(probe);
       this.context = buildPlaybackContext(probe);
@@ -424,6 +490,7 @@ export class PlaybackController {
           this.installationId = refreshed.id;
           this.trickplayServer = refreshed.trickplay;
           this.markerListServer = refreshed.markerList;
+          this.activeQualityServer = refreshed.activeQuality;
           await this.start(position, false);
           return;
         }
@@ -488,7 +555,27 @@ export class PlaybackController {
       autoplay: options.autoplay ?? !this.viewerPaused,
       heading: this.heading,
       previews: this.previewFacts(plan),
+      media: this.mediaFacts(plan),
+      quality: this.quality ?? 'auto',
+      activeQualityFeature: this.activeQualityServer,
     });
+  }
+
+  /** The item and the played version's facts for the options panel. */
+  private mediaFacts(plan: Plan): MediaFacts {
+    const fileId = plan.effective_media_file_id;
+    const version = this.versions.find((v) => v.fileId === fileId);
+    return {
+      fileId,
+      isEpisode: this.item.isEpisode,
+      ...(this.item.seriesId ? { seriesId: this.item.seriesId } : {}),
+      ...(this.item.year !== undefined ? { year: this.item.year } : {}),
+      ...(version?.videoCodec ? { videoCodec: version.videoCodec } : {}),
+      ...(version?.resolution ? { resolution: version.resolution } : {}),
+      hdr: version?.hdr === true,
+      audioTracks: version?.audioTracks ?? [],
+      subtitleTracks: version?.subtitleTracks ?? [],
+    };
   }
 
   /** Chapters, previews and skippable segments of the file the plan plays (an alternate version may differ from the picked one). */
@@ -699,7 +786,6 @@ export class PlaybackController {
   /** Switches to a quality label from the plan's `available_qualities` (or `auto`). */
   async qualityChange(label: string): Promise<ReplanResult> {
     const result = await this.replan('quality_change', { quality: label });
-    if (result.kind === 'applied') this.quality = label;
     await this.settle(result, this.reading()?.position ?? this.startPosition);
     return result;
   }
@@ -746,7 +832,7 @@ export class PlaybackController {
             plan_attempt_key: plan.plan_attempt_key,
             attempted_plan_keys: this.attemptedKeys,
             attempt_count: Math.max(1, this.recoveries),
-            quality_preference: options.quality ?? this.quality,
+            quality_preference: options.quality ?? this.quality ?? 'auto',
             position_seconds: position,
             selected_tracks: options.tracks ?? plan.selected_tracks,
             client_capabilities: profile.capabilities,
@@ -767,6 +853,11 @@ export class PlaybackController {
         }
         // The new load starts here; until its first frame this is the position to report.
         this.startPosition = position;
+        // The viewer's pick is the preference from the plan on, so the state that comes with
+        // the new plan already carries it.
+        if (operation === 'quality_change' && options.quality !== undefined) {
+          this.quality = options.quality;
+        }
         // After a failure the old transport is dead, so its URL is no reason to keep it.
         this.adopt(next, sessionId, {
           forceReload: options.forceReload || recovery,
@@ -973,6 +1064,13 @@ export class PlaybackController {
   }
 }
 
+export interface ProfileQuality {
+  known: boolean;
+  quality: string;
+}
+
+const AUTO_PROFILE: ProfileQuality = { known: true, quality: 'auto' };
+
 export interface PlaybackSession {
   state: SessionState;
   mediaError: MediaFailure | null;
@@ -1003,6 +1101,8 @@ export function usePlaybackSession(
   contentId: string,
   intent?: StartIntent,
   onEnded?: () => void,
+  /** The profile's preferred quality and whether its settings are settled; default `auto`, settled. */
+  profile: ProfileQuality = AUTO_PROFILE,
 ): PlaybackSession {
   const { client, baseUrl, session } = useSilo();
   const [state, setState] = useState<SessionState>({ kind: 'loading' });
@@ -1012,6 +1112,20 @@ export function usePlaybackSession(
   useEffect(() => {
     ended.current = onEnded;
   }, [onEnded]);
+  // A start waits here until the profile's settings are settled; a settled answer never waits.
+  const profileRef = useRef({ profile, waiters: [] as ((quality: string) => void)[] });
+  useEffect(() => {
+    const entry = profileRef.current;
+    entry.profile = profile;
+    if (profile.known) entry.waiters.splice(0).forEach((resolve) => resolve(profile.quality));
+  }, [profile]);
+  const profileQuality = useCallback(
+    () =>
+      profileRef.current.profile.known
+        ? Promise.resolve(profileRef.current.profile.quality)
+        : new Promise<string>((resolve) => profileRef.current.waiters.push(resolve)),
+    [],
+  );
 
   useEffect(() => {
     const created = new PlaybackController({
@@ -1020,6 +1134,7 @@ export function usePlaybackSession(
       session,
       contentId,
       intent,
+      profileQuality,
       onState: setState,
       onMediaError: setMediaError,
       onEnded: () => ended.current?.(),
@@ -1032,7 +1147,7 @@ export function usePlaybackSession(
     };
     // The intent is a plain value: its kind restarts the session, a new object of the same kind must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, baseUrl, session, contentId, intent?.kind]);
+  }, [client, baseUrl, session, contentId, intent?.kind, profileQuality]);
 
   const choose = useCallback((position: number) => void controller.current?.start(position), []);
   const resume = useCallback(() => void controller.current?.resume(), []);
