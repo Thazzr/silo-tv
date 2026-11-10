@@ -2,7 +2,7 @@
 
 Goal: the LG TV app should offer everything the Silo web client offers a viewer. The list is derived from the Silo web client (`silo-server/web/src/pages`) and the specification of the official Roku client (`silo-roku/docs/spec.md`, section 3). What the server offers only optionally is shown only when the server reports it through its capabilities.
 
-Status: ⬜ planned · 🟨 built and tested in the browser, not yet checked on the TV · ✅ done and checked on the TV (or, for repository items, done)
+Status: ⬜ planned · 🟨 built and tested in the browser, not yet checked on the TV · ✅ done and checked on the TV (or, for repository items, done) · ❌ dropped, with the reason
 
 ## Phase 0 – Feasibility (target v0.1.0)
 
@@ -63,7 +63,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ✅ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly (TV 2026-11-09)
 - ✅ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen (TV 2026-11-09)
-- ⬜ Choose version, audio track and subtitle on the detail page beforehand; audio and subtitle picks are saved as the title's server preferences (Silo keeps no version preference: the version played last is the next default)
+- ⬜ Choose version, audio track and subtitle on the detail page beforehand: three round buttons after Play and Start over, with a line above them showing the current choice. Audio and subtitle picks are saved as the title's server preferences; the version holds while the page is open (Silo keeps no version preference: the version played last is the next default)
 - 🟨 Playback core on protocol v3: an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
 - ⬜ Direct play, HLS remux and transcode verified on the TV
   - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
@@ -72,15 +72,22 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - play/pause, skips by the profile's steps (taps add up), scrubbing at 2–16× by holding or with Rewind/Fast Forward
   - scrub previews from the server's trickplay sheets, chapter marks on the scrubber
   - a chapter picker comes with the options panel
-- ⬜ Options panel: audio, subtitle and quality changes during playback (replan), chapters, info
+- ⬜ Options panel, opened from an Options button on the overlay or with Down while the overlay is hidden: tabs Info, Video (quality, auto-play next), Audio, Subtitles and Chapters
+  - audio, subtitle and quality changes during playback (replan)
+  - audio and subtitle changes are saved for the series or movie, as in Silo's web client
+  - a quality change holds for the current title only
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
 - 🟨 Skip intro, recap, credits and previews; automatic skipping following the profile settings
-- ⬜ Up Next: next episode automatically, On Deck suggestions at the end of a movie
-- ⬜ Shuffle for a library, collection, series and season
-- ⬜ Sleep timer
-- ⬜ Playback speed and aspect ratio (not possible in the Roku client; on webOS to be probed on the TV first)
-- ⬜ Subtitle delay (the renderer already takes an offset); an audio delay is not possible with the webOS video element
+- ⬜ Up Next for episodes: a card in the corner, opened `playback.next_up_prompt_seconds` before the end, with a countdown to the next episode when `playback.auto_play_next` is on
+  - skipping credits that run to the end opens the card at once, with a 10 s countdown
+  - an Up Next button on the overlay opens it without a countdown
+- ⬜ "Are you still watching?" after `player.passout_threshold` episodes that started on their own without a key press (default 3, 0 never asks). It is kept on the TV only, as Silo's settings contract defines it.
+- ⬜ On Deck at the end of a movie and of a series' last episode: Continue Watching and Next Up items, nothing starts on its own
+- ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people.
+- ⬜ Playback speed and aspect ratio, for the current title only (not possible in the Roku client; on webOS to be probed on the TV first)
+- ⬜ Subtitle delay (`player.subtitle_sync_ms`; the renderer already takes an offset); an audio delay is not possible with the webOS video element
+- ❌ Sleep timer: dropped (user decision 2026-11-10). LG TVs have a sleep timer of their own, and the progress reported every 10 s keeps the resume point when the TV turns off.
 
 ## Phase 4 – Personal and discovery (target v0.5.0)
 
