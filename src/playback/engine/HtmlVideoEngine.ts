@@ -134,6 +134,17 @@ export class HtmlVideoEngine implements PlayerEngine {
     return error ? { code: error.code, message: error.message } : null;
   }
 
+  get decoder(): 'native' | 'hlsjs' {
+    return this.hls ? 'hlsjs' : 'native';
+  }
+
+  get bandwidthEstimate(): number | null {
+    const estimate = this.hls?.bandwidthEstimate;
+    return typeof estimate === 'number' && Number.isFinite(estimate) && estimate > 0
+      ? estimate
+      : null;
+  }
+
   on(event: EngineEvent, handler: () => void): () => void {
     if (event !== 'error') return this.subscribe(event, handler);
     // A fatal hls.js error is reported once; an element error that follows it is the same failure.

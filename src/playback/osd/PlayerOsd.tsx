@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useT, type MessageKey } from '../../i18n';
-import { formatClock } from '../format';
+import { useLanguage, useT, type MessageKey } from '../../i18n';
+import { timeParts, type TimeFormat, type TimeMode } from '../timeDisplay';
 import { isPopover, type OsdMenu } from '../menus/usePanelState';
 import {
   ChaptersIcon,
@@ -57,7 +57,7 @@ export interface PlayerOsdProps {
   scrub: { rate: number; target: number } | null;
   /** A skip is pending: `position` is its target, not where the video is. */
   skipPending: boolean;
-  /** The playing file's chapters (ticks on the track, a title on the preview card). */
+  /** The playing file's chapters (the ticks on the track). */
   chapters: readonly Chapter[];
   /** Intro, recap and credits as bands on the track (fractions 0-1). */
   bands?: readonly Band[];
@@ -69,14 +69,25 @@ export interface PlayerOsdProps {
   openMenu: OsdMenu | null;
   /** The settings button's second line: the quality in use. */
   qualityText: string | null;
+  /** What the clock above the scrubber says, and how it writes the end time. */
+  timeMode: TimeMode;
+  timeFormat: TimeFormat;
   /** The open popover (rendered above its button); null for Info and when none is open. */
   popover: ReactNode;
+  /**
+   * The Info panel while it is open. It renders inside the overlay, so it stands above the
+   * overlay's gradient and below the preview card, and fades with the overlay.
+   */
+  info?: ReactNode;
   onFocus(focus: OsdFocus): void;
   onSeekFraction(fraction: number): void;
   onAction(action: OsdAction): void;
 }
 
 const NO_BANDS: readonly Band[] = [];
+
+/** The wall clock, read where the clock line is drawn: the end time moves with the position. */
+const wallClock = () => Date.now();
 
 /**
  * The on-screen controls: Exit at the top left, and at the bottom the scrubber and one row with
@@ -85,6 +96,7 @@ const NO_BANDS: readonly Band[] = [];
  */
 export function PlayerOsd(props: PlayerOsdProps) {
   const t = useT();
+  const lang = useLanguage();
   const { visible, focus, paused, position, duration, scrub, openMenu } = props;
   const buttons = useRef<Partial<Record<OsdAction, HTMLButtonElement | null>>>({});
   const root = useRef<HTMLDivElement>(null);
@@ -218,18 +230,35 @@ export function PlayerOsd(props: PlayerOsdProps) {
 
   const meta = (
     <p className="player-osd-meta" data-testid="player-meta">
-      {/* Only the detail gives way with an ellipsis; the time (and its dot) is always whole. */}
       {props.detail ? (
         <span className="player-osd-detail" data-testid="player-detail">
           {props.detail}
         </span>
       ) : null}
-      <span className="player-osd-clock" data-testid="player-clock">
-        {props.detail ? ' · ' : null}
-        <span data-testid="player-time">{formatClock(position)}</span>
-        {' / '}
-        <span data-testid="player-total">{formatClock(duration)}</span>
-      </span>
+    </p>
+  );
+
+  // Right-aligned directly above the scrubber (the preview card stands above it); never shrinks.
+  const parts = timeParts(props.timeMode, position, duration, wallClock(), props.timeFormat, lang);
+  const ends = parts.endsAt !== null ? t('player.osd.endsAt', { time: parts.endsAt }) : null;
+  const clock = (
+    <p className="player-osd-clock" data-testid="player-clock" data-mode={props.timeMode}>
+      {parts.position !== null ? (
+        <>
+          <span data-testid="player-time">{parts.position}</span>
+          {' / '}
+          <span data-testid="player-total">{parts.total}</span>
+        </>
+      ) : null}
+      {parts.remaining !== null ? (
+        <span data-testid="player-remaining">{parts.remaining}</span>
+      ) : null}
+      {ends !== null ? (
+        <>
+          {parts.position !== null ? ' · ' : null}
+          <span data-testid="player-ends">{ends}</span>
+        </>
+      ) : null}
     </p>
   );
 
@@ -247,6 +276,7 @@ export function PlayerOsd(props: PlayerOsdProps) {
         )}
       </div>
       <div className="player-osd" ref={root} data-visible={visible} data-testid="player-osd">
+        {props.info}
         <div className="player-osd-body">
           <div className="player-osd-scrubwrap" ref={wrap}>
             {cardShown ? (
@@ -255,10 +285,10 @@ export function PlayerOsd(props: PlayerOsdProps) {
                 centerX={(Math.max(0, Math.min(duration, cardTime)) / duration) * trackWidth}
                 trackWidth={trackWidth}
                 images={props.previews}
-                chapters={props.chapters}
                 scrub={scrub}
               />
             ) : null}
+            {clock}
             <Scrubber
               position={position}
               duration={duration}

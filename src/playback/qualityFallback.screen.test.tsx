@@ -66,6 +66,16 @@ const focusKey = () => document.activeElement?.getAttribute('data-focus-key');
 const osdFocused = (name: string) =>
   document.querySelector(`[data-focus-key="${name}"]`)?.getAttribute('data-focused') === 'true';
 
+/** Opens the gear's menu from the overlay's buttons, with the focus on one of its rows. */
+async function reopenMenu() {
+  key(KEY.up);
+  key(KEY.down);
+  for (let i = 0; i < 7 && !osdFocused('settings'); i += 1) key(KEY.right);
+  key(KEY.enter);
+  await screen.findByTestId('player-menu-settings');
+  await waitFor(() => expect(focusKey()).toMatch(/^player-menu-/));
+}
+
 /** The gear's menu is open on a title that played its first frame; the clock is a fake one. */
 async function openedMenu() {
   // A fake clock that also runs with real time, so the spatial navigation's waits still pass.
@@ -95,12 +105,7 @@ async function openedMenu() {
   fakeVideo(video()).duration = 5400;
   fireEvent.playing(video());
   await screen.findByLabelText('10 seconds back');
-  key(KEY.up);
-  key(KEY.down);
-  for (let i = 0; i < 7 && !osdFocused('settings'); i += 1) key(KEY.right);
-  key(KEY.enter);
-  await screen.findByTestId('player-menu-settings');
-  await waitFor(() => expect(focusKey()).toMatch(/^player-menu-/));
+  await reopenMenu();
   return { calls, video, view };
 }
 
@@ -116,7 +121,10 @@ async function moveTo(label: string) {
   await waitFor(() => expect(focusKey()).toBe(`player-menu-quality-${label}`));
 }
 
-/** Picks 720p, waits for its load, and fails that load before its first frame. */
+/**
+ * Picks 720p, waits for its load (the pick closes the menu), and fails that load before its first
+ * frame: the way back to the quality before loads and the hint shows.
+ */
 async function pickAndFail(ctx: Awaited<ReturnType<typeof openedMenu>>) {
   await waitFor(() => expect(focusKey()).toBe('player-menu-quality-auto'));
   await pressKey(KEY.down);
@@ -145,8 +153,17 @@ describe('the hint after a quality fell back', () => {
     const hint = await screen.findByTestId('player-quality-notice');
     expect(hint).toHaveTextContent("This quality can't be used right now.");
     expect(hint).toHaveAttribute('role', 'status');
-    // The gear's menu stayed open and its checked row follows the restored preference.
-    expect(screen.getByTestId('player-menu-settings')).toBeInTheDocument();
+    // The pick had closed the menu; the gear shows the restored preference, and the checked row
+    // of the menu, opened again, is that preference as well.
+    expect(screen.queryByTestId('player-menu-settings')).toBeNull();
+    await reopenMenu();
+    // The Enter that opened it picks nothing: the navigation still holds the 720p row from the
+    // menu before, and gives the focus back to it when the rows mount.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(ctx.calls.replan).toHaveLength(2);
+    await waitFor(() => expect(focusKey()).toBe('player-menu-quality-auto'));
     expect(screen.getByRole('menuitemradio', { name: /Auto/ })).toHaveAttribute(
       'aria-checked',
       'true',
@@ -158,11 +175,13 @@ describe('the hint after a quality fell back', () => {
     expect(screen.getByTestId('player-quality-label')).toHaveTextContent('Auto');
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(QUALITY_NOTICE_MS - 100);
+      // A second of slack on each side: this fake clock also follows real time, so a busy machine
+      // must not push the hint over its 4 s (the exact 4000 ms is pinned by the timer test below).
+      await vi.advanceTimersByTimeAsync(QUALITY_NOTICE_MS - 1000);
     });
     expect(screen.getByTestId('player-quality-notice')).toBeInTheDocument();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(1500);
     });
     expect(screen.queryByTestId('player-quality-notice')).toBeNull();
   });
@@ -197,6 +216,7 @@ describe('the hint after a quality fell back', () => {
     expect(screen.queryByTestId('player-quality-notice')).toBeNull();
 
     // Another load that plays (a pick that sticks) mounts the playing view again: no hint.
+    await reopenMenu();
     await moveTo('1080p');
     const before = ctx.video();
     await pressKey(KEY.enter);
@@ -208,6 +228,7 @@ describe('the hint after a quality fell back', () => {
     expect(screen.queryByTestId('player-quality-notice')).toBeNull();
 
     // A second fallback in the same session shows it again.
+    await reopenMenu();
     await moveTo('720p');
     const second = ctx.video();
     await pressKey(KEY.enter);
@@ -262,15 +283,16 @@ describe('the hint after a quality fell back', () => {
     const hint = await screen.findByTestId('player-quality-notice');
     expect(hint).not.toHaveAttribute('tabindex');
     expect(hint.querySelector('button, a, input, [tabindex]')).toBeNull();
-    const focused = focusKey();
     expect(document.activeElement).not.toBe(hint);
-    // Keys keep working while it shows: Up moves the focus up a row of the open menu.
-    await pressKey(KEY.up);
-    await waitFor(() => expect(focusKey()).not.toBe(focused));
+    // Keys keep working while it shows: Up brings the overlay up with the focus on the scrubber.
+    key(KEY.up);
+    expect(screen.getByTestId('player-osd')).toHaveAttribute('data-visible', 'true');
+    expect(osdFocused('scrubber')).toBe(true);
     expect(screen.getByTestId('player-quality-notice')).toBeInTheDocument();
-    // Back closes the menu, as without the hint.
+    // And Back hides it again, as without the hint.
     key(KEY.back);
-    await waitFor(() => expect(screen.queryByTestId('player-menu-settings')).toBeNull());
+    expect(screen.getByTestId('player-osd')).toHaveAttribute('data-visible', 'false');
+    expect(screen.getByTestId('player-quality-notice')).toBeInTheDocument();
   });
 });
 

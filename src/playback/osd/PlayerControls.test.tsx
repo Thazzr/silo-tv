@@ -634,50 +634,134 @@ describe('the title block', () => {
     year: 2020,
   });
 
-  it('shows the series, then "S1 · E1 — TITLE" with the elapsed and the total time for an episode', async () => {
+  it('shows the series, then only "S1 · E1 — TITLE" on the second line: no time', async () => {
     await mount({ playback: { watch: EPISODE } });
     tap(K.up);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Some Show');
-    expect(screen.getByTestId('player-meta')).toHaveTextContent('S1 · E1 — PILOT · 0:00 / 1:30:00');
+    expect(screen.getByTestId('player-meta').textContent).toBe('S1 · E1 — PILOT');
   });
 
-  it('keeps the time whole in its own span after a long episode title, the dot with it', async () => {
+  it('keeps a long episode title on its line and the time out of the block', async () => {
     const long = 'A very long episode title that could never fit on the line next to the time';
     await mount({ playback: { watch: { ...EPISODE, title: long } } });
     tap(K.up);
     expect(screen.getByTestId('player-detail')).toHaveTextContent(
       `S1 · E1 — ${long.toUpperCase()}`,
     );
-    const clock = screen.getByTestId('player-clock');
-    expect(clock.textContent).toBe(' · 0:00 / 1:30:00');
-    expect(clock).not.toContainElement(screen.getByTestId('player-detail'));
+    expect(screen.getByTestId('player-meta')).not.toContainElement(
+      screen.getByTestId('player-clock'),
+    );
+    expect(screen.getByTestId('player-meta').textContent).not.toMatch(/\d:\d\d/);
   });
 
-  it('shows the year for a movie, then the times', async () => {
+  it('shows only the year for a movie', async () => {
     await mount({ playback: { watch: watchDetail({ year: 1999 }) } });
     tap(K.up);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('First Title');
-    expect(screen.getByTestId('player-meta')).toHaveTextContent('1999 · 0:00 / 1:30:00');
+    expect(screen.getByTestId('player-meta').textContent).toBe('1999');
   });
 
-  it('leads with the times alone for a movie without a year', async () => {
+  it('has nothing on the second line for a movie without a year', async () => {
     await mount();
     tap(K.up);
-    expect(screen.getByTestId('player-meta').textContent).toBe('0:00 / 1:30:00');
+    expect(screen.getByTestId('player-meta').textContent).toBe('');
   });
+});
 
-  it('has no row of elapsed and remaining time any more', async () => {
+describe('the clock above the scrubber', () => {
+  const MINUS = '\u2212';
+  const EPISODE = watchDetail({ type: 'episode', title: 'Pilot', series_title: 'Some Show' });
+  const clock = () => screen.getByTestId('player-clock');
+
+  /** 14:00:00 local; the file is 1:30:00 long, so from the start it ends at 15:30. */
+  const at1400 = () => vi.setSystemTime(new Date(2026, 10, 10, 14, 0, 0));
+
+  it('sits right above the scrubber, in the same block, and not in the title block', async () => {
     await mount();
     tap(K.up);
-    expect(screen.queryByTestId('player-remaining')).not.toBeInTheDocument();
+    expect(clock().nextElementSibling).toBe(screen.getByTestId('player-scrubber'));
+    expect(clock().parentElement).toHaveClass('player-osd-scrubwrap');
+    expect(screen.getByTestId('player-meta')).not.toContainElement(clock());
   });
 
-  it('shows the pending skip target as the elapsed time', async () => {
+  it('is Combined by default: position, length and the end time (12 h in English)', async () => {
+    await mount();
+    at1400();
+    tap(K.up);
+    expect(clock().textContent).toBe('0:00 / 1:30:00 · Ends at 3:30 PM');
+    expect(clock()).toHaveAttribute('data-mode', 'combined');
+  });
+
+  it('shows Position / length alone', async () => {
+    window.localStorage.setItem('silo-tv.settings.timeDisplay', 'position');
+    await mount();
+    tap(K.up);
+    expect(clock().textContent).toBe('0:00 / 1:30:00');
+  });
+
+  it('shows the time left with a true minus sign', async () => {
+    window.localStorage.setItem('silo-tv.settings.timeDisplay', 'remaining');
+    const { state, video } = await mount();
+    state.currentTime = 4080;
+    fireEvent.timeUpdate(video);
+    tap(K.up);
+    // 4080 s played of 5400: 22:00 left.
+    expect(clock().textContent).toBe(`${MINUS}22:00`);
+  });
+
+  it('shows the end time alone', async () => {
+    window.localStorage.setItem('silo-tv.settings.timeDisplay', 'endsAt');
+    await mount();
+    at1400();
+    tap(K.up);
+    expect(clock().textContent).toBe('Ends at 3:30 PM');
+  });
+
+  it('writes the end time in 24 h when the profile says 24h, and in 12 h for 12h', async () => {
+    await mount({ settings: { values: { 'ui.time_format': '24h' } } });
+    at1400();
+    tap(K.up);
+    expect(clock().textContent).toBe('0:00 / 1:30:00 · Ends at 15:30');
+  });
+
+  it('writes 12 h when the profile says 12h', async () => {
+    await mount({ settings: { values: { 'ui.time_format': '12h' } } });
+    at1400();
+    tap(K.up);
+    expect(screen.getByTestId('player-ends')).toHaveTextContent('Ends at 3:30 PM');
+  });
+
+  it('shows the pending skip target as the position, and the end time follows it', async () => {
     const { state } = await mount({ playback: { watch: EPISODE } });
+    at1400();
     state.currentTime = 100;
     tap(K.up);
     tap(K.right);
-    expect(screen.getByTestId('player-meta')).toHaveTextContent('S1 · E1 — PILOT · 2:10 / 1:30:00');
+    // 100 s + the 30 s skip is 2:10; 5270 s are left: 14:00 + 1:27:50 is 3:27 PM.
+    expect(clock().textContent).toBe('2:10 / 1:30:00 · Ends at 3:27 PM');
+  });
+
+  it('reads the mode when the player opens, not later', async () => {
+    window.localStorage.setItem('silo-tv.settings.timeDisplay', 'remaining');
+    await mount();
+    window.localStorage.setItem('silo-tv.settings.timeDisplay', 'position');
+    tap(K.up);
+    expect(clock()).toHaveAttribute('data-mode', 'remaining');
+  });
+});
+
+describe('the blue key and a pending hold', () => {
+  it('cancels a Right held on the scrubber: Info stays, focus on its button, no scrub starts', async () => {
+    await mount();
+    // A keyup has been seen, so the remote delivers them and a hold waits for HOLD_MS.
+    tap(K.up);
+    down(K.right);
+    down(406);
+    expect(screen.getByTestId('player-info')).toBeInTheDocument();
+    advance(1000);
+    expect(screen.queryByTestId('player-scrub')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-info')).toBeInTheDocument();
+    expect(focused('info')).toBe(true);
   });
 });
 

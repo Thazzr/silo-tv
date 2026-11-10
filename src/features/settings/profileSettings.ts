@@ -127,6 +127,7 @@ const QUALITIES = ['auto', '480p', '720p', '1080p', '2160p', 'original'] as cons
  */
 export const PROFILE_SETTINGS = {
   'ui.title_art': bool(16, true),
+  'ui.time_format': oneOf(1, ['auto', '12h', '24h'] as const, 'auto'),
   'catalog.hide_unwatched_episode_images': bool(17, false),
   'catalog.hide_unwatched_episode_overviews': bool(17, false),
   'ui.theme_music_enabled': bool(11, false),

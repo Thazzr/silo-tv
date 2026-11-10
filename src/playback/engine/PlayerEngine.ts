@@ -55,6 +55,10 @@ export interface PlayerEngine {
   /** True from a stall until the next frame plays. */
   readonly waiting: boolean;
   readonly error: EngineError | null;
+  /** Which path decodes the source: the element's own player, or hls.js over MediaSource. */
+  readonly decoder: 'native' | 'hlsjs';
+  /** What hls.js estimates the connection carries, in bit/s; null off hls.js or before a reading. */
+  readonly bandwidthEstimate: number | null;
   /** Subscribes to an event; returns the function that unsubscribes. */
   on(event: EngineEvent, handler: () => void): () => void;
   /** Detaches every listener and frees the decoder. The engine is unusable afterwards; repeating it is harmless. */

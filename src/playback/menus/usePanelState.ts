@@ -29,6 +29,15 @@ export interface PanelState {
   recall(): string | null;
   show(menu: OsdMenu): void;
   hide(): void;
+  /**
+   * Closes the menu after a pick that loads a new stream. The view that mounts for that stream
+   * starts with the overlay up and the focus on `menu`'s button, as after any close.
+   */
+  finish(menu: OsdMenu): void;
+  /** The button a `finish` left the next view to land on; null when there is none. */
+  arrival(): OsdMenu | null;
+  /** The views have taken the arrival; a later view starts as a fresh one. */
+  settle(): void;
 }
 
 /**
@@ -38,6 +47,7 @@ export interface PanelState {
 export function usePanelState(): PanelState {
   const [open, setOpen] = useState<OsdMenu | null>(null);
   const focusKey = useRef<string | null>(null);
+  const landing = useRef<OsdMenu | null>(null);
 
   const remember = useCallback((key: string) => void (focusKey.current = key), []);
   const recall = useCallback(() => focusKey.current, []);
@@ -47,11 +57,19 @@ export function usePanelState(): PanelState {
   }, []);
   const hide = useCallback(() => {
     focusKey.current = null;
+    landing.current = null;
     setOpen(null);
   }, []);
+  const finish = useCallback((menu: OsdMenu) => {
+    focusKey.current = null;
+    landing.current = menu;
+    setOpen(null);
+  }, []);
+  const arrival = useCallback(() => landing.current, []);
+  const settle = useCallback(() => void (landing.current = null), []);
 
   return useMemo(
-    () => ({ open, remember, recall, show, hide }),
-    [open, remember, recall, show, hide],
+    () => ({ open, remember, recall, show, hide, finish, arrival, settle }),
+    [open, remember, recall, show, hide, finish, arrival, settle],
   );
 }

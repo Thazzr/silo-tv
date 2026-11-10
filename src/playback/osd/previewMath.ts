@@ -12,11 +12,11 @@ export interface Chapter {
 }
 
 /** The thumbnail is drawn this wide; its height follows the manifest's aspect ratio. */
-export const THUMB_DISPLAY_WIDTH = 320;
-/** The card around a thumbnail: the thumbnail plus 16 px of padding on each side. */
-export const CARD_WIDTH_WITH_IMAGE = THUMB_DISPLAY_WIDTH + 32;
-/** The card without an image holds only the time and the chapter title. */
-export const CARD_WIDTH_PLAIN = 240;
+export const THUMB_DISPLAY_WIDTH = 256;
+/** The card is exactly as wide as its thumbnail: the image sits flush, the time strip under it. */
+export const CARD_WIDTH_WITH_IMAGE = THUMB_DISPLAY_WIDTH;
+/** The card without an image is the time strip alone (the time, and the rate while scrubbing). */
+export const CARD_WIDTH_PLAIN = 220;
 
 /** Index of the thumbnail that covers `seconds`; clamped to the first and last thumbnail. */
 export function tileIndex(
@@ -66,13 +66,15 @@ export function thumbnailBox(
 ): ThumbnailBox {
   const { thumbnail_width: w, thumbnail_height: h, tile_columns: c, tile_rows: r } = manifest;
   const scale = displayWidth / w;
+  // Hundredths of a pixel: the scale is rarely exact, and its noise would end up in the CSS.
+  const px = (n: number) => Math.round(n * 100) / 100;
   const { sheet, column, row } = tilePosition(tileIndex(seconds, manifest), c, r);
   return {
     sheet,
     width: displayWidth,
-    height: h * scale,
-    backgroundSize: `${c * w * scale}px ${r * h * scale}px`,
-    backgroundPosition: `${-column * w * scale}px ${-row * h * scale}px`,
+    height: px(h * scale),
+    backgroundSize: `${px(c * w * scale)}px ${px(r * h * scale)}px`,
+    backgroundPosition: `${px(-column * w * scale)}px ${px(-row * h * scale)}px`,
   };
 }
 

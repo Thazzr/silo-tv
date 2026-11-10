@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../api/session';
@@ -11,6 +11,7 @@ import {
   playbackCapabilities,
   playbackPlan,
   servePlayback,
+  terminalDecision,
   until,
   watchDetail,
   watchUserData,
@@ -117,6 +118,27 @@ async function playing(
   if (firstFrame) fireEvent.playing(video);
   return { ...ctx, video, state: fakeVideo(video) };
 }
+
+describe('PlayerScreen loading view', () => {
+  it('shows the centred cue on the black player layer, with no heading or title', () => {
+    render();
+    const loading = screen.getByTestId('player-loading');
+    expect(loading).toHaveClass('player');
+    const cue = loading.querySelector('.player-cue');
+    expect(cue).not.toBeNull();
+    expect(cue).toHaveAttribute('role', 'status');
+    expect(cue).toHaveTextContent('Loading');
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(loading).not.toHaveTextContent('First Title');
+  });
+
+  it('is left with Back, like any screen', () => {
+    const { onExit } = render();
+    screen.getByTestId('player-loading');
+    key(BACK);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('PlayerScreen playback', () => {
   it('shows a loading cue until the video plays', async () => {
@@ -483,40 +505,82 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
   });
 });
 
-describe('PlayerScreen diagnostics', () => {
-  it('toggles with the blue key and shows the plan and the engine state', async () => {
-    const { video, state } = await playing();
-    state.videoWidth = 1920;
-    state.videoHeight = 1080;
-    state.currentTime = 65;
-    state.bufferedEnd = 125;
-    state.playbackRate = 1;
-    state.readyState = 4;
-    state.networkState = 2;
-    expect(screen.queryByTestId('player-diagnostics')).not.toBeInTheDocument();
+describe('PlayerScreen Info on the blue key', () => {
+  const osdVisible = () => screen.getByTestId('player-osd').getAttribute('data-visible') === 'true';
+  const infoButton = () => screen.getByRole('button', { name: 'Info' });
+
+  it('shows the overlay and opens Info with the focus on its button, and a second press closes it', async () => {
+    await playing();
+    expect(osdVisible()).toBe(false);
+    expect(screen.queryByTestId('player-info')).not.toBeInTheDocument();
     key(BLUE);
-    const overlay = await screen.findByTestId('player-diagnostics');
-    fireEvent.timeUpdate(video);
-    await waitFor(() => expect(overlay).toHaveTextContent('1920×1080'));
-    expect(overlay).toHaveTextContent('original_http');
-    expect(overlay).toHaveTextContent('mp4');
-    expect(overlay).toHaveTextContent('h264');
-    expect(overlay).toHaveTextContent('aac');
-    expect(overlay).toHaveTextContent('1:05');
-    expect(overlay).toHaveTextContent('2:05');
-    expect(overlay).toHaveTextContent(SESSION_ID.slice(0, 8));
-    expect(overlay.textContent).not.toContain(SESSION_ID);
+    expect(osdVisible()).toBe(true);
+    expect(await screen.findByTestId('player-info')).toBeInTheDocument();
+    expect(infoButton()).toHaveFocus();
+    expect(infoButton()).toHaveAttribute('aria-pressed', 'true');
     key(BLUE);
-    expect(screen.queryByTestId('player-diagnostics')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('player-info')).not.toBeInTheDocument();
+    // The overlay stays, with the focus on the button.
+    expect(osdVisible()).toBe(true);
+    expect(infoButton()).toHaveFocus();
   });
 
-  it('opens by itself on an error, and never shows the token or the media URL', async () => {
+  it('opens Info too while the overlay is up on another button', async () => {
+    await playing();
+    key(UP);
+    expect(osdVisible()).toBe(true);
+    key(BLUE);
+    expect(await screen.findByTestId('player-info')).toBeInTheDocument();
+    expect(infoButton()).toHaveFocus();
+  });
+
+  it('has no separate diagnostics window any more: the blue key shows the Info and nothing else', async () => {
+    const { state } = await playing();
+    state.videoWidth = 1920;
+    state.videoHeight = 1080;
+    key(BLUE);
+    const panel = await screen.findByTestId('player-info');
+    expect(screen.queryByTestId('player-diagnostics')).not.toBeInTheDocument();
+    expect(document.querySelector('.player-diag')).toBeNull();
+    // What the engine reports: the element's size, the plan's route and the file's codecs.
+    expect(panel).toHaveTextContent('1920×1080');
+    expect(panel).toHaveTextContent('Direct play');
+    expect(panel).toHaveTextContent('H.264');
+    expect(panel).toHaveTextContent('AAC');
+    expect(panel.textContent).not.toContain(SESSION_ID);
+  });
+
+  it('renders no diagnostics element in the playing view, also with a media error', async () => {
+    const { video, state } = await playing();
+    state.error = { code: 3, message: 'decode' };
+    fireEvent.error(video);
+    await waitFor(() => expect(document.querySelector('video')).not.toBe(video));
+    expect(screen.queryByTestId('player-diagnostics')).toBeNull();
+    expect(document.querySelector('.player-diag')).toBeNull();
+    key(BLUE);
+    await screen.findByTestId('player-info');
+    expect(screen.queryByTestId('player-diagnostics')).toBeNull();
+    expect(document.querySelector('.player-diag')).toBeNull();
+  });
+
+  it('works before the first frame, so a load that hangs can be looked at', async () => {
+    await playing({}, false);
+    key(BLUE);
+    expect(await screen.findByTestId('player-info')).toBeInTheDocument();
+    key(BLUE);
+    expect(screen.queryByTestId('player-info')).not.toBeInTheDocument();
+  });
+
+  it('shows the last media error with its code, and never the token or the media URL', async () => {
     const { video, state } = await playing();
     const src = video.getAttribute('src')!;
     state.error = { code: 3, message: `PIPELINE_ERROR_DECODE for ${src} (${ACCESS_TOKEN})` };
     fireEvent.error(video);
-    const overlay = await screen.findByTestId('player-diagnostics');
-    await waitFor(() => expect(overlay).toHaveTextContent('3 PIPELINE_ERROR_DECODE'));
+    // The failure is recovered with a new plan; Info on the new load names the error.
+    await waitFor(() => expect(document.querySelector('video')).not.toBe(video));
+    key(BLUE);
+    const panel = await screen.findByTestId('player-info');
+    await waitFor(() => expect(panel).toHaveTextContent('3 · PIPELINE_ERROR_DECODE'));
     const shown = document.body.textContent ?? '';
     expect(shown).not.toContain(ACCESS_TOKEN);
     expect(shown).not.toContain('signed-1');
@@ -526,6 +590,33 @@ describe('PlayerScreen diagnostics', () => {
 });
 
 describe('PlayerScreen failure', () => {
+  it('shows the terminal reason when the server ends a viewer-requested replan (a seek)', async () => {
+    const stuckPlan = playbackPlan({
+      timeline: {
+        can_seek_anywhere: false,
+        player_start_seconds: 0,
+        seek_restoration: 'source_position',
+        source_start_seconds: 0,
+        stream_origin_seconds: 0,
+        timeline_offset_seconds: 0,
+      },
+    });
+    const { state } = await playing({
+      start: [playableDecision(stuckPlan)],
+      replan: [terminalDecision('No route fits.')],
+    });
+    state.duration = 5400;
+    state.seekable = [[0, 30]];
+    state.currentTime = 25;
+    key(UP);
+    tap(RIGHT);
+    const error = await screen.findByTestId('player-error');
+    // No media error is behind this one: the server's reason is the code.
+    expect(within(error).getByTestId('player-error-details').textContent).toBe(
+      `Direct play · adaptation_exhausted · ${SESSION_ID.slice(0, 8)}`,
+    );
+  });
+
   it('replans and loads the new plan; a plan already tried shows the error with Back', async () => {
     const { calls, onExit, view, video, currentVideo } = await playing();
     const first = video.getAttribute('src');
@@ -559,22 +650,78 @@ describe('PlayerScreen failure', () => {
 
   it('hides the token and its URL-encoded form on the error screen', async () => {
     const token = 'tok/en+x y';
-    const { video, currentVideo } = await (async () => {
-      const ctx = render({}, token);
-      await screen.findByTestId('player');
-      return { ...ctx, video: ctx.currentVideo()! };
-    })();
     const message = `failed ${token} and ${encodeURIComponent(token)}`;
+    const ctx = render({ replan: [terminalDecision(message)] }, token);
+    await screen.findByTestId('player');
+    const video = ctx.currentVideo()!;
     fakeVideo(video).error = { code: 3, message };
     fireEvent.error(video);
-    await waitFor(() => expect(currentVideo()).not.toBe(video));
-    const second = currentVideo()!;
-    fakeVideo(second).error = { code: 4, message };
-    fireEvent.error(second);
     const error = await screen.findByTestId('player-error');
     await waitFor(() => expect(error).toHaveTextContent('[hidden]'));
     expect(error.textContent).not.toContain(token);
     expect(error.textContent).not.toContain(encodeURIComponent(token));
+  });
+
+  it('shows one small line under the message: the route, the error code and a short session id', async () => {
+    const { video } = await playing();
+    fakeVideo(video).error = { code: 3, message: 'decode' };
+    fireEvent.error(video);
+    await waitFor(() => expect(document.querySelector('video')).not.toBe(video));
+    // The second failure meets the loop guard and ends the playback.
+    const second = document.querySelector('video')!;
+    fakeVideo(second).error = { code: 4, message: 'unsupported' };
+    fireEvent.error(second);
+    const error = await screen.findByTestId('player-error');
+    const details = within(error).getByTestId('player-error-details');
+    expect(details).toHaveTextContent(`Direct play · 4 · ${SESSION_ID.slice(0, 8)}`);
+    expect(details.textContent).not.toContain(SESSION_ID);
+    // No block of diagnostics, no URL and no token.
+    expect(within(error).queryByTestId('player-diagnostics')).toBeNull();
+    expect(error.querySelector('dl')).toBeNull();
+    expect(error.textContent).not.toContain(ACCESS_TOKEN);
+    expect(error.textContent).not.toContain('/api/v2/stream/');
+    expect(error.textContent).not.toContain('signed-');
+  });
+
+  it('shows exactly the first 8 characters of a 36-character session id', async () => {
+    const uuid = 'a1b2c3d4-e5f6-4789-abcd-0123456789ab';
+    const retry = playbackPlan({
+      plan_id: 'plan:2',
+      plan_attempt_key: 'v3:key-2',
+      session_id: uuid,
+    });
+    const { video } = await playing({
+      start: [playableDecision(playbackPlan({ session_id: uuid }), uuid)],
+      replan: [playableDecision(retry, uuid)],
+    });
+    fakeVideo(video).error = { code: 3, message: 'decode' };
+    fireEvent.error(video);
+    await waitFor(() => expect(document.querySelector('video')).not.toBe(video));
+    const second = document.querySelector('video')!;
+    fakeVideo(second).error = { code: 4, message: 'unsupported' };
+    fireEvent.error(second);
+    const error = await screen.findByTestId('player-error');
+    expect(within(error).getByTestId('player-error-details').textContent).toBe(
+      'Direct play · 4 · a1b2c3d4',
+    );
+  });
+
+  it('puts the media error code first when there is one, and the terminal reason otherwise', async () => {
+    const { video } = await playing({ replan: [terminalDecision('No route fits.')] });
+    fakeVideo(video).error = { code: 3, message: 'decode' };
+    fireEvent.error(video);
+    const error = await screen.findByTestId('player-error');
+    expect(within(error).getByTestId('player-error-details')).toHaveTextContent(
+      `Direct play · 3 · ${SESSION_ID.slice(0, 8)}`,
+    );
+  });
+
+  it('shows the terminal reason when the start itself is refused, with dashes for what is not known', async () => {
+    render({ start: [terminalDecision('No route fits.')] });
+    const error = await screen.findByTestId('player-error');
+    expect(within(error).getByTestId('player-error-details')).toHaveTextContent(
+      '- · adaptation_exhausted · -',
+    );
   });
 
   it('says so when the server does not support the protocol, with Back', async () => {

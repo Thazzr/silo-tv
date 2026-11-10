@@ -97,6 +97,8 @@ export type SessionState =
       kind: 'error';
       reason: SessionFailure;
       message?: string;
+      /** The server's terminal reason code, for a `terminal` failure that names one. */
+      code?: string;
       plan?: Plan;
       sessionId?: string;
       mediaUrl?: string;
@@ -129,6 +131,16 @@ export interface MediaFacts {
   videoCodec?: string;
   resolution?: string;
   hdr: boolean;
+  /** The file's container as the library knows it (`mkv`, `mp4`). */
+  container?: string;
+  /** Bytes. */
+  fileSize?: number;
+  /** The file's overall bitrate in kbit/s, as the watch data gives it. */
+  bitrateKbps?: number;
+  /** How many versions (files) the title has. */
+  versionCount?: number;
+  /** The version's edition ("Director's Cut"), when it names one. */
+  edition?: string;
   audioTracks: S['WatchAudioTrack'][];
   subtitleTracks: S['WatchSubtitleTrack'][];
 }
@@ -176,6 +188,10 @@ interface Version {
   videoCodec: string;
   resolution: string;
   hdr: boolean;
+  container: string;
+  fileSize: number;
+  bitrateKbps: number;
+  edition?: string;
   audioTracks: S['WatchAudioTrack'][];
   subtitleTracks: S['WatchSubtitleTrack'][];
 }
@@ -222,7 +238,7 @@ export interface ReplanOptions {
 
 export type ReplanResult =
   | { kind: 'applied' }
-  | { kind: 'terminal'; message?: string }
+  | { kind: 'terminal'; message?: string; reason?: string }
   /** The session is unknown to the server (404): a new attempt can pick up where it was. */
   | { kind: 'gone' }
   /** The server ended the session on purpose (410). */
@@ -349,7 +365,7 @@ export class PlaybackController {
     if (!this.disposed) this.deps.onState(state);
   }
 
-  private fail(reason: SessionFailure, message?: string): void {
+  private fail(reason: SessionFailure, message?: string, code?: string): void {
     // An errored session is not worth a heartbeat.
     this.clearTimer();
     this.disarmWatchdog();
@@ -357,6 +373,7 @@ export class PlaybackController {
       kind: 'error',
       reason,
       ...(message ? { message } : {}),
+      ...(code ? { code } : {}),
       ...(this.plan ? { plan: this.plan } : {}),
       ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...(this.mediaUrl ? { mediaUrl: this.mediaUrl } : {}),
@@ -461,6 +478,10 @@ export class PlaybackController {
       videoCodec: v.codec_video,
       resolution: v.resolution,
       hdr: v.hdr,
+      container: v.container,
+      fileSize: v.file_size,
+      bitrateKbps: v.bitrate,
+      ...(v.edition_raw || v.edition_key ? { edition: v.edition_raw || v.edition_key } : {}),
       audioTracks: v.audio_tracks ?? [],
       subtitleTracks: v.subtitle_tracks ?? [],
     }));
@@ -541,7 +562,7 @@ export class PlaybackController {
       if (data.outcome === 'playable' && data.playback_plan && sessionId) {
         this.adopt(data.playback_plan, sessionId);
       } else {
-        this.fail('terminal', data.terminal?.message);
+        this.fail('terminal', data.terminal?.message, data.terminal?.reason);
       }
     } catch (error) {
       this.fail(error instanceof SessionError ? error.reason : 'failed');
@@ -616,6 +637,11 @@ export class PlaybackController {
       ...(version?.videoCodec ? { videoCodec: version.videoCodec } : {}),
       ...(version?.resolution ? { resolution: version.resolution } : {}),
       hdr: version?.hdr === true,
+      ...(version?.container ? { container: version.container } : {}),
+      ...(version?.fileSize ? { fileSize: version.fileSize } : {}),
+      ...(version?.bitrateKbps ? { bitrateKbps: version.bitrateKbps } : {}),
+      versionCount: this.versions.length,
+      ...(version?.edition ? { edition: version.edition } : {}),
       audioTracks: version?.audioTracks ?? [],
       subtitleTracks: version?.subtitleTracks ?? [],
     };
@@ -869,7 +895,7 @@ export class PlaybackController {
 
   /** What a replan the viewer asked for (not a failure) leaves to do. */
   private async settle(result: ReplanResult, position: number): Promise<void> {
-    if (result.kind === 'terminal') this.fail('terminal', result.message);
+    if (result.kind === 'terminal') this.fail('terminal', result.message, result.reason);
     else if (result.kind === 'ended') this.sessionGone();
     else if (result.kind === 'gone') await this.restartAt(position);
     // transient, refused and busy: the current plan keeps playing and the request is dropped.
@@ -972,7 +998,7 @@ export class PlaybackController {
             : null;
         return { kind: 'applied' };
       }
-      return { kind: 'terminal', message: data.terminal?.message };
+      return { kind: 'terminal', message: data.terminal?.message, reason: data.terminal?.reason };
     } catch {
       return this.stopped ? { kind: 'busy' } : { kind: 'transient' };
     } finally {
@@ -1036,7 +1062,7 @@ export class PlaybackController {
       case 'busy':
         return;
       case 'terminal':
-        this.fail('terminal', result.message);
+        this.fail('terminal', result.message, result.reason);
         return;
       case 'ended':
         this.sessionGone();
@@ -1085,7 +1111,7 @@ export class PlaybackController {
         if (this.stopped) return;
         if (result.kind === 'applied' || result.kind === 'busy') return;
         if (result.kind === 'terminal') {
-          this.fail('terminal', result.message);
+          this.fail('terminal', result.message, result.reason);
           return;
         }
         if (result.kind === 'ended') {

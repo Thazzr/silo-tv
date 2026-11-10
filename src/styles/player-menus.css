@@ -1,5 +1,5 @@
 /* The player's menus. A menu is a popover above its button on the overlay's button row (settings,
-   chapters; audio and subtitles later); Info is a column on the left. Everything is flat: no blur
+   chapters; audio and subtitles later); Info is a two-column panel on the left. Everything is flat: no blur
    and no shadow, so the TV only draws a plain layer over the playing video. Rows and the focus
    look follow the app's menus (.menu-item). */
 
@@ -111,26 +111,44 @@
   color: var(--warning);
 }
 
-/* Playback info: a column on the left, below Exit and above the scrubber. Nothing to focus. */
+/* Playback info: a two-column panel on the left, below Exit and above the scrubber, as tall as its
+   content. It is a child of the overlay, so it stands above the overlay's own background (the dark
+   gradient) and below the scrub preview card; `fixed` places it against the screen, not against
+   the overlay. Nothing to focus. */
 .player-info {
-  position: absolute;
+  position: fixed;
+  z-index: 1;
   top: calc(var(--safe-y) + var(--target) + 24px);
-  bottom: calc(var(--safe-y) + 200px);
   left: var(--safe-x);
   box-sizing: border-box;
-  width: 560px;
-  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 32px;
+  width: 1100px;
+  max-width: calc(100vw - 2 * var(--safe-x));
+  /* Never lower than the scrubber and the button row: 88 px buttons, the scrubber and the gaps. */
+  max-height: calc(100vh - 2 * var(--safe-y) - var(--target) - 24px - 220px);
+  padding: 12px 24px 16px;
   overflow: hidden;
   pointer-events: none;
-  background: var(--surface-raised);
+  /* A little see-through, so it sits on the picture; no blur (the TV does not draw one cheaply). */
+  background: rgba(21, 23, 28, 0.78);
   border: 2px solid var(--hairline);
   border-radius: 20px;
 }
 
+.player-info-column {
+  min-width: 0;
+}
+
 .player-info-title {
-  margin: 0 0 4px 16px;
+  margin: 0;
   font-size: var(--fs-card-title);
   font-weight: 700;
+}
+
+.player-info .player-menu-heading {
+  margin: 10px 0 2px;
 }
 
 .player-info-facts {
@@ -141,10 +159,29 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 24px;
-  min-height: 36px;
-  padding: 0 16px;
+  gap: 16px;
+  min-height: 30px;
   font-size: 22px;
+  line-height: 30px;
+}
+
+/* What only shows when it applies: under the source-file facts (the right column, which has the
+   room), and long text wraps. */
+.player-info-footer {
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 2px solid var(--hairline);
+}
+
+.player-info-footer .player-info-fact {
+  line-height: 30px;
+}
+
+.player-info-footer .player-info-fact dd {
+  overflow: visible;
+  text-align: left;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .player-info-fact dt {

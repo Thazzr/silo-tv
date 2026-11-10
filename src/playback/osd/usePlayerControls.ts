@@ -22,7 +22,6 @@ interface Args {
   read(): number | null;
   seekTo(sourceSeconds: number): void;
   leave(): void;
-  toggleDiagnostics(): void;
   skipBackSeconds: number;
   skipForwardSeconds: number;
   /** The menu buttons that are present, in the order of the row. */
@@ -35,6 +34,8 @@ interface Args {
     open: OsdMenu | null;
     show(menu: OsdMenu): void;
     hide(): void;
+    /** The button a menu that just closed after a pick leaves this view to land on. */
+    arrival(): OsdMenu | null;
   };
   /** The skip pill (intro, recap, credits): whether it shows and holds the focus, and its actions. */
   pill: {
@@ -87,7 +88,9 @@ interface Held {
 export function usePlayerControls(args: Args): PlayerControls {
   const { engine, started, paused, buffering, position, duration } = args;
   // A player that reloads its stream under an open menu starts with the overlay up on its button.
-  const [overlayFocus, setFocusState] = useState<OsdFocus>(args.panel.open ?? 'video');
+  // So does one that loads for a pick that just closed its menu: the focus returns to the button.
+  const [landed] = useState(() => args.panel.arrival());
+  const [overlayFocus, setFocusState] = useState<OsdFocus>(args.panel.open ?? landed ?? 'video');
 
   const skip = useSkipAccumulator({
     read: args.read,
@@ -98,7 +101,7 @@ export function usePlayerControls(args: Args): PlayerControls {
   const menuOpen = args.panel.open !== null;
   const osd = useOsdVisibility(
     paused || buffering || scrub.state !== null || skip.pending !== null || menuOpen,
-    menuOpen,
+    menuOpen || landed !== null,
   );
   // A hidden overlay (also one that hid by itself when idle) leaves the focus on the video, except
   // for a new skip pill, which holds it for its first seconds. A pill that is gone leaves the
@@ -132,7 +135,7 @@ export function usePlayerControls(args: Args): PlayerControls {
     holdTimer.current = null;
   }, []);
   useEffect(() => clearHoldTimer, [clearHoldTimer]);
-  const visibleRef = useRef(menuOpen);
+  const visibleRef = useRef(menuOpen || landed !== null);
   useEffect(() => {
     visibleRef.current = osd.visible;
   }, [osd.visible]);
@@ -159,6 +162,18 @@ export function usePlayerControls(args: Args): PlayerControls {
     },
     [clearHoldTimer],
   );
+
+  /** The blue key: Info opens with the overlay up and the focus on its button, or closes again. */
+  const toggleInfo = useCallback(() => {
+    const { args: a, osd: o } = latest.current;
+    clearHoldTimer();
+    const closing = a.panel.open === 'info';
+    if (closing) a.panel.hide();
+    else a.panel.show('info');
+    setFocusState('info');
+    if (closing) o.poke();
+    else o.show();
+  }, [clearHoldTimer]);
 
   const closeMenu = useCallback(() => {
     const { args: a, osd: o } = latest.current;
@@ -274,7 +289,7 @@ export function usePlayerControls(args: Args): PlayerControls {
             break;
           case 'blue':
             e.preventDefault();
-            a.toggleDiagnostics();
+            toggleInfo();
             break;
         }
         return;
@@ -283,9 +298,9 @@ export function usePlayerControls(args: Args): PlayerControls {
       // The player owns these keys. A press that opens a menu must not also reach the menu's first
       // row, which takes the focus a moment later: the navigation would count it as OK there.
       e.stopImmediatePropagation();
-      // Before the first frame nothing but Back (and the diagnostics) acts.
+      // Before the first frame nothing but Back (and the Info, for a load that hangs) acts.
       if (!a.started) {
-        if (key === 'blue') a.toggleDiagnostics();
+        if (key === 'blue') toggleInfo();
         return;
       }
       const wasVisible = o.visible;
@@ -312,8 +327,7 @@ export function usePlayerControls(args: Args): PlayerControls {
           a.leave();
           return;
         case 'blue':
-          touch();
-          a.toggleDiagnostics();
+          toggleInfo();
           return;
         default:
           break;
@@ -449,7 +463,7 @@ export function usePlayerControls(args: Args): PlayerControls {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [engine, openOsd, startScrub, commitScrub, togglePlay, action, clearHoldTimer]);
+  }, [engine, openOsd, startScrub, commitScrub, togglePlay, action, clearHoldTimer, toggleInfo]);
 
   const pointerMoved = useCallback(() => {
     // A menu is open: the overlay stays up on its own until it closes.

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react';
+import { getLanguageSetting, subscribeLanguageSetting } from './languageSetting';
 import { detectLanguage, translate, type Language, type MessageKey } from './translate';
 
 export { detectLanguage, translate };
@@ -9,7 +17,12 @@ type TFunction = (key: MessageKey, params?: Record<string, string | number>) => 
 const I18nContext = createContext<Language>('de');
 
 export function I18nProvider({ children, lang }: { children: ReactNode; lang?: Language }) {
-  const value = useMemo(() => lang ?? detectLanguage(navigator.language), [lang]);
+  // The viewer's own choice (Settings) wins over the TV's language; `lang` is for tests and previews.
+  const setting = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
+  const value = useMemo(
+    () => lang ?? (setting === 'auto' ? detectLanguage(navigator.language) : setting),
+    [lang, setting],
+  );
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

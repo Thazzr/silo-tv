@@ -1,9 +1,9 @@
 // The popover's focus claim: it comes one task after the mount, and not at all when the menu is
 // gone by then.
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
-import { getCurrentFocusKey } from '../../app/nav';
+import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { MenuPopover, MenuRow } from './MenuPopover';
 
@@ -71,5 +71,45 @@ describe('the focus claim of a popover', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('the press that opened a menu', () => {
+  it('presses no row, although the navigation holds the focus key of a row of the menu before', async () => {
+    const pressed = vi.fn();
+    const menu = (
+      <MenuPopover
+        label="Menu"
+        testId="t"
+        rows={['row-a', 'row-b']}
+        fallback="row-a"
+        remember={() => {}}
+        recall={() => null}
+        onSide={() => {}}
+      >
+        <MenuRow focusKey="row-a" onClick={() => pressed('a')}>
+          A
+        </MenuRow>
+        <MenuRow focusKey="row-b" onClick={() => pressed('b')}>
+          B
+        </MenuRow>
+      </MenuPopover>
+    );
+    // The first menu leaves its focus on row-b when it goes.
+    const first = renderWithSilo(menu, { session: new Session(memoryStorage()) });
+    await wait(50);
+    await setFocus('row-b');
+    expect(getCurrentFocusKey()).toBe('row-b');
+    first.unmount();
+    const second = renderWithSilo(menu, { session: new Session(memoryStorage()) });
+    // The Enter that opened the menu arrives while the rows mount.
+    fireEvent.keyDown(window, { keyCode: 13 });
+    await wait(80);
+    expect(pressed).not.toHaveBeenCalled();
+    // Once the menu has its own focus a press acts.
+    fireEvent.keyDown(window, { keyCode: 13 });
+    await wait(80);
+    expect(pressed).toHaveBeenCalledTimes(1);
+    second.unmount();
   });
 });

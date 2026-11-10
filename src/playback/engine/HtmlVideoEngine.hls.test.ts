@@ -15,6 +15,7 @@ const mock = vi.hoisted(() => {
     };
     handlers: Handler[] = [];
     config: unknown;
+    bandwidthEstimate = Number.NaN;
     attachMedia = vi.fn();
     loadSource = vi.fn();
     detachMedia = vi.fn();
@@ -101,6 +102,47 @@ describe('HtmlVideoEngine source path', () => {
     engine.setSource('https://media.example/file.mp4', { hls: false });
     expect(FakeHls.instances[0]!.destroy).toHaveBeenCalledTimes(1);
     expect(el.src).toBe('https://media.example/file.mp4');
+  });
+});
+
+describe('HtmlVideoEngine decoder and bandwidth', () => {
+  it('names hls.js while it plays HLS, and the native player otherwise', () => {
+    const { engine } = setup();
+    expect(engine.decoder).toBe('native');
+    engine.setSource(URL, { hls: true });
+    expect(engine.decoder).toBe('hlsjs');
+    engine.setSource('https://media.example/file.mp4', { hls: false });
+    expect(engine.decoder).toBe('native');
+  });
+
+  it('plays HLS natively, and says so, when hls.js is not supported', () => {
+    FakeHls.supported = false;
+    const { engine } = setup();
+    engine.setSource(URL, { hls: true });
+    expect(engine.decoder).toBe('native');
+  });
+
+  it('gives null for an estimate of 0 or Infinity, which is no reading', () => {
+    const { engine } = setup();
+    engine.setSource(URL, { hls: true });
+    const hls = FakeHls.instances[0]!;
+    hls.bandwidthEstimate = 0;
+    expect(engine.bandwidthEstimate).toBeNull();
+    hls.bandwidthEstimate = Number.POSITIVE_INFINITY;
+    expect(engine.bandwidthEstimate).toBeNull();
+    hls.bandwidthEstimate = -5;
+    expect(engine.bandwidthEstimate).toBeNull();
+  });
+
+  it('hands out the hls.js estimate once it has one, and null before or off hls.js', () => {
+    const { engine } = setup();
+    expect(engine.bandwidthEstimate).toBeNull();
+    engine.setSource(URL, { hls: true });
+    expect(engine.bandwidthEstimate).toBeNull();
+    FakeHls.instances[0]!.bandwidthEstimate = 12_500_000;
+    expect(engine.bandwidthEstimate).toBe(12_500_000);
+    engine.setSource('https://media.example/file.mp4', { hls: false });
+    expect(engine.bandwidthEstimate).toBeNull();
   });
 });
 

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
 import {
   Focusable,
   FocusGroup,
@@ -20,13 +28,22 @@ import {
  * focus change ahead of it, so the OK that opened the menu would otherwise land on the row that
  * takes the focus and press it.
  */
-function FocusOnMount({ recall, fallback }: { recall(): string | null; fallback: string }) {
+function FocusOnMount({
+  recall,
+  fallback,
+  onReady,
+}: {
+  recall(): string | null;
+  fallback: string;
+  onReady(): void;
+}) {
   useEffect(() => {
     // Read now, not in the timeout: the navigation gives the focus back to a row whose key it
     // still holds from the menu that was open before (the same keys), and that row would then be
     // remembered as the viewer's choice.
     const remembered = recall();
     const timer = setTimeout(() => {
+      onReady();
       void setFocus(remembered && doesFocusableExist(remembered) ? remembered : fallback);
     }, 0);
     return () => clearTimeout(timer);
@@ -39,11 +56,17 @@ function FocusOnMount({ recall, fallback }: { recall(): string | null; fallback:
 interface RowApi {
   /** A row got the focus: remember it and keep it in view. */
   focused(key: string): void;
+  /**
+   * The menu has taken its own focus. Until then a press on a row is the one that opened the menu
+   * (the navigation holds the focus key of a row of an earlier menu and gives it back on mount),
+   * and it must not act.
+   */
+  ready(): boolean;
 }
 const RowContext = createContext<RowApi | null>(null);
 
 /** One row of a menu: a button that takes part in the navigation. */
-export function MenuRow({ focusKey, onFocused, className, ...rest }: FocusableProps) {
+export function MenuRow({ focusKey, onFocused, onClick, className, ...rest }: FocusableProps) {
   const api = useContext(RowContext);
   return (
     <Focusable
@@ -52,6 +75,10 @@ export function MenuRow({ focusKey, onFocused, className, ...rest }: FocusablePr
       onFocused={() => {
         api?.focused(focusKey);
         onFocused?.();
+      }}
+      onClick={(event) => {
+        if (api && !api.ready()) return;
+        onClick?.(event);
       }}
       {...rest}
     />
@@ -89,9 +116,12 @@ export function MenuPopover({
   children,
 }: MenuPopoverProps) {
   const box = useRef<HTMLDivElement>(null);
+  const readyRef = useRef(false);
+  const markReady = useCallback(() => void (readyRef.current = true), []);
 
   const api = useMemo<RowApi>(
     () => ({
+      ready: () => readyRef.current,
       focused(key) {
         remember(key);
         // The pointer never scrolls (origin.ts); a key press does, and nothing animates.
@@ -133,7 +163,7 @@ export function MenuPopover({
           <div className="player-menu-scroll" ref={box}>
             {children}
           </div>
-          <FocusOnMount recall={recall} fallback={fallback} />
+          <FocusOnMount recall={recall} fallback={fallback} onReady={markReady} />
         </FocusGroup>
       </RowContext.Provider>
     </SelfFocusing>

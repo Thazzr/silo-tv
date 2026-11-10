@@ -542,8 +542,16 @@ h3 {
   text-overflow: ellipsis;
 }
 
+/* The clock sits right-aligned directly above the scrubber, inside the overlay's safe-area padding;
+   the preview card stands above it. It never shrinks. */
 .player-osd-clock {
   flex-shrink: 0;
+  margin: 0 0 2px;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(237, 237, 237, 0.85);
+  text-align: right;
   white-space: pre;
 }
 
@@ -551,51 +559,50 @@ h3 {
   position: absolute;
   bottom: 100%;
   left: 0;
+  /* Above the Info panel, which stands above the overlay's gradient. */
+  z-index: 2;
   box-sizing: border-box;
-  padding: 16px;
   margin-bottom: 12px;
-  text-align: center;
-  background: rgba(21, 23, 28, 0.97);
-  border-radius: 20px;
+  overflow: hidden;
+  border-radius: 10px;
   pointer-events: none;
   will-change: transform;
 }
 
+/* The thumbnail sits flush at the top of the card; a thin light line inside it keeps its edge
+   visible over a dark frame. */
 .player-preview-image {
-  margin: 0 auto;
   background-color: #000;
   background-repeat: no-repeat;
-  border-radius: 14px;
-  outline: 1px solid rgba(255, 255, 255, 0.18);
+  outline: 1px solid rgba(255, 255, 255, 0.35);
   outline-offset: -1px;
 }
 
+/* A slim strip: the time on the left, the scrub rate on the right while scrubbing. */
 .player-preview-time {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin: 12px 0 0;
-  font-size: 24px;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 22px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.player-preview-time:first-child {
-  margin-top: 0;
+  background: rgba(21, 23, 28, 0.8);
 }
 
 .player-preview-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-secondary);
 }
 
-.player-preview-chapter {
-  margin: 4px 0 0;
-  overflow: hidden;
-  font-size: 20px;
-  color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.player-preview-rate svg {
+  width: 24px;
+  height: 24px;
 }
 
 /* The hit area is tall enough for the pointer; the visible bar inside it is thin. */
@@ -801,6 +808,13 @@ h3 {
   background: rgba(110, 231, 183, 0.45);
 }
 
+/* The error page's one small line: route, error code and a short session id. */
+.player-error-details {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
 /* A short hint over the video (a quality that did not play): flat, centred above the bottom bar,
    inside the safe area. It never takes the focus or a key. */
 .player-notice {
@@ -874,43 +888,6 @@ h3 {
   to {
     transform: scaleX(1);
   }
-}
-
-/* The overlay lays out its own rows (label | value); the probe screen's dl styles are scoped to
-   .platform and do not apply here. */
-.player-diag {
-  position: absolute;
-  top: var(--safe-y);
-  left: var(--safe-x);
-  box-sizing: border-box;
-  width: 960px;
-  max-width: calc(100vw - 2 * var(--safe-x));
-  /* Stays above the controls and inside the safe area. */
-  max-height: calc(100vh - 2 * var(--safe-y) - 420px);
-  overflow: hidden;
-  margin: 0;
-  padding: 16px 24px;
-  font-family: monospace;
-  font-size: 22px;
-  line-height: 1.3;
-  background: rgba(21, 23, 28, 0.85);
-  border-radius: var(--radius-control);
-}
-
-.player-diag-row {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 0 24px;
-  padding: 3px 0;
-}
-
-.player-diag dt {
-  color: var(--text-secondary);
-}
-
-.player-diag dd {
-  margin: 0;
-  color: var(--text);
 }
 
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the
@@ -1431,6 +1408,19 @@ html {
 /* Settings screen: choice pills in one row, the saved one marked like the password screen's choice. */
 .settings-section h2 {
   margin-top: 24px;
+}
+
+.settings-section-title {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.settings-note {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
 }
 
 .settings-name {

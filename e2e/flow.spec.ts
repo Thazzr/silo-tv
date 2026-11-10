@@ -1155,7 +1155,11 @@ test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewat
   await expect(page.getByRole('menuitem', { name: 'Einstellungen' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
-  // The row opens on the saved pill (7 s); the arrows only move the highlight, OK selects.
+  // The screen opens on its first row (language); Down twice reaches the rewind row, which is
+  // entered on the saved pill (7 s). The arrows only move the highlight, OK selects.
+  await expect(page.getByRole('radio', { name: 'Automatisch (wie Fernseher)' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
   await expect(page.getByRole('radio', { name: '7 s' })).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('ArrowRight');
@@ -1837,7 +1841,7 @@ test('two servers: code sign-in on A, password sign-in on B, switching and remov
   await expect(page.getByTestId('server-name')).toHaveText('Silo A');
 });
 
-test('player diagnostics (blue key): a two-column list of readable rows inside the screen', async ({
+test('player Info (blue key): two columns of readable rows, inside the safe area and above the overlay gradient', async ({
   page,
 }) => {
   const { origin } = await startFakeSilo({ series: true });
@@ -1853,12 +1857,15 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
-  // Blue is key code 406 on the remote; Playwright has no key name for it.
-  await page.evaluate(
-    "document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 406, bubbles: true }))",
-  );
-  const panel = page.getByTestId('player-diagnostics');
+  // Blue is key code 406 on the remote; Playwright has no key name for it. It opens the overlay
+  // and Info with the focus on the Info button; no separate diagnostics window exists.
+  const blue =
+    "document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 406, bubbles: true }))";
+  await page.evaluate(blue);
+  const panel = page.getByTestId('player-info');
   await expect(panel).toBeVisible();
+  await expect(page.getByTestId('player-diagnostics')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Info' })).toBeFocused();
 
   // The probe screen's dl rules must not leak in: no 280 px grid, no break-anywhere values.
   const styles = await panel.evaluate((el) => {
@@ -1870,44 +1877,88 @@ test('player diagnostics (blue key): a two-column list of readable rows inside t
       wordBreak: view.getComputedStyle(dd).wordBreak,
     };
   });
-  expect(styles.display).not.toBe('grid');
+  expect(styles.display).toBe('grid');
   expect(styles.columns).not.toContain('280px');
   expect(styles.wordBreak).not.toBe('break-all');
 
-  const rows = await panel.locator('.player-diag-row').evaluateAll((els) =>
+  // Two columns side by side: "now" on the left, the source file on the right.
+  const columns = await panel.locator('.player-info-column').evaluateAll((els) =>
+    els.map((el) => {
+      const box = el.getBoundingClientRect();
+      return { left: box.left, right: box.right, title: el.querySelector('h2')!.textContent };
+    }),
+  );
+  expect(columns.map((column) => column.title)).toEqual(['Jetzt', 'Quelldatei']);
+  expect(columns[1]!.left).toBeGreaterThanOrEqual(columns[0]!.right);
+
+  const rows = await panel.locator('.player-info-fact').evaluateAll((els) =>
     els.map((el) => {
       const dt = el.querySelector('dt')!.getBoundingClientRect();
       const dd = el.querySelector('dd')!.getBoundingClientRect();
       return {
         label: el.querySelector('dt')!.textContent ?? '',
-        text: el.querySelector('dd')!.textContent ?? '',
-        dtLeft: dt.left,
-        dtTop: dt.top,
+        dtRight: dt.right,
         ddLeft: dd.left,
+        dtTop: dt.top,
         ddTop: dd.top,
-        ddWidth: dd.width,
-        ddHeight: dd.height,
+        height: el.getBoundingClientRect().height,
+        fontSize: parseFloat(el.ownerDocument.defaultView!.getComputedStyle(el).fontSize),
       };
     }),
   );
-  expect(rows).toHaveLength(12);
-  const oneLine = rows[0]?.ddHeight ?? 0;
+  expect(rows.length).toBeGreaterThanOrEqual(10);
   for (const row of rows) {
-    // Label and value sit side by side, in this order, and the value has room to read.
-    expect(row.ddLeft, row.label).toBeGreaterThan(row.dtLeft + 100);
-    expect(Math.abs(row.ddTop - row.dtTop), row.label).toBeLessThan(oneLine);
-    expect(row.ddWidth, row.label).toBeGreaterThanOrEqual(200);
-    // A short value never wraps: it is as high as the route value.
-    if (row.text.length <= 20) expect(row.ddHeight, row.label).toBeLessThanOrEqual(oneLine + 1);
+    // Label and value sit side by side, in this order, on one compact row.
+    expect(row.ddLeft, row.label).toBeGreaterThanOrEqual(row.dtRight);
+    expect(Math.abs(row.ddTop - row.dtTop), row.label).toBeLessThan(10);
+    expect(row.height, row.label).toBeLessThanOrEqual(31);
+    expect(row.fontSize, row.label).toBeGreaterThanOrEqual(20);
   }
 
-  // The panel lies inside the screen (and its 5 % safe area).
-  const box = await panel.boundingBox();
+  // The panel lies inside the screen's safe area, below Exit, about 1100 px wide, and clear of
+  // the scrubber and the button row.
+  const box = (await panel.boundingBox())!;
   const viewport = page.viewportSize()!;
-  expect(box!.x).toBeGreaterThanOrEqual(viewport.width * 0.05 - 1);
-  expect(box!.y).toBeGreaterThanOrEqual(viewport.height * 0.05 - 1);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width * 0.95 + 1);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height * 0.95 + 1);
+  expect(box.x).toBeGreaterThanOrEqual(viewport.width * 0.05 - 1);
+  expect(box.y).toBeGreaterThanOrEqual(viewport.height * 0.05 - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width * 0.95 + 1);
+  expect(box.width).toBeGreaterThanOrEqual(1000);
+  expect(box.width).toBeLessThanOrEqual(1100 + 1);
+  const exit = (await page.getByRole('button', { name: 'Beenden' }).boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(exit.y + exit.height);
+  const scrubber = (await page.getByTestId('player-scrubber').boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(scrubber.y);
+
+  // The overlay fades in over 200 ms; measure colours once it is fully there.
+  await expect(page.getByTestId('player-osd')).toHaveCSS('opacity', '1');
+  // Nothing overflows the panel (the footer's rows included).
+  expect(await panel.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+  // Above the overlay's gradient: the panel is a little see-through (78 % of #15171c over the
+  // picture), so a spot inside it is at least 0.78 x (21, 23, 28); under the gradient's 88 % black
+  // it would be near zero.
+  const shot = await page.screenshot({
+    clip: { x: box.x + 12, y: box.y + box.height - 10, width: 4, height: 4 },
+  });
+  const pixel = (await page.evaluate(`(async () => {
+    const image = new Image();
+    image.src = 'data:image/png;base64,${shot.toString('base64')}';
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    return Array.from(context.getImageData(1, 1, 1, 1).data);
+  })()`)) as number[];
+  expect(pixel[0]!).toBeGreaterThanOrEqual(14);
+  expect(pixel[1]!).toBeGreaterThanOrEqual(15);
+  expect(pixel[2]!).toBeGreaterThanOrEqual(18);
+  expect(pixel[0]!).toBeLessThanOrEqual(30);
+
+  // The blue key again closes it.
+  await page.evaluate(blue);
+  await expect(panel).toHaveCount(0);
 });
 
 async function openSeriesDetail(
@@ -2595,6 +2646,9 @@ test('a screen taller than the window scrolls the document to the focused elemen
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
   // A window much shorter than the settings: moving the focus brings its pill into view.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
   await page.setViewportSize({ width: 1920, height: 300 });
   const inWindow = () =>
     page.evaluate(
@@ -2855,12 +2909,14 @@ test('Magic Remote wheel: on the settings screen in a small window nothing scrol
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
   await page.setViewportSize({ width: 1920, height: 300 });
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
   await page.evaluate('window.scrollTo(0, 0)');
-  // The screen has one row of choices: Up and Down have nowhere to go, so the wheel must not
-  // fall back to scrolling the page by itself.
+  // The rewind row is the last one: Down has nowhere to go, so the wheel must not fall back to
+  // scrolling the page by itself.
   await page.mouse.wheel(0, 400);
   await page.waitForTimeout(WHEEL_GAP_MS);
   await page.mouse.wheel(0, 400);

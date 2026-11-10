@@ -24,13 +24,16 @@ export function settingsRowKeys(menu: QualityMenu | null, episode: boolean): str
 
 /**
  * The gear's menu: Quality (when the plan offers a choice) and, for an episode, "Auto-play next".
- * A quality pick is a replan; a refused one leaves the old stream playing and says so.
+ * A quality pick is a replan. One that is applied closes the menu (the stream reloads under it and
+ * the focus goes back to the gear); a refused one leaves the old stream playing, the menu open,
+ * and says so.
  */
 export function SettingsMenu({
   menu,
   preference,
   episode,
   qualityChange,
+  onApplied,
   remember,
   recall,
   onSide,
@@ -41,6 +44,8 @@ export function SettingsMenu({
   preference: string;
   episode: boolean;
   qualityChange(label: string): Promise<ReplanResult>;
+  /** The pick was applied: the menu closes. */
+  onApplied(): void;
   remember(key: string): void;
   recall(): string | null;
   onSide(direction: 'left' | 'right'): void;
@@ -61,8 +66,8 @@ export function SettingsMenu({
     setRefused(false);
     try {
       const result = await qualityChange(target);
-      // An applied change reloads the stream and this menu with it.
-      if (result.kind !== 'applied') setRefused(true);
+      if (result.kind === 'applied') onApplied();
+      else setRefused(true);
     } finally {
       busy.current = false;
     }

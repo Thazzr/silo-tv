@@ -10,6 +10,7 @@ type S = components['schemas'];
 /** The contract defaults of the keys the app reads (what a server answers when nothing is stored). */
 const SERVER_DEFAULTS: Record<string, unknown> = {
   'ui.title_art': true,
+  'ui.time_format': 'auto',
   'catalog.hide_unwatched_episode_images': false,
   'catalog.hide_unwatched_episode_overviews': false,
   'ui.theme_music_enabled': false,
@@ -61,6 +62,7 @@ export interface SettingsCalls {
 
 const INTRODUCED_IN: Record<string, number> = {
   'ui.title_art': 16,
+  'ui.time_format': 1,
   'catalog.hide_unwatched_episode_images': 17,
   'catalog.hide_unwatched_episode_overviews': 17,
   'ui.theme_music_enabled': 11,

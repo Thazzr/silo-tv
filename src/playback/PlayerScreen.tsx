@@ -8,7 +8,7 @@ import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
 import { ChaptersMenu } from './menus/ChaptersMenu';
-import { currentChapter } from './menus/info';
+import { currentChapter, routeOf, type Route } from './menus/info';
 import { InfoColumn } from './menus/InfoColumn';
 import { qualityLabel, qualityMenu } from './menus/qualityMenu';
 import { SettingsMenu, settingsRowKeys } from './menus/SettingsMenu';
@@ -18,13 +18,13 @@ import { bufferedUntil, SPINNER_DELAY_MS, SPINNER_MIN_MS, titleBlock } from './o
 import { useDelayedFlag } from './osd/useDelayedFlag';
 import { usePlayerControls } from './osd/usePlayerControls';
 import { useTrickplay } from './osd/useTrickplay';
-import { PlayerDiagnostics } from './PlayerDiagnostics';
 import { bandFractions } from './skip/segments';
 import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import type { StartIntent } from './resume';
 import { isHlsStream } from './engine/PlayerEngine';
+import { getTimeMode } from './timeDisplay';
 import {
   usePlaybackSession,
   type PlaybackSession,
@@ -37,6 +37,12 @@ import {
 
 /** How long the hint about a quality that did not play stays on screen. */
 export const QUALITY_NOTICE_MS = 4_000;
+
+const ROUTE_TEXT: Record<Route, MessageKey> = {
+  direct: 'player.info.routeDirect',
+  remux: 'player.info.routeRemux',
+  transcode: 'player.info.routeTranscode',
+};
 
 const ERROR_TEXT: Record<SessionFailure, MessageKey> = {
   unsupported: 'player.error.unsupported',
@@ -80,6 +86,9 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
   const token = auth.get()?.accessToken;
+  // A view that mounted for a pick that closed its menu has taken the arrival by now.
+  const settlePanel = panel.settle;
+  useEffect(() => settlePanel());
 
   // The hint for a quality change that went back to the quality before. It lives here, above the
   // playing view, which is mounted anew for every load (the fallback is one).
@@ -94,16 +103,7 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
     return () => clearTimeout(handle);
   }, [fallbacks]);
 
-  if (state.kind === 'loading' || state.kind === 'starting') {
-    return (
-      <Screen title={title} onBack={onExit} testId="player-loading">
-        <p className="loading" role="status">
-          <span className="spinner" aria-hidden="true" />
-          {t('player.loading')}
-        </p>
-      </Screen>
-    );
-  }
+  if (state.kind === 'loading' || state.kind === 'starting') return <LoadingView onExit={onExit} />;
 
   if (state.kind === 'prompt') {
     return (
@@ -119,24 +119,25 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   }
 
   if (state.kind === 'error') {
+    const route = state.plan ? routeOf(state.plan.delivery) : null;
+    const details = [
+      route ? t(ROUTE_TEXT[route]) : '-',
+      playback.mediaError ? String(playback.mediaError.code) : (state.code ?? '-'),
+      state.sessionId ? state.sessionId.slice(0, 8) : '-',
+    ].join(' · ');
     return (
       <Screen title={title} onBack={onExit} testId="player-error">
         <p role="alert" className="error">
           {t(ERROR_TEXT[state.reason])}
         </p>
         {state.message ? <p>{redact(state.message, [token, state.mediaUrl])}</p> : null}
+        {/* The route, the error's code and a short session id: enough to tell a report apart. */}
+        <p className="player-error-details" data-testid="player-error-details">
+          {redact(details, [token, state.mediaUrl])}
+        </p>
         <Button focusKey="player-back" autoFocus onClick={onExit}>
           {t('player.back')}
         </Button>
-        {state.plan ? (
-          <PlayerDiagnostics
-            plan={state.plan}
-            sessionId={state.sessionId}
-            video={null}
-            mediaError={playback.mediaError}
-            secrets={[token, state.mediaUrl]}
-          />
-        ) : null}
       </Screen>
     );
   }
@@ -146,7 +147,6 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       <PlayingView
         key={state.loadId}
         plan={state.plan}
-        sessionId={state.sessionId}
         mediaUrl={state.mediaUrl}
         autoplay={state.autoplay}
         heading={state.heading}
@@ -172,9 +172,30 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   );
 }
 
+/** The centred spinner both loading views show, so the hand-over from one to the other is invisible. */
+function LoadingCue() {
+  const t = useT();
+  return (
+    <p className="player-cue loading" role="status" data-testid="player-cue">
+      <span className="spinner" aria-hidden="true" />
+      {t('player.loading')}
+    </p>
+  );
+}
+
+/** While the session starts: the black player layer with the cue, as the playing view waits. */
+function LoadingView({ onExit }: { onExit: () => void }) {
+  // Back leaves, as on any screen.
+  useBackHandler(onExit);
+  return (
+    <div className="player" data-testid="player-loading">
+      <LoadingCue />
+    </div>
+  );
+}
+
 function PlayingView({
   plan,
-  sessionId,
   mediaUrl,
   autoplay,
   heading,
@@ -192,7 +213,6 @@ function PlayingView({
   onExit,
 }: {
   plan: Plan;
-  sessionId: string;
   mediaUrl: string;
   autoplay: boolean;
   heading: Heading | null;
@@ -230,9 +250,11 @@ function PlayingView({
   const [paused, setPaused] = useState(!autoplay);
   const [position, setPosition] = useState(0);
   const [bufferedEnd, setBufferedEnd] = useState(0);
-  const [diagnostics, setDiagnostics] = useState(false);
   const skipBack = useProfileSetting('player.video_skip_back_seconds').value;
   const skipForward = useProfileSetting('player.video_skip_forward_seconds').value;
+  const timeFormat = useProfileSetting('ui.time_format').value;
+  // The device's choice, read when the player opens.
+  const [timeMode] = useState(getTimeMode);
   const settings = useProfileSettings();
   const total = plan.source.duration_seconds;
   const popoverOpen = isPopover(panel.open);
@@ -312,7 +334,6 @@ function PlayingView({
     read: () => reading()?.position ?? null,
     seekTo: (sourceSeconds) => void seekTo(sourceSeconds),
     leave,
-    toggleDiagnostics: () => setDiagnostics((on) => !on),
     skipBackSeconds: skipBack,
     skipForwardSeconds: skipForward,
     menus,
@@ -405,6 +426,7 @@ function PlayingView({
         preference={quality}
         episode={media.isEpisode}
         qualityChange={playback.qualityChange}
+        onApplied={() => panel.finish('settings')}
         remember={panel.remember}
         recall={panel.recall}
         onSide={controls.menuSide}
@@ -436,15 +458,8 @@ function PlayingView({
         autoPlay={autoplay}
         onClick={controls.videoClicked}
       />
-      {cue ? (
-        <p className="player-cue loading" role="status" data-testid="player-cue">
-          <span className="spinner" aria-hidden="true" />
-          {t('player.loading')}
-        </p>
-      ) : null}
+      {cue ? <LoadingCue /> : null}
       <PlayerSubtitles plan={plan} position={position} lifted={controls.visible} />
-      {/* Before the overlay, so the scrub preview card stands above it. */}
-      {panel.open === 'info' ? <InfoColumn plan={plan} media={media} video={video} /> : null}
       <PlayerOsd
         visible={controls.visible}
         title={block.title}
@@ -464,7 +479,22 @@ function PlayingView({
         menus={menus}
         openMenu={panel.open}
         qualityText={qualityText}
+        timeMode={timeMode}
+        timeFormat={timeFormat}
         popover={popover}
+        info={
+          panel.open === 'info' ? (
+            <InfoColumn
+              plan={plan}
+              media={media}
+              video={video}
+              engine={engine}
+              qualityName={qualityInUse?.kind === 'name' ? qualityInUse.name : quality}
+              mediaError={mediaError}
+              secrets={[mediaUrl, token]}
+            />
+          ) : null
+        }
         onFocus={controls.setFocus}
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
@@ -477,15 +507,6 @@ function PlayingView({
           raised={controls.visible}
           onActivate={skip.activate}
           onFocus={() => controls.setFocus('pill')}
-        />
-      ) : null}
-      {diagnostics || mediaError ? (
-        <PlayerDiagnostics
-          plan={plan}
-          sessionId={sessionId}
-          video={video}
-          mediaError={mediaError}
-          secrets={[mediaUrl, token]}
         />
       ) : null}
     </div>

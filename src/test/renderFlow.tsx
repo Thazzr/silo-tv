@@ -39,7 +39,7 @@ export function renderWithSilo(
   const queryClient = options.queryClient ?? newQueryClient();
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <I18nProvider lang={options.lang ?? 'en'}>
+      <I18nProvider lang={'lang' in options ? options.lang : 'en'}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
           <Navigator initial={null} renderScreen={() => ui} />
         </SiloProvider>

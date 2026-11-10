@@ -213,6 +213,13 @@ describe('start', () => {
             file_id: 'file-1',
             resolution: '2160p',
             hdr: true,
+            container: 'mkv',
+            file_size: 4_500_000_000,
+            bitrate: 9500,
+            edition_raw: "Director's Cut",
+            // A path and a name are never part of the facts the panel gets.
+            file_path: '/media/secret/Movie.mkv',
+            file_name: 'Movie.mkv',
             audio_tracks: [{ default: true, language: 'en', codec: 'eac3', channels: 6 }],
             subtitle_tracks: [
               { default: false, external: false, forced: false, hearing_impaired: false, index: 3 },
@@ -236,6 +243,11 @@ describe('start', () => {
       videoCodec: 'h264',
       resolution: '2160p',
       hdr: true,
+      container: 'mkv',
+      fileSize: 4_500_000_000,
+      bitrateKbps: 9500,
+      versionCount: 2,
+      edition: "Director's Cut",
       audioTracks: [{ default: true, language: 'en', codec: 'eac3', channels: 6 }],
       subtitleTracks: [
         { default: false, external: false, forced: false, hearing_impaired: false, index: 3 },
@@ -443,6 +455,7 @@ describe('start', () => {
     expect(hook.result.current.state).toMatchObject({
       reason: 'terminal',
       message: 'No route fits.',
+      code: 'adaptation_exhausted',
     });
   });
 
@@ -727,6 +740,29 @@ describe('failure-driven replan', () => {
     expect(calls.replan[0]?.body.failure).toMatchObject({ classification: 'transport_stall' });
   });
 
+  it('keeps the terminal reason of an answer to a quality change and to a track change', async () => {
+    for (const change of [
+      (h: ReturnType<typeof setup>) => h.result.current.qualityChange('480p'),
+      (h: ReturnType<typeof setup>) => h.result.current.trackChange({}),
+    ]) {
+      servePlayback(server, { replan: [terminalDecision('Nothing else works.')] });
+      const hook = setup();
+      await ready(hook);
+      await act(async () => {
+        expect(await change(hook)).toMatchObject({
+          kind: 'terminal',
+          reason: 'adaptation_exhausted',
+        });
+      });
+      expect(hook.result.current.state).toMatchObject({
+        kind: 'error',
+        reason: 'terminal',
+        code: 'adaptation_exhausted',
+      });
+      hook.unmount();
+    }
+  });
+
   it('shows the terminal answer of a replan', async () => {
     servePlayback(server, { replan: [terminalDecision('Nothing else works.')] });
     const hook = setup();
@@ -736,6 +772,7 @@ describe('failure-driven replan', () => {
     expect(hook.result.current.state).toMatchObject({
       reason: 'terminal',
       message: 'Nothing else works.',
+      code: 'adaptation_exhausted',
     });
   });
 });

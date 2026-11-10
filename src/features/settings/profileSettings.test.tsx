@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { useState } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import {
   DEFAULT_SUBTITLE_APPEARANCE,
   defaultSettings,
   keysKnownAt,
+  PROFILE_SETTINGS,
   ProfileSettingsSync,
   settingValuesFrom,
   useProfileSetting,
@@ -57,6 +58,48 @@ function AllValues() {
 const shows = (name: string, text: string) =>
   waitFor(() => expect(screen.getByTestId(name)).toHaveTextContent(text));
 
+describe('ui.time_format', () => {
+  const timeFormat = () => JSON.parse(screen.getByTestId('all').textContent!)['ui.time_format'];
+
+  it('is introduced at manifest revision 1 and is a closed set with default auto', () => {
+    expect(keysKnownAt(0)).not.toContain('ui.time_format');
+    expect(keysKnownAt(1)).toContain('ui.time_format');
+    expect(PROFILE_SETTINGS['ui.time_format'].default).toBe('auto');
+    for (const value of ['auto', '12h', '24h']) {
+      expect(PROFILE_SETTINGS['ui.time_format'].parse(value)).toBe(value);
+    }
+    expect(PROFILE_SETTINGS['ui.time_format'].parse('36h')).toBeUndefined();
+    expect(PROFILE_SETTINGS['ui.time_format'].parse(12)).toBeUndefined();
+  });
+
+  it.each(['12h', '24h', 'auto'])('reads a stored %s as it is', async (stored) => {
+    serveSettings(server, { values: { 'ui.time_format': stored } });
+    renderWithSilo(<AllValues />, { session: sessionOf() });
+    await waitFor(() => expect(timeFormat()).toBe(stored));
+  });
+
+  it('falls back to auto for a stored value outside the set', async () => {
+    serveSettings(server, { values: { 'ui.time_format': '36h' } });
+    renderWithSilo(<AllValues />, { session: sessionOf() });
+    await shows('all', '"ui.time_format":"auto"');
+  });
+
+  it('reads auto when the answer has no such key, and when the read fails', async () => {
+    serveSettings(server, {});
+    server.use(
+      http.get(`${BASE_URL}/api/v2/settings/values/effective`, () =>
+        HttpResponse.json({ items: [], revision: 40 }),
+      ),
+    );
+    renderWithSilo(<AllValues />, { session: sessionOf() });
+    await shows('all', '"ui.time_format":"auto"');
+    cleanup();
+    serveSettings(server, { effective: 'fail' });
+    renderWithSilo(<AllValues />, { session: sessionOf() });
+    await shows('all', '"ui.time_format":"auto"');
+  });
+});
+
 describe('keysKnownAt', () => {
   it('lists only the keys a manifest revision knows', () => {
     expect(keysKnownAt(0)).toEqual(['playback.auto_skip_intro']);
@@ -67,7 +110,7 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
     expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(40)).toHaveLength(16);
+    expect(keysKnownAt(40)).toHaveLength(17);
   });
 
   it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
@@ -236,10 +279,10 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
     expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
-    expect(url.searchParams.getAll('keys')).toHaveLength(16);
+    expect(url.searchParams.getAll('keys')).toHaveLength(17);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(16);
+    expect(url.search.match(/keys=/g)).toHaveLength(17);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {

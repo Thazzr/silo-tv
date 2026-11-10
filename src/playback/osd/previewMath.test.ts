@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { components } from '../../api/generated/schema';
 import {
   cardLeft,
+  CARD_WIDTH_PLAIN,
   CARD_WIDTH_WITH_IMAGE,
   chapterAt,
   chapterTickFractions,
   chapterTitleAt,
   resolveSheetUrl,
+  THUMB_DISPLAY_WIDTH,
   thumbnailBox,
   tileIndex,
   tilePosition,
@@ -73,14 +75,24 @@ describe('tilePosition', () => {
 });
 
 describe('thumbnailBox', () => {
-  it('draws a 300 px thumbnail at 320 px: the sheet scales by 320/300 and shifts to the tile', () => {
+  it('draws a 300 px thumbnail at 256 px: the sheet scales by 256/300 and shifts to the tile', () => {
     // 1350 s is thumbnail 135: sheet 1, column 5, row 3.
     const box = thumbnailBox(1350, manifest);
     expect(box.sheet).toBe(1);
-    expect(box.width).toBe(320);
-    expect(box.height).toBeCloseTo(134.4, 6);
-    expect(box.backgroundSize).toBe('3200px 1344px');
-    expect(box.backgroundPosition.split(' ').map(parseFloat)).toEqual([-1600, -403.2]);
+    expect(THUMB_DISPLAY_WIDTH).toBe(256);
+    expect(box.width).toBe(256);
+    expect(box.height).toBeCloseTo(107.52, 6);
+    const [sizeX, sizeY] = box.backgroundSize.split(' ').map(parseFloat);
+    expect(sizeX).toBeCloseTo(2560, 6);
+    expect(sizeY).toBeCloseTo(1075.2, 6);
+    const [x, y] = box.backgroundPosition.split(' ').map(parseFloat);
+    expect(x).toBeCloseTo(-1280, 6);
+    expect(y).toBeCloseTo(-322.56, 6);
+  });
+
+  it('makes the card as wide as the thumbnail, and the card without one slim', () => {
+    expect(CARD_WIDTH_WITH_IMAGE).toBe(THUMB_DISPLAY_WIDTH);
+    expect(CARD_WIDTH_PLAIN).toBeLessThan(CARD_WIDTH_WITH_IMAGE);
   });
 
   it('starts at the sheet origin for the first thumbnail', () => {
@@ -92,8 +104,9 @@ describe('thumbnailBox', () => {
 
   it('uses the manifest aspect for the height', () => {
     const wide = thumbnailBox(0, { ...manifest, thumbnail_width: 320, thumbnail_height: 180 });
-    expect(wide.height).toBe(180);
-    expect(wide.backgroundSize).toBe('3200px 1800px');
+    // 16:9 at 256 px wide is 144 px tall.
+    expect(wide.height).toBe(144);
+    expect(wide.backgroundSize).toBe('2560px 1440px');
   });
 });
 

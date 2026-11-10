@@ -1,14 +1,7 @@
 import { useT } from '../../i18n';
 import { formatClock } from '../format';
 import { ScrubIcon } from './icons';
-import {
-  cardLeft,
-  CARD_WIDTH_PLAIN,
-  CARD_WIDTH_WITH_IMAGE,
-  chapterTitleAt,
-  thumbnailBox,
-  type Chapter,
-} from './previewMath';
+import { cardLeft, CARD_WIDTH_PLAIN, CARD_WIDTH_WITH_IMAGE, thumbnailBox } from './previewMath';
 import type { TrickplayImages } from './useTrickplay';
 import { useSheetPreload } from './useSheetPreload';
 
@@ -21,28 +14,20 @@ export interface PreviewCardProps {
   centerX: number;
   trackWidth: number;
   images: TrickplayImages | undefined;
-  chapters: readonly Chapter[];
   scrub: { rate: number } | null;
 }
 
 /** A CSS url() token for a URL we do not control: quotes and backslashes cannot end it early. */
-function cssUrl(url: string): string {
-  return `url("${url.replace(/["\\n\r]/g, (c) => encodeURIComponent(c))}")`;
+export function cssUrl(url: string): string {
+  return `url("${url.replace(/["\n\r\\]/g, (c) => encodeURIComponent(c))}")`;
 }
 
 /**
- * The card above the scrubber: the thumbnail for `time` (one element, the sheet as its background),
- * the time and, inside a titled chapter, the chapter's name. Without previews it holds the time
- * and the chapter only. Only `transform` moves, so it stays on the compositor.
+ * The card above the scrubber: the thumbnail for `time` (one element, the sheet as its background)
+ * flush at the top and a slim strip under it with the time and, while scrubbing, the rate. Without
+ * previews it is the strip alone. Only `transform` moves, so it stays on the compositor.
  */
-export function PreviewCard({
-  time,
-  centerX,
-  trackWidth,
-  images,
-  chapters,
-  scrub,
-}: PreviewCardProps) {
+export function PreviewCard({ time, centerX, trackWidth, images, scrub }: PreviewCardProps) {
   const t = useT();
   const box = images ? thumbnailBox(time, images.manifest) : null;
   const url = box && images ? (images.sheetUrls[box.sheet] ?? null) : null;
@@ -54,7 +39,6 @@ export function PreviewCard({
   );
 
   const width = withImage ? CARD_WIDTH_WITH_IMAGE : CARD_WIDTH_PLAIN;
-  const chapter = chapterTitleAt(chapters, time);
   const rateLabel = scrub ? `${Math.abs(scrub.rate)}×` : '';
 
   return (
@@ -76,26 +60,21 @@ export function PreviewCard({
           }}
         />
       ) : null}
-      {/* While scrubbing the time row carries the rate too, and the scrub's own test id. */}
+      {/* While scrubbing the strip carries the rate too, and the scrub's own test id. */}
       <p
         className="player-preview-time"
         data-testid={scrub ? 'player-scrub' : 'player-preview-time'}
         data-rate={scrub ? scrub.rate : undefined}
         aria-label={scrub ? t('player.osd.scrubbing', { rate: rateLabel }) : undefined}
       >
-        {scrub ? (
-          <>
-            <ScrubIcon forward={scrub.rate > 0} />
-            <span className="player-preview-rate">{rateLabel}</span>
-          </>
-        ) : null}
         <span>{formatClock(time)}</span>
+        {scrub ? (
+          <span className="player-preview-rate" data-testid="player-preview-rate">
+            <ScrubIcon forward={scrub.rate > 0} />
+            <span>{rateLabel}</span>
+          </span>
+        ) : null}
       </p>
-      {chapter ? (
-        <p className="player-preview-chapter" data-testid="player-preview-chapter">
-          {chapter}
-        </p>
-      ) : null}
     </div>
   );
 }

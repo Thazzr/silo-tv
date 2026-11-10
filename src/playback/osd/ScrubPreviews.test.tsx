@@ -198,8 +198,8 @@ describe('the preview card', () => {
     expect(within(card()!).getByTestId('player-preview-time')).toHaveTextContent('2:10');
     expect(image()).toHaveStyle({
       backgroundImage: `url("${SHEET(0)}")`,
-      backgroundSize: '3200px 1344px',
-      backgroundPosition: '-960px -134.4px',
+      backgroundSize: '2560px 1075.2px',
+      backgroundPosition: '-768px -107.52px',
     });
     advance(200);
     expect(card()).not.toBeInTheDocument();
@@ -223,17 +223,52 @@ describe('the preview card', () => {
     expect(image()!.style.backgroundImage).toContain('1.rev1.jpg');
   });
 
+  it('draws the backward icon and "2×" for a negative scrub rate, the forward icon for a positive one', async () => {
+    const { state } = await mount();
+    state.currentTime = 2500;
+    tap(K.up);
+    tap(K.rewind);
+    const back = screen.getByTestId('player-scrub');
+    expect(back).toHaveAttribute('data-rate', '-2');
+    // The rate is shown without its sign.
+    expect(screen.getByTestId('player-preview-rate')).toHaveTextContent(/^2×$/);
+    // The backward icon is the forward one mirrored.
+    expect(back.querySelector('svg g')).toHaveAttribute('transform');
+    tap(K.ok);
+    tap(K.up);
+    tap(K.fastForward);
+    const forward = screen.getByTestId('player-scrub');
+    expect(forward).toHaveAttribute('data-rate', '2');
+    expect(forward.querySelector('svg g')).not.toHaveAttribute('transform');
+  });
+
+  it('shows the time strip alone, without a crash, for a sheet the manifest does not list', async () => {
+    await mount({
+      answer: trickplayManifest({
+        // Sheet 1 (where 22:30 lies) is missing.
+        sheets: [0, 2, 3, 4, 5].map((index) => ({ index, url: `/x/${index}.jpg` })),
+      }),
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(card()).toBeInTheDocument();
+    expect(image()).not.toBeInTheDocument();
+    expect(card()).toHaveTextContent(/^22:30$/);
+    expect(card()!.style.width).toBe('220px');
+  });
+
   it('shows on pointer hover without seeking, and goes when the pointer leaves', async () => {
     const { state } = await mount();
     tap(K.up);
     placeTrack();
     hoverAt(0.25);
-    // 1350 s: thumbnail 135, sheet 1, column 5, row 3; 300 px thumbnails drawn at 320 px.
+    // 1350 s: thumbnail 135, sheet 1, column 5, row 3; 300 px thumbnails drawn at 256 px.
     expect(within(card()!).getByTestId('player-preview-time')).toHaveTextContent('22:30');
     expect(image()).toHaveStyle({
       backgroundImage: `url("${SHEET(1)}")`,
-      backgroundSize: '3200px 1344px',
-      backgroundPosition: '-1600px -403.2px',
+      backgroundSize: '2560px 1075.2px',
+      backgroundPosition: '-1280px -322.56px',
     });
     expect(state.seeks).toEqual([]);
     fireEvent.mouseLeave(screen.getByTestId('player-scrubber'));
@@ -259,12 +294,12 @@ describe('the preview card', () => {
     tap(K.up);
     placeTrack();
     hoverAt(0.5);
-    // 1000 px track, 352 px card: centred is 500 - 176.
-    expect(card()!.style.transform).toBe('translateX(324px)');
+    // 1000 px track, 256 px card: centred is 500 - 128.
+    expect(card()!.style.transform).toBe('translateX(372px)');
     hoverAt(0);
     expect(card()!.style.transform).toBe('translateX(0px)');
     hoverAt(1);
-    expect(card()!.style.transform).toBe('translateX(648px)');
+    expect(card()!.style.transform).toBe('translateX(744px)');
   });
 
   it('uses the sheet URL as given, with no token appended and none logged', async () => {
@@ -317,7 +352,7 @@ describe('the preview card', () => {
     expect(card()).toHaveTextContent(/^22:30$/);
   });
 
-  it('shows the chapter title for a target inside a titled chapter, and none otherwise', async () => {
+  it('shows no chapter title, inside a titled chapter or anywhere else', async () => {
     await mount({
       chapters: [
         chapterOf(0, 0, 1000, 'Opening'),
@@ -328,11 +363,55 @@ describe('the preview card', () => {
     tap(K.up);
     placeTrack();
     hoverAt(0.25);
-    expect(screen.getByTestId('player-preview-chapter')).toHaveTextContent('The Heist');
-    hoverAt(0.05);
-    expect(screen.getByTestId('player-preview-chapter')).toHaveTextContent('Opening');
-    hoverAt(0.7);
     expect(screen.queryByTestId('player-preview-chapter')).not.toBeInTheDocument();
+    expect(card()).not.toHaveTextContent('The Heist');
+    hoverAt(0.05);
+    expect(card()).not.toHaveTextContent('Opening');
+    // The chapters still mark the scrubber.
+    expect(screen.getAllByTestId('player-chapter-tick').length).toBeGreaterThan(0);
+  });
+
+  it('is a thumbnail 256 px wide with the time strip under it, as wide as the thumbnail', async () => {
+    await mount();
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(card()!.style.width).toBe('256px');
+    expect(image()!.style.width).toBe('256px');
+    // 300x126 tiles drawn at 256 px are 107.52 px high.
+    expect(image()!.style.height).toBe('107.52px');
+    // The image comes first, the strip under it.
+    expect(card()!.firstElementChild).toBe(image());
+    expect(card()!.lastElementChild).toBe(screen.getByTestId('player-preview-time'));
+  });
+
+  it('shows the rate on the right of the strip only while scrubbing', async () => {
+    const { state } = await mount();
+    state.currentTime = 100;
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(screen.queryByTestId('player-preview-rate')).not.toBeInTheDocument();
+    expect(within(card()!).getByTestId('player-preview-time')).toHaveTextContent(/^22:30$/);
+    fireEvent.mouseLeave(screen.getByTestId('player-scrubber'));
+    tap(K.fastForward);
+    const strip = screen.getByTestId('player-scrub');
+    const rate = within(strip).getByTestId('player-preview-rate');
+    expect(rate).toHaveTextContent('2×');
+    // The time is first (left), the rate last (right).
+    expect(strip.firstElementChild).toHaveTextContent('1:40');
+    expect(strip.lastElementChild).toBe(rate);
+  });
+
+  it('shows the time strip alone, narrow, when the file has no previews', async () => {
+    await mount({ version: false });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(image()).not.toBeInTheDocument();
+    expect(card()!.style.width).toBe('220px');
+    expect(card()!.children).toHaveLength(1);
+    expect(card()!.firstElementChild).toBe(screen.getByTestId('player-preview-time'));
   });
 });
 

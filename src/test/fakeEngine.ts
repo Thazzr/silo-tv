@@ -19,6 +19,8 @@ export class FakeEngine implements PlayerEngine {
   ended = false;
   waiting = false;
   error: EngineError | null = null;
+  decoder: 'native' | 'hlsjs' = 'native';
+  bandwidthEstimate: number | null = null;
   source = '';
   released = false;
   /** Every position the controller seeked to. */

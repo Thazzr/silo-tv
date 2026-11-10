@@ -389,14 +389,26 @@ describe('keys while a menu is open', () => {
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
-  it('the blue key toggles the diagnostics in a popover', async () => {
+  it('the blue key opens Info in place of the popover, and a second press closes Info', async () => {
     await mount();
     await openMenu('settings');
     key(406);
-    expect(screen.getByTestId('player-diagnostics')).toBeInTheDocument();
-    key(406);
+    expect(info()).not.toBeNull();
+    expect(menu('settings')).toBeNull();
+    expect(osdFocused('info')).toBe(true);
     expect(screen.queryByTestId('player-diagnostics')).toBeNull();
-    expect(menu('settings')).not.toBeNull();
+    key(406);
+    expect(info()).toBeNull();
+    expect(overlayOpen()).toBe(true);
+    expect(osdFocused('info')).toBe(true);
+  });
+
+  it('prevents the default of the blue key while a popover is open', async () => {
+    await mount();
+    await openMenu('settings');
+    const blue = new KeyboardEvent('keydown', { keyCode: 406, cancelable: true });
+    window.dispatchEvent(blue);
+    expect(blue.defaultPrevented).toBe(true);
   });
 
   it('Play does nothing while playing, and Pause does nothing while paused, in a popover', async () => {
@@ -570,7 +582,7 @@ describe('the gear: settings', () => {
     expect(screen.queryByTestId('menu-bitrate')).toBeNull();
   });
 
-  it("sends a quality_change replan with the row's label, and the menu survives the reload on the picked row", async () => {
+  it("sends a quality_change replan with the row's label, then closes the menu with the focus back on the gear", async () => {
     const { calls, video } = await mount({
       replan: [playableDecision(planOnStream(2, { active_quality: '1080p' }))],
     });
@@ -584,18 +596,74 @@ describe('the gear: settings', () => {
       operation: 'quality_change',
       quality_preference: '1080p',
     });
-    // A new stream: the video element is another one, the menu is still open, the overlay is up
-    // and the focus is back on the row that was picked.
+    // A new stream: the video element is another one, the menu is closed, the overlay is up and
+    // the focus is on the gear button.
     await waitFor(() => expect(video()).not.toBe(before));
-    expect(menu('settings')).not.toBeNull();
+    await waitFor(() => expect(menu('settings')).toBeNull());
     expect(overlayOpen()).toBe(true);
-    // The menu's button carries the open state again, and holds no focus of its own.
-    expect(screen.getByRole('button', { name: /Settings/ })).toHaveAttribute('data-open', 'true');
+    const gear = screen.getByRole('button', { name: /Settings/ });
+    expect(gear).not.toHaveAttribute('data-open');
+    expect(gear).toHaveAttribute('data-focused', 'true');
+    await waitFor(() => expect(gear).toHaveFocus());
+    expect(gearLabel()).toBe('1080p (8 Mbps)');
+  });
+
+  it('starts a later reload like a normal load: no overlay up, no gear focus', async () => {
+    const { video } = await mount({
+      replan: [playableDecision(planOnStream(2)), playableDecision(planOnStream(3))],
+    });
+    await openMenu('settings');
+    const first = video();
+    await pressKey(KEY.down);
     await focusOn('player-menu-quality-1080p');
-    expect(screen.getByRole('menuitemradio', { name: /1080p/ })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(video()).not.toBe(first));
+    await waitFor(() => expect(menu('settings')).toBeNull());
+    // The pick's own load lands on the gear with the overlay up ...
+    expect(overlayOpen()).toBe(true);
+    expect(osdFocused('settings')).toBe(true);
+    // ... a failure recovery after it is a load like any other.
+    const second = video();
+    fakeVideo(second).error = { code: 4, message: 'unsupported' };
+    fireEvent.error(second);
+    await waitFor(() => expect(video()).not.toBe(second));
+    expect(overlayOpen()).toBe(false);
+    expect(osdFocused('settings')).toBe(false);
+  });
+
+  it('hides the overlay by itself after the pick, as after any close', async () => {
+    const { calls, video } = await mount({ replan: [playableDecision(planOnStream(2))] });
+    useClock();
+    await openMenu('settings');
+    const before = video();
+    await pressKey(KEY.down);
+    await focusOn('player-menu-quality-1080p');
+    await pressKey(KEY.enter);
+    await until(() => calls.replan.length === 1);
+    await waitFor(() => expect(video()).not.toBe(before));
+    await waitFor(() => expect(menu('settings')).toBeNull());
+    fireEvent.playing(video());
+    expect(overlayOpen()).toBe(true);
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(overlayOpen()).toBe(false);
+  });
+
+  it('closes the menu for an applied pick that keeps the stream, too', async () => {
+    // The same stream URL: the plan changes, the video element stays.
+    const { calls, video } = await mount({
+      replan: [playableDecision(planOnStream(1, { plan_id: 'plan:other' }))],
+    });
+    await openMenu('settings');
+    const before = video();
+    await pressKey(KEY.down);
+    await focusOn('player-menu-quality-1080p');
+    await pressKey(KEY.enter);
+    await until(() => calls.replan.length === 1);
+    await waitFor(() => expect(menu('settings')).toBeNull());
+    expect(video()).toBe(before);
+    expect(overlayOpen()).toBe(true);
+    expect(osdFocused('settings')).toBe(true);
+    expect(screen.getByRole('button', { name: /Settings/ })).toHaveFocus();
   });
 
   it('keeps the keys alive after a paused reload, where no frame plays: a key shows the overlay and Play/Pause resumes', async () => {
@@ -615,12 +683,13 @@ describe('the gear: settings', () => {
     await pressKey(KEY.enter);
     await until(() => calls.replan.length === 1);
     await waitFor(() => expect(video()).not.toBe(before));
+    await waitFor(() => expect(menu('settings')).toBeNull());
     // The new load is paused (autoplay off): its first decoded frame is all there will be.
     fireEvent.loadedData(video());
     // The time and the scrubber show where the load begins, not 0:00.
     await waitFor(() => expect(screen.getByTestId('player-time')).toHaveTextContent('0:47'));
     expect(screen.getByTestId('player-scrubber')).toHaveAttribute('aria-valuenow', '47');
-    key(KEY.back);
+    // The menu closed with the pick: one Back hides the overlay.
     key(KEY.back);
     expect(overlayOpen()).toBe(false);
     key(KEY.up);
@@ -702,6 +771,26 @@ describe('the gear: settings', () => {
     expect(video()).toBe(before);
     expect(calls.stop).toHaveLength(0);
     expect(menu('settings')).not.toBeNull();
+    expect(osdFocused('settings')).toBe(false);
+  });
+
+  it('keeps the menu open, with the note, when the server cannot be reached for the moment', async () => {
+    const { video } = await mount();
+    server.use(
+      http.post(`${BASE_URL}/api/v2/playback/:sessionId/replan`, () =>
+        HttpResponse.json(
+          { type: 'about:blank', title: 'Unavailable', status: 503, code: 'unavailable' },
+          { status: 503, headers: { 'content-type': 'application/problem+json' } },
+        ),
+      ),
+    );
+    const before = video();
+    await openMenu('settings');
+    await pressKey(KEY.down);
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('menu-quality-note')).toBeInTheDocument();
+    expect(video()).toBe(before);
+    expect(menu('settings')).not.toBeNull();
   });
 
   it('ignores further picks while a change is in flight', async () => {
@@ -728,7 +817,7 @@ describe('the gear: settings', () => {
     expect(screen.queryByTestId('menu-quality-note')).toBeNull();
   });
 
-  it('puts the focus back on the row the viewer moved to while the change was in flight, not on the checked one', async () => {
+  it('keeps the menu open while the change is in flight, and closes it onto the gear when it is applied', async () => {
     let replans = 0;
     const { video } = await mount();
     server.use(
@@ -745,31 +834,45 @@ describe('the gear: settings', () => {
     await pressKey(KEY.enter);
     await pressKey(KEY.down);
     await focusOn('player-menu-quality-720p');
+    expect(menu('settings')).not.toBeNull();
     await waitFor(() => expect(video()).not.toBe(before), { timeout: 2500 });
     expect(replans).toBe(1);
-    // 1080p is the checked row now; the focus stays where the viewer left it.
-    expect(screen.getByRole('menuitemradio', { name: /1080p/ })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+    await waitFor(() => expect(menu('settings')).toBeNull());
+    expect(screen.getByRole('button', { name: /Settings/ })).toHaveFocus();
+  });
+
+  it('keeps an open menu, on the row it was on, when the stream reloads for another reason', async () => {
+    // A failure recovery loads a new stream under the open menu; it stays, with its focus.
+    const { video } = await mount({ replan: [playableDecision(planOnStream(2))] });
+    await openMenu('settings');
+    const before = video();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await focusOn('player-menu-quality-720p');
+    fakeVideo(before).error = { code: 4, message: 'unsupported' };
+    fireEvent.error(before);
+    await waitFor(() => expect(video()).not.toBe(before));
+    expect(menu('settings')).not.toBeNull();
+    expect(overlayOpen()).toBe(true);
     await focusOn('player-menu-quality-720p');
   });
 
-  it('falls back to the checked row, else the first, when the remembered row is gone after the reload', async () => {
-    const { calls, video } = await mount({
-      replan: [playableDecision(planOnStream(2, { available_qualities: [rung('720p')] }))],
+  it('falls back to the checked row, else the first, when the remembered row is gone after such a reload', async () => {
+    const { video } = await mount({
+      replan: [playableDecision(planOnStream(2, { available_qualities: [rung('1080p')] }))],
     });
     await openMenu('settings');
     const before = video();
     await pressKey(KEY.down);
-    await focusOn('player-menu-quality-1080p');
-    await pressKey(KEY.enter);
-    await until(() => calls.replan.length === 1);
+    await pressKey(KEY.down);
+    await focusOn('player-menu-quality-720p');
+    fakeVideo(before).error = { code: 4, message: 'unsupported' };
+    fireEvent.error(before);
     await waitFor(() => expect(video()).not.toBe(before));
     await waitFor(() =>
-      expect(document.querySelector('[data-focus-key="player-menu-quality-1080p"]')).toBeNull(),
+      expect(document.querySelector('[data-focus-key="player-menu-quality-720p"]')).toBeNull(),
     );
-    // 1080p is no row of the new plan and no row is checked: the first row takes the focus.
+    // 720p is no row of the new plan: the checked row (Auto) takes the focus.
     await focusOn('player-menu-quality-auto');
   });
 
@@ -951,6 +1054,20 @@ describe('the gear: settings', () => {
       );
     });
 
+    it('keeps the menu open after the toggle, with the focus on its row', async () => {
+      const puts: unknown[] = [];
+      await mount({ watch: EPISODE });
+      serveWrite(puts);
+      await toAutoPlay();
+      await pressKey(KEY.enter);
+      await until(() => puts.length === 1);
+      await waitFor(() =>
+        expect(screen.getByTestId('menu-autoplay-value')).toHaveTextContent('Off'),
+      );
+      expect(menu('settings')).not.toBeNull();
+      expect(focusKey()).toBe('player-menu-autoplay');
+    });
+
     it('writes once when OK is pressed twice before the first write is answered', async () => {
       const puts: unknown[] = [];
       await mount({ watch: EPISODE });
@@ -1046,6 +1163,26 @@ describe('a chapter pick after the pointer hovered another button', () => {
   });
 });
 
+describe('the clock in German', () => {
+  const ends = () => screen.getByTestId('player-ends').textContent ?? '';
+
+  it('writes a 24 h end time for auto under a German UI', async () => {
+    await mount({ lang: 'de', settings: { values: { 'ui.time_format': 'auto' } } });
+    key(KEY.up);
+    expect(ends()).toMatch(/^Endet um \d{2}:\d{2}$/);
+  });
+
+  it('follows an explicit 24h and 12h profile value under a German UI', async () => {
+    await mount({ lang: 'de', settings: { values: { 'ui.time_format': '12h' } } });
+    key(KEY.up);
+    expect(ends()).toMatch(/^Endet um \d{1,2}:\d{2} (AM|PM)$/);
+    cleanup();
+    await mount({ lang: 'de', settings: { values: { 'ui.time_format': '24h' } } });
+    key(KEY.up);
+    expect(ends()).toMatch(/^Endet um \d{2}:\d{2}$/);
+  });
+});
+
 describe('info', () => {
   const EPISODE_INFO = watchDetail({
     title: 'The Pilot',
@@ -1100,6 +1237,22 @@ describe('info', () => {
     expect(info()).not.toBeNull();
   });
 
+  it('keeps the overlay up for the normal idle time after the blue key closes it', async () => {
+    await mount();
+    useClock();
+    key(406);
+    await screen.findByTestId('player-info');
+    // Open Info holds the overlay as long as it is open.
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(overlayOpen()).toBe(true);
+    key(406);
+    expect(info()).toBeNull();
+    act(() => void vi.advanceTimersByTime(4000));
+    expect(overlayOpen()).toBe(true);
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(overlayOpen()).toBe(false);
+  });
+
   it('Left closes it and moves to the neighbouring button', async () => {
     await mount();
     await openMenu('info');
@@ -1117,7 +1270,7 @@ describe('info', () => {
     expect(osdFocused('info')).toBe(true);
   });
 
-  it('names the route, the stream type, the sizes, the codecs and the source', async () => {
+  it('names the route, the stream, the sizes, the codecs and the source file', async () => {
     const { state } = await mount({ watch: EPISODE_INFO });
     state.videoWidth = 3840;
     state.videoHeight = 2160;
@@ -1125,34 +1278,68 @@ describe('info', () => {
     const column = info()!;
     for (const text of [
       'Direct play',
-      'Progressive',
+      'Plays directly',
+      'Built-in',
+      'File (progressive)',
       '3840×2160',
-      'H264',
-      'en · EAC3 · 5.1',
+      'H.264 · direct',
+      'English · E-AC-3 · 5.1',
       'Off',
-      'MP4',
-      '2160p',
+      'MP4 · 1 MB',
+      '8 Mbit/s',
       'HDR',
     ]) {
       expect(column).toHaveTextContent(text);
     }
-    expect(column).toHaveTextContent('Playback info');
+    expect(column).toHaveAttribute('aria-label', 'Playback info');
+    expect(screen.getByTestId('player-info-now')).toBeInTheDocument();
+    expect(screen.getByTestId('player-info-source')).toBeInTheDocument();
   });
 
-  it('names HLS for a remux and a transcode', async () => {
+  it('names HLS in TS segments, and the transcode, for an HLS transcode', async () => {
     await mount({
-      start: [playableDecision(planOnStream(1, { delivery: 'server_transcode_hls' }))],
+      start: [
+        playableDecision(
+          planOnStream(1, {
+            delivery: 'server_transcode_hls',
+            decision_reason: 'quality_fixed_rung',
+            stream: {
+              container: 'mp4',
+              header_refresh: 'none',
+              headers: {},
+              protocol: 'hls',
+              url: `/api/v2/stream/${SESSION_ID}/index.m3u8?st=signed-1`,
+            },
+            effective_recipe: {
+              video_codec: 'h264',
+              audio_codec: 'aac',
+              segment_container: 'mpegts',
+            },
+          }),
+        ),
+      ],
+      settings: { values: { 'playback.preferred_quality': '720p' } },
     });
     await openMenu('info');
     expect(info()).toHaveTextContent('Transcode');
-    expect(info()).toHaveTextContent('HLS');
-    expect(info()).not.toHaveTextContent('Progressive');
+    expect(info()).toHaveTextContent('HLS · TS segments');
+    expect(info()).toHaveTextContent('Quality chosen: 720p');
+    expect(info()).not.toHaveTextContent('File (progressive)');
   });
 
-  it('leaves out the dropped frames when the element cannot count them', async () => {
+  it('stands inside the overlay, above its gradient', async () => {
     await mount();
     await openMenu('info');
-    expect(info()).not.toHaveTextContent('Dropped frames');
+    // The gradient is the overlay's own background: only a child of the overlay paints over it.
+    expect(info()!.closest('[data-testid="player-osd"]')).not.toBeNull();
+    // It is not a sibling of the overlay (which would put it under the gradient or over the card).
+    expect(info()!.parentElement).toBe(screen.getByTestId('player-osd'));
+  });
+
+  it('leaves out the frames when the element cannot count them', async () => {
+    await mount();
+    await openMenu('info');
+    expect(info()).not.toHaveTextContent('Frames');
   });
 
   it('shows the dropped frames from getVideoPlaybackQuality, refreshed while it is open', async () => {
@@ -1160,12 +1347,33 @@ describe('info', () => {
     let dropped = 3;
     Object.defineProperty(video(), 'getVideoPlaybackQuality', {
       configurable: true,
-      value: () => ({ droppedVideoFrames: dropped }),
+      value: () => ({ droppedVideoFrames: dropped, totalVideoFrames: 972 }),
     });
     await openMenu('info');
-    expect(info()).toHaveTextContent('Dropped frames3');
+    expect(info()).toHaveTextContent('Frames3 of 972 dropped');
     dropped = 9;
-    await waitFor(() => expect(info()).toHaveTextContent('Dropped frames9'), { timeout: 2500 });
+    await waitFor(() => expect(info()).toHaveTextContent('Frames9 of 972 dropped'), {
+      timeout: 2500,
+    });
+  });
+
+  it('never shows the name or the path of the file, in the panel or anywhere in the player', async () => {
+    await mount({
+      watch: watchDetail({
+        versions: [
+          watchVersion({
+            file_name: 'Secret Movie (2020).mkv',
+            file_path: '/media/secret/Secret Movie (2020).mkv',
+          }),
+        ],
+      }),
+    });
+    await openMenu('info');
+    const everything = document.body.innerHTML;
+    for (const text of ['Secret Movie', '/media/secret', '.mkv']) {
+      expect(everything).not.toContain(text);
+      expect(info()!.textContent).not.toContain(text);
+    }
   });
 
   it('never shows a URL, a path or a token', async () => {

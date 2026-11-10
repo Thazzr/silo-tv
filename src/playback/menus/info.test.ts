@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { playbackPlan } from '../../test/playbackFixtures';
 import type { MediaFacts } from '../usePlaybackSession';
 import {
-  audioText,
-  channelText,
+  conversions,
   currentChapter,
+  dynamicRangeName,
+  informativeTitle,
   episodeCode,
+  reasonsOf,
   routeOf,
-  sourceFacts,
-  streamType,
-  subtitleText,
-  videoCodecText,
+  selectedAudio,
+  streamKind,
+  subtitleChoice,
 } from './info';
 
 const media = (overrides: Partial<MediaFacts> = {}): MediaFacts => ({
@@ -34,47 +35,12 @@ describe('routeOf', () => {
   });
 });
 
-describe('channelText', () => {
-  it.each([
-    [6, '5.1'],
-    [8, '7.1'],
-    [2, '2.0'],
-    [1, '1.0'],
-    [3, '3 ch'],
-    [0, null],
-    [undefined, null],
-  ])('%s channels read %s', (channels, text) => {
-    expect(channelText(channels)).toBe(text);
-  });
-});
-
-describe('audioText', () => {
-  const tracks = [
-    { default: true, language: 'en', codec: 'eac3', channels: 6 },
-    { default: false, language: 'und', title: 'Commentary', codec: 'aac', channels: 2 },
-  ];
-
-  it('names language, codec and channels of the selected track', () => {
-    const plan = playbackPlan({ selected_tracks: { audio: { id: 'file:1:audio:0', index: 0 } } });
-    expect(audioText(plan, media({ audioTracks: tracks }))).toBe('en · EAC3 · 5.1');
-  });
-
-  it('falls back to the title for an undetermined language, and to the id for the index', () => {
-    const plan = playbackPlan({ selected_tracks: { audio: { id: 'file:1:audio:1' } } });
-    expect(audioText(plan, media({ audioTracks: tracks }))).toBe('Commentary · AAC · 2.0');
-  });
-
-  it('is null when no list describes the track', () => {
-    expect(audioText(playbackPlan(), media())).toBeNull();
-  });
-});
-
-describe('subtitleText', () => {
+describe('subtitleChoice', () => {
   it('is null (off) when the plan selects no subtitle', () => {
-    expect(subtitleText(playbackPlan(), media())).toBeNull();
+    expect(subtitleChoice(playbackPlan(), media(), 'en')).toBeNull();
   });
 
-  it('names the label of the inventory item, else the track list, else only "on"', () => {
+  it('names the label of the inventory item, else the track list (a bare language as its name), else only "on"', () => {
     const inventory = {
       combined_index: 0,
       default: false,
@@ -90,10 +56,10 @@ describe('subtitleText', () => {
       selected_tracks: { subtitle: selected },
       subtitle: { inventory: [inventory], mode: 'sidecar' },
     });
-    expect(subtitleText(withInventory, media())).toEqual({ label: 'English (SDH)' });
+    expect(subtitleChoice(withInventory, media(), 'en')).toEqual({ label: 'English (SDH)' });
     const listed = playbackPlan({ selected_tracks: { subtitle: selected } });
     expect(
-      subtitleText(
+      subtitleChoice(
         listed,
         media({
           subtitleTracks: [
@@ -107,9 +73,10 @@ describe('subtitleText', () => {
             },
           ],
         }),
+        'en',
       ),
-    ).toEqual({ label: 'de' });
-    expect(subtitleText(listed, media())).toEqual({ label: null });
+    ).toEqual({ label: 'German' });
+    expect(subtitleChoice(listed, media(), 'en')).toEqual({ label: null });
   });
 
   it('prefers the inventory label over the listed title when both exist', () => {
@@ -144,29 +111,7 @@ describe('subtitleText', () => {
         },
       ],
     });
-    expect(subtitleText(plan, withTitle)).toEqual({ label: 'Inventory label' });
-  });
-});
-
-describe('videoCodecText', () => {
-  it('is the codec in capitals, from the recipe, else the media facts, else the source', () => {
-    const plan = playbackPlan();
-    expect(videoCodecText(plan, media())).toBe('H264');
-    const noRecipe = { ...plan, effective_recipe: {} };
-    expect(videoCodecText(noRecipe, media({ videoCodec: 'hevc' }))).toBe('HEVC');
-    expect(videoCodecText(noRecipe, media())).toBe('H264');
-    expect(
-      videoCodecText(
-        { ...plan, effective_recipe: { ...plan.effective_recipe, video_codec: 'av1' } },
-        media(),
-      ),
-    ).toBe('AV1');
-    expect(
-      videoCodecText(
-        { ...plan, effective_recipe: {}, source: { ...plan.source, video_codec: undefined } },
-        media(),
-      ),
-    ).toBeNull();
+    expect(subtitleChoice(plan, withTitle, 'en')).toEqual({ label: 'Inventory label' });
   });
 });
 
@@ -182,37 +127,6 @@ describe('episodeCode', () => {
   });
 });
 
-describe('streamType', () => {
-  it('is progressive for a direct play and HLS for everything else', () => {
-    expect(streamType('direct')).toBe('progressive');
-    expect(streamType('remux')).toBe('hls');
-    expect(streamType('transcode')).toBe('hls');
-    expect(streamType(null)).toBe('hls');
-  });
-});
-
-describe('sourceFacts', () => {
-  it('names the container, the resolution and the dynamic range as far as known', () => {
-    const plan = playbackPlan();
-    expect(sourceFacts(plan, media({ resolution: '2160p', hdr: true }))).toEqual({
-      container: 'MP4',
-      resolution: '2160p',
-      hdr: true,
-    });
-    // The watch data's resolution wins over the plan's height.
-    const tall = { ...plan, source: { ...plan.source, height: 720 } };
-    expect(sourceFacts(tall, media({ resolution: '1080p' })).resolution).toBe('1080p');
-    expect(sourceFacts(tall, media()).resolution).toBe('720p');
-    // The container is trimmed, and a blank one is unknown.
-    const padded = { ...plan, source: { ...plan.source, container: '  mkv ' } };
-    expect(sourceFacts(padded, media()).container).toBe('MKV');
-    const blank = { ...plan, source: { ...plan.source, container: '   ' } };
-    expect(sourceFacts(blank, media()).container).toBeNull();
-    const bare = { ...plan, source: { ...plan.source, container: undefined, height: 720 } };
-    expect(sourceFacts(bare, media())).toEqual({ container: null, resolution: '720p', hdr: false });
-  });
-});
-
 describe('currentChapter', () => {
   const chapters = [
     { title: 'A', start: 0, end: 100 },
@@ -224,5 +138,227 @@ describe('currentChapter', () => {
     expect(currentChapter(chapters, 100)).toBe(1);
     expect(currentChapter([{ title: 'X', start: 5, end: 9 }], 1)).toBe(-1);
     expect(currentChapter([], 10)).toBe(-1);
+  });
+});
+
+describe('selectedAudio', () => {
+  const tracks = [
+    { default: true, language: 'en', codec: 'eac3', channels: 6 },
+    { default: false, language: 'de', codec: 'aac', channels: 2 },
+  ];
+
+  it('is the listed track the plan plays, by index or by the number at the end of its id', () => {
+    const byIndex = playbackPlan({
+      selected_tracks: { audio: { id: 'file:1:audio:0', index: 1 } },
+    });
+    expect(selectedAudio(byIndex, media({ audioTracks: tracks }))?.language).toBe('de');
+    const byId = playbackPlan({ selected_tracks: { audio: { id: 'file:1:audio:0' } } });
+    expect(selectedAudio(byId, media({ audioTracks: tracks }))?.language).toBe('en');
+  });
+
+  it('is undefined when no list describes the track', () => {
+    expect(selectedAudio(playbackPlan(), media())).toBeUndefined();
+    const none = playbackPlan({ selected_tracks: {} });
+    expect(selectedAudio(none, media({ audioTracks: tracks }))).toBeUndefined();
+  });
+});
+
+describe('streamKind', () => {
+  const hls = {
+    container: 'mp4',
+    header_refresh: 'none',
+    headers: {},
+    protocol: 'hls',
+    url: '/x.m3u8',
+  };
+  const recipe = (segment_container?: string) => ({ video_codec: 'h264', segment_container });
+
+  it('is a file for a progressive stream', () => {
+    expect(streamKind(playbackPlan())).toBe('file');
+  });
+
+  it('is HLS in TS segments or in fMP4 as the recipe says, and plain HLS when it does not', () => {
+    expect(streamKind(playbackPlan({ stream: hls, effective_recipe: recipe('mpegts') }))).toBe(
+      'hlsTs',
+    );
+    expect(streamKind(playbackPlan({ stream: hls, effective_recipe: recipe('fmp4') }))).toBe(
+      'hlsFmp4',
+    );
+    expect(streamKind(playbackPlan({ stream: hls, effective_recipe: recipe() }))).toBe('hls');
+    // `mp4` and `ts` are other names for the same two packagings.
+    expect(streamKind(playbackPlan({ stream: hls, effective_recipe: recipe('mp4') }))).toBe(
+      'hlsFmp4',
+    );
+    expect(streamKind(playbackPlan({ stream: hls, effective_recipe: recipe('ts') }))).toBe('hlsTs');
+  });
+
+  it('takes an HLS mime type for HLS as well', () => {
+    const stream = { ...hls, protocol: 'http', mime_type: 'application/vnd.apple.mpegurl' };
+    expect(streamKind(playbackPlan({ stream }))).toBe('hls');
+  });
+});
+
+const transformation = (name: string) => ({
+  name,
+  executor: 'server',
+  recipe_version: '1',
+  validated_claims: [],
+});
+
+describe('reasonsOf', () => {
+  const reason = (decision_reason: string, names: string[] = []) =>
+    reasonsOf(playbackPlan({ decision_reason, transformations: names.map(transformation) }));
+
+  it.each([
+    ['validated_original_playback', 'direct'],
+    ['container_normalization', 'container'],
+    ['audio_adaptation', 'audio'],
+    ['hls_audio_adaptation', 'audio'],
+    ['hls_packaging_required', 'packaging'],
+    ['subtitle_burn_in_required', 'burnIn'],
+    ['client_dv7_to_dv81', 'dolbyVision'],
+    ['client_dv7_to_hdr10', 'dolbyVision'],
+    ['client_managed_dynamic_range', 'managedRange'],
+    ['client_dv8_base_layer', 'dolbyBase'],
+    ['evidence_insufficient_for_direct', 'noEvidence'],
+    ['quality_auto_source', 'qualityAuto'],
+    ['quality_fixed_rung', 'quality'],
+    ['quality_device_limit', 'qualityDevice'],
+    ['quality_bandwidth_limit', 'qualityBandwidth'],
+    ['quality_bandwidth_cap', 'qualityCap'],
+    ['quality_original', 'qualityOriginal'],
+  ])('maps the documented reason %s to %s', (decision, id) => {
+    expect(reason(decision)).toEqual([id]);
+  });
+
+  it('says nothing for a reason it does not know, rather than the raw code', () => {
+    expect(reason('some_future_reason')).toEqual([]);
+  });
+
+  it('adds what the transformations convert, once', () => {
+    expect(reason('validated_original_playback', ['audio_to_aac'])).toEqual(['direct', 'audio']);
+    expect(reason('audio_adaptation', ['audio_to_aac'])).toEqual(['audio']);
+    expect(reason('hls_packaging_required', ['video_to_h264'])).toEqual(['packaging', 'video']);
+    expect(reason('some_future_reason', ['video_to_hevc', 'audio_to_aac'])).toEqual([
+      'video',
+      'audio',
+    ]);
+  });
+
+  it('leaves "video is converted" out of a chosen quality, which says so already', () => {
+    expect(reason('quality_fixed_rung', ['video_to_h264'])).toEqual(['quality']);
+  });
+});
+
+describe('conversions', () => {
+  const base = playbackPlan();
+
+  it('is direct for a plan that plays the file as it is', () => {
+    expect(conversions(base)).toEqual({ video: false, audio: false });
+  });
+
+  it('converts the audio for an audio transformation, another codec or fewer channels', () => {
+    const named = playbackPlan({ transformations: [transformation('audio_to_aac')] });
+    expect(conversions(named)).toEqual({ video: false, audio: true });
+    const codec = playbackPlan({ effective_recipe: { video_codec: 'h264', audio_codec: 'ac3' } });
+    expect(conversions(codec).audio).toBe(true);
+    const channels = playbackPlan({
+      effective_recipe: { video_codec: 'h264', audio_codec: 'aac', audio_channels: 2 },
+      source: { ...base.source, audio_channels: 6 },
+    });
+    expect(conversions(channels).audio).toBe(true);
+  });
+
+  it('converts the video for a transcode, a video transformation, another codec or a lower height', () => {
+    expect(conversions(playbackPlan({ delivery: 'server_transcode_hls' })).video).toBe(true);
+    const named = playbackPlan({ transformations: [transformation('video_to_h264')] });
+    expect(conversions(named).video).toBe(true);
+    const codec = playbackPlan({
+      effective_recipe: { video_codec: 'h264' },
+      source: { ...base.source, video_codec: 'hevc' },
+    });
+    expect(conversions(codec).video).toBe(true);
+    const scaled = playbackPlan({
+      effective_recipe: { video_codec: 'h264', height: 720 },
+      source: { ...base.source, height: 1080 },
+    });
+    expect(conversions(scaled).video).toBe(true);
+  });
+
+  it('keeps a remux direct', () => {
+    expect(conversions(playbackPlan({ delivery: 'server_remux_hls' }))).toEqual({
+      video: false,
+      audio: false,
+    });
+  });
+});
+
+describe('dynamicRangeName', () => {
+  const source = (extra: Partial<ReturnType<typeof playbackPlan>['source']>) => ({
+    ...playbackPlan().source,
+    ...extra,
+  });
+
+  it('writes Dolby Vision with its profile and level', () => {
+    const dv = (extra: object) =>
+      dynamicRangeName(source({ dolby_vision_profile: 8, ...extra }), true);
+    expect(dv({ dv_bl_compat_id: 1 })).toBe('Dolby Vision 8.1');
+    expect(dv({ dv_bl_compat_id: 4 })).toBe('Dolby Vision 8.4');
+    // The level is left out; without a compatibility id only the profile shows.
+    expect(dv({ dv_bl_compat_id: 1, dolby_vision_level: 6 })).toBe('Dolby Vision 8.1');
+    expect(dv({ dolby_vision_level: 6 })).toBe('Dolby Vision 8');
+    expect(dynamicRangeName(source({ dolby_vision_profile: 5 }), true)).toBe('Dolby Vision 5');
+  });
+
+  it('knows HDR10+, HDR10, HLG and SDR', () => {
+    expect(dynamicRangeName(source({ hdr10_plus: true, dynamic_range: 'hdr10' }), true)).toBe(
+      'HDR10+',
+    );
+    expect(dynamicRangeName(source({ dynamic_range: 'HDR10Plus' }), true)).toBe('HDR10+');
+    expect(dynamicRangeName(source({ dynamic_range: 'hdr10' }), true)).toBe('HDR10');
+    expect(dynamicRangeName(source({ dynamic_range: 'hlg' }), true)).toBe('HLG');
+    expect(dynamicRangeName(source({ dynamic_range: 'sdr' }), false)).toBe('SDR');
+  });
+
+  it("falls back on the file's HDR flag when the range is not named", () => {
+    expect(dynamicRangeName(source({}), true)).toBe('HDR');
+    expect(dynamicRangeName(source({ dynamic_range: 'something_new' }), false)).toBe('SDR');
+  });
+});
+
+describe('informativeTitle', () => {
+  it.each([
+    'GER - AC3',
+    'AC3 5.1',
+    'Deutsch',
+    'English Stereo',
+    'DTS-HD 7.1',
+    'Surround',
+    'E-AC-3 · 5.1',
+    '',
+  ])('leaves out %j, which only repeats the language, codec or channels', (title) => {
+    expect(informativeTitle(title)).toBeNull();
+  });
+
+  it.each(['Kommentar', "Director's Commentary", 'GER - Audiodeskription', 'Commentary 5.1'])(
+    'keeps %j, which says more',
+    (title) => {
+      expect(informativeTitle(title)).toBe(title);
+    },
+  );
+
+  it('leaves out a mono title and titles joined by commas, slashes or dots', () => {
+    for (const title of ['Mono', 'GER, AC3', 'GER/AC3', 'DE · AC3']) {
+      expect(informativeTitle(title), title).toBeNull();
+    }
+  });
+
+  it('returns the trimmed text of a title that says more', () => {
+    expect(informativeTitle("  Director's Commentary  ")).toBe("Director's Commentary");
+  });
+
+  it('is null for a missing title', () => {
+    expect(informativeTitle(undefined)).toBeNull();
+    expect(informativeTitle(null)).toBeNull();
   });
 });

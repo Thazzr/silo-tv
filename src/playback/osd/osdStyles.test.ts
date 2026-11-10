@@ -46,11 +46,41 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(card).not.toMatch(/transition|backdrop-filter/);
   });
 
-  it('rounds the card at 20 px and the thumbnail at 14 px, 24 px tabular time', () => {
-    expect(rule('.player-preview')).toContain('border-radius: 20px');
-    expect(rule('.player-preview-image')).toContain('border-radius: 14px');
-    expect(rule('.player-preview-time')).toMatch(/font-size: 24px/);
-    expect(rule('.player-preview-time')).toContain('tabular-nums');
+  it('rounds the card slightly, with the thumbnail flush at the top: no padding, a thin light line', () => {
+    const card = rule('.player-preview');
+    expect(card).toContain('border-radius: 10px');
+    expect(card).toContain('overflow: hidden');
+    expect(card).not.toMatch(/padding/);
+    const image = rule('.player-preview-image');
+    // An inset outline: it draws the border without changing the 256 px the sprite is scaled to.
+    expect(image).toContain('outline: 1px solid rgba(255, 255, 255, 0.35)');
+    expect(image).toContain('outline-offset: -1px');
+    expect(image).not.toMatch(/padding|margin/);
+  });
+
+  it('makes the time a slim strip: 22 px tabular time left, the rate right', () => {
+    const strip = rule('.player-preview-time');
+    expect(strip).toContain('font-size: 22px');
+    expect(strip).toContain('tabular-nums');
+    expect(strip).toContain('display: flex');
+    expect(strip).toContain('justify-content: space-between');
+    expect(strip).toContain('padding: 6px 12px');
+    expect(css).not.toContain('player-preview-chapter');
+  });
+
+  it('keeps the card above the Info panel, which stands above the overlay gradient', () => {
+    const zOf = (body: string) => Number(/z-index: (\d+)/.exec(body)?.[1]);
+    const menus = readFileSync('src/styles/player-menus.css', 'utf-8');
+    const info = menus.slice(
+      menus.indexOf('.player-info {'),
+      menus.indexOf('}', menus.indexOf('.player-info {')),
+    );
+    expect(zOf(info)).toBeGreaterThan(0);
+    expect(zOf(rule('.player-preview'))).toBeGreaterThan(zOf(info));
+    // The gradient is the overlay's own background, so a child of the overlay paints over it
+    // without the overlay needing a z-index of its own.
+    expect(rule('.player-osd')).toContain('linear-gradient');
+    expect(rule('.player-osd')).not.toMatch(/z-index/);
   });
 
   it('draws chapter ticks 2 px wide, taller than the 6 px track', () => {
@@ -60,8 +90,15 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(parseInt(/height: (\d+)px/.exec(tick)?.[1] ?? '0', 10)).toBeGreaterThan(6);
   });
 
-  it('fills the card nearly opaque', () => {
-    expect(rule('.player-preview')).toMatch(/rgba\(21, 23, 28, 0\.9[5-9]\)/);
+  it('fills the strip dark and translucent, with no blur or shadow on the card', () => {
+    const alpha = Number(
+      /background: rgba\(21, 23, 28, (0\.\d+)\)/.exec(rule('.player-preview-time'))?.[1],
+    );
+    expect(alpha).toBeGreaterThanOrEqual(0.7);
+    expect(alpha).toBeLessThanOrEqual(0.9);
+    for (const selector of ['.player-preview', '.player-preview-image', '.player-preview-time']) {
+      expect(rule(selector), selector).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+    }
   });
 });
 
@@ -139,6 +176,18 @@ describe('overlay layout styles', () => {
     const clock = rule('.player-osd-clock');
     expect(clock).toContain('flex-shrink: 0');
     expect(clock).not.toContain('overflow');
+  });
+
+  it('right-aligns the clock above the scrubber, 22 px, never shrinking, inside the safe area', () => {
+    const clock = rule('.player-osd-clock');
+    expect(clock).toContain('text-align: right');
+    expect(clock).toContain('flex-shrink: 0');
+    expect(clock).toContain('white-space: pre');
+    expect(parseInt(/font-size: (\d+)px/.exec(clock)?.[1] ?? '0', 10)).toBeGreaterThanOrEqual(22);
+    // The overlay's own padding keeps its content, the clock included, off the screen edge.
+    expect(rule('.player-osd')).toContain('padding: 120px var(--safe-x) var(--safe-y)');
+    // The title block's second line no longer carries it.
+    expect(rule('.player-osd-meta')).not.toContain('tabular');
   });
 
   it('uses no backdrop filter, blur or shadow on the overlay, its buttons and Exit', () => {
@@ -220,13 +269,48 @@ describe('player menu styles', () => {
     expect(heading).toContain('letter-spacing');
   });
 
-  it('puts the info column on the left inside the safe area, below Exit, and flat', () => {
-    const column = block('.player-info');
-    expect(column).toContain('left: var(--safe-x)');
-    expect(column).toContain('top: calc(var(--safe-y) + var(--target)');
-    expect(column).toContain('bottom: calc(var(--safe-y)');
-    expect(column).toContain('background: var(--surface-raised)');
-    expect(block('.player-info-fact')).toMatch(/font-size: (2\d|[3-9]\d)px/);
+  it('puts the Info panel on the left inside the safe area, below Exit, solid and flat', () => {
+    const panel = block('.player-info');
+    expect(panel).toContain('left: var(--safe-x)');
+    expect(panel).toContain('top: calc(var(--safe-y) + var(--target)');
+    // A little see-through, so it sits on the picture; no blur or filter for it.
+    const alpha = Number(/background: rgba\(21, 23, 28, (0\.\d+)\)/.exec(panel)?.[1]);
+    expect(alpha).toBeGreaterThanOrEqual(0.7);
+    expect(alpha).toBeLessThanOrEqual(0.9);
+    // Fixed, so it is placed against the screen although it is a child of the overlay.
+    expect(panel).toContain('position: fixed');
+    expect(panel).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
+  });
+
+  it('makes the Info panel about 1100 px wide with two columns, as tall as its content', () => {
+    const panel = block('.player-info');
+    expect(panel).toContain('width: 1100px');
+    expect(panel).toContain('display: grid');
+    expect(panel).toContain('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)');
+    // It stays inside the safe area on a narrower screen and above the scrubber and the buttons.
+    expect(panel).toContain('max-width: calc(100vw - 2 * var(--safe-x))');
+    expect(panel).toContain('max-height: calc(100vh - 2 * var(--safe-y)');
+    // No fixed height or bottom: it takes its content's height.
+    expect(panel).not.toMatch(/(^|[\s;])(height|bottom):/);
+  });
+
+  it('lays the Info footer in the right column (no spanning) and lets its long text wrap', () => {
+    const footer = block('.player-info-footer');
+    expect(footer).not.toContain('grid-column');
+    expect(footer).toContain('border-top');
+    const text = block('.player-info-footer .player-info-fact dd');
+    expect(text).toContain('white-space: normal');
+    expect(text).not.toContain('nowrap');
+  });
+
+  it('keeps the Info rows compact: 30 px rows, 22 px text, nothing under 20 px', () => {
+    expect(block('.player-info-fact')).toContain('min-height: 30px');
+    expect(block('.player-info-fact')).toContain('font-size: 22px');
+    const sizes = [...menus.slice(menus.indexOf('.player-info {')).matchAll(/font-size: (\d+)px/g)];
+    expect(sizes.length).toBeGreaterThan(0);
+    for (const match of sizes) expect(Number(match[1])).toBeGreaterThanOrEqual(20);
+    expect(block('.player-info .player-menu-heading')).not.toMatch(/font-size/);
+    expect(block('.player-menu-heading')).toContain('font-size: var(--fs-small)');
   });
 
   it('no longer carries the options panel', () => {
