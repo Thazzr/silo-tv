@@ -67,15 +67,18 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Playback core on protocol v3: an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
 - ⬜ Direct play, HLS remux and transcode verified on the TV
   - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
-- 🟨 Controls (Silo TV app style, defaults to confirm on the TV):
-  - overlay with title, scrubber, times and buttons; hides after 5 s
+- 🟨 Controls (keys confirmed on the TV 2026-11-10 on webOS 26):
+  - overlay that hides after 5 s
   - play/pause, skips by the profile's steps (taps add up), scrubbing at 2–16× by holding or with Rewind/Fast Forward
   - scrub previews from the server's trickplay sheets, chapter marks on the scrubber
-  - a chapter picker comes with the options panel
-- ⬜ Options panel, opened from an Options button on the overlay or with Down while the overlay is hidden: tabs Info, Video (quality, auto-play next), Audio, Subtitles and Chapters
-  - audio, subtitle and quality changes during playback (replan)
-  - audio and subtitle changes are saved for the series or movie, as in Silo's web client
-  - a quality change holds for the current title only
+- ⬜ Overlay in the layout of Silo's web player, adapted to the TV (user decision 2026-11-10):
+  - Exit at the top left
+  - a full-width scrubber; below it the title, the episode line and "elapsed / total"
+  - in the middle: skip back, play/pause, skip forward and the next episode
+  - on the right, menu buttons that open their menu above them: Audio, Chapters, Subtitles, a gear for quality (later speed, and auto-play next for episodes) and Info
+  - left out on the TV: volume, marker editing, pop-out, fullscreen and the subtitle appearance editor (it comes from the profile)
+- 🟨 Quality menu (built as a side panel, moving into the gear menu): Auto plus the plan's qualities; a change replans and holds for the current title only. Info and the chapter picker are built too.
+- ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
 - 🟨 Skip intro, recap, credits and previews; automatic skipping following the profile settings
