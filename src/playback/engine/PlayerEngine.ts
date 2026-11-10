@@ -23,9 +23,21 @@ export type EngineEvent =
   | 'ended'
   | 'error';
 
+export interface SourceOptions {
+  /** The plan says the stream is HLS (protocol or MIME type), so an engine can pick its HLS path. */
+  hls: boolean;
+}
+
+/** Whether the plan's stream is HLS; from the plan's own facts, never from the URL. */
+export function isHlsStream(stream: { protocol: string; mime_type?: string }): boolean {
+  return (
+    stream.protocol === 'hls' || stream.mime_type?.toLowerCase() === 'application/vnd.apple.mpegurl'
+  );
+}
+
 export interface PlayerEngine {
   /** Loads another source; playback starts by itself where the host allows autoplay. */
-  setSource(url: string): void;
+  setSource(url: string, options: SourceOptions): void;
   /** Never rejects: an autoplay refusal is not a failure the caller can act on. */
   play(): Promise<void>;
   pause(): void;

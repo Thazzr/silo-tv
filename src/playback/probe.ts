@@ -1,3 +1,4 @@
+import Hls from 'hls.js';
 import { getPlatform } from '../platform';
 import type { ProfileProbe } from './deviceProfile';
 
@@ -14,5 +15,6 @@ export async function collectProfileProbe(): Promise<ProfileProbe> {
     manufacturer: platform.manufacturer,
     appVersion: __APP_VERSION__,
     osVersion: platform.readPlatformVersion(),
+    hlsJs: Hls.isSupported(),
   };
 }

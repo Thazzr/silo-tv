@@ -24,6 +24,7 @@ import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import type { StartIntent } from './resume';
+import { isHlsStream } from './engine/PlayerEngine';
 import {
   usePlaybackSession,
   type PlaybackSession,
@@ -305,6 +306,7 @@ function PlayingView({
   useBackHandler(controls.back);
 
   // Subscribed before the source is set, so no early event is missed.
+  const hls = isHlsStream(plan.stream);
   useLayoutEffect(() => {
     if (!engine) return;
     const off = [
@@ -344,11 +346,12 @@ function PlayingView({
         onMediaError({ code: error?.code ?? 0, message: error?.message ?? '' });
       }),
     ];
-    engine.setSource(mediaUrl);
+    engine.setSource(mediaUrl, { hls });
     return () => off.forEach((unsubscribe) => unsubscribe());
   }, [
     engine,
     mediaUrl,
+    hls,
     autoplay,
     reading,
     onStarted,

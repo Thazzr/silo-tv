@@ -5,6 +5,7 @@ import type {
   EngineError,
   EngineEvent,
   PlayerEngine,
+  SourceOptions,
   TimeRange,
 } from '../playback/engine/PlayerEngine';
 
@@ -31,8 +32,12 @@ export class FakeEngine implements PlayerEngine {
   });
   private readonly handlers = new Map<EngineEvent, Set<() => void>>();
 
-  setSource(url: string): void {
+  /** The `hls` flag of the last setSource call. */
+  sourceIsHls = false;
+
+  setSource(url: string, options: SourceOptions = { hls: false }): void {
     this.source = url;
+    this.sourceIsHls = options.hls;
   }
 
   seek(seconds: number): void {

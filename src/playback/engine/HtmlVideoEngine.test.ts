@@ -36,7 +36,7 @@ function setup() {
 describe('HtmlVideoEngine', () => {
   it('forwards the source, play, pause, seek and the playback rate to the element', async () => {
     const { el, engine } = setup();
-    engine.setSource('https://media.example/stream');
+    engine.setSource('https://media.example/stream', { hls: false });
     expect(el.src).toBe('https://media.example/stream');
     await engine.play();
     expect(el.play).toHaveBeenCalledTimes(1);
@@ -117,7 +117,7 @@ describe('HtmlVideoEngine', () => {
     const { el, engine } = setup();
     const handler = vi.fn();
     engine.on('playing', handler);
-    engine.setSource('https://media.example/stream');
+    engine.setSource('https://media.example/stream', { hls: false });
     engine.release();
     el.dispatchEvent(new Event('playing'));
     expect(handler).not.toHaveBeenCalled();

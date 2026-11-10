@@ -22,6 +22,8 @@ export interface ProfileProbe {
   appVersion: string;
   /** webOS platform version, e.g. "24.0.0"; used for diagnostics on the server only. */
   osVersion?: string | null;
+  /** `Hls.isSupported()`: HLS plays through hls.js over MSE, whatever the native player does. */
+  hlsJs?: boolean;
 }
 
 /** The features the client sends on start and replan. Only the base plan feature: nothing opt-in. */
@@ -206,6 +208,14 @@ function delivery(init: Partial<Delivery> & Pick<Delivery, 'enabled'>): Delivery
   };
 }
 
+/** The HLS client feature hls.js covers: playlists with EXT-X-DEFINE variables (HLS version 8). */
+export const HLS_VARIABLE_SUBSTITUTION = 'hls_variable_substitution_v1';
+
+/** True when MSE accepted any of these probe rows: hls.js feeds the decoder through MSE only. */
+function mseOk(probe: ProfileProbe, ...ids: string[]): boolean {
+  return ids.some((id) => row(probe, id)?.mse === true);
+}
+
 /** HLS is native on webOS; it counts when the engine answers for either HLS MIME type. */
 function hlsSupported(probe: ProfileProbe): boolean {
   return containerOk(probe, 'hls-apple') || containerOk(probe, 'hls-x');
@@ -214,10 +224,24 @@ function hlsSupported(probe: ProfileProbe): boolean {
 export function buildPlaybackContext(probe: ProfileProbe): PlaybackContext {
   const caps = buildClientCapabilities(probe);
   const hdr = caps.hdr_details ?? hdrDetails(probe);
-  const hls = hlsSupported(probe);
-  // Server-packaged HLS: only the codecs HLS carries.
-  const hlsVideo = caps.codecs_video.filter((c) => c === 'h264' || c === 'hevc');
-  const hlsAudio = caps.codecs_audio.filter((c) => ['aac', 'ac3', 'eac3', 'mp3'].includes(c));
+  const viaHlsJs = probe.hlsJs === true;
+  const hls = viaHlsJs || hlsSupported(probe);
+  // Server-packaged HLS: only the codecs HLS carries. Through hls.js they must also pass MSE,
+  // which is stricter than canPlayType for the native player.
+  let hlsVideo = caps.codecs_video.filter((c) => c === 'h264' || c === 'hevc');
+  let hlsAudio = caps.codecs_audio.filter((c) => ['aac', 'ac3', 'eac3', 'mp3'].includes(c));
+  if (viaHlsJs) {
+    const mseIds: Record<string, string[]> = {
+      h264: startsWith(probe, 'h264-'),
+      hevc: startsWith(probe, 'hevc-'),
+      aac: ['aac-lc', 'he-aac'],
+      mp3: ['mp3'],
+      ac3: ['ac3'],
+      eac3: ['eac3'],
+    };
+    hlsVideo = hlsVideo.filter((c) => mseOk(probe, ...(mseIds[c] ?? [])));
+    hlsAudio = hlsAudio.filter((c) => mseOk(probe, ...(mseIds[c] ?? [])));
+  }
 
   const output: S['OutputContextV3'] = { hdr_details: hdr, sink_type: 'hdmi' };
   // The flags are the TV's own answer; without them the display is "unknown" and none is sent.
@@ -253,6 +277,7 @@ export function buildPlaybackContext(probe: ProfileProbe): PlaybackContext {
             containers: ['hls'],
             video_codecs: hlsVideo,
             audio_decode_codecs: hlsAudio,
+            features: viaHlsJs ? [HLS_VARIABLE_SUBSTITUTION] : [],
           })
         : delivery({
             enabled: false,

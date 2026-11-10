@@ -140,6 +140,95 @@ describe('buildPlaybackContext', () => {
     expect(progressive?.failure_reason).toBeTruthy();
   });
 
+  it('lists hls_variable_substitution_v1 only when hls.js plays the HLS', () => {
+    expect(context.deliveries.hls?.features).toEqual([]);
+    const viaHlsJs = buildPlaybackContext(tvProbe({ hlsJs: true }));
+    expect(viaHlsJs.deliveries.hls).toMatchObject({
+      enabled: true,
+      features: ['hls_variable_substitution_v1'],
+    });
+    expect(viaHlsJs.deliveries.original_http?.features).toEqual([]);
+  });
+
+  it('claims HLS codecs through hls.js only when MSE accepts them', () => {
+    const media = tvRows.map((r) => (r.id === 'ac3' ? { ...r, mse: false } : r));
+    const hls = buildPlaybackContext(tvProbe({ media, hlsJs: true })).deliveries.hls;
+    expect(hls?.audio_decode_codecs).not.toContain('ac3');
+    expect(hls?.audio_decode_codecs).toContain('aac');
+    // The native player's own answer still counts without hls.js.
+    expect(buildPlaybackContext(tvProbe({ media })).deliveries.hls?.audio_decode_codecs).toContain(
+      'ac3',
+    );
+  });
+
+  describe('the MSE narrowing of the HLS claim through hls.js', () => {
+    type Mutate = (r: (typeof tvRows)[number]) => (typeof tvRows)[number];
+    const claim = (change: Mutate, hlsJs: boolean) =>
+      buildPlaybackContext(tvProbe({ media: tvRows.map(change), hlsJs })).deliveries.hls!;
+    const only =
+      (ids: string[], patch: Partial<(typeof tvRows)[number]>): Mutate =>
+      (r) =>
+        ids.includes(r.id) ? { ...r, ...patch } : r;
+    const h264Ids = tvRows.filter((r) => r.id.startsWith('h264-')).map((r) => r.id);
+    const hevcIds = tvRows.filter((r) => r.id.startsWith('hevc-')).map((r) => r.id);
+
+    it('drops h264 when no h264 row passes MSE, and keeps it natively', () => {
+      const change = only(h264Ids, { mse: false });
+      expect(claim(change, true).video_codecs).toEqual(['hevc']);
+      expect(claim(change, false).video_codecs).toEqual(['h264', 'hevc']);
+    });
+
+    it('drops hevc when no hevc row passes MSE, and keeps it natively', () => {
+      const change = only(hevcIds, { mse: false });
+      expect(claim(change, true).video_codecs).toEqual(['h264']);
+      expect(claim(change, false).video_codecs).toEqual(['h264', 'hevc']);
+    });
+
+    it('keeps h264 while a single h264 row passes MSE', () => {
+      const keep = h264Ids[0]!;
+      const change: Mutate = (r) => (h264Ids.includes(r.id) ? { ...r, mse: r.id === keep } : r);
+      expect(claim(change, true).video_codecs).toContain('h264');
+    });
+
+    it('drops eac3 and mp3 on their own rows only', () => {
+      expect(claim(only(['eac3'], { mse: false }), true).audio_decode_codecs).toEqual([
+        'aac',
+        'mp3',
+        'ac3',
+      ]);
+      expect(claim(only(['mp3'], { mse: false }), true).audio_decode_codecs).toEqual([
+        'aac',
+        'ac3',
+        'eac3',
+      ]);
+    });
+
+    it('claims aac when only HE-AAC passes MSE, and not when neither does', () => {
+      expect(claim(only(['aac-lc'], { mse: false }), true).audio_decode_codecs).toContain('aac');
+      expect(claim(only(['he-aac'], { mse: false }), true).audio_decode_codecs).toContain('aac');
+      expect(
+        claim(only(['aac-lc', 'he-aac'], { mse: false }), true).audio_decode_codecs,
+      ).not.toContain('aac');
+    });
+
+    it('does not claim a codec whose mse answer is missing', () => {
+      const missing: Mutate = (r) => {
+        if (!['ac3', 'mp3', 'eac3', ...h264Ids].includes(r.id)) return r;
+        const copy = { ...r } as Partial<typeof r>;
+        delete copy.mse;
+        return copy as typeof r;
+      };
+      const hls = claim(missing, true);
+      expect(hls.audio_decode_codecs).toEqual(['aac']);
+      expect(hls.video_codecs).toEqual(['hevc']);
+    });
+  });
+
+  it('enables hls on a browser without native HLS when hls.js works', () => {
+    const hls = buildPlaybackContext(browserProbe({ hlsJs: true })).deliveries.hls;
+    expect(hls).toMatchObject({ enabled: true, features: ['hls_variable_substitution_v1'] });
+  });
+
   it('claims WebVTT sidecar text only, nothing else for subtitles', () => {
     for (const name of ['original_http', 'hls'] as const) {
       expect(context.deliveries[name]?.subtitles).toEqual({
