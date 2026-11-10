@@ -104,6 +104,44 @@ describe('ProgressReporter single flight', () => {
     expect(sent[1]!.body.is_paused).toBe(true);
   });
 
+  it('sends the latest paused flag of the waiting reports, in either order', async () => {
+    const first = setup();
+    first.reporter.send(false);
+    first.reporter.send(true);
+    first.reporter.send(false);
+    await first.sent[0]!.settle();
+    expect(first.sent[1]!.body.is_paused).toBe(false);
+
+    const second = setup();
+    second.reporter.send(false);
+    second.reporter.send(false);
+    second.reporter.send(true);
+    await second.sent[0]!.settle();
+    expect(second.sent[1]!.body.is_paused).toBe(true);
+  });
+
+  it.each([410, 404])(
+    'ignores a %s answer of a session that was replaced meanwhile',
+    async (status) => {
+      const { reporter, state, sent, deps } = setup();
+      reporter.send(false);
+      state.sessionId = 'session-2';
+      await sent[0]!.settle(status);
+      expect(deps.onEnded).not.toHaveBeenCalled();
+      expect(deps.onExpired).not.toHaveBeenCalled();
+    },
+  );
+
+  it('dropPending alone drops the waiting report, with the session not stopped', async () => {
+    const { reporter, state, sent } = setup();
+    reporter.send(false);
+    reporter.send(false);
+    reporter.dropPending();
+    expect(state.stopped).toBe(false);
+    await sent[0]!.settle();
+    expect(sent).toHaveLength(1);
+  });
+
   it('assigns the sequence when a report is sent, so sent order and sequence order agree', async () => {
     const { reporter, sent } = setup();
     reporter.send(false);

@@ -335,6 +335,192 @@ describe('proactive refresh', () => {
   });
 });
 
+describe('refresh edge cases', () => {
+  const problemResponse = (code: string, status: number, headers: Record<string, string> = {}) =>
+    new Response(JSON.stringify(problem(code, status)), {
+      status,
+      headers: { 'Content-Type': 'application/problem+json', ...headers },
+    });
+  const okJson = (body: unknown) =>
+    new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+
+  /** A transport that answers `me` and `refresh` from the given functions and counts both. */
+  function stub(handlers: {
+    refresh?: () => Response | Promise<Response>;
+    me?: (auth: string | null) => Response | Promise<Response>;
+  }) {
+    const calls = { me: [] as (string | null)[], refresh: 0 };
+    const transport: Transport = async (request) => {
+      if (request.url.endsWith('/api/v2/auth/refresh')) {
+        calls.refresh += 1;
+        return handlers.refresh ? handlers.refresh() : okJson(newTokens);
+      }
+      const auth = request.headers.get('Authorization');
+      calls.me.push(auth);
+      return handlers.me ? handlers.me(auth) : okJson(account);
+    };
+    return { calls, transport };
+  }
+
+  function clientOf(transport: Transport, session = signedInSession()) {
+    const client = createSiloClient({
+      baseUrl: BASE_URL,
+      transport,
+      session,
+      device,
+      clientVersion: 'test',
+    });
+    return { client, session };
+  }
+
+  const slow = <T>(value: () => T) =>
+    new Promise<T>((resolve) => setTimeout(() => resolve(value()), 20));
+
+  afterEach(() => vi.useRealTimers());
+
+  it('lets two parallel calls read the body of a shared 503 from the proactive refresh', async () => {
+    const { transport } = stub({
+      refresh: () =>
+        slow(() => problemResponse('dependency_unavailable', 503, { 'Retry-After': '5' })),
+    });
+    localStorage.setItem(
+      'silo-tv.session.v1',
+      JSON.stringify({ v: 2, session: { refreshToken: 'refresh-old', user: account } }),
+    );
+    const { client } = clientOf(transport, new Session(getPlatform().storage));
+    const [a, b] = await Promise.all([
+      client.GET('/api/v2/account/me'),
+      client.GET('/api/v2/account/me'),
+    ]);
+    expect(a.response.status).toBe(503);
+    expect(b.response.status).toBe(503);
+    expect(a.error).toMatchObject({ status: 503 });
+    expect(b.error).toMatchObject({ status: 503 });
+  });
+
+  it('lets two parallel calls read the body of a shared 503 from the reactive refresh', async () => {
+    const { transport, calls } = stub({
+      me: () => problemResponse('invalid_token', 401),
+      refresh: () => slow(() => problemResponse('dependency_unavailable', 503)),
+    });
+    const { client } = clientOf(transport);
+    const [a, b] = await Promise.all([
+      client.GET('/api/v2/account/me'),
+      client.GET('/api/v2/account/me'),
+    ]);
+    expect(calls.refresh).toBe(1);
+    expect(a.response.status).toBe(503);
+    expect(b.response.status).toBe(503);
+    expect(a.error).toMatchObject({ status: 503 });
+    expect(b.error).toMatchObject({ status: 503 });
+  });
+
+  it('does not send the request with an already expired token when the refresh answers 503', async () => {
+    const { transport, calls } = stub({
+      refresh: () => problemResponse('dependency_unavailable', 503),
+    });
+    const session = signedInSession();
+    session.update({ expiresAt: Date.now() - 1000 });
+    const { response } = await clientOf(transport, session).client.GET('/api/v2/account/me');
+    expect(response.status).toBe(503);
+    expect(calls.me).toEqual([]);
+    expect(calls.refresh).toBe(1);
+  });
+
+  it('sends a token with 90 s left as it is, without a refresh', async () => {
+    const { transport, calls } = stub({});
+    const session = signedInSession();
+    session.update({ expiresAt: Date.now() + 90_000 });
+    await clientOf(transport, session).client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(0);
+    expect(calls.me).toEqual(['Bearer old']);
+  });
+
+  it('refreshes at 59.999 s left but not at exactly 60 s', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2030-01-01T00:00:00Z'));
+    const { transport, calls } = stub({});
+    const session = signedInSession();
+    const { client } = clientOf(transport, session);
+    session.update({ expiresAt: Date.now() + 60_000 });
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(0);
+    session.update({ expiresAt: Date.now() + 59_999 });
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(1);
+  });
+
+  it('starts a second refresh when the token expires again after the first one finished', async () => {
+    const { transport, calls } = stub({});
+    const session = signedInSession();
+    session.update({ expiresAt: Date.now() + 10_000 });
+    const { client } = clientOf(transport, session);
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(1);
+    session.update({ expiresAt: Date.now() + 10_000 });
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(2);
+  });
+
+  it('starts a second refresh for a later 401 after an earlier refresh', async () => {
+    const { transport, calls } = stub({
+      me: (auth) =>
+        auth === 'Bearer newer' ? okJson(account) : problemResponse('invalid_token', 401),
+      refresh: () =>
+        okJson(calls.refresh === 1 ? newTokens : { ...newTokens, access_token: 'newer' }),
+    });
+    const { client } = clientOf(transport);
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(1);
+    await client.GET('/api/v2/account/me');
+    expect(calls.refresh).toBe(2);
+  });
+
+  it('retries a 401 once with the new token, without a second refresh, when another request already refreshed', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { transport, calls } = stub({
+      me: async (auth) => {
+        if (auth === 'Bearer old') {
+          await gate;
+          return problemResponse('invalid_token', 401);
+        }
+        return okJson(account);
+      },
+    });
+    const { client, session } = clientOf(transport);
+    const pending = client.GET('/api/v2/account/me');
+    await vi.waitFor(() => expect(calls.me).toEqual(['Bearer old']));
+    // A parallel request refreshed while this one was on its way.
+    session.update({ accessToken: 'new', refreshToken: 'refresh-new' });
+    release();
+    const { response } = await pending;
+    expect(response.status).toBe(200);
+    expect(calls.refresh).toBe(0);
+    expect(calls.me).toEqual(['Bearer old', 'Bearer new']);
+  });
+
+  it('hands back the original 401 when the session was signed out while the request was in flight', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { transport, calls } = stub({
+      me: async () => {
+        await gate;
+        return problemResponse('invalid_token', 401);
+      },
+    });
+    const { client, session } = clientOf(transport);
+    const pending = client.GET('/api/v2/account/me');
+    await vi.waitFor(() => expect(calls.me).toHaveLength(1));
+    session.signOut();
+    release();
+    const { response } = await pending;
+    expect(response.status).toBe(401);
+    expect(calls.refresh).toBe(0);
+    expect(calls.me).toHaveLength(1);
+  });
+});
+
 describe('Session', () => {
   const STORED = 'silo-tv.session.v1';
 

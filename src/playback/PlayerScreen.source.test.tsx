@@ -36,6 +36,10 @@ afterEach(async () => {
 
 /** Plays a plan and returns the options the screen gave the engine with the source. */
 async function sourceOptionsFor(stream: Partial<ReturnType<typeof playbackPlan>['stream']>) {
+  return (await sourceFor(stream)).options;
+}
+
+async function sourceFor(stream: Partial<ReturnType<typeof playbackPlan>['stream']>) {
   const setSource = vi.spyOn(HtmlVideoEngine.prototype, 'setSource').mockImplementation(() => {});
   const base = playbackPlan();
   servePlayback(server, {
@@ -55,7 +59,7 @@ async function sourceOptionsFor(stream: Partial<ReturnType<typeof playbackPlan>[
   });
   await screen.findByTestId('player');
   expect(setSource).toHaveBeenCalledTimes(1);
-  return setSource.mock.calls[0]![1];
+  return { options: setSource.mock.calls[0]![1], session };
 }
 
 describe('PlayerScreen tells the engine whether the source is HLS', () => {
@@ -65,6 +69,15 @@ describe('PlayerScreen tells the engine whether the source is HLS', () => {
         hls: true,
       },
     );
+  });
+
+  it('reads the token again on every headers call, so a refreshed token applies', async () => {
+    const { options, session } = await sourceFor({ protocol: 'hls', url: '/api/v2/stream/x?st=1' });
+    const url = `${BASE_URL}/api/v2/stream/x/seg.ts`;
+    expect(options.headers?.(url)?.Authorization).toBe(`Bearer ${ACCESS_TOKEN}`);
+    session.update({ accessToken: 'new-fake' });
+    expect(options.headers?.(url)?.Authorization).toBe('Bearer new-fake');
+    expect(options.nativeUrl?.()).toContain('token=new-fake');
   });
 
   it('gives an HLS source its token as headers, and the token URL only for the native fallback', async () => {
