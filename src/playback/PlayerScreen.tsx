@@ -35,6 +35,9 @@ import {
   type SessionFailure,
 } from './usePlaybackSession';
 
+/** How long the hint about a quality that did not play stays on screen. */
+export const QUALITY_NOTICE_MS = 4_000;
+
 const ERROR_TEXT: Record<SessionFailure, MessageKey> = {
   unsupported: 'player.error.unsupported',
   noFile: 'player.error.noFile',
@@ -77,6 +80,19 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
   const token = auth.get()?.accessToken;
+
+  // The hint for a quality change that went back to the quality before. It lives here, above the
+  // playing view, which is mounted anew for every load (the fallback is one).
+  const fallbacks = state.kind === 'ready' ? state.qualityFallbacks : 0;
+  const [notice, setNotice] = useState(false);
+  const seenFallbacks = useRef(0);
+  useEffect(() => {
+    if (fallbacks <= seenFallbacks.current) return undefined;
+    seenFallbacks.current = fallbacks;
+    setNotice(true);
+    const handle = setTimeout(() => setNotice(false), QUALITY_NOTICE_MS);
+    return () => clearTimeout(handle);
+  }, [fallbacks]);
 
   if (state.kind === 'loading' || state.kind === 'starting') {
     return (
@@ -126,26 +142,33 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   }
 
   return (
-    <PlayingView
-      key={state.loadId}
-      plan={state.plan}
-      sessionId={state.sessionId}
-      mediaUrl={state.mediaUrl}
-      autoplay={state.autoplay}
-      heading={state.heading}
-      previews={state.previews}
-      media={state.media}
-      quality={state.quality}
-      activeQualityFeature={state.activeQualityFeature}
-      panel={panel}
-      started={started}
-      onStarted={markStarted}
-      contentId={contentId}
-      title={title}
-      token={token}
-      playback={playback}
-      onExit={onExit}
-    />
+    <>
+      <PlayingView
+        key={state.loadId}
+        plan={state.plan}
+        sessionId={state.sessionId}
+        mediaUrl={state.mediaUrl}
+        autoplay={state.autoplay}
+        heading={state.heading}
+        previews={state.previews}
+        media={state.media}
+        quality={state.quality}
+        activeQualityFeature={state.activeQualityFeature}
+        panel={panel}
+        started={started}
+        onStarted={markStarted}
+        contentId={contentId}
+        title={title}
+        token={token}
+        playback={playback}
+        onExit={onExit}
+      />
+      {notice ? (
+        <p className="player-notice" role="status" data-testid="player-quality-notice">
+          {t('player.menu.quality.unavailable')}
+        </p>
+      ) : null}
+    </>
   );
 }
 

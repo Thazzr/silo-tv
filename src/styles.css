@@ -801,6 +801,27 @@ h3 {
   background: rgba(110, 231, 183, 0.45);
 }
 
+/* A short hint over the video (a quality that did not play): flat, centred above the bottom bar,
+   inside the safe area. It never takes the focus or a key. */
+.player-notice {
+  position: fixed;
+  bottom: calc(var(--safe-y) + 250px);
+  left: 50%;
+  box-sizing: border-box;
+  max-width: calc(100% - 2 * var(--safe-x));
+  margin: 0;
+  padding: 16px 40px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+  background: rgba(21, 23, 28, 0.92);
+  border: 2px solid var(--chrome-border);
+  border-radius: 40px;
+  transform: translateX(-50%);
+}
+
 /* The skip pill: bottom right inside the safe area; above the controls while they are open. The
    fill plays over the 5 s the pill holds the focus (transform only). */
 .player-skip {

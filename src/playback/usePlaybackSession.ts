@@ -87,6 +87,11 @@ export type SessionState =
       quality: string;
       /** The server lists `plan_active_quality_v1`: the plan's `active_quality` can be trusted. */
       activeQualityFeature: boolean;
+      /**
+       * Counts the quality changes that could not play and went back to the quality before. The
+       * screen shows its hint when this grows.
+       */
+      qualityFallbacks: number;
     }
   | {
       kind: 'error';
@@ -211,6 +216,8 @@ export interface ReplanOptions {
   forceReload?: boolean;
   /** Whether the reloaded video starts by itself; default is the viewer's own play state. */
   autoplay?: boolean;
+  /** A `quality_change` that goes back to the quality before one that did not play. */
+  fallback?: boolean;
 }
 
 export type ReplanResult =
@@ -318,6 +325,13 @@ export class PlaybackController {
   private awaitingMetadata = false;
   /** The load whose failure was handled already: one failure is recovered once. */
   private failedLoad = -1;
+  /**
+   * The load a viewer's quality change started, with the preference from before it. While it has
+   * not shown its first frame, a failure goes back to that preference instead of recovering.
+   */
+  private qualityLoad: { loadId: number; previous: string } | null = null;
+  /** Fallbacks to the previous quality so far (see `SessionState.qualityFallbacks`). */
+  private qualityFallbacks = 0;
   private wake: (() => void) | null = null;
 
   constructor(private readonly deps: Deps) {
@@ -586,6 +600,7 @@ export class PlaybackController {
       media: this.mediaFacts(plan),
       quality: this.quality ?? 'auto',
       activeQualityFeature: this.activeQualityServer,
+      qualityFallbacks: this.qualityFallbacks,
     });
   }
 
@@ -939,14 +954,22 @@ export class PlaybackController {
         this.startPosition = position;
         // The viewer's pick is the preference from the plan on, so the state that comes with
         // the new plan already carries it.
-        if (operation === 'quality_change' && options.quality !== undefined) {
-          this.quality = options.quality;
-        }
+        const before = this.quality ?? 'auto';
+        const qualityPick = operation === 'quality_change' && options.quality !== undefined;
+        if (qualityPick) this.quality = options.quality ?? before;
+        if (qualityPick && options.fallback) this.qualityFallbacks += 1;
+        const loadBefore = this.loadId;
         // After a failure the old transport is dead, so its URL is no reason to keep it.
         this.adopt(next, sessionId, {
           forceReload: options.forceReload || recovery,
           autoplay: options.autoplay,
         });
+        // A new load from the viewer's pick may fail before its first frame: then the way back is
+        // the quality it came from. The way back itself has no way back.
+        this.qualityLoad =
+          qualityPick && !options.fallback && this.loadId !== loadBefore
+            ? { loadId: this.loadId, previous: before }
+            : null;
         return { kind: 'applied' };
       }
       return { kind: 'terminal', message: data.terminal?.message };
@@ -979,6 +1002,19 @@ export class PlaybackController {
     this.failedLoad = this.loadId;
     this.deps.onMediaError(failure);
     this.playing = false;
+    // A quality the viewer picked that does not play before its first frame goes back to the
+    // quality before it, at the same position. If that is not possible, the failure path below runs.
+    const pick = this.qualityLoad;
+    this.qualityLoad = null;
+    if (pick && pick.loadId === this.loadId && !this.hasPlayed) {
+      const back = await this.replan('quality_change', {
+        quality: pick.previous,
+        position: this.reading()?.position ?? this.startPosition,
+        forceReload: true,
+        fallback: true,
+      });
+      if (back.kind === 'applied' || this.stopped) return;
+    }
     // A network error after the first frame is a lost connection, not a failed route (§6.2).
     // A caller that names the classification (the watchdog) has decided it is a route failure.
     if (failure.code === MEDIA_ERR_NETWORK && this.hasPlayed && !classification) {
