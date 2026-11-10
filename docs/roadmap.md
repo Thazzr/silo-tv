@@ -63,23 +63,24 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ✅ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly (TV 2026-11-09)
 - ✅ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen (TV 2026-11-09)
-- ⬜ Choose version, audio track and subtitle on the detail page beforehand; save the choice as a server preference
-- ⬜ Direct play, HLS remux and transcode, as protocol v3 plans them
+- ⬜ Choose version, audio track and subtitle on the detail page beforehand; audio and subtitle picks are saved as the title's server preferences (Silo keeps no version preference: the version played last is the next default)
+- 🟨 Playback core on protocol v3: an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
+- ⬜ Direct play, HLS remux and transcode verified on the TV
   - device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them
-- ⬜ Controls:
-  - play/pause, skip and seek steps
-  - scrubbing with preview thumbnails (trickplay)
-  - chapters: picker, display and marks on the timeline
-- ⬜ Audio, subtitle and quality changes during playback (replan)
+- 🟨 Controls (Silo TV app style, defaults to confirm on the TV):
+  - overlay with title, scrubber, times and buttons; hides after 5 s
+  - play/pause, skips by the profile's steps (taps add up), scrubbing at 2–16× by holding or with Rewind/Fast Forward
+  - scrub previews from the server's trickplay sheets, chapter marks on the scrubber
+  - a chapter picker comes with the options panel
+- ⬜ Options panel: audio, subtitle and quality changes during playback (replan), chapters, info
 - ⬜ Search and download subtitles through the server's subtitle providers
-- ⬜ Subtitle appearance following the profile setting (size, style)
-- ⬜ Skip intro, recap and credits; automatic skipping following the profile setting
+- 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
+- 🟨 Skip intro, recap, credits and previews; automatic skipping following the profile settings
 - ⬜ Up Next: next episode automatically, On Deck suggestions at the end of a movie
 - ⬜ Shuffle for a library, collection, series and season
-- ⬜ Report progress continuously and at the end
 - ⬜ Sleep timer
-- ⬜ Playback speed and aspect ratio (not possible in the Roku client, possible on webOS)
-- ⬜ Audio and subtitle delay
+- ⬜ Playback speed and aspect ratio (not possible in the Roku client; on webOS to be probed on the TV first)
+- ⬜ Subtitle delay (the renderer already takes an offset); an audio delay is not possible with the webOS video element
 
 ## Phase 4 – Personal and discovery (target v0.5.0)
 
