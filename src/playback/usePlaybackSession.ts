@@ -21,6 +21,7 @@ import { collectProfileProbe } from './probe';
 import { resumePoint, rewound, type StartIntent, type TrackChoice } from './resume';
 import { getResumeRewind } from './resumeRewind';
 import { segmentsOf, type MarkerFields, type Segment } from './skip/segments';
+import { stopTiming } from './stopTiming';
 import { uuidV4 } from './uuid';
 
 type S = components['schemas'];
@@ -41,6 +42,20 @@ export const RECONNECT_BUDGET_MS = 120_000;
 const MAX_RESTARTS = 3;
 /** Waits before the retries of a stop that did not arrive (the stop_id stays the same). */
 export const STOP_RETRY_DELAYS_MS = [500, 1_500];
+/**
+ * The stop goes out this long after the video was unloaded. webOS 26 hangs the next stream
+ * request when the server aborts a stream the media stack still reads, and a stop that arrives
+ * while the element is still loaded does exactly that. If the app closes within this time the
+ * stop never goes out; the server's session lease ends the session then.
+ */
+export const STOP_AFTER_UNLOAD_MS = 2_000;
+/**
+ * A new source must deliver `loadedmetadata` within this time, or the load counts as failed.
+ * webOS can hang a stream request without any event, which no media error would ever report.
+ */
+export const METADATA_TIMEOUT_MS = 20_000;
+/** The largest position taken at its word: webOS reports INT64_MAX nanoseconds for "unknown". */
+const MAX_PLAUSIBLE_SECONDS = 1e7;
 
 /** What the player's overlay names: the title and, for an episode, its series and numbers. */
 export interface Heading {
@@ -216,6 +231,10 @@ export type ReplanResult =
 /** A MediaError code: the media element could not reach its source. */
 const MEDIA_ERR_NETWORK = 2;
 
+function plausible(seconds: number): boolean {
+  return Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_PLAUSIBLE_SECONDS;
+}
+
 function inRanges(ranges: { start: number; end: number }[], time: number): boolean {
   return ranges.some((range) => time >= range.start && time <= range.end);
 }
@@ -294,6 +313,11 @@ export class PlaybackController {
   /** What the viewer wants: a reload after a lost connection or session follows it. */
   private viewerPaused = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** The first-frame watchdog; running only while a loaded source has not shown its metadata. */
+  private watchdog: ReturnType<typeof setTimeout> | null = null;
+  private awaitingMetadata = false;
+  /** The load whose failure was handled already: one failure is recovered once. */
+  private failedLoad = -1;
   private wake: (() => void) | null = null;
 
   constructor(private readonly deps: Deps) {
@@ -314,6 +338,7 @@ export class PlaybackController {
   private fail(reason: SessionFailure, message?: string): void {
     // An errored session is not worth a heartbeat.
     this.clearTimer();
+    this.disarmWatchdog();
     this.set({
       kind: 'error',
       reason,
@@ -478,6 +503,7 @@ export class PlaybackController {
       });
       if (this.disposed) {
         // Left while the start was in flight: end the session the server just created.
+        this.unload();
         if (data?.session_id) await this.stopSession(data.session_id);
         return;
       }
@@ -545,6 +571,8 @@ export class PlaybackController {
       // A new load must prove itself again before progress counts, and finds its own origin.
       this.hasPlayed = false;
       this.origin = 0;
+      // The old element is replaced; the new one arms the watchdog when it is attached.
+      this.disarmWatchdog();
     }
     this.set({
       kind: 'ready',
@@ -603,11 +631,60 @@ export class PlaybackController {
     // The last position must be taken while the engine can still tell it.
     if (!engine) this.reading();
     this.engine = engine;
+    // A new element loads a new source (every load mounts its own); a gone one loads nothing.
+    this.awaitingMetadata = engine !== null && !this.stopped;
+    this.armWatchdog();
   }
+
+  /** Unloads the video: the decoder is freed and the element has no source. Safe to repeat. */
+  private unload(): void {
+    const engine = this.engine;
+    this.engine = null;
+    engine?.release();
+  }
+
+  private armWatchdog(): void {
+    this.clearWatchdog();
+    if (!this.awaitingMetadata || this.stopped || document.visibilityState === 'hidden') return;
+    this.watchdog = setTimeout(this.onWatchdog, METADATA_TIMEOUT_MS);
+  }
+
+  private clearWatchdog(): void {
+    if (this.watchdog) clearTimeout(this.watchdog);
+    this.watchdog = null;
+  }
+
+  private disarmWatchdog(): void {
+    this.awaitingMetadata = false;
+    this.clearWatchdog();
+  }
+
+  /** No metadata and no error in time: the load failed silently, so it takes the failure path. */
+  private readonly onWatchdog = (): void => {
+    this.watchdog = null;
+    const engine = this.engine;
+    if (!engine || !this.awaitingMetadata || this.stopped) return;
+    this.awaitingMetadata = false;
+    // Data without metadata is a decoder's problem; nothing at all is a transport that stalled.
+    const received = engine.buffered.length > 0;
+    // Always a failure recovery: a silent hang is a failed route, never a lost connection, so
+    // the server must pick another one instead of the same URL being retried.
+    void this.onMediaError(
+      {
+        code: received ? 3 : MEDIA_ERR_NETWORK,
+        message: `No metadata within ${METADATA_TIMEOUT_MS / 1000} s`,
+      },
+      received ? 'decoder_failure' : 'transport_stall',
+    );
+  };
 
   /** The position on the source's timeline: player time minus the container origin plus the offset. */
   reading(): PlayerReading | null {
     const raw = this.read?.() ?? this.readEngine();
+    // An implausible time (webOS reports INT64_MAX nanoseconds for "unknown") is no position.
+    if (raw && !plausible(raw.position)) {
+      return this.lastReading ?? { position: this.startPosition, paused: raw.paused };
+    }
     // Until a frame has played the element is at its own 0: the plan's start is the position.
     const live = raw && !this.hasPlayed ? { ...raw, position: this.startPosition } : raw;
     if (live) this.lastReading = live;
@@ -619,7 +696,10 @@ export class PlaybackController {
     if (!engine) return null;
     const offset = this.plan?.timeline.timeline_offset_seconds ?? 0;
     return {
-      position: Math.max(0, engine.currentTime - this.origin) + offset,
+      // NaN for a time that cannot be one, which reading() turns into the last good position.
+      position: plausible(engine.currentTime)
+        ? Math.max(0, engine.currentTime - this.origin) + offset
+        : Number.NaN,
       paused: engine.paused,
     };
   }
@@ -628,8 +708,9 @@ export class PlaybackController {
   onLoadedMetadata(): void {
     const engine = this.engine;
     const plan = this.plan;
+    this.disarmWatchdog();
     if (!engine || !plan) return;
-    this.origin = engine.currentTime;
+    this.origin = plausible(engine.currentTime) ? engine.currentTime : 0;
     const start = plan.timeline.player_start_seconds;
     if (start > 0) engine.seek(this.origin + start);
   }
@@ -667,6 +748,9 @@ export class PlaybackController {
 
   /** A hidden document (the viewer left the app) pauses and reports at once. */
   private readonly onVisibility = (): void => {
+    // The watchdog does not run while the page is hidden; it starts over when it is shown again.
+    if (document.visibilityState === 'hidden') this.clearWatchdog();
+    else this.armWatchdog();
     if (document.visibilityState !== 'hidden' || this.stopped) return;
     const engine = this.engine;
     if (!engine || engine.paused) return;
@@ -885,13 +969,19 @@ export class PlaybackController {
   }
 
   /** A MediaError: a lost connection reconnects; any other failure replans for another route. */
-  async onMediaError(failure: MediaFailure): Promise<void> {
+  async onMediaError(failure: MediaFailure, classification?: string): Promise<void> {
+    // Whatever the error is, the load has an answer now and the watchdog has nothing to add.
+    this.disarmWatchdog();
     if (this.stopped || this.replanning || this.reconnecting || this.restarting) return;
     if (!this.plan || !this.capabilities || !this.context) return;
+    // A second report of the same load (an error after the watchdog fired) is not a new failure.
+    if (this.failedLoad === this.loadId) return;
+    this.failedLoad = this.loadId;
     this.deps.onMediaError(failure);
     this.playing = false;
     // A network error after the first frame is a lost connection, not a failed route (§6.2).
-    if (failure.code === MEDIA_ERR_NETWORK && this.hasPlayed) {
+    // A caller that names the classification (the watchdog) has decided it is a route failure.
+    if (failure.code === MEDIA_ERR_NETWORK && this.hasPlayed && !classification) {
       await this.reconnect();
       return;
     }
@@ -900,7 +990,8 @@ export class PlaybackController {
       // decoder failure; an aborted or interrupted load is a transport stall.
       failure: {
         classification:
-          failure.code === 3 || failure.code === 4 ? 'decoder_failure' : 'transport_stall',
+          classification ??
+          (failure.code === 3 || failure.code === 4 ? 'decoder_failure' : 'transport_stall'),
         message: failure.message.slice(0, 512),
       },
     });
@@ -1019,8 +1110,12 @@ export class PlaybackController {
     this.stopped = true;
     this.clearTimer();
     this.cancelWait();
+    this.disarmWatchdog();
+    // The final reading first, then the unload, then (later) the stop: see STOP_AFTER_UNLOAD_MS.
+    const reading = this.sessionId ? this.reading() : null;
+    this.unload();
     if (!this.sessionId) return Promise.resolve();
-    return this.stopSession(this.sessionId, this.reading());
+    return this.stopSession(this.sessionId, reading);
   }
 
   private async stopSession(sessionId: string, reading?: PlayerReading | null): Promise<void> {
@@ -1037,6 +1132,13 @@ export class PlaybackController {
           }
         : {}),
     };
+    await new Promise<void>((resolve) => {
+      stopTiming.waiting += 1;
+      setTimeout(() => {
+        stopTiming.waiting -= 1;
+        resolve();
+      }, stopTiming.delayMs ?? STOP_AFTER_UNLOAD_MS);
+    });
     for (let attempt = 0; ; attempt += 1) {
       try {
         const { response } = await this.deps.client.DELETE('/api/v2/playback/{session_id}', {

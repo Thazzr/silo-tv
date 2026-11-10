@@ -283,6 +283,21 @@ describe('PlayerScreen playback', () => {
     expect(screen.getByTestId('player-remaining')).toHaveTextContent('−1:28:45');
   });
 
+  it('lets the video load its metadata even when it does not autoplay', async () => {
+    const { currentVideo } = await playing();
+    expect(currentVideo()).toHaveAttribute('preload', 'auto');
+  });
+
+  it('keeps the last time when the TV reports an unknown one (INT64_MAX nanoseconds)', async () => {
+    const { video, state } = await playing();
+    state.currentTime = 75;
+    fireEvent.timeUpdate(video);
+    state.currentTime = 9223372036.854;
+    fireEvent.timeUpdate(video);
+    expect(screen.getByTestId('player-time')).toHaveTextContent('1:15');
+    expect(screen.getByTestId('player-time')).not.toHaveTextContent('2562048');
+  });
+
   it('names an episode with its series and numbers, a movie with its title only', async () => {
     await playing({
       watch: watchDetail({

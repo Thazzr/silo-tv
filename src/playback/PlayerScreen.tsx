@@ -309,6 +309,7 @@ function PlayingView({
       <video
         ref={setRef}
         className="player-video"
+        preload="auto"
         autoPlay={autoplay}
         onClick={controls.videoClicked}
       />

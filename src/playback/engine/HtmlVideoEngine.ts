@@ -10,6 +10,7 @@ function ranges(list: TimeRanges): TimeRange[] {
 export class HtmlVideoEngine implements PlayerEngine {
   private readonly subscriptions = new Set<() => void>();
   private stalled = false;
+  private released = false;
 
   constructor(private readonly el: HTMLVideoElement) {
     // The element has no "waiting" state of its own that matches the events, so track it here.
@@ -90,6 +91,9 @@ export class HtmlVideoEngine implements PlayerEngine {
   }
 
   release(): void {
+    // The controller unloads on stop and the screen's cleanup does it again: once is enough.
+    if (this.released) return;
+    this.released = true;
     for (const off of [...this.subscriptions]) off();
     // Without a source the element drops its decoder; the screen removes the element itself.
     this.el.removeAttribute('src');

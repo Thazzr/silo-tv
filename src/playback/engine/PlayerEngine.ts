@@ -38,6 +38,6 @@ export interface PlayerEngine {
   readonly error: EngineError | null;
   /** Subscribes to an event; returns the function that unsubscribes. */
   on(event: EngineEvent, handler: () => void): () => void;
-  /** Detaches every listener and frees the decoder. The engine is unusable afterwards. */
+  /** Detaches every listener and frees the decoder. The engine is unusable afterwards; repeating it is harmless. */
   release(): void;
 }

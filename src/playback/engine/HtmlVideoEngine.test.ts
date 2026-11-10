@@ -118,4 +118,17 @@ describe('HtmlVideoEngine', () => {
     el.dispatchEvent(new Event('waiting'));
     expect(engine.waiting).toBe(false);
   });
+
+  it('releases once: a second release neither unloads the element again nor touches its listeners', () => {
+    const { el, engine } = setup();
+    engine.on('playing', vi.fn());
+    const removeListener = vi.spyOn(el, 'removeEventListener');
+    engine.release();
+    const removed = removeListener.mock.calls.length;
+    expect(removed).toBeGreaterThan(0);
+    engine.release();
+    expect(el.load).toHaveBeenCalledTimes(1);
+    expect(el.removeAttribute).toHaveBeenCalledTimes(1);
+    expect(removeListener).toHaveBeenCalledTimes(removed);
+  });
 });
