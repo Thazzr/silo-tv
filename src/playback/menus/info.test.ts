@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { playbackPlan } from '../../test/playbackFixtures';
-import type { MediaFacts } from '../usePlaybackSession';
+import type { MediaFacts } from '../session/types';
 import {
   conversions,
   currentChapter,

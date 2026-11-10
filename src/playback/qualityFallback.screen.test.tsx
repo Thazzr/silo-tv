@@ -20,7 +20,7 @@ import {
 import { memoryStorage, renderWithSilo } from '../test/renderFlow';
 import { serveSettings } from '../test/settingsFixtures';
 import { PlayerScreen, QUALITY_NOTICE_MS } from './PlayerScreen';
-import { clearInstallationCache } from './usePlaybackSession';
+import { clearInstallationCache } from './session/startSession';
 
 type S = components['schemas'];
 

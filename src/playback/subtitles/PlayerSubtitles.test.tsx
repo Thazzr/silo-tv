@@ -18,7 +18,7 @@ import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import { PlayerScreen } from '../PlayerScreen';
 import { PlayerSubtitles } from './SubtitleOverlay';
-import { clearInstallationCache } from '../usePlaybackSession';
+import { clearInstallationCache } from '../session/startSession';
 
 type Plan = components['schemas']['PlaybackPlan'];
 type Subtitle = components['schemas']['SubtitleDecisionV3'];

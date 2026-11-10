@@ -25,15 +25,8 @@ import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import type { StartIntent } from './resume';
 import { isHlsStream } from './engine/PlayerEngine';
 import { getTimeMode } from './timeDisplay';
-import {
-  usePlaybackSession,
-  type PlaybackSession,
-  type Heading,
-  type MediaFacts,
-  type PreviewFacts,
-  type Plan,
-  type SessionFailure,
-} from './usePlaybackSession';
+import { usePlaybackSession, type PlaybackSession } from './usePlaybackSession';
+import type { Heading, MediaFacts, PreviewFacts, Plan, SessionFailure } from './session/types';
 
 /** How long the hint about a quality that did not play stays on screen. */
 export const QUALITY_NOTICE_MS = 4_000;

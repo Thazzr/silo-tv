@@ -23,7 +23,7 @@ import { serveSettings, type SettingsServe } from '../test/settingsFixtures';
 import { PlayerScreen } from './PlayerScreen';
 import { setResumeRewind } from './resumeRewind';
 import type { StartIntent } from './resume';
-import { clearInstallationCache } from './usePlaybackSession';
+import { clearInstallationCache } from './session/startSession';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));

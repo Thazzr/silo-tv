@@ -24,13 +24,10 @@ import {
 import { memoryStorage, testDevice } from '../test/renderFlow';
 import { setResumeRewind } from './resumeRewind';
 import type { StartIntent } from './resume';
-import {
-  PROGRESS_INTERVAL_MS,
-  clearInstallationCache,
-  usePlaybackSession,
-  type PlayerReading,
-  type ProfileQuality,
-} from './usePlaybackSession';
+import { PROGRESS_INTERVAL_MS } from './session/ProgressReporter';
+import { clearInstallationCache } from './session/startSession';
+import { usePlaybackSession, type ProfileQuality } from './usePlaybackSession';
+import type { PlayerReading } from './session/types';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));

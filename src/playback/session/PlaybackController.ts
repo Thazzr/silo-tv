@@ -1,0 +1,553 @@
+// One playback through Silo playback protocol v3: capabilities, start, progress, replans (failure
+// recovery, reconnect, seek, track and quality changes) and stop. The controller is plain
+// TypeScript so the protocol logic does not depend on React; usePlaybackSession ties its lifetime
+// to a component. It drives the player only through the PlayerEngine interface.
+//
+// It holds the session's state and wires the modules next to it: startSession (before a plan
+// plays), ProgressReporter, Replanner, Recovery with the first-frame watchdog, StopSequence.
+import type { SiloClient } from '../../api/client';
+import type { Session } from '../../api/session';
+import type { ClientCapabilities, PlaybackContext } from '../deviceProfile';
+import type { PlayerEngine } from '../engine/PlayerEngine';
+import { mediaUrlWithToken } from '../mediaUrl';
+import { rewound, type StartIntent } from '../resume';
+import { getResumeRewind } from '../resumeRewind';
+import { uuidV4 } from '../uuid';
+import { mediaFacts, plausible, previewFacts, type Item, type Tracks, type Version } from './facts';
+import { ProgressReporter } from './ProgressReporter';
+import { FirstFrameWatchdog, Recovery } from './recovery';
+import { Replanner } from './replan';
+import { StopSequence } from './StopSequence';
+import {
+  forgetInstallation,
+  interpretStart,
+  loadInstallation,
+  loadWatch,
+  readDeviceProfile,
+  requestStart,
+  type Installation,
+} from './startSession';
+import {
+  SessionError,
+  type Heading,
+  type MediaFailure,
+  type Plan,
+  type PlayerReading,
+  type ReplanOperation,
+  type ReplanOptions,
+  type ReplanResult,
+  type SelectedTracks,
+  type SessionFailure,
+  type SessionState,
+} from './types';
+
+/** The recovery chain remembers this many plan keys (§6). */
+export const MAX_ATTEMPTED_KEYS = 16;
+
+export interface ControllerDeps {
+  client: SiloClient;
+  baseUrl: string;
+  session: Session;
+  contentId: string;
+  /** How to start; without one the player asks when there is something to resume. */
+  intent?: StartIntent;
+  /**
+   * The profile's preferred quality, for a start whose intent names none. Resolves once the
+   * profile's settings are settled (`auto` when they could not be read); without it, `auto`.
+   */
+  profileQuality?(): Promise<string>;
+  onState(state: SessionState): void;
+  onMediaError(failure: MediaFailure | null): void;
+  /** The stream played to its end and the session is stopped. */
+  onEnded(): void;
+}
+
+export class PlaybackController {
+  private disposed = false;
+  private stopped = false;
+  private profileId = '';
+  /** What the server's capabilities say; empty until the first begin. */
+  private server: Installation = {
+    id: '',
+    trickplay: false,
+    markerList: false,
+    activeQuality: false,
+  };
+  private fileId = '';
+  private versions: Version[] = [];
+  private item: Item = { isEpisode: false };
+  private attemptId = '';
+  private sessionId = '';
+  private plan: Plan | null = null;
+  private planAttemptId = '';
+  private mediaUrl = '';
+  private attemptedKeys: string[] = [];
+  private capabilities: ClientCapabilities | null = null;
+  private context: PlaybackContext | null = null;
+  private startPosition = 0;
+  private resumeAt: number | null = null;
+  private heading: Heading | null = null;
+  private loadId = 0;
+  /** The quality preference; null until a start decides it (the intent's, else the profile's). */
+  private quality: string | null;
+  private readonly pinnedFile: boolean;
+  private tracks: Tracks;
+  private read: (() => PlayerReading | null) | null = null;
+  private engine: PlayerEngine | null = null;
+  /** The container's own first timestamp: Chromium keeps it for Matroska. Set at loadedmetadata. */
+  private origin = 0;
+  private lastReading: PlayerReading | null = null;
+  private playing = false;
+  private wasPaused = false;
+  private hasPlayed = false;
+  /** What the viewer wants: a reload after a lost connection or session follows it. */
+  private viewerPaused = false;
+
+  private readonly progress: ProgressReporter;
+  private readonly stopSequence: StopSequence;
+  private readonly watchdog: FirstFrameWatchdog;
+  private readonly replanner: Replanner;
+  private readonly recovery: Recovery;
+
+  constructor(private readonly deps: ControllerDeps) {
+    this.quality = deps.intent?.quality ?? null;
+    this.pinnedFile = deps.intent?.fileId !== undefined;
+    this.tracks = { audio: deps.intent?.audio, subtitle: deps.intent?.subtitle };
+    this.progress = new ProgressReporter({
+      client: deps.client,
+      header: () => this.header(),
+      installationId: () => this.server.id,
+      sessionId: () => this.sessionId,
+      isStopped: () => this.stopped,
+      reading: () => this.reading(),
+      hasPlayed: () => this.hasPlayed,
+      isPlaying: () => this.playing,
+      onEnded: () => this.sessionGone(),
+      onExpired: (position) => void this.recovery.restartAt(position),
+    });
+    this.stopSequence = new StopSequence({
+      client: deps.client,
+      header: () => this.header(),
+      installationId: () => this.server.id,
+      nextSequence: () => this.progress.nextSequence(),
+    });
+    this.watchdog = new FirstFrameWatchdog({
+      isStopped: () => this.stopped,
+      engine: () => this.engine,
+      onStall: (failure, classification) =>
+        void this.recovery.onMediaError(failure, classification),
+    });
+    this.replanner = new Replanner({
+      client: deps.client,
+      header: () => this.header(),
+      isStopped: () => this.stopped,
+      plan: () => this.plan,
+      capabilities: () => this.capabilities,
+      context: () => this.context,
+      state: () => ({
+        sessionId: this.sessionId,
+        installationId: this.server.id,
+        attemptId: this.attemptId,
+        planAttemptId: this.planAttemptId,
+        attemptedKeys: this.attemptedKeys,
+        quality: this.quality,
+        startPosition: this.startPosition,
+        hasPlayed: this.hasPlayed,
+        loadId: this.loadId,
+      }),
+      reading: () => this.reading(),
+      refreshProfile: async () => {
+        const profile = await readDeviceProfile();
+        this.capabilities = profile.capabilities;
+        this.context = profile.context;
+        return profile;
+      },
+      setStartPosition: (position) => {
+        this.startPosition = position;
+      },
+      setQuality: (quality) => {
+        this.quality = quality;
+      },
+      adopt: (plan, sessionId, options) => this.adopt(plan, sessionId, options),
+      engine: () => this.engine,
+      origin: () => this.origin,
+      recoveryActive: () => this.recovery.active,
+      fail: (reason, message, code) => this.fail(reason, message, code),
+      sessionGone: () => this.sessionGone(),
+      restartAt: (position) => this.recovery.restartAt(position),
+    });
+    this.recovery = new Recovery({
+      isStopped: () => this.stopped,
+      isReplanning: () => this.replanner.isReplanning,
+      ready: () => Boolean(this.plan && this.capabilities && this.context),
+      loadId: () => this.loadId,
+      hasPlayed: () => this.hasPlayed,
+      viewerPaused: () => this.viewerPaused,
+      startPosition: () => this.startPosition,
+      reading: () => this.reading(),
+      plan: () => this.plan,
+      reportFailure: (failure) => this.deps.onMediaError(failure),
+      markNotPlaying: () => {
+        this.playing = false;
+      },
+      disarmWatchdog: () => this.watchdog.disarm(),
+      takeQualityLoad: () => this.replanner.takeQualityLoad(),
+      replan: (operation, options) => this.replanner.replan(operation, options),
+      sendPausedProgress: () => this.progress.send(true),
+      fail: (reason, message, code) => this.fail(reason, message, code),
+      sessionGone: () => this.sessionGone(),
+      prepareRestart: () => this.prepareRestart(),
+      start: (position) => this.start(position),
+    });
+    document.addEventListener('visibilitychange', this.onVisibility);
+  }
+
+  private header() {
+    return { 'X-Profile-Id': this.profileId };
+  }
+
+  private set(state: SessionState): void {
+    if (!this.disposed) this.deps.onState(state);
+  }
+
+  private fail(reason: SessionFailure, message?: string, code?: string): void {
+    // An errored session is not worth a heartbeat.
+    this.progress.clearTimer();
+    this.watchdog.disarm();
+    this.set({
+      kind: 'error',
+      reason,
+      ...(message ? { message } : {}),
+      ...(code ? { code } : {}),
+      ...(this.plan ? { plan: this.plan } : {}),
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
+      ...(this.mediaUrl ? { mediaUrl: this.mediaUrl } : {}),
+    });
+  }
+
+  private sessionGone(): void {
+    if (this.stopped) return;
+    this.stopped = true;
+    this.progress.clearTimer();
+    this.recovery.cancelWait();
+    this.fail('sessionEnded');
+  }
+
+  // --- Preparation ---------------------------------------------------------------------------
+
+  /** Capabilities and the watch state; then either the resume prompt or the start. */
+  async begin(): Promise<void> {
+    const profileId = this.deps.session.get()?.profileId;
+    if (!profileId) {
+      this.fail('failed');
+      return;
+    }
+    this.profileId = profileId;
+    try {
+      const [server, watch] = await Promise.all([
+        loadInstallation(this.deps.client, this.deps.baseUrl, this.header()),
+        loadWatch(this.deps.client, this.deps.contentId, this.deps.intent?.fileId, this.header()),
+      ]);
+      if (this.disposed) return;
+      this.server = server;
+      this.versions = watch.versions;
+      this.item = watch.item;
+      this.fileId = watch.fileId;
+      this.resumeAt = watch.resume;
+      this.heading = watch.heading;
+      const kind = this.deps.intent?.kind ?? 'ask';
+      if (kind === 'beginning') {
+        await this.start(0);
+      } else if (kind === 'resume') {
+        await this.resume();
+      } else if (watch.resume !== null) {
+        this.set({ kind: 'prompt', positionSeconds: watch.resume });
+      } else {
+        await this.start(0);
+      }
+    } catch (error) {
+      this.fail(error instanceof SessionError ? error.reason : 'failed');
+    }
+  }
+
+  // --- Start ---------------------------------------------------------------------------------
+
+  /**
+   * Starts at the resume point, moved back by the "Rewind on resume" setting (read now, so a
+   * change applies to the next start); from the beginning when there is no resume point.
+   */
+  async resume(): Promise<void> {
+    await this.start(this.resumeAt === null ? 0 : rewound(this.resumeAt, getResumeRewind()));
+  }
+
+  /** Starts the playback at `position` seconds (0 means from the beginning). */
+  async start(position: number, retryInstallation = true): Promise<void> {
+    this.set({ kind: 'starting' });
+    this.startPosition = position;
+    try {
+      // The first start decides the quality: the intent's, else what the profile prefers (the
+      // server does not apply that setting itself). Later starts keep what the viewer picked.
+      this.quality ??= (await this.deps.profileQuality?.()) ?? 'auto';
+      if (this.disposed) return;
+      const profile = await readDeviceProfile();
+      this.capabilities = profile.capabilities;
+      this.context = profile.context;
+      this.attemptId = uuidV4();
+      const answer = await requestStart(this.deps.client, this.header(), {
+        installationId: this.server.id,
+        fileId: this.fileId,
+        pinnedFile: this.pinnedFile,
+        profileId: this.profileId,
+        attemptId: this.attemptId,
+        quality: this.quality,
+        position,
+        tracks: this.tracks,
+        capabilities: this.capabilities,
+        context: this.context,
+      });
+      if (this.disposed) {
+        // Left while the start was in flight: end the session the server just created.
+        this.unload();
+        if (answer.data?.session_id) await this.stopSequence.send(answer.data.session_id);
+        return;
+      }
+      const outcome = interpretStart(answer, retryInstallation);
+      if (outcome.kind === 'installationChanged') {
+        // The server was replaced or restored: read its capabilities again, new attempt.
+        forgetInstallation(this.deps.baseUrl);
+        this.server = await loadInstallation(this.deps.client, this.deps.baseUrl, this.header());
+        await this.start(position, false);
+      } else if (outcome.kind === 'failed') {
+        this.fail(outcome.reason);
+      } else if (outcome.kind === 'playable') {
+        this.adopt(outcome.plan, outcome.sessionId);
+      } else {
+        this.fail('terminal', outcome.message, outcome.reason);
+      }
+    } catch (error) {
+      this.fail(error instanceof SessionError ? error.reason : 'failed');
+    }
+  }
+
+  /**
+   * Takes a plan as the current one. The video loads again only when the stream is another one
+   * (a new URL or timeline) or the old transport is dead; a plan on the same stream plays on.
+   */
+  private adopt(
+    plan: Plan,
+    sessionId: string,
+    options: { forceReload?: boolean; autoplay?: boolean } = {},
+  ): void {
+    const previous = this.plan;
+    const url = mediaUrlWithToken(
+      plan.stream.url,
+      this.deps.baseUrl,
+      this.deps.session.get()?.accessToken,
+    );
+    const reload =
+      !previous ||
+      Boolean(options.forceReload) ||
+      sessionId !== this.sessionId ||
+      url !== this.mediaUrl ||
+      previous.timeline.timeline_offset_seconds !== plan.timeline.timeline_offset_seconds ||
+      previous.timeline.stream_origin_seconds !== plan.timeline.stream_origin_seconds;
+    this.plan = plan;
+    this.sessionId = sessionId;
+    this.planAttemptId = uuidV4();
+    if (!this.attemptedKeys.includes(plan.plan_attempt_key)) {
+      this.attemptedKeys.push(plan.plan_attempt_key);
+    }
+    this.attemptedKeys = this.attemptedKeys.slice(-MAX_ATTEMPTED_KEYS);
+    this.mediaUrl = url;
+    if (reload) {
+      this.loadId += 1;
+      this.playing = false;
+      this.wasPaused = false;
+      // A new load must prove itself again before progress counts, and finds its own origin.
+      this.hasPlayed = false;
+      this.origin = 0;
+      // The old element is replaced; the new one arms the watchdog when it is attached.
+      this.watchdog.disarm();
+    }
+    this.set({
+      kind: 'ready',
+      plan,
+      sessionId,
+      mediaUrl: url,
+      loadId: this.loadId,
+      autoplay: options.autoplay ?? !this.viewerPaused,
+      heading: this.heading,
+      previews: previewFacts(plan, this.versions, this.server),
+      media: mediaFacts(plan, this.versions, this.item),
+      quality: this.quality ?? 'auto',
+      activeQualityFeature: this.server.activeQuality,
+      qualityFallbacks: this.replanner.qualityFallbacks,
+    });
+  }
+
+  /** The session is gone on the server: forget it, but keep the tracks playing now. */
+  private prepareRestart(): void {
+    if (this.plan) {
+      this.tracks = {
+        audio: this.plan.selected_tracks.audio,
+        subtitle: this.plan.selected_tracks.subtitle,
+      };
+    }
+    // Nothing to stop on the server any more; the new session counts from its own start.
+    this.sessionId = '';
+    this.progress.reset();
+    this.attemptedKeys = [];
+    this.replanner.resetRecoveries();
+    this.plan = null;
+    this.hasPlayed = false;
+  }
+
+  // --- Player ---------------------------------------------------------------------------------
+
+  /** Overrides how the position is read; the engine is the normal source. */
+  bindPlayer(read: (() => PlayerReading | null) | null): void {
+    this.read = read;
+  }
+
+  /** The screen hands over the engine of its video; null when the video goes away. */
+  attachEngine(engine: PlayerEngine | null): void {
+    // The last position must be taken while the engine can still tell it.
+    if (!engine) this.reading();
+    this.engine = engine;
+    this.watchdog.expect(engine !== null && !this.stopped);
+  }
+
+  /** Unloads the video: the decoder is freed and the element has no source. Safe to repeat. */
+  private unload(): void {
+    const engine = this.engine;
+    this.engine = null;
+    engine?.release();
+  }
+
+  /** The position on the source's timeline: player time minus the container origin plus the offset. */
+  reading(): PlayerReading | null {
+    const raw = this.read?.() ?? this.readEngine();
+    // An implausible time (webOS reports INT64_MAX nanoseconds for "unknown") is no position.
+    if (raw && !plausible(raw.position)) {
+      return this.lastReading ?? { position: this.startPosition, paused: raw.paused };
+    }
+    // Until a frame has played the element is at its own 0: the plan's start is the position.
+    const live = raw && !this.hasPlayed ? { ...raw, position: this.startPosition } : raw;
+    if (live) this.lastReading = live;
+    return live ?? this.lastReading;
+  }
+
+  private readEngine(): PlayerReading | null {
+    const engine = this.engine;
+    if (!engine) return null;
+    const offset = this.plan?.timeline.timeline_offset_seconds ?? 0;
+    return {
+      // NaN for a time that cannot be one, which reading() turns into the last good position.
+      position: plausible(engine.currentTime)
+        ? Math.max(0, engine.currentTime - this.origin) + offset
+        : Number.NaN,
+      paused: engine.paused,
+    };
+  }
+
+  /** The container's first timestamp is the origin; then the player moves to the plan's start. */
+  onLoadedMetadata(): void {
+    const engine = this.engine;
+    const plan = this.plan;
+    this.watchdog.disarm();
+    if (!engine || !plan) return;
+    this.origin = plausible(engine.currentTime) ? engine.currentTime : 0;
+    const start = plan.timeline.player_start_seconds;
+    if (start > 0) engine.seek(this.origin + start);
+  }
+
+  onPlaying(): void {
+    if (this.stopped) return;
+    this.hasPlayed = true;
+    this.playing = true;
+    this.viewerPaused = false;
+    if (this.wasPaused) {
+      this.wasPaused = false;
+      this.progress.send(false);
+    }
+    this.progress.startHeartbeat();
+  }
+
+  onPause(): void {
+    // The element's own pause event follows a pause made here: report once.
+    if (this.stopped || this.wasPaused) return;
+    this.playing = false;
+    this.wasPaused = true;
+    this.viewerPaused = true;
+    this.progress.send(true);
+  }
+
+  /** The stream played to its end: stop with the end position, then hand over. */
+  onEnded(): void {
+    if (this.stopped) return;
+    void this.stop();
+    if (!this.disposed) this.deps.onEnded();
+  }
+
+  /** A MediaError: a lost connection reconnects; any other failure replans for another route. */
+  onMediaError(failure: MediaFailure, classification?: string): Promise<void> {
+    return this.recovery.onMediaError(failure, classification);
+  }
+
+  /** A hidden document (the viewer left the app) pauses and reports at once. */
+  private readonly onVisibility = (): void => {
+    // The watchdog does not run while the page is hidden; it starts over when it is shown again.
+    if (document.visibilityState === 'hidden') this.watchdog.clear();
+    else this.watchdog.arm();
+    if (document.visibilityState !== 'hidden' || this.stopped) return;
+    const engine = this.engine;
+    if (!engine || engine.paused) return;
+    engine.pause();
+    this.onPause();
+  };
+
+  // --- Seeking and replans ----------------------------------------------------------------------
+
+  /** Moves to a position on the source's timeline; the server moves the timeline when it must. */
+  seekTo(sourceSeconds: number): Promise<void> {
+    return this.replanner.seekTo(sourceSeconds);
+  }
+
+  /** Switches the audio and subtitle (an omitted subtitle means off); no UI calls this yet. */
+  trackChange(selected: SelectedTracks): Promise<ReplanResult> {
+    return this.replanner.trackChange(selected);
+  }
+
+  /** Switches to a quality label from the plan's `available_qualities` (or `auto`). */
+  qualityChange(label: string): Promise<ReplanResult> {
+    return this.replanner.qualityChange(label);
+  }
+
+  /** Any replan operation of the protocol; the result tells what happened. */
+  replan(operation: ReplanOperation, options: ReplanOptions = {}): Promise<ReplanResult> {
+    return this.replanner.replan(operation, options);
+  }
+
+  // --- Stop ----------------------------------------------------------------------------------
+
+  /** Ends the session on the server with the final position. Safe to call more than once. */
+  stop(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    this.stopped = true;
+    this.progress.clearTimer();
+    this.recovery.cancelWait();
+    this.watchdog.disarm();
+    // The final reading first, then the unload, then (later) the stop: see STOP_AFTER_UNLOAD_MS.
+    const reading = this.sessionId ? this.reading() : null;
+    this.unload();
+    if (!this.sessionId) return Promise.resolve();
+    return this.stopSequence.send(this.sessionId, reading);
+  }
+
+  /** The screen is gone: end the session, and one still being started when it arrives. */
+  dispose(): void {
+    void this.stop();
+    this.disposed = true;
+    document.removeEventListener('visibilitychange', this.onVisibility);
+  }
+}

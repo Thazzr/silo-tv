@@ -8,7 +8,7 @@ import en from '../../i18n/en.json';
 import { FakeEngine } from '../../test/fakeEngine';
 import { fakeVideo, installFakeMedia } from '../../test/fakeVideo';
 import { ACCESS_TOKEN, playbackPlan } from '../../test/playbackFixtures';
-import type { MediaFacts, MediaFailure, Plan } from '../usePlaybackSession';
+import type { MediaFacts, MediaFailure, Plan } from '../session/types';
 import { InfoColumn } from './InfoColumn';
 
 const media = (overrides: Partial<MediaFacts> = {}): MediaFacts => ({

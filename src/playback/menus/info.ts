@@ -5,7 +5,7 @@ import { isLanguageWord, languageName } from '../../i18n/languages';
 import { isHlsStream } from '../engine/PlayerEngine';
 import type { Chapter } from '../osd/previewMath';
 import { isAudioCodecWord } from './infoFormat';
-import type { Heading, MediaFacts, Plan } from '../usePlaybackSession';
+import type { Heading, MediaFacts, Plan } from '../session/types';
 
 export type Route = 'direct' | 'remux' | 'transcode';
 

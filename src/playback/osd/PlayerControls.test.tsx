@@ -19,7 +19,7 @@ import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings, type SettingsServe } from '../../test/settingsFixtures';
 import { PlayerScreen } from '../PlayerScreen';
 import { SPINNER_DELAY_MS, SPINNER_MIN_MS } from './timing';
-import { clearInstallationCache } from '../usePlaybackSession';
+import { clearInstallationCache } from '../session/startSession';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));

@@ -14,7 +14,7 @@ import { memoryStorage, renderWithSilo } from '../test/renderFlow';
 import { serveSettings } from '../test/settingsFixtures';
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import { PlayerScreen } from './PlayerScreen';
-import { clearInstallationCache } from './usePlaybackSession';
+import { clearInstallationCache } from './session/startSession';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));

@@ -24,7 +24,7 @@ import {
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import { PlayerScreen } from '../PlayerScreen';
-import { clearInstallationCache } from '../usePlaybackSession';
+import { clearInstallationCache } from '../session/startSession';
 
 type S = components['schemas'];
 

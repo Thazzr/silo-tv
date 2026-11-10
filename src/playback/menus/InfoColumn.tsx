@@ -3,7 +3,7 @@ import { useLanguage, useT, type MessageKey } from '../../i18n';
 import { languageName } from '../../i18n/languages';
 import type { PlayerEngine } from '../engine/PlayerEngine';
 import { redact } from '../format';
-import type { MediaFacts, MediaFailure, Plan } from '../usePlaybackSession';
+import type { MediaFacts, MediaFailure, Plan } from '../session/types';
 import {
   conversions,
   dynamicRangeName,

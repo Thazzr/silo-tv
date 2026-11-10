@@ -26,7 +26,7 @@ import {
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings, type SettingsServe } from '../../test/settingsFixtures';
 import { PlayerScreen } from '../PlayerScreen';
-import { clearInstallationCache } from '../usePlaybackSession';
+import { clearInstallationCache } from '../session/startSession';
 import type { OsdMenu } from './usePanelState';
 
 type S = components['schemas'];

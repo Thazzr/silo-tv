@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { currentTransport } from '../../api/transport';
 import { useSilo } from '../../app/SiloContext';
-import type { Plan } from '../usePlaybackSession';
+import type { Plan } from '../session/types';
 import { loadSubtitleCues, sidecarUrl } from './loader';
 import type { Cue } from './webvtt';
 

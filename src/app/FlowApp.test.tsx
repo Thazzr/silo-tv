@@ -21,7 +21,7 @@ import {
 } from '../test/flowFixtures';
 import { I18nProvider } from '../i18n';
 import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launchPrefs';
-import { clearInstallationCache } from '../playback/usePlaybackSession';
+import { clearInstallationCache } from '../playback/session/startSession';
 import { episodeOf, itemDetail, seasonOf, serveDetail } from '../test/detailFixtures';
 import { homeCapabilities, homeSection, resumeEpisode } from '../test/homeFixtures';
 import { servePlayback } from '../test/playbackFixtures';

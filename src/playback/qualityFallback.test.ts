@@ -17,12 +17,10 @@ import {
 import { memoryStorage } from '../test/renderFlow';
 import type { StartIntent } from './resume';
 import { stopTiming } from './stopTiming';
-import {
-  METADATA_TIMEOUT_MS,
-  PlaybackController,
-  clearInstallationCache,
-  type SessionState,
-} from './usePlaybackSession';
+import { METADATA_TIMEOUT_MS } from './session/recovery';
+import { PlaybackController } from './session/PlaybackController';
+import { clearInstallationCache } from './session/startSession';
+import type { SessionState } from './session/types';
 
 type S = components['schemas'];
 type Json = Record<string, unknown>;

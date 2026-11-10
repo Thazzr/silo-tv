@@ -1,7 +1,7 @@
 // The player controls' timings and the pure rules behind them, kept apart from React so each can
 // be tested on its own.
 import { episodeCode } from '../menus/info';
-import type { Heading } from '../usePlaybackSession';
+import type { Heading } from '../session/types';
 import type { TimeRange } from '../engine/PlayerEngine';
 
 /** The overlay hides this long after the last key or pointer activity. */

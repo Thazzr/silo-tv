@@ -5,7 +5,7 @@ import {
   useSetProfileDeviceSetting,
 } from '../../features/settings/profileSettings';
 import { CheckIcon } from '../osd/icons';
-import type { ReplanResult } from '../usePlaybackSession';
+import type { ReplanResult } from '../session/types';
 import { MenuPopover, MenuRow } from './MenuPopover';
 import { AUTO, changesQuality, formatBitrate, type QualityMenu } from './qualityMenu';
 

@@ -1,6 +1,6 @@
 // The Quality section of the settings menu, as pure rules: which rows it lists, which one is
 // checked and whether a pick changes anything. The menu only draws what this decides.
-import type { Plan } from '../usePlaybackSession';
+import type { Plan } from '../session/types';
 
 /** The "Auto" row, which stands for the source (the `auto` preference). */
 export const AUTO = 'auto';

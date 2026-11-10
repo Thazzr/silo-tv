@@ -15,14 +15,12 @@ import {
 } from '../test/playbackFixtures';
 import { memoryStorage } from '../test/renderFlow';
 import { stopTiming } from './stopTiming';
-import {
-  METADATA_TIMEOUT_MS,
-  PROGRESS_INTERVAL_MS,
-  PlaybackController,
-  STOP_AFTER_UNLOAD_MS,
-  clearInstallationCache,
-  type SessionState,
-} from './usePlaybackSession';
+import { METADATA_TIMEOUT_MS } from './session/recovery';
+import { PROGRESS_INTERVAL_MS } from './session/ProgressReporter';
+import { PlaybackController } from './session/PlaybackController';
+import { STOP_AFTER_UNLOAD_MS } from './session/StopSequence';
+import { clearInstallationCache } from './session/startSession';
+import type { SessionState } from './session/types';
 
 type Json = Record<string, unknown>;
 type Event =

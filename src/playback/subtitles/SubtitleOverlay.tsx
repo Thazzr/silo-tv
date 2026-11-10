@@ -3,7 +3,7 @@ import {
   useProfileSetting,
   type SubtitleAppearance,
 } from '../../features/settings/profileSettings';
-import type { Plan } from '../usePlaybackSession';
+import type { Plan } from '../session/types';
 import { subtitleStyles } from './appearance';
 import { activeCues, sameCues } from './select';
 import { useSubtitleCues } from './useSubtitleCues';
