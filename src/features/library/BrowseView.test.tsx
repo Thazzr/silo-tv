@@ -1,10 +1,10 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { HttpResponse } from 'msw';
+import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
-import { account } from '../../test/apiFixtures';
+import { BASE_URL, account } from '../../test/apiFixtures';
 import { catalogItem, library } from '../../test/flowFixtures';
 import {
   facets,
@@ -295,6 +295,27 @@ describe('Browse filter', () => {
     await waitFor(() => expect(calls.filters).toHaveLength(1));
     expect(calls.filters[0]!.get('library_id')).toBe('lib-1');
     expect(calls.filters[0]!.get('type')).toBe('movie');
+  });
+
+  it('moves the focus to the first facet when the facets arrive after the panel opened', async () => {
+    const calls = serveLibrary(server);
+    // The facets come late (a slow link or TV): the panel opens without its genres.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    server.use(
+      http.get(`${BASE_URL}/api/v2/catalog/filters`, async () => {
+        await gate;
+        return HttpResponse.json(facets());
+      }),
+    );
+    setup();
+    const panel = await openFilter(calls);
+    // Without genres the panel landed on a later row (Done, or Status once the probe is back).
+    await waitFor(() => expect(getCurrentFocusKey()?.startsWith('lib-dialog-')).toBe(true));
+    expect(getCurrentFocusKey()).not.toBe('lib-dialog-facet-genre');
+    release();
+    await waitFor(() => expect(row(panel, /^Genre/)).toBeInTheDocument());
+    await waitFor(() => expect(getCurrentFocusKey()).toBe('lib-dialog-facet-genre'));
   });
 
   it('lists the facets the server has values for, and leaves out the rest', async () => {

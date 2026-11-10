@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Focusable,
   FocusGroup,
@@ -99,14 +99,33 @@ export function FilterPanel({
       facetValues(facet, facets).length > 0,
   );
 
+  const firstKey = visible[0] ? facetKey(visible[0]) : DONE_KEY;
+  // The row the panel put the focus on itself; null once the viewer or a facet view took over.
+  const landedOn = useRef<string | null>(null);
+
   useEffect(() => {
-    void setFocus(visible[0] ? facetKey(visible[0]) : DONE_KEY);
+    landedOn.current = firstKey;
+    void setFocus(firstKey);
     return () => {
       if (previous && doesFocusableExist(previous)) void setFocus(previous);
     };
     // The focus goes to the first row when the panel opens, not whenever the facets arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The server's facets can arrive after the panel opened (slow link or TV): the panel first
+  // landed on the only row there was ("Done", or Status). When the real first row shows up and the
+  // focus is still where the panel put it, the focus follows to it; once the viewer moved, it stays.
+  useEffect(() => {
+    if (open !== null) landedOn.current = null;
+    if (landedOn.current === null || landedOn.current === firstKey) return;
+    if (getCurrentFocusKey() !== landedOn.current) {
+      landedOn.current = null;
+      return;
+    }
+    landedOn.current = firstKey;
+    void setFocus(firstKey);
+  }, [firstKey, open]);
 
   const apply = () => onApply(draft);
   const closeFacet = (facet: Facet) => {
