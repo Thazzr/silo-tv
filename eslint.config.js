@@ -46,7 +46,18 @@ const NAV_IMPORT = {
 };
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-perf/', 'out/', 'coverage/', 'src/api/generated/'] },
+  {
+    // Agent worktrees and local artefacts live inside the checkout but are not part of it.
+    ignores: [
+      'dist/',
+      'dist-perf/',
+      'out/',
+      'coverage/',
+      'src/api/generated/',
+      '.claude/worktrees/',
+      '.playwright-mcp/',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
