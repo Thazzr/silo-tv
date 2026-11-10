@@ -140,10 +140,10 @@ describe('buildPlaybackContext', () => {
     expect(progressive?.failure_reason).toBeTruthy();
   });
 
-  it('claims no subtitle capability while the player renders none', () => {
+  it('claims WebVTT sidecar text only, nothing else for subtitles', () => {
     for (const name of ['original_http', 'hls'] as const) {
       expect(context.deliveries[name]?.subtitles).toEqual({
-        sidecar_text: false,
+        sidecar_text: true,
         embedded_text: false,
         ass_styling: false,
         embedded_bitmap: false,

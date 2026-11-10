@@ -179,9 +179,10 @@ function originalContainers(probe: ProfileProbe): string[] {
 }
 
 const SUBTITLES: Delivery['subtitles'] = {
-  // The player renders no subtitles yet, so nothing is claimed. WebVTT sidecars come with the
-  // subtitle work in Phase 3; then sidecar_text becomes true (still no ASS, bitmap or fonts).
-  sidecar_text: false,
+  // The player draws WebVTT sidecars itself (src/playback/subtitles). Nothing else is claimed:
+  // no ASS styling, no bitmap subtitles, no fonts, no native embedded tracks; bitmap tracks fall
+  // back to burn-in on the server. The HLS subtitle-rendition features are not opted into.
+  sidecar_text: true,
   embedded_text: false,
   ass_styling: false,
   embedded_bitmap: false,

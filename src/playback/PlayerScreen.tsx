@@ -16,6 +16,7 @@ import { PlayerDiagnostics } from './PlayerDiagnostics';
 import { bandFractions } from './skip/segments';
 import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
+import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
@@ -292,6 +293,7 @@ function PlayingView({
           {t('player.loading')}
         </p>
       ) : null}
+      <PlayerSubtitles plan={plan} position={position} lifted={controls.visible} />
       <PlayerOsd
         visible={controls.visible}
         series={lines.series}

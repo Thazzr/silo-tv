@@ -407,6 +407,30 @@ h3 {
   transform: translate(-50%, -50%);
 }
 
+/* Subtitles drawn by the app: above the video, below the controls (which follow in the DOM). The
+   block is about 80 % of the screen wide; the look (size, colours, effects, position) comes from
+   the profile's appearance as inline styles. The lift above the controls is a static transform. */
+.player-subtitles {
+  position: absolute;
+  right: 10%;
+  left: 10%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.player-subtitle-line {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 14px;
+  line-height: 1.25;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
 /* The on-screen controls. The overlay sits on a permanent compositor layer and fades with
    opacity only (design.md, "Animating over large images"); the dark gradient is part of it. */
 .player-osd {
