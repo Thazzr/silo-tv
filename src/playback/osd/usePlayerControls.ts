@@ -24,6 +24,14 @@ interface Args {
   toggleDiagnostics(): void;
   skipBackSeconds: number;
   skipForwardSeconds: number;
+  /** The skip pill (intro, recap, credits): whether it shows and holds the focus, and its actions. */
+  pill: {
+    shown: boolean;
+    holdsFocus: boolean;
+    activate(): void;
+    /** Hides it for its segment; false when none was showing. */
+    dismiss(): boolean;
+  };
 }
 
 export interface PlayerControls {
@@ -37,7 +45,7 @@ export interface PlayerControls {
   setFocus(focus: OsdFocus): void;
   action(button: OsdButton): void;
   seekToFraction(fraction: number): void;
-  /** Back: cancel scrubbing, else hide the overlay, else leave. */
+  /** Back: cancel scrubbing, else dismiss the skip pill, else hide the overlay, else leave. */
   back(): void;
   /** Pointer movement over the player. */
   pointerMoved(): void;
@@ -67,8 +75,16 @@ export function usePlayerControls(args: Args): PlayerControls {
   const osd = useOsdVisibility(
     paused || buffering || scrub.state !== null || skip.pending !== null,
   );
-  // A hidden overlay (also one that hid by itself when idle) leaves the focus on the video.
-  const focus: OsdFocus = osd.visible ? overlayFocus : 'video';
+  // A hidden overlay (also one that hid by itself when idle) leaves the focus on the video, except
+  // for a new skip pill, which holds it for its first seconds. A pill that is gone leaves the
+  // overlay's focus on the scrubber.
+  const focus: OsdFocus = osd.visible
+    ? overlayFocus === 'pill' && !args.pill.shown
+      ? 'scrubber'
+      : overlayFocus
+    : args.pill.holdsFocus
+      ? 'pill'
+      : 'video';
 
   const latest = useRef({ args, skip, scrub, osd, focus });
   useEffect(() => {
@@ -161,6 +177,7 @@ export function usePlayerControls(args: Args): PlayerControls {
   const back = useCallback(() => {
     const { scrub: sc, osd: o, args: a } = latest.current;
     if (sc.active()) sc.cancel();
+    else if (a.pill.dismiss()) return;
     else if (o.visible) hideOsd();
     else a.leave();
   }, [hideOsd]);
@@ -206,9 +223,10 @@ export function usePlayerControls(args: Args): PlayerControls {
         default:
           break;
       }
-      // Any other key only opens the overlay.
+      // OK on a pill that holds the focus skips; any other key only opens the overlay.
       if (!wasVisible) {
-        openOsd();
+        if (key === 'enter' && current === 'pill') a.pill.activate();
+        else openOsd();
         return;
       }
       o.poke();
@@ -273,9 +291,19 @@ export function usePlayerControls(args: Args): PlayerControls {
         return;
       }
 
+      // On the skip pill, which stands right of the last button.
+      if (current === 'pill') {
+        if (key === 'left') setFocusState(OSD_BUTTONS[OSD_BUTTONS.length - 1]!);
+        else if (key === 'up') setFocusState('scrubber');
+        else if (key === 'enter') a.pill.activate();
+        return;
+      }
+
       // On the buttons.
       const index = OSD_BUTTONS.indexOf(current as OsdButton);
-      if (key === 'left') {
+      if (key === 'right' && index === OSD_BUTTONS.length - 1 && a.pill.shown) {
+        setFocusState('pill');
+      } else if (key === 'left') {
         setFocusState(OSD_BUTTONS[Math.max(0, index - 1)]!);
       } else if (key === 'right') {
         setFocusState(OSD_BUTTONS[Math.min(OSD_BUTTONS.length - 1, index + 1)]!);

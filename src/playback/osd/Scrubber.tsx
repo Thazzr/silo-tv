@@ -1,5 +1,6 @@
 import { useRef, type MouseEvent } from 'react';
 import { formatClock } from '../format';
+import type { Band } from '../skip/segments';
 
 export interface ScrubberProps {
   /** Seconds shown by the playhead: the pending target while a skip or scrub is pending. */
@@ -16,6 +17,8 @@ export interface ScrubberProps {
   onHoverMove(fraction: number | null): void;
   /** Where chapters start, as fractions (0-1) of the track; the first second is not among them. */
   chapterTicks: readonly number[];
+  /** Intro, recap and credits: ranges (fractions 0-1) drawn on the track under the progress. */
+  bands: readonly Band[];
   /** A click: the fraction (0-1) of the track where it landed. */
   onSeek(fraction: number): void;
 }
@@ -34,6 +37,7 @@ export function Scrubber({
   onHover,
   onHoverMove,
   chapterTicks,
+  bands,
   onSeek,
 }: ScrubberProps) {
   const track = useRef<HTMLDivElement>(null);
@@ -74,6 +78,14 @@ export function Scrubber({
           className="player-scrubber-buffered"
           style={{ transform: `scaleX(${ratioOf(bufferedEnd, duration)})` }}
         />
+        {bands.map((band) => (
+          <div
+            key={`${band.start}-${band.end}`}
+            className="player-scrubber-band"
+            data-testid="player-scrubber-band"
+            style={{ left: `${band.start * 100}%`, width: `${(band.end - band.start) * 100}%` }}
+          />
+        ))}
         <div className="player-scrubber-fill" style={{ transform: `scaleX(${ratio})` }} />
       </div>
       {/* Outside the track (which clips) so the ticks can stand a little taller than it. */}

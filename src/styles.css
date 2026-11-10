@@ -649,6 +649,68 @@ h3 {
   transform: scale(1.1);
 }
 
+/* Intro, recap and credits: a lighter stretch of the track, under the progress. */
+.player-scrubber-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* The skip pill: bottom right inside the safe area; above the controls while they are open. The
+   fill plays over the 5 s the pill holds the focus (transform only). */
+.player-skip {
+  position: absolute;
+  right: var(--safe-x);
+  bottom: var(--safe-y);
+  box-sizing: border-box;
+  min-width: 260px;
+  height: 80px;
+  padding: 0 40px;
+  overflow: hidden;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: rgba(21, 23, 28, 0.85);
+  border: 2px solid var(--chrome-border);
+  border-radius: 40px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-skip[data-raised='true'] {
+  bottom: calc(var(--safe-y) + 250px);
+}
+
+.player-skip[data-focused='true'],
+.player-skip:hover {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  transform: scale(1.05);
+}
+
+.player-skip-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: player-skip-fill 5s linear forwards;
+}
+
+.player-skip-text {
+  position: relative;
+}
+
+@keyframes player-skip-fill {
+  to {
+    transform: scaleX(1);
+  }
+}
+
 /* The overlay lays out its own rows (label | value); the probe screen's dl styles are scoped to
    .platform and do not apply here. */
 .player-diag {

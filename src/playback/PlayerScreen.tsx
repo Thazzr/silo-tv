@@ -1,9 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useBackHandler, useWheelSuspended } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
-import { useProfileSetting } from '../features/settings/profileSettings';
+import { useProfileSetting, useProfileSettings } from '../features/settings/profileSettings';
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
@@ -13,6 +13,9 @@ import { useDelayedFlag } from './osd/useDelayedFlag';
 import { usePlayerControls } from './osd/usePlayerControls';
 import { useTrickplay } from './osd/useTrickplay';
 import { PlayerDiagnostics } from './PlayerDiagnostics';
+import { bandFractions } from './skip/segments';
+import { SkipPillButton } from './skip/SkipPill';
+import { useSkipPill } from './skip/useSkipPill';
 import type { StartIntent } from './resume';
 import {
   usePlaybackSession,
@@ -166,6 +169,7 @@ function PlayingView({
   const [diagnostics, setDiagnostics] = useState(false);
   const skipBack = useProfileSetting('player.video_skip_back_seconds').value;
   const skipForward = useProfileSetting('player.video_skip_forward_seconds').value;
+  const settings = useProfileSettings();
   const total = plan.source.duration_seconds;
 
   // The element is rendered here; everything that controls playback goes through its engine.
@@ -195,6 +199,22 @@ function PlayingView({
 
   const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
   const buffering = !showing && !paused;
+  // The pill waits for the first frame and for the profile's values, so a mode that skips by
+  // itself is never taken for "ask" while the settings are still loading.
+  const skip = useSkipPill({
+    enabled: started && settings.known,
+    segments: previews.segments,
+    position,
+    duration,
+    introMode: settings.values['playback.intro_skip_mode'],
+    autoSkipRecap: settings.values['playback.auto_skip_recap'],
+    autoSkipCredits: settings.values['playback.auto_skip_credits'],
+    seekTo: (sourceSeconds) => void seekTo(sourceSeconds),
+  });
+  const bands = useMemo(
+    () => bandFractions(previews.segments, duration),
+    [previews.segments, duration],
+  );
   const controls = usePlayerControls({
     engine,
     started,
@@ -208,6 +228,12 @@ function PlayingView({
     toggleDiagnostics: () => setDiagnostics((on) => !on),
     skipBackSeconds: skipBack,
     skipForwardSeconds: skipForward,
+    pill: {
+      shown: skip.pill !== null,
+      holdsFocus: skip.focusWindow,
+      activate: skip.activate,
+      dismiss: skip.dismiss,
+    },
   });
 
   // Back goes through the screen stack like everywhere else; the controls decide what it does.
@@ -280,11 +306,22 @@ function PlayingView({
         scrub={controls.scrub}
         skipPending={controls.skipPending}
         chapters={previews.chapters}
+        bands={bands}
         previews={trickplay}
         onFocus={controls.setFocus}
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
       />
+      {skip.pill ? (
+        <SkipPillButton
+          pill={skip.pill}
+          focused={controls.focus === 'pill'}
+          filling={skip.focusWindow}
+          raised={controls.visible}
+          onActivate={skip.activate}
+          onFocus={() => controls.setFocus('pill')}
+        />
+      ) : null}
       {diagnostics || mediaError ? (
         <PlayerDiagnostics
           plan={plan}

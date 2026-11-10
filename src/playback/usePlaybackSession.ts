@@ -20,6 +20,7 @@ import { toChapters, type Chapter } from './osd/previewMath';
 import { collectProfileProbe } from './probe';
 import { resumePoint, rewound, type StartIntent, type TrackChoice } from './resume';
 import { getResumeRewind } from './resumeRewind';
+import { segmentsOf, type MarkerFields, type Segment } from './skip/segments';
 import { uuidV4 } from './uuid';
 
 type S = components['schemas'];
@@ -83,6 +84,8 @@ export interface PreviewFacts {
   /** The server offers trickplay AND this file's version has it published. */
   trickplay: boolean;
   chapters: Chapter[];
+  /** Intro, recap, credits and preview of the playing file, in source-time order. */
+  segments: Segment[];
 }
 
 /** What the player reports: the position on the source's timeline, in seconds. */
@@ -103,11 +106,26 @@ class SessionError extends Error {
 }
 
 // The server's installation id, per server, for the whole app run. Every mutation carries it.
-const installations = new Map<string, { id: string; trickplay: boolean }>();
+const installations = new Map<string, Installation>();
 
 /** Test hook. */
 export function clearInstallationCache(): void {
   installations.clear();
+}
+
+/** What the capabilities document tells about the server. */
+interface Installation {
+  id: string;
+  trickplay: boolean;
+  /** `marker_segments_v1`: the versions list every marker occurrence, not one per kind. */
+  markerList: boolean;
+}
+
+interface Version {
+  fileId: string;
+  trickplay: boolean;
+  chapters: Chapter[];
+  markers: MarkerFields;
 }
 
 interface Deps {
@@ -192,7 +210,9 @@ export class PlaybackController {
   private fileId = '';
   /** The server lists `trickplay_v1` among its playback features. */
   private trickplayServer = false;
-  private versions: { fileId: string; trickplay: boolean; chapters: Chapter[] }[] = [];
+  /** The server lists `marker_segments_v1`. */
+  private markerListServer = false;
+  private versions: Version[] = [];
   private attemptId = '';
   private sessionId = '';
   private plan: Plan | null = null;
@@ -271,6 +291,7 @@ export class PlaybackController {
       if (this.disposed) return;
       this.installationId = installationId.id;
       this.trickplayServer = installationId.trickplay;
+      this.markerListServer = installationId.markerList;
       this.versions = watch.versions;
       this.fileId = watch.fileId;
       this.resumeAt = watch.resume;
@@ -290,7 +311,7 @@ export class PlaybackController {
     }
   }
 
-  private async installation(): Promise<{ id: string; trickplay: boolean }> {
+  private async installation(): Promise<Installation> {
     const cached = installations.get(this.deps.baseUrl);
     if (cached) return cached;
     const { data, response } = await this.deps.client.GET('/api/v2/playback/capabilities', {
@@ -304,7 +325,11 @@ export class PlaybackController {
       data.features.includes('sequenced_progress_v1') &&
       Boolean(data.installation_id);
     if (!supported || !data.installation_id) throw new SessionError('unsupported');
-    const known = { id: data.installation_id, trickplay: data.features.includes('trickplay_v1') };
+    const known = {
+      id: data.installation_id,
+      trickplay: data.features.includes('trickplay_v1'),
+      markerList: data.features.includes('marker_segments_v1'),
+    };
     installations.set(this.deps.baseUrl, known);
     return known;
   }
@@ -313,7 +338,7 @@ export class PlaybackController {
     fileId: string;
     resume: number | null;
     heading: Heading;
-    versions: { fileId: string; trickplay: boolean; chapters: Chapter[] }[];
+    versions: Version[];
   }> {
     const { data, error, response } = await this.deps.client.GET('/api/v2/watch/{id}', {
       params: { path: { id: this.deps.contentId }, header: this.header() },
@@ -335,6 +360,13 @@ export class PlaybackController {
       fileId: v.file_id,
       trickplay: v.trickplay_available,
       chapters: toChapters(v.chapters),
+      markers: {
+        marker_segments: v.marker_segments,
+        intro: v.intro,
+        recap: v.recap,
+        credits: v.credits,
+        preview: v.preview,
+      },
     }));
     return { fileId: version.file_id, resume, heading, versions };
   }
@@ -391,6 +423,7 @@ export class PlaybackController {
           const refreshed = await this.installation();
           this.installationId = refreshed.id;
           this.trickplayServer = refreshed.trickplay;
+          this.markerListServer = refreshed.markerList;
           await this.start(position, false);
           return;
         }
@@ -458,7 +491,7 @@ export class PlaybackController {
     });
   }
 
-  /** Chapters and previews of the file the plan plays (an alternate version may differ from the picked one). */
+  /** Chapters, previews and skippable segments of the file the plan plays (an alternate version may differ from the picked one). */
   private previewFacts(plan: Plan): PreviewFacts {
     const fileId = plan.effective_media_file_id;
     // Only the exact file: another version's chapters and previews would not match its timeline.
@@ -467,6 +500,7 @@ export class PlaybackController {
       fileId,
       trickplay: this.trickplayServer && version?.trickplay === true,
       chapters: version?.chapters ?? [],
+      segments: version ? segmentsOf(version.markers, this.markerListServer) : [],
     };
   }
 

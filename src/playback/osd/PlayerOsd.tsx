@@ -4,10 +4,12 @@ import { formatClock } from '../format';
 import { CloseIcon, PauseIcon, PlayIcon, SkipIcon } from './icons';
 import { PreviewCard } from './PreviewCard';
 import { chapterTickFractions, type Chapter } from './previewMath';
+import type { Band } from '../skip/segments';
 import { Scrubber } from './Scrubber';
 import type { TrickplayImages } from './useTrickplay';
 
-export type OsdFocus = 'video' | 'scrubber' | 'skipBack' | 'playPause' | 'skipForward' | 'close';
+export type OsdFocus =
+  'video' | 'scrubber' | 'skipBack' | 'playPause' | 'skipForward' | 'close' | 'pill';
 /** The round buttons, left to right as the 5-way keys walk them. */
 export const OSD_BUTTONS = ['skipBack', 'playPause', 'skipForward', 'close'] as const;
 export type OsdButton = (typeof OSD_BUTTONS)[number];
@@ -29,12 +31,16 @@ export interface PlayerOsdProps {
   skipPending: boolean;
   /** The playing file's chapters (ticks on the track, a title on the preview card). */
   chapters: readonly Chapter[];
+  /** Intro, recap and credits as bands on the track (fractions 0-1). */
+  bands?: readonly Band[];
   /** The scrub previews, when the file has them and they have loaded. */
   previews: TrickplayImages | undefined;
   onFocus(focus: OsdFocus): void;
   onSeekFraction(fraction: number): void;
   onAction(button: OsdButton): void;
 }
+
+const NO_BANDS: readonly Band[] = [];
 
 /** The on-screen controls: titles, scrubber, time row and the round buttons. */
 export function PlayerOsd(props: PlayerOsdProps) {
@@ -45,6 +51,8 @@ export function PlayerOsd(props: PlayerOsdProps) {
 
   // DOM focus follows the overlay's own focus, without scrolling anything.
   useEffect(() => {
+    // The skip pill is outside the overlay and focuses itself.
+    if (focus === 'pill') return;
     if (!visible || focus === 'video') {
       const active = document.activeElement;
       if (active instanceof HTMLElement && root.current?.contains(active)) active.blur();
@@ -133,6 +141,7 @@ export function PlayerOsd(props: PlayerOsdProps) {
             scrubbing={scrub !== null}
             label={t('player.osd.position')}
             chapterTicks={ticks}
+            bands={props.bands ?? NO_BANDS}
             onHover={() => props.onFocus('scrubber')}
             onHoverMove={setHover}
             onSeek={props.onSeekFraction}
