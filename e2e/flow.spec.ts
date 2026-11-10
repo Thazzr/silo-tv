@@ -1083,9 +1083,12 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  // Leaving while the start is still in flight ends the session when its answer arrives, 2 s after
+  // the video was unloaded (STOP_AFTER_UNLOAD_MS); the default 5 s is too tight on a slow machine.
   await expect
-    .poll(() =>
-      seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+    .poll(
+      () => seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+      { timeout: 15_000 },
     )
     .toBe(true);
 
@@ -1192,6 +1195,8 @@ test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewat
   await expect(page.getByRole('button', { name: /Profilmenü für/ })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  // Home's first row is in; a Down before that has no row to enter (the skeleton takes no focus).
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
 
   // The rewatch card of Continue Watching plays at once, 15 s before the saved 600 s.
   await page.keyboard.press('ArrowDown');
@@ -1287,6 +1292,8 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
 
   // Down to Recently Added; its first card is the series, OK opens its page.
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  // Home's first row is in; a Down before that has no row to enter (the skeleton takes no focus).
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
@@ -2897,6 +2904,8 @@ test('Magic Remote wheel: on Home it moves the focus between the rows, down and 
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
     timeout: 10_000,
   });
+  // Home's first row is in; a Down before that has no row to enter (the skeleton takes no focus).
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
 
@@ -2960,6 +2969,9 @@ test('Magic Remote wheel: in a long filter list it moves the focus and the list 
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
+  // The facets come from the server: until Genre is the focused row, OK would press whatever the
+  // panel focused while it loaded (Done), not open Genre.
+  await expect(page.getByRole('button', { name: /^Genre/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitemcheckbox', { name: 'Action' })).toBeFocused();
   for (let i = 0; i < 41; i += 1) {
@@ -3127,6 +3139,8 @@ test('the Magic Remote pointer focuses a half-visible card at the right edge of 
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
     timeout: 10_000,
   });
+  // Home's first row is in; a Down before that has no row to enter (the skeleton takes no focus).
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
   await page.keyboard.press('ArrowDown');
   const second = page.getByRole('button', { name: /Second Title/ });
   await expect(second).toBeFocused();
@@ -3310,9 +3324,12 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toHaveCount(0);
   await expect(play).toBeVisible();
+  // Leaving while the start is still in flight ends the session when its answer arrives, 2 s after
+  // the video was unloaded (STOP_AFTER_UNLOAD_MS); the default 5 s is too tight on a slow machine.
   await expect
-    .poll(() =>
-      seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+    .poll(
+      () => seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+      { timeout: 15_000 },
     )
     .toBe(true);
 
