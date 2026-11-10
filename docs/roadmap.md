@@ -32,7 +32,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen
 - 🟨 Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
 - 🟨 Loading, empty and error states
-- 🟨 German and English: following the TV's language (German when the TV is German, otherwise English), or chosen in the app's settings (Automatic, Deutsch, English; stored on the TV)
+- ✅ German and English: following the TV's language (German when the TV is German, otherwise English), or chosen in the app's settings (Automatic, Deutsch, English; stored on the TV) (TV 2026-11-10)
 
 ## Phase 2 – Browse (target v0.3.0)
 
@@ -90,7 +90,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - left out on the TV: volume, marker editing, pop-out, fullscreen
 - ✅ Quality menu: Auto plus the plan's qualities with bitrates; a change replans and holds for the current title only (TV 2026-11-10: 720p through hls.js)
 - 🟨 A quality change that does not play falls back to the quality before it, at the same position, with a short hint
-- 🟨 Player polish (user decisions 2026-11-10; built, TV test pending):
+- ✅ Player polish (user decisions 2026-11-10; TV 2026-11-10 on webOS 26):
   - a menu closes after a successful pick, with the focus back on its button
   - one Info panel in two columns ("Now" and "Source file", with live buffer, bandwidth and dropped frames; limits, server warnings and errors under the source file), also on the blue key; the old diagnostics window is gone; the error page shows short details only (route, code, session)
   - a slim scrub preview card like the web's, without the chapter title
@@ -175,7 +175,7 @@ LG Content Store:
 - ⬜ `requiredACG` in `appinfo.json` with exactly the ACG groups the app and its service use
 - ⬜ JS service secured: callable only by this app, no requests to the TV itself or link-local addresses
 - 🟨 Tokens stored as protected as the platform allows; no credentials in source or file names
-  - done (2026-11-10): the access token lives in memory only, only the refresh token is stored; HLS through hls.js and subtitle sidecars authenticate with a header instead of `token=` in the URL (direct play keeps it, a media element cannot send headers)
+  - done (2026-11-10): the access token lives in memory only, only the refresh token is stored; HLS through hls.js and subtitle sidecars authenticate with a header instead of `token=` in the URL (direct play keeps it, a media element cannot send headers). TV 2026-11-10: the sign-in survived the update to the new storage format, and a longer HLS session with pause and resume played through
   - open: encrypt the stored refresh token with keymanager3 on webOS 24+ (ACG group `securitykey.operation`), after a TV probe
 - ⬜ Seller Lounge account (individual or corporate seller)
 - ⬜ Demo Silo server for LG's testers: reachable from the internet, with a reviewer account and legally shareable content (e.g. Blender open movies)
