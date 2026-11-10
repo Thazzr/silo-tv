@@ -32,7 +32,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen
 - 🟨 Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
 - 🟨 Loading, empty and error states
-- 🟨 German and English following the TV's language (a language choice in the app's settings comes with Phase 3: automatic, German, English)
+- 🟨 German and English: following the TV's language (German when the TV is German, otherwise English), or chosen in the app's settings (Automatic, Deutsch, English; stored on the TV)
 
 ## Phase 2 – Browse (target v0.3.0)
 
@@ -71,6 +71,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ Choose version, audio track and subtitle on the detail page beforehand, as pills under the action row like Silo's web app ("Audio Auto: German · EAC3 · 5.1", "Subtitles Auto: …"; a Version pill only when the title has several versions). Audio and subtitle picks are saved as the title's server preferences; the version holds while the page is open (Silo keeps no version preference: the version played last is the next default)
 - ✅ Playback core on protocol v3 (TV 2026-11-10 on webOS 26):
   - an engine interface over the video element (a Tizen engine follows in Phase 6), local seeks and `seek_reanchor`, every replan operation with a loop guard, reconnect after network drops, restarts when the server loses the session, progress while paused, pause in the background, the position before the first frame keeps the resume point
+  - progress reports go out one at a time: one waits while another is in flight, the newest wins, nothing is retried
+  - the controller is split into small modules in `src/playback/session/` (start, progress, stop, replan, recovery), so the features below extend one module each
   - the session stop goes out 2 s after the video is unloaded: on webOS 26 a stop that aborts a stream the media stack still reads makes every later direct-play MKV hang
   - a load that brings neither metadata nor an error within 20 s asks the server for another route
   - implausible times from webOS (INT64_MAX nanoseconds, "unknown") never reach the overlay or the progress report
@@ -88,11 +90,12 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - left out on the TV: volume, marker editing, pop-out, fullscreen
 - ✅ Quality menu: Auto plus the plan's qualities with bitrates; a change replans and holds for the current title only (TV 2026-11-10: 720p through hls.js)
 - 🟨 A quality change that does not play falls back to the quality before it, at the same position, with a short hint
-- ⬜ Player polish (user decisions 2026-11-10, in progress):
-  - the gear menu closes after a successful pick
-  - one Info panel in two columns ("Now" and "Source file", with live buffer, bandwidth and dropped frames), also on the blue key; the old diagnostics window goes; the error page shows short details only
+- 🟨 Player polish (user decisions 2026-11-10; built, TV test pending):
+  - a menu closes after a successful pick, with the focus back on its button
+  - one Info panel in two columns ("Now" and "Source file", with live buffer, bandwidth and dropped frames; limits, server warnings and errors under the source file), also on the blue key; the old diagnostics window is gone; the error page shows short details only (route, code, session)
   - a slim scrub preview card like the web's, without the chapter title
-  - the time moves above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at
+  - the time sits above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at; 12 h or 24 h follows the profile's `ui.time_format`
+  - one centred loading view from the start; slightly translucent menus and Info panel
 - ⬜ The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
 - ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
@@ -171,7 +174,9 @@ LG Content Store:
 - ⬜ LG QA requirements built in from the start: 5-way navigation and Magic Remote pointer everywhere, a selection effect on every object, exit popup on Back at the entry page, loading cues, 75 px targets and 20 px text at 1080p
 - ⬜ `requiredACG` in `appinfo.json` with exactly the ACG groups the app and its service use
 - ⬜ JS service secured: callable only by this app, no requests to the TV itself or link-local addresses
-- ⬜ Tokens stored as protected as the platform allows; no credentials in source or file names
+- 🟨 Tokens stored as protected as the platform allows; no credentials in source or file names
+  - done (2026-11-10): the access token lives in memory only, only the refresh token is stored; HLS through hls.js and subtitle sidecars authenticate with a header instead of `token=` in the URL (direct play keeps it, a media element cannot send headers)
+  - open: encrypt the stored refresh token with keymanager3 on webOS 24+ (ACG group `securitykey.operation`), after a TV probe
 - ⬜ Seller Lounge account (individual or corporate seller)
 - ⬜ Demo Silo server for LG's testers: reachable from the internet, with a reviewer account and legally shareable content (e.g. Blender open movies)
 - ⬜ Privacy policy (what the app stores on the TV and sends to the user's own server)

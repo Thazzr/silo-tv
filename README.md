@@ -35,14 +35,16 @@ It works with any Silo server (API v2). You enter the server's address on the TV
 - **A player in the layout of Silo's web player:**
   - a scrubber with buffer, trickplay previews, chapter marks and coloured intro, recap and credits segments;
   - skips by your profile's steps, scrubbing at up to 16×, skip intro, recap and credits as your profile says;
-  - a quality menu (a quality that does not play falls back to the one before), chapters and playback info;
+  - a quality menu (a quality that does not play falls back to the one before), chapters, and an Info panel with what plays now next to the source file;
+  - a clock above the scrubber: elapsed and total time with the end time, or just one of them;
   - subtitles drawn by the app in your profile's appearance.
 - **Extras:**
   - Trailers & More: local extras play in the app, YouTube trailers open in the TV's YouTube app.
   - Theme music, spoiler protection for unwatched episodes, and AI translation of descriptions, each when your profile and your server turn it on.
 - **Made for the remote:** arrow keys, OK and Back everywhere, the Magic Remote pointer and wheel, and focus that comes back to where you were.
 - **Your server's look:** its name, logo, sign-in background and accent colour.
-- **German and English**, following the TV's language.
+- **German and English**, following the TV's language or chosen in the app's settings.
+- **Careful with your sign-in:** the short-lived access token stays in memory; only the refresh token is stored on the TV, and HLS streams and subtitles sign in with a header instead of a token in the URL.
 
 Next up in the player: audio and subtitle menus, Up Next, shuffle, subtitle search and subtitle appearance on the TV; then a featured hero on Home and the library tabs. After that come watchlist, For You, calendar, requests and the profile settings. The whole plan is in [`docs/roadmap.md`](docs/roadmap.md), the look in [`docs/design.md`](docs/design.md).
 
