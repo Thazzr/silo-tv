@@ -202,7 +202,7 @@ export function ProfilesScreen({
       title={title}
       onBack={back}
       testId="profiles-screen"
-      className={view.kind === 'list' ? 'picker' : undefined}
+      className={view.kind === 'list' ? 'picker' : view.kind === 'pin' ? 'pin-screen' : undefined}
     >
       {body}
       {view.kind === 'list' ? (

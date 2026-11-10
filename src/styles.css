@@ -337,6 +337,28 @@ h3 {
   text-align: center;
 }
 
+.pad-icon {
+  display: block;
+  margin: 0 auto;
+}
+
+/* PIN entry: heading, prompt, dots, pad and messages share one centred axis, like the picker. */
+.screen.pin-screen {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+}
+
+.pin-screen [data-testid='pin-entry'] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 /* The note stays visible however far the list is scrolled. */
 .toast {
   position: fixed;

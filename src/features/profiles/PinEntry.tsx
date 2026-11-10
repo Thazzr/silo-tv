@@ -10,6 +10,20 @@ const MAX_DIGITS = 12;
 
 const PAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'delete', '0', 'confirm'] as const;
 
+// A left-pointing tag with a cross; the key's name comes from aria-label, so it shows no text.
+const BackspaceIcon = () => (
+  <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" className="pad-icon">
+    <path
+      d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7 6-7zM12 9.5l5 5M17 9.5l-5 5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 function digitFromKey(e: KeyboardEvent): string | null {
   if (/^[0-9]$/.test(e.key)) return e.key;
   // webOS number keys: 48-57 on the row, 96-105 on a keypad.
@@ -102,9 +116,10 @@ export function PinEntry({
                 key={key}
                 focusKey={`pin-${key}`}
                 className="pad-key"
+                aria-label={t('pin.delete')}
                 onClick={() => setPin((p) => p.slice(0, -1))}
               >
-                {t('pin.delete')}
+                <BackspaceIcon />
               </Button>
             );
           }

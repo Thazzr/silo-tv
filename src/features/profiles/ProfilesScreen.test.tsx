@@ -265,6 +265,35 @@ describe('PIN entry', () => {
     await waitFor(() => expect(bodies).toEqual([{ pin: '123' }]));
   });
 
+  it('shows the Delete key as a backspace icon, named by aria-label, without text', async () => {
+    listProfiles(two);
+    setup();
+    await openPin();
+    const key = screen.getByRole('button', { name: 'Delete' });
+    expect(key).toHaveAttribute('aria-label', 'Delete');
+    expect(key.textContent).toBe('');
+    expect(key.querySelector('svg')).not.toBeNull();
+  });
+
+  it('keeps pin-screen off the list and the create form (picker stays on the list)', async () => {
+    listProfiles(two);
+    setup();
+    await screen.findByTestId('profile-list');
+    expect(screen.getByTestId('profiles-screen')).toHaveClass('picker');
+    expect(screen.getByTestId('profiles-screen')).not.toHaveClass('pin-screen');
+    fireEvent.click(screen.getByRole('button', { name: 'Add profile' }));
+    await screen.findByRole('heading', { name: 'New profile' });
+    expect(screen.getByTestId('profiles-screen')).not.toHaveClass('pin-screen');
+    expect(screen.getByTestId('profiles-screen')).not.toHaveClass('picker');
+  });
+
+  it('marks the PIN screen for centring, as the picker is marked', async () => {
+    listProfiles(two);
+    setup();
+    await openPin();
+    expect(screen.getByTestId('profiles-screen')).toHaveClass('pin-screen');
+  });
+
   it('is operable with arrows and Enter only (digit pad grid)', async () => {
     listProfiles(two);
     const bodies = verifyPin(true, 'pvt_x');
