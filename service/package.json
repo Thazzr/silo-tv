@@ -1,6 +1,6 @@
 {
   "name": "io.github.thazzr.silotv.service",
-  "version": "0.0.1",
+  "version": "0.3.0",
   "description": "HTTP proxy for the Silo API, used when webOS enforces CORS for the file:// app",
   "private": true,
   "main": "index.js",
