@@ -22,7 +22,7 @@ made for the remote control and the couch
 
 It works with any Silo server (API v2): you enter the server's address on the TV, nothing is built in.
 
-| | |
+| Area | What you get |
 |---|---|
 | **Sign-in from the couch** | a code or QR code you confirm on your phone, or a password with the on-screen keyboard; several servers, each with its own sign-in |
 | **Profiles** | a picker with avatars, PIN-protected and kids profiles, creating a profile, and how the app picks the profile at launch |
