@@ -22,6 +22,7 @@ const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => {
   server.resetHandlers();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 afterAll(() => server.close());
@@ -52,10 +53,39 @@ function harness(profileId: string | null = 'p1') {
   return { wrapper, client, session };
 }
 
+/**
+ * Holds back the timers of exactly the 300 ms search delay instead of running them, so a test
+ * pins the quiet period without any wall clock. `rest` checks that nothing was sent while the
+ * timer is held, then releases it.
+ */
+function holdQuietPeriod() {
+  const realSetTimeout = globalThis.setTimeout;
+  const held: (() => void)[] = [];
+  vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+    fn: () => void,
+    ms?: number,
+    ...args: unknown[]
+  ) => {
+    if (ms === 300) {
+      held.push(fn);
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }
+    return realSetTimeout(fn, ms, ...args);
+  }) as typeof setTimeout);
+  return {
+    held,
+    async rest(sent: () => number) {
+      await waitFor(() => expect(held).toHaveLength(1));
+      await new Promise((resolve) => realSetTimeout(resolve, 50));
+      expect(sent()).toBe(0);
+      held[0]!();
+    },
+  };
+}
+
 interface Seen {
   url: URL;
   profile: string | null;
-  at: number;
 }
 
 interface Routes {
@@ -83,7 +113,6 @@ const problem = (status: number, code: string) =>
 const record = (request: Request): Seen => ({
   url: new URL(request.url),
   profile: request.headers.get('X-Profile-Id'),
-  at: Date.now(),
 });
 
 function serve(routes: Routes = {}): Served {
@@ -260,17 +289,17 @@ describe('useSearchTitles', () => {
         } satisfies S['CatalogBrowseCollection']),
     });
     const { wrapper } = harness();
+    const quiet = holdQuietPeriod();
     const { result } = renderHook(() => useSearchTitles('abc', 'all'), { wrapper });
     await waitFor(() => expect(served.capabilities).toHaveLength(1));
-    const asked = Date.now();
+    // The 300 ms quiet period is held back on purpose: nothing is sent until it is released.
+    await quiet.rest(() => served.titles.length);
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(served.titles[0]!.at - asked).toBeGreaterThanOrEqual(250);
     expect(result.current.hasNextPage).toBe(true);
 
-    const before = Date.now();
     await act(() => result.current.fetchNextPage());
     expect(served.titles).toHaveLength(2);
-    expect(served.titles[1]!.at - before).toBeLessThan(200);
+    expect(quiet.held).toHaveLength(1);
     expect(served.titles[1]!.url.searchParams.get('cursor')).toBe('c2');
     await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
     expect(result.current.hasNextPage).toBe(false);
@@ -372,14 +401,14 @@ describe('useSearchBoxSets', () => {
       boxSets: () => HttpResponse.json({ items: [boxSet('b1'), boxSet('b2')] }),
     });
     const { wrapper, client } = harness('p1');
+    const quiet = holdQuietPeriod();
     const { result } = renderHook(() => useSearchBoxSets('abc', 'all'), { wrapper });
     await waitFor(() => expect(served.capabilities).toHaveLength(1));
-    const asked = Date.now();
+    await quiet.rest(() => served.boxSets.length);
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     expect(served.boxSets).toHaveLength(1);
     expect(paramsOf(served.boxSets[0]!.url)).toEqual({ q: 'abc', limit: '4' });
     expect(served.boxSets[0]!.profile).toBe('p1');
-    expect(served.boxSets[0]!.at - asked).toBeGreaterThanOrEqual(250);
     expect(result.current.items.map((b) => b.id)).toEqual(['b1', 'b2']);
     expect(client.getQueryData(['search', 'boxsets', BASE_URL, 'p1', 'abc'])).toBeDefined();
   });
@@ -481,9 +510,10 @@ describe('useSearchPeople', () => {
         HttpResponse.json({ items: [personMatch({ id: 'a' }), personMatch({ id: 'b' })] }),
     });
     const { wrapper, client } = harness('p1');
+    const quiet = holdQuietPeriod();
     const { result } = renderHook(() => useSearchPeople('abc', 'all'), { wrapper });
     await waitFor(() => expect(served.capabilities).toHaveLength(1));
-    const asked = Date.now();
+    await quiet.rest(() => served.people.length);
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     expect(paramsOf(served.people[0]!.url)).toEqual({
       q: 'abc',
@@ -491,7 +521,6 @@ describe('useSearchPeople', () => {
       media_scope: 'video',
     });
     expect(served.people[0]!.profile).toBe('p1');
-    expect(served.people[0]!.at - asked).toBeGreaterThanOrEqual(250);
     expect(result.current.items.map((p) => p.id)).toEqual(['a', 'b']);
     expect(client.getQueryData(['search', 'people', BASE_URL, 'p1', 'abc', 'video'])).toBeDefined();
   });

@@ -431,7 +431,7 @@ h3 {
 
 /* Subtitles drawn by the app: above the video, below the controls (which follow in the DOM). The
    block is about 80 % of the screen wide; the look (size, colours, effects, position) comes from
-   the profile's appearance as inline styles. The lift above the controls is a static transform. */
+   the profile's appearance as inline styles. The lift above the controls is a transform measured from the overlay (lift.ts). */
 .player-subtitles {
   position: absolute;
   right: 10%;

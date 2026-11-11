@@ -123,7 +123,7 @@ const RESET_KEY = 'subtitle-reset';
 /** The sample lines, drawn by the player's own subtitle styles into a frame of the preview's size. */
 function Preview({ look }: { look: Look }) {
   const t = useT();
-  const styles = subtitleStyles(look, false, FRAME);
+  const styles = subtitleStyles(look, 0, FRAME);
   return (
     <div
       className="subtitle-preview"

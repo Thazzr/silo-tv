@@ -79,7 +79,55 @@ describe('SubtitleOverlay', () => {
     expect(styles).toHaveBeenCalledTimes(2);
     // The lift is a change too.
     rerender(<SubtitleOverlay {...props} position={7.2} lifted />);
-    expect(styles).toHaveBeenCalledTimes(3);
+    // One render for the new prop, one for the measured lift that follows it.
+    expect(styles).toHaveBeenCalledTimes(4);
     expect(screen.getByTestId('player-subtitles')).toHaveAttribute('data-lifted', 'true');
+  });
+
+  describe('lift above the overlay', () => {
+    // jsdom has no layout: a 1080 px player whose overlay body is 300 px tall on a 54 px padding
+    // (top edge at y = 726) and whose subtitles rest 76 px up (7 %).
+    function renderInPlayer(position: 'bottom' | 'lower-third' | 'top', lifted: boolean) {
+      const player = document.createElement('div');
+      Object.defineProperty(player, 'clientHeight', { value: 1080 });
+      document.body.append(player);
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: Element,
+      ) {
+        const top = this.classList.contains('player-osd-body') ? 726 : 0;
+        return { top, bottom: 1080, height: 1080 } as DOMRect;
+      });
+      const restBottom = position === 'lower-third' ? 130 : 76;
+      vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockReturnValue(1080 - restBottom - 100);
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(100);
+      const appearance = { ...DEFAULT_SUBTITLE_APPEARANCE, position };
+      return render(
+        <>
+          <SubtitleOverlay {...props} appearance={appearance} position={2} lifted={lifted} />
+          <div className="player-osd-body" />
+        </>,
+        { container: player },
+      );
+    }
+
+    it('raises bottom subtitles by the overlay body plus a gap, only while it is shown', () => {
+      renderInPlayer('bottom', true);
+      expect(screen.getByTestId('player-subtitles').style.transform).toBe('translateY(-302px)');
+    });
+
+    it('does not raise them while the overlay is hidden', () => {
+      renderInPlayer('bottom', false);
+      expect(screen.getByTestId('player-subtitles').style.transform).toBe('');
+    });
+
+    it('never raises top subtitles', () => {
+      renderInPlayer('top', true);
+      expect(screen.getByTestId('player-subtitles').style.transform).toBe('');
+    });
+
+    it('raises lower-third subtitles only as far as the overlay covers them', () => {
+      renderInPlayer('lower-third', true);
+      expect(screen.getByTestId('player-subtitles').style.transform).toBe('translateY(-248px)');
+    });
   });
 });

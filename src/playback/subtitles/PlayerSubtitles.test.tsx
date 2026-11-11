@@ -208,7 +208,6 @@ describe('Player subtitles', () => {
     await waitFor(() =>
       expect(screen.getByTestId('player-subtitles')).toHaveAttribute('data-lifted', 'true'),
     );
-    expect(screen.getByTestId('player-subtitles').style.transform).toContain('translateY');
   });
 
   it('loads the cues of the new subtitle when a replan names another artifact', async () => {

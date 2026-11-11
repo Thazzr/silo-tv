@@ -318,7 +318,7 @@ describe('SubtitleAppearanceScreen preview', () => {
     // Large is 52 px at 1080p; the 540 px high frame is half of it.
     expect(previewLine().style.fontSize).toBe('26px');
     expect(previewLine().style.color).toBe('rgb(255, 255, 255)');
-    expect(screen.getByTestId('subtitle-preview-block').style.bottom).toBe('27px');
+    expect(screen.getByTestId('subtitle-preview-block').style.bottom).toBe('37.8px');
   });
 
   it('follows every change at once, before anything is written', async () => {
@@ -332,7 +332,7 @@ describe('SubtitleAppearanceScreen preview', () => {
     expect(previewLine().style.color).toBe('rgb(255, 255, 0)');
     for (let i = 0; i < 6; i += 1) await pressKey(KEY.down);
     await pressKey(KEY.left);
-    expect(screen.getByTestId('subtitle-preview-block').style.top).toBe('27px');
+    expect(screen.getByTestId('subtitle-preview-block').style.top).toBe('37.8px');
     expect(writes).toEqual([]);
   });
 });

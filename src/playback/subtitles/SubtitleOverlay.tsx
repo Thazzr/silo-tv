@@ -1,10 +1,11 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import {
   useProfileSetting,
   type SubtitleAppearance,
 } from '../../features/settings/profileSettings';
 import type { Plan } from '../session/types';
 import { subtitleStyles } from './appearance';
+import { measureLift } from './lift';
 import { activeCues, sameCues } from './select';
 import { useSubtitleCues } from './useSubtitleCues';
 import type { Cue, Run } from './webvtt';
@@ -39,9 +40,17 @@ interface LinesProps {
 // block (and its DOM) untouched until the set, the look or the lift changes.
 const Lines = memo(
   function Lines({ cues, appearance, lifted }: LinesProps) {
-    const styles = subtitleStyles(appearance, lifted);
+    const block = useRef<HTMLDivElement>(null);
+    const [lift, setLift] = useState(0);
+    // Measured against the overlay's real bottom block before the first paint, so the subtitles
+    // never show at the wrong height; it is 0 while the overlay is hidden.
+    useLayoutEffect(() => {
+      setLift(lifted && block.current ? measureLift(block.current, appearance.position) : 0);
+    }, [lifted, appearance.position]);
+    const styles = subtitleStyles(appearance, lift);
     return (
       <div
+        ref={block}
         className="player-subtitles"
         data-testid="player-subtitles"
         data-lifted={lifted}

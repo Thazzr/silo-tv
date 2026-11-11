@@ -13,8 +13,15 @@ export const FONT_SIZES_PX: Record<SubtitleAppearance['fontSize'], number> = {
   xxlarge: 72,
 };
 
-/** How far the block rises while the controls are open: above their dark band (45 vh). */
-export const LIFT = 'translateY(-46vh)';
+/**
+ * The resting gap between the subtitles and the screen's edge, as a fraction of the screen's
+ * height. These are the web player's offsets; each is above the TV's 5 % safe area.
+ */
+export const RESTING_GAP: Record<SubtitleAppearance['position'], number> = {
+  bottom: 0.07,
+  'lower-third': 0.12,
+  top: 0.07,
+};
 
 /** `#rrggbb` and a percentage as an `rgba()` colour. */
 export function rgba(hex: string, percent: number): string {
@@ -64,7 +71,8 @@ export interface SubtitleStyles {
 
 export function subtitleStyles(
   appearance: SubtitleAppearance,
-  lifted: boolean,
+  /** How far the block rises above its position, in CSS pixels (see `measureLift`). */
+  lift: number,
   frame?: SubtitleFrame,
 ): SubtitleStyles {
   const scale = frame ? frame.height / 1080 : 1;
@@ -88,17 +96,9 @@ export function subtitleStyles(
   if (frame) line.padding = `${px(2, scale)} ${px(14, scale)}`;
 
   const block: CSSProperties = {};
-  if (frame) {
-    const safe = px(frame.height * 0.05, 1);
-    if (appearance.position === 'top') block.top = safe;
-    else if (appearance.position === 'lower-third') block.bottom = px(frame.height * 0.22, 1);
-    else block.bottom = safe;
-  } else if (appearance.position === 'top') block.top = 'var(--safe-y)';
-  else if (appearance.position === 'lower-third') block.bottom = '22vh';
-  else block.bottom = 'var(--safe-y)';
-  // Only the bottom positions can collide with the controls.
-  if (lifted && appearance.position !== 'top') {
-    block.transform = frame ? `translateY(-${px(frame.height * 0.46, 1)})` : LIFT;
-  }
+  const gap = RESTING_GAP[appearance.position];
+  const edge = appearance.position === 'top' ? 'top' : 'bottom';
+  block[edge] = frame ? px(frame.height * gap, 1) : `${Math.round(gap * 10000) / 100}vh`;
+  if (lift > 0) block.transform = `translateY(-${px(lift, 1)})`;
   return { block, line };
 }
