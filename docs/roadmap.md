@@ -132,11 +132,12 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - request, cancel, notify me
   - My Requests
   - request search for missing titles
-- ⬜ Profile settings, in the settings screen that Phase 3 opens with its section "This TV" (user decisions 2026-11-10):
+- ⬜ Profile settings, in the settings screen that Phase 3 opens with its section "This TV" (user decisions 2026-11-10 and 2026-11-11):
+  - every setting Silo's web app offers a viewer is offered here too, read from the server and written back with the same key and scope; the app behaves as the web app does (rule in `CLAUDE.md`, TV UI rules)
   - the profile sections go above "This TV", each with a note that it applies to the profile on all devices; a change on the TV is written for the whole profile
   - playback: preferred quality, maximum bitrate, lower quality when buffering, skip intros, auto-skip recaps and credits, start next at preview, auto-play next, the video skip intervals
-  - language and subtitles: audio and subtitle language, subtitle appearance
-  - left out on the TV: marker confidence and source, audiobook intervals, browser decoding; a connection speed test maybe later
+  - language and subtitles: audio and subtitle language, subtitle mode, show forced subtitles, subtitle appearance
+  - to decide under the 2026-11-11 rule: the settings left out on 2026-11-10 (marker confidence and source, audiobook intervals, browser decoding, a connection speed test)
   - interface, home screen, metadata language, profile picker at launch
   - account and signed-in devices
 

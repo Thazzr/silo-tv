@@ -150,6 +150,10 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
 
 ## TV UI rules
 
+- **Like Silo's web app** (user decision 2026-11-11): the app behaves like Silo's web client wherever a TV allows it, so a viewer does not have to relearn anything.
+  - Every setting the web app offers a viewer exists in the app too. It is read from the server and written back on change with the same key and scope. No app-only setting replaces a server setting, and no app rule replaces what a setting decides (e.g. which subtitle starts).
+  - Where a TV forces a difference (remote instead of mouse, no hover scrolling, …), the difference and its reason are recorded in `docs/roadmap.md`.
+
 - **Look:** The app looks like a Silo app. Colours and the three-bar motif may be reused. **Silo's logo, wordmark and icons may not**, except unchanged on a "Connect to Silo" hint.
 - **Name:** The app needs a name of its own (Silo trademark policy). "Silo …", "Silo[word]" and "[word]Silo" are not allowed; wordplay is. The description reads "a client for Silo". Until the user decides, it is called `silo-tv` (repository Thazzr/silo-tv, app ID `io.github.thazzr.silotv`, fixed before the first store release).
 - **Text:**
