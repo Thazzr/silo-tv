@@ -6,4 +6,5 @@ This file exists only so agents that look for `AGENTS.md` by convention find the
 
 - Operative rules & workflow → [`CLAUDE.md`](CLAUDE.md)
 - Feature plan and phases → [`docs/roadmap.md`](docs/roadmap.md)
+- Setup, commands, TV installation, tests and CI → [`docs/development.md`](docs/development.md)
 - Generated changelog (do not hand-edit) → `CHANGELOG.md`, config [`cliff.toml`](cliff.toml)

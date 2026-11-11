@@ -17,40 +17,40 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Check a server address (`/system/info`, `api_major == 2`)
 - ✅ Sign-in by code/QR (device login)
 - ✅ One title through playback protocol v3: direct play and HLS, progress every 10 s, stop (TV 2026-11-10 on webOS 26: MKV direct play, HLS remux and transcode through hls.js)
-- 🟨 Device profile probe: which codecs, containers and HDR formats the TV really supports (probed on webOS 24: H.264, HEVC Main10, VP9, AV1, Dolby Vision 5/8, DTS, E-AC-3; turning it into Silo's device profile comes with playback)
+- ✅ Device profile probe: which codecs, containers and HDR formats the TV really supports (probed on webOS 24: H.264, HEVC Main10, VP9, AV1, Dolby Vision 5/8, DTS, E-AC-3); the player builds Silo's device profile from it on every TV (Phase 3)
 - ✅ Diagnostics overlay with plan, route and player state, without secrets (replaced in Phase 3 by the player's Info panel)
 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
-- 🟨 Platform adapter: everything webOS-specific (Luna calls, device info, key codes, exit, launch parameters, secure storage, later the player) behind one `Platform` interface with a webOS and a browser implementation, so a Samsung Tizen port (Phase 6) adds an adapter instead of touching the app
+- ✅ Platform adapter: everything webOS-specific (Luna calls, device info, key codes, exit, launch parameters, secure storage, the player engine) behind one `Platform` interface with a webOS and a browser implementation, so a Samsung Tizen port (Phase 6) adds an adapter instead of touching the app (runs on webOS 24 and 26)
 - 🟨 Save several servers and switch between them; each keeps its sign-in
 - ✅ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out (TV 2026-11-09)
 - ✅ Profiles: picker, PIN, child profiles, create a profile (TV 2026-11-10); the PIN entry is centred like the picker and its delete key is a backspace icon
 - 🟨 Profile at launch: automatic, every time, after 1 hour, after 12 hours
-- 🟨 Switch profile and server
-- 🟨 App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu (the tabs show the Phase 0 title list or "Coming soon" until Phase 2 and 4 fill them)
-- 🟨 Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen
+- 🟨 Switch profile and server (switching the profile checked on the TV, 2026-11-09)
+- ✅ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu; For You and Calendar show "Coming soon" until Phase 4 fills them (TV 2026-11-09)
+- ✅ Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen (TV 2026-11-09)
 - 🟨 Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
 - 🟨 Loading, empty and error states
 - ✅ German and English: following the TV's language (German when the TV is German, otherwise English), or chosen in the app's settings (Automatic, Deutsch, English; stored on the TV) (TV 2026-11-10)
 
 ## Phase 2 – Browse (target v0.3.0)
 
-- 🟨 Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures
+- ✅ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures (TV 2026-11-09)
 - 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
-- 🟨 Library tabs for Movies and Series:
+- 🟨 Library tabs for Movies and Series (the browse grid with its filters checked on the TV, 2026-11-09):
   - Recommended rows
   - Browse grid with sort, filters (genre, decade, content rating, and watch state – unwatched, watched, in progress – when a silent probe shows the server accepts its rules) and an alphabet rail
   - Collections
 - 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
 - ✅ Search with an on-screen keyboard of our own (TV 2026-11-09) (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
-- 🟨 Movie detail page: hero, description, credit line, external ratings, quality badges
-- 🟨 Series detail page with seasons and episodes, cast, recommendations
+- ✅ Movie detail page: hero, description, credit line, external ratings, quality badges (TV 2026-11-09)
+- ✅ Series detail page with seasons and episodes, cast, recommendations (TV 2026-11-09)
 - 🟨 Similar titles
 - ✅ Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series (TV 2026-11-09)
-- 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages
+- 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages (the row checked on the TV, 2026-11-09)
 - 🟨 Long synopses and biographies scroll in the text dialog
-- 🟨 Smooth scrolling on TV hardware: memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
+- ✅ Smooth scrolling on TV hardware (TV 2026-11-09): memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
 - ✅ The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe (TV 2026-11-09)
 - ✅ The Magic Remote pointer moves the focus but never scrolls the page at the screen edge (TV 2026-11-10)
 - ⬜ Featured hero carousel, as in Silo's web app, on Home and on the Movies and Series tabs (user decision 2026-11-10):
@@ -103,7 +103,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
-- ⬜ Subtitle appearance for this TV in the app's settings, with a live preview: size, font, colours, opacity, background style, outline, position; stored per profile for this TV (`playback.subtitle_appearance` at `profile_device`)
+- 🟨 Subtitle appearance for this TV in the app's settings, with a live preview: size, font, colours, opacity, background style, outline, position; stored per profile for this TV (`playback.subtitle_appearance` at `profile_device`); Reset returns to the profile's own appearance
 - ✅ Skip intro, recap, credits and previews; automatic skipping following the profile settings (TV 2026-11-10)
 - ⬜ Up Next for episodes: a card in the corner, opened `playback.next_up_prompt_seconds` before the end, with a countdown to the next episode when `playback.auto_play_next` is on
   - skipping credits that run to the end opens the card at once, with a 10 s countdown
@@ -167,6 +167,8 @@ Repository and project:
 - ✅ Repository in English (docs, comments, commit messages, changelog)
 - ⬜ No code copied from Silo's repositories, so the store build carries only code this project owns
 - ✅ CI on GitHub: the gate on every push and pull request, with test counts and coverage in each run's summary and the reports as artifacts
+- ✅ Test results on the README: a card with the gate's steps, test counts, coverage and the mutation score, drawn after every CI run on `main` and every mutation run and published on GitHub Pages, so it updates without a commit
+- ✅ Development and deployment guide: [`docs/development.md`](development.md)
 - ✅ Mutation testing: a weekly StrykerJS run over all app code in 24 parallel shards; the merged report and the score badge are published on GitHub Pages. Baseline from the first full run (2026-11-11): 79.3 % over 15,215 mutants. A run below 77 % fails the workflow.
 - ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
 - ⬜ Contribution guidelines and issue templates; contributions under the same MPL-2.0 with a DCO sign-off (no CLA needed for store distribution)
@@ -186,7 +188,7 @@ LG Content Store:
 - ⬜ Privacy policy (what the app stores on the TV and sends to the user's own server)
 - ⬜ Submission material: screenshots, UX scenario, filled-in self-checklist (always the current form from Seller Lounge)
 - ⬜ Device tests on as many webOS versions as possible (6, 22, 23, 24, 25)
-- ⬜ For sideloading meanwhile: an installation guide for Developer Mode and the Homebrew Channel
+- 🟨 For sideloading meanwhile: installing in Developer Mode, from source or from a package that CI built, is described in [`docs/development.md`](development.md#install-it-on-a-tv); the Homebrew Channel is still to describe
 
 ## Deliberately not planned
 

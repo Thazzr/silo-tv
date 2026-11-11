@@ -37,6 +37,7 @@ If a product decision is missing - wording the user has to choose, a behaviour t
   - Every new rule, hook, component and UI behaviour gets a test that would fail without it.
   - Mock the API with MSW, and keep fixtures typed against the generated types.
   - Focus behaviour is tested with key events.
+  - Build and call the unit under test inside each test, never in a `describe` body: mutation testing (Stryker) credits a mutant only to code that runs inside a test.
   - When the package asks you to check a test with a temporary mutation, first save the file's original bytes to a scratchpad file, then restore from that copy. Never use `git checkout` to restore a file with uncommitted changes.
 - **Checks.**
   - Run the checks the package names, and read each step's exit code. A green grep over a red run is red.
@@ -48,7 +49,7 @@ If a product decision is missing - wording the user has to choose, a behaviour t
 ## What you never do
 
 - Commit, tag, push, or edit `CHANGELOG.md`.
-- Edit `README.md`, `CLAUDE.md` or `docs/roadmap.md`, or write memory files. The main session does that.
+- Edit `README.md`, `CLAUDE.md`, `docs/roadmap.md`, `docs/development.md` or `docs/design.md`, or write memory files. The main session does that.
 - Start other subagents.
 - Stop or kill processes you did not start.
 - Type passwords, tokens or API keys into anything. Print the contents of `.env.local` or any token.

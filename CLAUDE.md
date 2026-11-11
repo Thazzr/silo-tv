@@ -37,7 +37,7 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
 - **The main session (Opus) plans and reviews. It writes no product code.**
   - It clarifies the requirement and splits it into work packages.
   - It reviews the result, writes commit messages and sets tags.
-  - It maintains `README.md`, `CLAUDE.md`, `docs/roadmap.md` and the memory.
+  - It maintains `README.md`, `CLAUDE.md`, `docs/roadmap.md`, `docs/development.md`, `docs/design.md` and the memory.
   - Code and tests go to a subagent as a package, including small review fixes and tooling scripts.
 - **Implementation: subagent `implementer`** (Sonnet, `.claude/agents/implementer.md`). One package per call, with
   - the goal,
@@ -59,7 +59,7 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
 
 ### After EVERY phase (mandatory, in this order)
 
-1. **Check `README.md` and `docs/roadmap.md` and update them if needed.** This applies when the phase changes structure, setup, architecture, test counts, verification commands, dependencies or the state of a feature.
+1. **Check `README.md`, `docs/roadmap.md` and `docs/development.md` and update them if needed.** This applies when the phase changes structure, setup, architecture, commands, verification, CI, dependencies or the state of a feature. The README stays short: features, status and links. Setup, commands, TV installation and the checks belong in `docs/development.md`, and test counts in the README's results card, which CI draws.
 2. **Commit with a Conventional Commit.** Format `type(scope): description`, e.g. `feat(player): skip intro`.
    - The subject becomes the changelog line, so **always write a body**: root cause, fix, verification, and at the end of a phase the result of the TV test.
    - Type → section: `feat`→Added, `fix`→Fixed, `perf`/`refactor`/`docs`/`test`/`chore`/`build`→Changed, `revert`→Removed, `fix(sec…)`/`sec…`→Security.
@@ -189,7 +189,10 @@ From LG's app self-checklist, approval process, Back button, Magic Remote and AC
   3. check playback with direct play and HLS.
 
   The result belongs in the commit body that closes the phase.
-- **Live checks** against the test server (`npm run test:live`) are read-only, except progress and stop of a short test playback.
+- **Live checks** against the test server are not built yet. When they come (as `npm run test:live`), they are read-only, except progress and stop of a short test playback.
+- **Mutation testing** (StrykerJS, weekly in CI, baseline 77 % on the merged score):
+  - The unit under test is built and called inside each test, never in a `describe` body. Stryker credits a mutant only to code that runs inside a test, so a build at collection time leaves its mutants uncaught even when the tests check the values.
+  - A hardening package that targets surviving mutants proves each kill by running the mutant (a targeted Stryker run or the mutation-checker's definitions), not by test design alone.
 
 ## Verification
 
