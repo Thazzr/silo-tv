@@ -1,0 +1,112 @@
+# The only workflow that deploys GitHub Pages. A deployment replaces the whole site, so two
+# workflows deploying would wipe each other's files. ci.yml and mutation.yml only upload artifacts
+# (`ci-status` and `mutation-site`); this one combines the newest of each:
+#   <pages url>/status/test-results-light.svg and -dark.svg   the README's test results card
+#   <pages url>/mutation/                                     the merged mutation report
+#   <pages url>/badge.json                                    the mutation score badge endpoint
+#
+# Only trusted runs count. `--branch main` matches the head branch, which a pull request from a fork
+# can also be called, and its artifact is attacker-controlled data. So the CI lookup takes pushes only
+# (forks cannot push here) and skips cancelled runs (a run cancelled by the concurrency group can
+# still upload a partial status), the mutation lookup takes scheduled and manual runs only, and a
+# CI run that came from a pull request does not even trigger a deploy.
+#
+# It runs after every finished CI or mutation run on main, and on demand. A missing artifact is not
+# fatal: the card says "no recent run" for that part and the site is still deployed. Without a
+# mutation-site artifact there is no mutation/ and no badge.json until the next mutation run.
+name: Pages
+
+on:
+  workflow_run:
+    workflows: [CI, Mutation testing]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish on GitHub Pages
+    # Only the default branch publishes (a manual run on another branch does nothing), and a run that
+    # a pull request caused never does.
+    if: (github.event_name == 'workflow_dispatch' || github.event.workflow_run.event != 'pull_request') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The newest run on main that still has the artifact: a cancelled run or one whose artifact has
+      # expired is passed over. No npm ci: the tools have no dependencies.
+      - name: Download the latest results
+        run: |
+          find_run() {
+            # $1 workflow file, $2 artifact name, $3 extra gh run list flags, $4 how many runs to try
+            local ids id
+            ids=$(gh run list --repo "$REPO" --workflow "$1" --branch main $3 --limit "$4" --json databaseId,conclusion,event --jq "$5")
+            for id in $ids; do
+              if gh api "repos/$REPO/actions/runs/$id/artifacts" --jq ".artifacts[] | select(.name == \"$2\" and .expired == false) | .name" | grep -qx "$2"; then
+                echo "$id"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          if run=$(find_run ci.yml ci-status "--event push --status completed" 20 '.[] | select(.conclusion != "cancelled") | .databaseId'); then
+            gh run download "$run" --repo "$REPO" --name ci-status --dir in/ci
+          else
+            echo "::warning::No CI run with a ci-status artifact found; the card shows no recent run."
+          fi
+
+          if run=$(find_run mutation.yml mutation-site "" 10 '.[] | select(.event == "schedule" or .event == "workflow_dispatch") | .databaseId'); then
+            gh run download "$run" --repo "$REPO" --name mutation-site --dir in/mutation
+          else
+            echo "::warning::No mutation run with a mutation-site artifact found; the site has no mutation report and no badge until the next mutation run."
+          fi
+
+      - name: Build the site
+        run: |
+          mkdir -p site/status
+          node tools/status-card.mjs render --ci in/ci/ci-status.json --mutation in/mutation/mutation-status.json --out site/status
+          has_mutation=""
+          if [ -d in/mutation/mutation ]; then
+            cp -r in/mutation/mutation site/mutation
+            has_mutation="--mutation"
+          fi
+          if [ -f in/mutation/badge.json ]; then
+            cp in/mutation/badge.json site/badge.json
+          fi
+          node tools/status-card.mjs index --out site/index.html $has_mutation
+          touch site/.nojekyll
+
+      - name: Upload the Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

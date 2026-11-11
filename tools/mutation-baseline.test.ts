@@ -270,9 +270,9 @@ describe('the workflow', () => {
     expect(report).toMatch(/id: summary\n\s+run: \|[\s\S]*--break "\$MUTATION_BREAK"/);
   });
 
-  it('runs the baseline job after report and pages, even when pages is skipped', () => {
+  it('runs the baseline job after report only (pages.yml deploys, not this workflow)', () => {
     const baseline = job('baseline');
-    expect(baseline).toMatch(/needs: \[report, pages\]/);
+    expect(baseline).toMatch(/needs: report\n/);
     expect(baseline).toContain("if: always() && needs.report.result == 'success'");
     expect(baseline).toMatch(/permissions:\n\s+contents: read/);
   });

@@ -1,7 +1,7 @@
 // Turns Stryker's JSON report (reports/mutation/mutation.json) into the CI job summary and the
 // shields.io endpoint file for the badge. Plain Node, no dependencies.
 //
-//   node tools/mutation-summary.mjs [--report <file>] [--badge <file>] [--break <percent>]
+//   node tools/mutation-summary.mjs [--report <file>] [--badge <file>] [--json <file>] [--break <percent>]
 //   node tools/mutation-summary.mjs --check <score> --break <percent>
 //
 // The summary is appended to $GITHUB_STEP_SUMMARY, or printed without it. Unlike ci-summary.mjs this
@@ -142,6 +142,26 @@ export function parseBreak(argv) {
 /** The score as the workflow passes it around: one decimal, so the check sees what the badge shows. */
 const rounded = (score) => (score === null ? null : Number(score.toFixed(1)));
 
+/**
+ * The record for the status card (tools/status-card.mjs). `total` is the number of mutants the score
+ * is taken over (killed, survived, timeout, no coverage); errors and ignored ones are outside it.
+ */
+function buildStatus(tally, score, baseline, below, env, now) {
+  return {
+    score,
+    killed: tally.killed,
+    survived: tally.survived,
+    timeout: tally.timeout,
+    noCoverage: tally.noCoverage,
+    errors: tally.errors,
+    total: tally.killed + tally.survived + tally.timeout + tally.noCoverage,
+    baseline,
+    belowBaseline: baseline === null ? null : below,
+    finishedAt: now.toISOString(),
+    sha: env.GITHUB_SHA ?? null,
+  };
+}
+
 function usageError(message) {
   console.error(`mutation-summary: ${message}`);
   return 2;
@@ -163,7 +183,7 @@ function check(argv, baseline) {
 }
 
 /** @returns {number} the exit code: 0, 1 below the baseline in --check mode, 2 for a usage error. */
-export function main(argv = process.argv.slice(2), env = process.env) {
+export function main(argv = process.argv.slice(2), env = process.env, now = new Date()) {
   const baseline = parseBreak(argv);
   if (Number.isNaN(baseline)) return usageError('--break needs a number from 0 to 100');
   if (argv.includes('--check')) {
@@ -181,6 +201,14 @@ export function main(argv = process.argv.slice(2), env = process.env) {
   if (badge) {
     mkdirSync(dirname(badge), { recursive: true });
     writeFileSync(badge, `${JSON.stringify(buildBadge(result.total.score))}\n`);
+  }
+  const json = option(argv, '--json', '');
+  if (json) {
+    mkdirSync(dirname(json), { recursive: true });
+    writeFileSync(
+      json,
+      `${JSON.stringify(buildStatus(result.total, score, baseline, below, env, now))}\n`,
+    );
   }
   if (env.GITHUB_OUTPUT) {
     const lines = [`score=${score === null ? '' : score.toFixed(1)}`];

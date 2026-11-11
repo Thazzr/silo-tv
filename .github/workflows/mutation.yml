@@ -3,7 +3,8 @@
 # A full run is about 16,000 mutants, far more than one 6 h job can test. The files are therefore
 # split into 24 shards (tools/mutation-shards.mjs: greedy by file size, deterministic), one matrix
 # job each, 12 at a time so the normal CI keeps its runner slots. A final job merges the shard
-# reports (tools/mutation-merge.mjs) into one report, one score and one badge, and publishes them:
+# reports (tools/mutation-merge.mjs) into one report, one score and one badge, and uploads them as
+# the artifact `mutation-site`. pages.yml, the only workflow that deploys, publishes them:
 #   <pages url>/mutation/   the merged report
 #   <pages url>/badge.json  https://img.shields.io/endpoint?url=<pages url>/badge.json
 #
@@ -144,8 +145,7 @@ jobs:
         id: summary
         run: |
           node tools/mutation-merge.mjs --expect "$SHARDS" --out site/mutation shards
-          node tools/mutation-summary.mjs --report site/mutation/mutation.json --badge site/badge.json --break "$MUTATION_BREAK"
-          touch site/.nojekyll
+          node tools/mutation-summary.mjs --report site/mutation/mutation.json --badge site/badge.json --json site/mutation-status.json --break "$MUTATION_BREAK"
 
       - name: Note the missing shards
         if: failure()
@@ -159,36 +159,20 @@ jobs:
           path: site/mutation/
           retention-days: 30
 
-      - name: Upload the Pages artifact
-        if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      # The built site for pages.yml, which is the only workflow that deploys to GitHub Pages (a
+      # deployment replaces the whole site, so it combines this with the latest CI results).
+      - name: Upload the site
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: site
+          name: mutation-site
+          path: site/
+          retention-days: 90
 
-  pages:
-    name: Publish on GitHub Pages
-    needs: report
-    # Only the default branch publishes, and only a complete report: a manual run on another branch
-    # still reports and uploads.
-    if: needs.report.result == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
-
-  # Fails the workflow when the merged score is below the baseline. It runs after the site is
-  # published (or skipped off the default branch), so the badge always shows the real score.
+  # Fails the workflow when the merged score is below the baseline.
   baseline:
     name: Hold the baseline
-    needs: [report, pages]
+    needs: report
     if: always() && needs.report.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5

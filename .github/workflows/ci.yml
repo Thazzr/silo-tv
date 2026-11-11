@@ -60,6 +60,21 @@ jobs:
         if: always()
         run: node tools/ci-summary.mjs
 
+      # The data of the README's test results card. The Pages workflow (pages.yml) picks it up; this
+      # workflow does not deploy anything itself, because a Pages deployment replaces the whole site.
+      - name: Collect the status for the test results card
+        if: always()
+        run: node tools/status-card.mjs collect --out status/ci-status.json
+
+      - name: Upload the status
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-status
+          path: status/ci-status.json
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Upload the reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
