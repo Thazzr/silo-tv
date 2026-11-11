@@ -46,7 +46,7 @@ Launch parameters work as query strings in the browser:
 
 ## Install it on a TV
 
-The app is not in the LG Content Store yet. To install it from source:
+The app is not in the LG Content Store yet. To install a release without a command line, follow [`install.md`](install.md). To install it from source:
 
 1. Install LG's **Developer Mode** app on the TV, sign in with an LG developer account and turn Developer Mode on. The Developer Mode session expires unless you extend it in that app.
 2. Connect the TV once. The passphrase is shown in the Developer Mode app.

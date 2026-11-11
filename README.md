@@ -83,9 +83,9 @@ Every feature and its state: [roadmap](docs/roadmap.md).
 
 ## Try it on your TV
 
-It is not in the LG Content Store yet. You can install it on an LG TV from 2021 or later (webOS 6 and newer) in Developer Mode, from a [release](https://github.com/Thazzr/silo-tv/releases) or from source. You need a Silo server.
+It is not in the LG Content Store yet. You can install it on an LG TV from 2021 or later (webOS 6 and newer) in Developer Mode, from the file of a [release](https://github.com/Thazzr/silo-tv/releases/latest), with a desktop program and no command line. You need a Silo server.
 
-→ **[Install it on a TV](docs/development.md#install-it-on-a-tv)**
+→ **[Install silo-tv on your LG TV](docs/install.md)**, step by step
 
 ## How it is built
 
@@ -107,7 +107,8 @@ It is not in the LG Content Store yet. You can install it on an LG TV from 2021 
 
 | Document | What is in it |
 |---|---|
-| [Development and deployment](docs/development.md) | setup, commands, running in the browser, installing on a TV, diagnostics, tests and CI |
+| [Install on your TV](docs/install.md) | Developer Mode and installing a release without a command line, keeping it running, updates |
+| [Development and deployment](docs/development.md) | setup, commands, running in the browser, installing from source, diagnostics, tests and CI |
 | [Roadmap](docs/roadmap.md) | every feature by phase, with its state |
 | [Design](docs/design.md) | colours, type, layout and focus rules |
 | [Changelog](CHANGELOG.md) | generated from the commit history |

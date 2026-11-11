@@ -199,7 +199,7 @@ LG Content Store:
 - ⬜ Privacy policy (what the app stores on the TV and sends to the user's own server)
 - ⬜ Submission material: screenshots, UX scenario, filled-in self-checklist (always the current form from Seller Lounge)
 - ⬜ Device tests on as many webOS versions as possible (6, 22, 23, 24, 25)
-- 🟨 For sideloading meanwhile: installing in Developer Mode, from source or from a package that CI built, is described in [`docs/development.md`](development.md#install-it-on-a-tv); the Homebrew Channel is still to describe
+- ✅ For sideloading meanwhile: [`docs/install.md`](install.md) walks users through Developer Mode and installing a release with webOS Dev Manager, without a command line, including how to keep Developer Mode from expiring; installing from source is in [`docs/development.md`](development.md#install-it-on-a-tv)
 
 ## Deliberately not planned
 
