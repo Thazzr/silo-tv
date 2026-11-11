@@ -64,6 +64,12 @@
   overflow-y: auto;
 }
 
+/* The wheel and the remote still scroll the body; a visible bar would only narrow the rows so the
+   size chips wrap (the player menus hide theirs the same way). */
+.subtitle-dialog-body::-webkit-scrollbar {
+  display: none;
+}
+
 .subtitle-section-title {
   margin: 20px 0 8px;
   font-size: var(--fs-small);

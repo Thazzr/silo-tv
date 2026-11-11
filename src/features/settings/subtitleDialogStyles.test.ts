@@ -21,6 +21,10 @@ describe('subtitle appearance dialog styles', () => {
     expect(rule('.subtitle-dialog')).toContain('max-height: calc(100vh - 2 * var(--safe-y))');
   });
 
+  it('hides the body scrollbar, so the rows keep their width and the size chips do not wrap', () => {
+    expect(rule('.subtitle-dialog-body::-webkit-scrollbar')).toContain('display: none');
+  });
+
   it('dims the screen without blurring it (the TV animates nothing but transform and opacity)', () => {
     expect(css).not.toContain('backdrop-filter');
     expect(css).not.toContain('filter:');

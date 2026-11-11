@@ -446,8 +446,7 @@ h3 {
   box-sizing: border-box;
   max-width: 100%;
   margin: 0;
-  padding: 2px 14px;
-  line-height: 1.25;
+  line-height: 1.375;
   text-align: center;
   white-space: pre-wrap;
   overflow-wrap: break-word;

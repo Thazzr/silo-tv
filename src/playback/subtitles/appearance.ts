@@ -31,16 +31,18 @@ export function rgba(hex: string, percent: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-// Eight directions around the glyph: a static outline that looks the same on every Chromium the
-// app supports, unlike -webkit-text-stroke, which eats into the glyph.
-const RING: readonly (readonly [number, number])[] = [
-  [-2, 0],
-  [2, 0],
-  [0, -2],
-  [0, 2],
+// Outline style: hard offsets with no blur, in fixed CSS pixels as the web draws them (only its
+// font size scales with the frame): one pixel on the axes, two on
+// the diagonals (a static outline looks the same on every Chromium, unlike -webkit-text-stroke,
+// which eats into the glyph).
+const OUTLINE: readonly (readonly [number, number])[] = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
   [-2, -2],
-  [2, -2],
   [-2, 2],
+  [2, -2],
   [2, 2],
 ];
 
@@ -49,15 +51,12 @@ function px(value: number, scale: number): string {
   return `${Math.round(value * scale * 100) / 100}px`;
 }
 
-function ring(color: string, scale: number): string[] {
-  return RING.map(([x, y]) => `${px(x, scale)} ${px(y, scale)} 0 ${color}`);
-}
-
 /**
  * A box the subtitles are drawn into instead of the screen (the appearance preview), in CSS
- * pixels. The positions are measured in the box, not in `vh` or the screen's safe area. Sizes
- * scale with the box's height against the 1080p layout, unless `scale` says otherwise (the
- * preview draws the cues at the size they have over the video).
+ * pixels. The positions are measured in the box, not in `vh` or the screen's safe area. The font
+ * size scales with the box's height against the 1080p layout, unless `scale` says otherwise (the
+ * preview draws the cues at the size they have over the video). The effects, padding and radius
+ * stay fixed pixels, as in the web.
  */
 export interface SubtitleFrame {
   width: number;
@@ -79,24 +78,32 @@ export function subtitleStyles(
   frame?: SubtitleFrame,
 ): SubtitleStyles {
   const scale = frame ? (frame.scale ?? frame.height / 1080) : 1;
-  const effect = rgba(appearance.backgroundColor, appearance.backgroundOpacity);
   const shadows: string[] = [];
   if (appearance.backgroundStyle === 'shadow') {
-    shadows.push(`0 ${px(3, scale)} ${px(8, scale)} ${effect}`, `0 0 ${px(4, scale)} ${effect}`);
+    shadows.push('2px 2px 4px rgba(0,0,0,0.9)');
   } else if (appearance.backgroundStyle === 'outline') {
-    shadows.push(...ring(effect, scale));
+    for (const [x, y] of OUTLINE) {
+      shadows.push(`${x}px ${y}px 0 ${appearance.textOutlineColor}`);
+    }
   }
-  if (appearance.textOutline) shadows.push(...ring(appearance.textOutlineColor, scale));
+  if (appearance.textOutline) {
+    const glow = `0 0 3px ${appearance.textOutlineColor}`;
+    shadows.push(glow, glow);
+  }
 
   const line: CSSProperties = {
     fontFamily: `${appearance.fontFamily}, sans-serif`,
     fontSize: px(FONT_SIZES_PX[appearance.fontSize], scale),
     color: rgba(appearance.fontColor, appearance.textOpacity),
     textShadow: shadows.length > 0 ? shadows.join(', ') : 'none',
-    backgroundColor: appearance.backgroundStyle === 'box' ? effect : 'transparent',
+    // Only the box style paints a background; the web's padding and radius apply to every style.
+    backgroundColor:
+      appearance.backgroundStyle === 'box'
+        ? rgba(appearance.backgroundColor, appearance.backgroundOpacity)
+        : 'transparent',
+    padding: '4px 12px',
+    borderRadius: '4px',
   };
-  // The line's padding comes from the stylesheet on screen; a frame scales it with the rest.
-  if (frame) line.padding = `${px(2, scale)} ${px(14, scale)}`;
 
   const block: CSSProperties = {};
   const gap = RESTING_GAP[appearance.position];
