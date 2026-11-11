@@ -49,19 +49,26 @@ jobs:
 
       # The download is a no-op when the cache hit; the system libraries are not part of the cache.
       - name: Install Chromium for the E2E tests
+        timeout-minutes: 15
         run: |
           npx playwright install chromium --only-shell
-          # install-deps runs apt, and the runner's Ubuntu mirror is sometimes unreachable for a
-          # while. Retry twice with a pause; the step fails only when the last attempt fails.
-          attempt=1
-          until npx playwright install-deps chromium; do
-            if [ "$attempt" -ge 3 ]; then
-              echo "install-deps failed $attempt times" >&2
-              exit 1
-            fi
-            sleep $((attempt * 30))
-            attempt=$((attempt + 1))
-          done
+          # The runner image usually has the system libraries already, so apt is only called when the
+          # headless shell does not start. The runner's Ubuntu mirror is sometimes unreachable and apt
+          # then hangs; the step's timeout bounds that, and install-deps is retried twice with a pause.
+          # The step fails only when the shell does not start and the last attempt fails.
+          if timeout 60 node -e "require('@playwright/test').chromium.launch().then((b) => b.close())"; then
+            echo "The Chromium system libraries are present, skipping install-deps"
+          else
+            attempt=1
+            until npx playwright install-deps chromium; do
+              if [ "$attempt" -ge 3 ]; then
+                echo "install-deps failed $attempt times" >&2
+                exit 1
+              fi
+              sleep $((attempt * 30))
+              attempt=$((attempt + 1))
+            done
+          fi
 
       - name: Run the gate
         run: pwsh -NoProfile -File tools/verify.ps1

@@ -40,7 +40,8 @@ const posix = (p: string) =>
   p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, drive: string) => `/${drive.toLowerCase()}`);
 
 // Runs the script with `npx playwright install-deps` failing `failures` times, then succeeding.
-const run = (script: string, failures: number) => {
+// `launches` is whether the stub `node` (the headless-shell launch check) succeeds.
+const run = (script: string, failures: number, launches = false) => {
   const dir = mkdtempSync(join(tmpdir(), 'retry-'));
   dirs.push(dir);
   const log = posix(join(dir, 'log'));
@@ -57,6 +58,13 @@ if [ "$2" = "install-deps" ]; then
 fi
 `,
   );
+  writeFileSync(
+    join(dir, 'node'),
+    `#!/bin/bash
+echo "node $*" >> "${log}"
+${launches ? '' : 'exit 1\n'}`,
+  );
+  chmodSync(join(dir, 'node'), 0o755);
   writeFileSync(join(dir, 'sleep'), `#!/bin/bash\necho "sleep $*" >> "${log}"\n`);
   chmodSync(join(dir, 'npx'), 0o755);
   chmodSync(join(dir, 'sleep'), 0o755);
@@ -76,6 +84,33 @@ describe.each(['ci.yml', 'release.yml'])('%s: install-deps retry', (file) => {
   const script = () => stepScript(readWorkflow(file));
   const deps = (calls: string[]) => calls.filter((c) => c.includes('install-deps'));
   const sleeps = (calls: string[]) => calls.filter((c) => c.startsWith('sleep'));
+
+  const launch = (calls: string[]) => calls.filter((c) => c.startsWith('node'));
+
+  it('skips install-deps when the headless shell starts with the runner libraries', () => {
+    const r = run(script(), 99, true);
+    expect(launch(r.calls)).toHaveLength(1);
+    expect(deps(r.calls)).toEqual([]);
+    expect(sleeps(r.calls)).toEqual([]);
+    expect(r.status).toBe(0);
+  });
+
+  it('checks the launch before it calls install-deps, and only then', () => {
+    const r = run(script(), 0);
+    expect(launch(r.calls)).toHaveLength(1);
+    expect(r.calls.findIndex((c) => c.startsWith('node'))).toBeLessThan(
+      r.calls.findIndex((c) => c.includes('install-deps')),
+    );
+  });
+
+  it('bounds the step and the job with a timeout', () => {
+    const yaml = readWorkflow(file);
+    const stepStart = yaml.indexOf(`- name: ${STEP}\n`);
+    const stepHead = yaml.slice(stepStart, yaml.indexOf('run: |', stepStart));
+    expect(stepHead).toMatch(/\n {8}timeout-minutes: \d+\n/);
+    const jobHead = yaml.slice(yaml.indexOf('\njobs:'), yaml.indexOf('    steps:'));
+    expect(jobHead).toMatch(/\n {4}timeout-minutes: \d+\n/);
+  });
 
   it('stays a plain step: nothing that would hide a failure', () => {
     expect(readWorkflow(file)).not.toContain('continue-on-error');
