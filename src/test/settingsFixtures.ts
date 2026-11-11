@@ -24,6 +24,7 @@ const SERVER_DEFAULTS: Record<string, unknown> = {
   'playback.auto_play_next_preview': false,
   'playback.preferred_quality': 'auto',
   'playback.max_bitrate_kbps': null,
+  'playback.buffering_quality_mode': 'always',
   'playback.subtitle_appearance': {
     fontSize: 'large',
     fontFamily: 'sans-serif',
@@ -77,6 +78,7 @@ const INTRODUCED_IN: Record<string, number> = {
   'playback.auto_play_next_preview': 1,
   'playback.preferred_quality': 1,
   'playback.max_bitrate_kbps': 1,
+  'playback.buffering_quality_mode': 23,
   'playback.subtitle_appearance': 1,
   'player.video_skip_back_seconds': 9,
   'player.video_skip_forward_seconds': 9,

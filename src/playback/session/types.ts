@@ -121,6 +121,10 @@ export interface ReplanOptions {
   autoplay?: boolean;
   /** A `quality_change` that goes back to the quality before one that did not play. */
   fallback?: boolean;
+  /** The buffering controller's lowering on Auto: the step-down estimate and what was measured. */
+  lowering?: { estimateKbps: number; observedKbps: number | null };
+  /** The buffering controller's undo: back to Auto, the learned limit cleared. */
+  restore?: boolean;
 }
 
 export type ReplanResult =

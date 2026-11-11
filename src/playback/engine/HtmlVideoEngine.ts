@@ -22,6 +22,7 @@ export class HtmlVideoEngine implements PlayerEngine {
   /** The fatal hls.js error of the current source; the element itself has none to report. */
   private hlsError: EngineError | null = null;
   private readonly errorHandlers = new Set<() => void>();
+  private readonly dataHandlers = new Set<() => void>();
 
   constructor(private readonly el: HTMLVideoElement) {
     // The element has no "waiting" state of its own that matches the events, so track it here.
@@ -74,6 +75,10 @@ export class HtmlVideoEngine implements PlayerEngine {
               : 4;
         this.hlsError = { code, message: `hls.js ${data.type}: ${data.details}` };
         for (const handler of [...this.errorHandlers]) handler();
+      });
+      // A loaded fragment is media data arriving (playlists and keys are not).
+      hls.on(Hls.Events.FRAG_LOADED, () => {
+        if (this.hls === hls) for (const handler of [...this.dataHandlers]) handler();
       });
       this.hls = hls;
       hls.attachMedia(this.el);
@@ -146,6 +151,10 @@ export class HtmlVideoEngine implements PlayerEngine {
     return error ? { code: error.code, message: error.message } : null;
   }
 
+  get hasFutureData(): boolean {
+    return this.el.readyState >= 3;
+  }
+
   get decoder(): 'native' | 'hlsjs' {
     return this.hls ? 'hlsjs' : 'native';
   }
@@ -158,6 +167,16 @@ export class HtmlVideoEngine implements PlayerEngine {
   }
 
   on(event: EngineEvent, handler: () => void): () => void {
+    if (event === 'data') {
+      // The element's own progress covers direct play and the buffer growing under hls.js; hls.js
+      // adds each loaded fragment.
+      const offProgress = this.subscribe('progress', handler);
+      this.dataHandlers.add(handler);
+      return () => {
+        offProgress();
+        this.dataHandlers.delete(handler);
+      };
+    }
     if (event !== 'error') return this.subscribe(event, handler);
     // A fatal hls.js error is reported once; an element error that follows it is the same failure.
     const offElement = this.subscribe('error', () => {
@@ -176,6 +195,7 @@ export class HtmlVideoEngine implements PlayerEngine {
     this.released = true;
     for (const off of [...this.subscriptions]) off();
     this.errorHandlers.clear();
+    this.dataHandlers.clear();
     // Before the unload below, so hls.js lets go of the element and its MediaSource first.
     this.destroyHls();
     // Without a source the element drops its decoder; the screen removes the element itself.

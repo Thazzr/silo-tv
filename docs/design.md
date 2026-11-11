@@ -54,6 +54,14 @@ All sizes are CSS pixels on the 1920×1080 layout (the TV renders it at device p
 - **Back:** goes one step back; on the entry screen it opens the exit popup ("Exit the app?" – Exit / Cancel, Cancel focused), Exit calls `platform.exitApp()`.
 - **Loading:** skeletons shaped like the layout they replace; a spinner only inside buttons and the player.
 
+## Player
+
+- **Overlay:** hides 5 s after the last key press. Exit at the top left, a full-width scrubber, the title and episode line below it, playback controls in the middle and the menu buttons on the right. Menus open above their button.
+- **Bottom-right corner:** it holds one pill at a time.
+  - The skip pill (intro, recap, credits) wins over the buffering prompt.
+  - The buffering prompt ("Lower quality" / "Keep quality") and the undo pill ("Restore quality") hold the focus for 15 s, with a countdown line along their bottom edge that freezes while playback is paused (user decision 2026-11-11).
+- **Menus and the Info panel** are slightly translucent `--surface-raised`. An applied pick closes the menu with the focus back on its button.
+
 ## Branding from the server
 
 `GET /api/v2/theme/branding` may provide a server name, a mark, a wordmark, a sign-in background, a sign-in subtitle and an accent colour. The app shows the mark in the server list and the top bar, the wordmark and background on the server and sign-in screens, and the accent only where it passes the contrast check above. Without branding it shows the server's name (or host) and a neutral initial badge. The app's own launcher icon is fixed in the package and never changes per server.

@@ -97,9 +97,15 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - the time sits above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at; 12 h or 24 h follows the profile's `ui.time_format`
   - one centred loading view from the start; slightly translucent menus and Info panel
 - 🟨 The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
-  - ✅ the maximum bitrate goes with every start and replan, and Info shows it
-  - ✅ a seek during a quality or track change waits for it and lands where the viewer asked
-  - ⬜ lower quality when buffering (never / ask / always, the undo pill)
+  - 🟨 the maximum bitrate goes with every start and replan, and Info shows it
+  - 🟨 a seek during a quality or track change waits for it and lands where the viewer asked
+  - 🟨 lower quality when buffering, following Silo's buffering-quality design:
+    - in `always` mode, a stall of 6 s or two stalls within 2 minutes lower Auto at once, with a "Restore quality" pill;
+    - `ask`, or a quality the viewer picked, asks first ("Lower quality" / "Keep quality");
+    - `never` only watches;
+    - an outage (no media data at all) is no reason to lower;
+    - the prompt and the pill hold the focus for 15 s (user decision 2026-11-11)
+    - still to check on the TV: whether webOS reports media data on direct play (`progress` events, a growing buffer)
 - ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)

@@ -21,6 +21,7 @@ import {
   watchUserData,
   watchVersion,
 } from '../test/playbackFixtures';
+import { FakeEngine } from '../test/fakeEngine';
 import { memoryStorage, testDevice } from '../test/renderFlow';
 import { setResumeRewind } from './resumeRewind';
 import type { StartIntent } from './resume';
@@ -218,6 +219,83 @@ describe('start', () => {
     hook.rerender({ profile: { known: true, quality: 'auto', bandwidthCapKbps: 3000 } });
     await ready(hook);
     expect(calls.start[0]?.body.bandwidth_cap_kbps).toBe(3000);
+  });
+
+  it('hands the buffering setting to the session: never ignores the learned limit, none means always without the feature', async () => {
+    const never = servePlayback(server);
+    await ready(
+      setup(undefined, {
+        known: true,
+        quality: 'auto',
+        bufferingMode: 'never',
+        bufferingKnown: true,
+      }),
+    );
+    expect(never.start[0]?.body).toMatchObject({
+      learned_limit: 'ignore',
+      client_features: ['playback_plan_v3', 'buffering_quality_v1'],
+    });
+    server.resetHandlers();
+    clearInstallationCache();
+    const unset = servePlayback(server);
+    await ready(setup(undefined, { known: true, quality: 'auto' }));
+    expect(unset.start[0]?.body.client_features).toEqual(['playback_plan_v3']);
+    expect(unset.start[0]?.body).not.toHaveProperty('learned_limit');
+    server.resetHandlers();
+    clearInstallationCache();
+    const known = servePlayback(server);
+    await ready(setup(undefined, { known: true, quality: 'auto', bufferingKnown: true }));
+    // Known but no mode: `always`, which sends no learned-limit control.
+    expect(known.start[0]?.body.client_features).toEqual([
+      'playback_plan_v3',
+      'buffering_quality_v1',
+    ]);
+    expect(known.start[0]?.body).not.toHaveProperty('learned_limit');
+  });
+
+  it('without a profile mode, repeated stalls on Auto lower the quality at once and ask nothing', async () => {
+    const withRate = (n: number, kbps: number) =>
+      playableDecision(
+        playbackPlan({
+          plan_id: `plan:${n}`,
+          plan_attempt_key: `v3:key-${n}`,
+          effective_recipe: { video_codec: 'h264', audio_codec: 'aac', bitrate_kbps: kbps },
+        }),
+      );
+    const calls = servePlayback(server, {
+      start: [withRate(1, 10_000)],
+      replan: [withRate(2, 5000)],
+    });
+    const hook = setup(undefined, { known: true, quality: 'auto' });
+    await ready(hook);
+    const engine = new FakeEngine();
+    engine.paused = false;
+    act(() => {
+      hook.result.current.attachEngine(engine);
+      hook.result.current.onLoadedMetadata();
+      hook.result.current.onPlaying();
+    });
+    vi.useFakeTimers({
+      toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
+    const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+    const stall = () => {
+      engine.emit('data');
+      act(() => hook.result.current.onWaiting());
+      advance(1500);
+      act(() => hook.result.current.onPlaying());
+    };
+    advance(10_001);
+    stall();
+    advance(1000);
+    stall();
+    vi.useRealTimers();
+    await until(() => calls.replan.length === 1);
+    expect(calls.replan[0]?.body).toMatchObject({
+      operation: 'quality_change',
+      bandwidth_estimate_kbps: 7000,
+    });
+    expect(hook.result.current.buffering.offer?.kind).not.toBe('prompt');
   });
 
   it('starts at once with `auto` when no profile settings are handed in', async () => {

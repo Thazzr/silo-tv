@@ -5,6 +5,7 @@ import { toApiError, type SiloClient } from '../../api/client';
 import { CLIENT_FEATURES, type ClientCapabilities, type PlaybackContext } from '../deviceProfile';
 import type { PlayerEngine } from '../engine/PlayerEngine';
 import { uuidV4 } from '../uuid';
+import { bufferingFields, clientFeatures, type BufferingMode } from './bufferingQuality';
 import { inRanges } from './facts';
 import type {
   Plan,
@@ -15,6 +16,9 @@ import type {
   ReplanResult,
   SelectedTracks,
 } from './types';
+
+/** What a request says about buffering when the controller does not track it. */
+const NO_BUFFERING = { feature: false, mode: 'always' as const, keptKbps: null };
 
 /** The recovery chain's bounds: `attempt_count` 1-8 and 16 remembered plan keys (§6). */
 export const MAX_RECOVERIES = 8;
@@ -59,6 +63,10 @@ export interface ReplanDeps {
   reading(): PlayerReading | null;
   /** The profile's bitrate cap in kbit/s; null = none. Sent with every operation. */
   bandwidthCap(): number | null;
+  /** What the buffering-quality fields of a request depend on, read anew for each one. */
+  buffering?(): { feature: boolean; mode: BufferingMode; keptKbps: number | null };
+  /** A quality change that went back to the quality before one that did not play. */
+  onQualityFallback?(): void;
   /** The display or output changed: the device profile is read again and kept. */
   refreshProfile(): Promise<{ capabilities: ClientCapabilities; context: PlaybackContext }>;
   /** The new load starts here; until its first frame this is the position to report. */
@@ -98,6 +106,8 @@ export class Replanner {
   private loadSeek: { loadId: number; seconds: number } | null = null;
   /** The load id the running replan's adopt started; null when the stream played on. */
   private reloadedTo: number | null = null;
+  /** A Restore that met a running replan: sent when that replan has ended (one at most). */
+  private restorePending = false;
 
   constructor(private readonly deps: ReplanDeps) {}
 
@@ -118,6 +128,7 @@ export class Replanner {
   dropQueuedSeek(): void {
     this.queuedSeek = null;
     this.loadSeek = null;
+    this.restorePending = false;
   }
 
   /**
@@ -197,9 +208,20 @@ export class Replanner {
     return result;
   }
 
-  /** Switches to a quality label from the plan's `available_qualities` (or `auto`). */
-  async qualityChange(label: string): Promise<ReplanResult> {
-    const result = await this.replan('quality_change', { quality: label });
+  /**
+   * Switches to a quality label from the plan's `available_qualities` (or `auto`). `extra` carries
+   * the buffering controller's own lowering or restore.
+   */
+  async qualityChange(
+    label: string,
+    extra: Pick<ReplanOptions, 'lowering' | 'restore'> = {},
+  ): Promise<ReplanResult> {
+    if (extra.restore && this.replanning) {
+      // Silo: a Restore that cannot be sent at once is sent after the replan in flight.
+      this.restorePending = true;
+      return { kind: 'busy' };
+    }
+    const result = await this.replan('quality_change', { quality: label, ...extra });
     const state = this.deps.state();
     await this.settle(result, this.deps.reading()?.position ?? state.startPosition);
     return result;
@@ -217,7 +239,35 @@ export class Replanner {
   async replan(operation: ReplanOperation, options: ReplanOptions = {}): Promise<ReplanResult> {
     const result = await this.run(operation, options);
     this.afterReplan(result);
+    if (['terminal', 'ended', 'gone', 'loop'].includes(result.kind)) {
+      // The session does not go on this way (the caller settles it): a Restore has nothing to do.
+      this.restorePending = false;
+    } else {
+      this.releaseRestore();
+    }
     return result;
+  }
+
+  /**
+   * The Restore that waited for a replan goes out once that replan has ended with an answer under
+   * which the session goes on (applied, refused, transient, busy), and only then: after
+   * `afterReplan` has applied a queued seek that needs no new load (a seek that starts a replan of
+   * its own makes the Restore wait for that one too), and not while a seek is still owed to a
+   * load the ended replan started. That seek is taken at the load's metadata (`releaseRestore`
+   * is called from there); sending the Restore first would null it in `run()`. A later replan
+   * (a failure recovery for a load that never reached its metadata) nulls it as well, and the
+   * Restore goes out after that one. Settling a terminal, ended or gone answer comes first for the
+   * caller, so those drop the Restore instead.
+   */
+  releaseRestore(): void {
+    void this.sendPendingRestore().catch(() => undefined);
+  }
+
+  private async sendPendingRestore(): Promise<void> {
+    if (!this.restorePending || this.replanning || this.loadSeek !== null) return;
+    this.restorePending = false;
+    if (this.deps.isStopped()) return;
+    await this.qualityChange('auto', { restore: true });
   }
 
   /**
@@ -261,6 +311,8 @@ export class Replanner {
       if (recovery) this.recoveries += 1;
       const before = this.deps.state();
       const cap = this.deps.bandwidthCap();
+      const buffering = this.deps.buffering?.() ?? NO_BUFFERING;
+      const preference = options.quality ?? before.quality ?? 'auto';
       const reading = before.hasPlayed ? this.deps.reading() : null;
       const position = options.position ?? reading?.position ?? before.startPosition;
       const { data, error, response } = await this.deps.client.POST(
@@ -272,7 +324,7 @@ export class Replanner {
             protocol_version: 3,
             operation,
             ...(options.failure ? { failure: options.failure } : {}),
-            client_features: CLIENT_FEATURES,
+            client_features: clientFeatures(CLIENT_FEATURES, buffering.feature),
             playback_attempt_id: before.attemptId,
             replan_request_id: uuidV4(),
             failed_plan_id: plan.plan_id,
@@ -280,8 +332,15 @@ export class Replanner {
             plan_attempt_key: plan.plan_attempt_key,
             attempted_plan_keys: before.attemptedKeys,
             attempt_count: Math.max(1, this.recoveries),
-            quality_preference: options.quality ?? before.quality ?? 'auto',
+            quality_preference: preference,
             ...(cap !== null ? { bandwidth_cap_kbps: cap } : {}),
+            ...bufferingFields({
+              ...buffering,
+              auto: preference === 'auto',
+              lowering: options.lowering,
+              restore: options.restore,
+              fallback: options.fallback,
+            }),
             position_seconds: position,
             selected_tracks: options.tracks ?? plan.selected_tracks,
             client_capabilities: profile.capabilities,
@@ -308,7 +367,11 @@ export class Replanner {
         const previous = now.quality ?? 'auto';
         const qualityPick = operation === 'quality_change' && options.quality !== undefined;
         if (qualityPick) this.deps.setQuality(options.quality ?? previous);
-        if (qualityPick && options.fallback) this.fallbacks += 1;
+        if (qualityPick && options.fallback) {
+          this.fallbacks += 1;
+          // The stepped-down plan did not play: what it was lowered with is no longer wanted.
+          this.deps.onQualityFallback?.();
+        }
         const loadBefore = this.deps.state().loadId;
         // After a failure the old transport is dead, so its URL is no reason to keep it.
         this.deps.adopt(next, sessionId, {

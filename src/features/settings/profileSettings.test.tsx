@@ -112,7 +112,7 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
     expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(40)).toHaveLength(18);
+    expect(keysKnownAt(40)).toHaveLength(19);
   });
 
   it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
@@ -128,6 +128,11 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(9)).toContain('player.video_skip_forward_seconds');
   });
 
+  it('knows the buffering-quality mode from revision 23 on', () => {
+    expect(keysKnownAt(22)).not.toContain('playback.buffering_quality_mode');
+    expect(keysKnownAt(23)).toContain('playback.buffering_quality_mode');
+  });
+
   it('has the contract defaults for every key', () => {
     expect(defaultSettings()).toMatchObject({
       'playback.intro_skip_mode': 'ask',
@@ -138,6 +143,7 @@ describe('keysKnownAt', () => {
       'playback.auto_play_next_preview': false,
       'playback.preferred_quality': 'auto',
       'playback.max_bitrate_kbps': null,
+      'playback.buffering_quality_mode': 'always',
       'player.video_skip_back_seconds': 10,
       'player.video_skip_forward_seconds': 30,
       'player.sleep_timer_default_minutes': 30,
@@ -168,6 +174,16 @@ describe('keysKnownAt', () => {
     ['playback.max_bitrate_kbps', null, null],
     ['playback.max_bitrate_kbps', '8000', null],
     ['playback.max_bitrate_kbps', true, null],
+    ['playback.buffering_quality_mode', 'never', 'never'],
+    ['playback.buffering_quality_mode', 'ask', 'ask'],
+    ['playback.buffering_quality_mode', 'always', 'always'],
+    ['playback.buffering_quality_mode', 'sometimes', 'always'],
+    ['playback.buffering_quality_mode', 'Never', 'always'],
+    ['playback.buffering_quality_mode', 'ask ', 'always'],
+    ['playback.buffering_quality_mode', '', 'always'],
+    ['playback.buffering_quality_mode', 0, 'always'],
+    ['playback.buffering_quality_mode', true, 'always'],
+    ['playback.buffering_quality_mode', null, 'always'],
     ['player.video_skip_back_seconds', 15, 15],
     ['player.video_skip_back_seconds', 12, 10],
     ['player.video_skip_forward_seconds', '30', 30],
@@ -291,10 +307,10 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
     expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
-    expect(url.searchParams.getAll('keys')).toHaveLength(18);
+    expect(url.searchParams.getAll('keys')).toHaveLength(19);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(18);
+    expect(url.search.match(/keys=/g)).toHaveLength(19);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {

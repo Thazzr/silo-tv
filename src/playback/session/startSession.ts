@@ -2,6 +2,7 @@
 // of the item, the device profile and the start request with its answer mapped to an outcome.
 import { toApiError, type SiloClient } from '../../api/client';
 import { toChapters } from '../osd/previewMath';
+import { bufferingFields, clientFeatures, type BufferingMode } from './bufferingQuality';
 import {
   buildClientCapabilities,
   buildPlaybackContext,
@@ -143,6 +144,8 @@ export interface StartRequest {
   quality: string;
   /** The profile's bitrate cap in kbit/s; null sends nothing. */
   bandwidthCapKbps?: number | null;
+  /** The buffering-quality setting and whether the server knows it; absent = `always`, unknown. */
+  buffering?: { feature: boolean; mode: BufferingMode };
   position: number;
   tracks: Tracks;
   capabilities: ClientCapabilities;
@@ -150,12 +153,13 @@ export interface StartRequest {
 }
 
 export function requestStart(client: SiloClient, header: ProfileHeader, start: StartRequest) {
+  const buffering = start.buffering ?? { feature: false, mode: 'always' as const };
   return client.POST('/api/v2/playback/start', {
     params: { header },
     body: {
       installation_id: start.installationId,
       protocol_version: 3,
-      client_features: CLIENT_FEATURES,
+      client_features: clientFeatures(CLIENT_FEATURES, buffering.feature),
       file_id: start.fileId,
       // A file the viewer picked is the one to play, not one of its alternate versions.
       ...(start.pinnedFile ? { allow_alternate_versions: false } : {}),
@@ -163,6 +167,8 @@ export function requestStart(client: SiloClient, header: ProfileHeader, start: S
       playback_attempt_id: start.attemptId,
       quality_preference: start.quality,
       ...(start.bandwidthCapKbps != null ? { bandwidth_cap_kbps: start.bandwidthCapKbps } : {}),
+      // A start carries no kept estimate: only the mode's learned-limit control.
+      ...bufferingFields({ ...buffering, auto: start.quality === 'auto', keptKbps: null }),
       subtitle_fidelity_preference: 'compatible',
       start_position: start.position,
       // Left out unless the viewer picked one: then the server decides from the preferences.

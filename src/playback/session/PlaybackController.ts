@@ -13,6 +13,8 @@ import { mediaUrlWithToken } from '../mediaUrl';
 import { rewound, type StartIntent } from '../resume';
 import { getResumeRewind } from '../resumeRewind';
 import { uuidV4 } from '../uuid';
+import type { BufferingMode } from './bufferingQuality';
+import { BufferingManager, type BufferingAnswer, type BufferingView } from './BufferingManager';
 import { mediaFacts, plausible, previewFacts, type Item, type Tracks, type Version } from './facts';
 import { ProgressReporter } from './ProgressReporter';
 import { FirstFrameWatchdog, Recovery } from './recovery';
@@ -58,6 +60,13 @@ export interface ControllerDeps {
   profileQuality?(): Promise<string>;
   /** The profile's bitrate cap in kbit/s, read at every start and replan; null or absent = none. */
   bandwidthCap?(): number | null;
+  /**
+   * The profile's buffering-quality mode and whether the server's settings know it, read anew each
+   * time; without it `always`, unknown (no buffering fields are sent).
+   */
+  buffering?(): { feature: boolean; mode: BufferingMode };
+  /** What the buffering controller offers the screen: the prompt, the undo pill, the notices. */
+  onBuffering?(view: BufferingView): void;
   onState(state: SessionState): void;
   onMediaError(failure: MediaFailure | null): void;
   /** The stream played to its end and the session is stopped. */
@@ -110,6 +119,7 @@ export class PlaybackController {
   private readonly watchdog: FirstFrameWatchdog;
   private readonly replanner: Replanner;
   private readonly recovery: Recovery;
+  private readonly buffering: BufferingManager;
 
   constructor(private readonly deps: ControllerDeps) {
     this.quality = deps.intent?.quality ?? null;
@@ -159,6 +169,8 @@ export class PlaybackController {
       }),
       reading: () => this.reading(),
       bandwidthCap: () => this.deps.bandwidthCap?.() ?? null,
+      buffering: () => ({ ...this.bufferingSettings(), keptKbps: this.buffering.keptKbps }),
+      onQualityFallback: () => this.buffering.qualityFellBack(),
       refreshProfile: async () => {
         const profile = await readDeviceProfile();
         this.capabilities = profile.capabilities;
@@ -202,7 +214,24 @@ export class PlaybackController {
       prepareRestart: () => this.prepareRestart(),
       start: (position) => this.start(position),
     });
+    this.buffering = new BufferingManager({
+      settings: () => this.bufferingSettings(),
+      plan: () => this.plan,
+      quality: () => this.quality,
+      engine: () => this.engine,
+      isStopped: () => this.stopped,
+      isReplanning: () => this.replanner.isReplanning,
+      recoveryActive: () => this.recovery.active,
+      qualityChange: (label, extra) => this.replanner.qualityChange(label, extra),
+      onView: (view) => {
+        if (!this.disposed) this.deps.onBuffering?.(view);
+      },
+    });
     document.addEventListener('visibilitychange', this.onVisibility);
+  }
+
+  private bufferingSettings(): { feature: boolean; mode: BufferingMode } {
+    return this.deps.buffering?.() ?? { feature: false, mode: 'always' };
   }
 
   private header() {
@@ -288,6 +317,7 @@ export class PlaybackController {
   async start(position: number, retryInstallation = true): Promise<void> {
     this.set({ kind: 'starting' });
     this.replanner.dropQueuedSeek();
+    this.buffering.started();
     this.startPosition = position;
     try {
       // The first start decides the quality: the intent's, else what the profile prefers (the
@@ -306,6 +336,7 @@ export class PlaybackController {
         attemptId: this.attemptId,
         quality: this.quality,
         bandwidthCapKbps: this.deps.bandwidthCap?.() ?? null,
+        buffering: this.bufferingSettings(),
         position,
         tracks: this.tracks,
         capabilities: this.capabilities,
@@ -368,6 +399,7 @@ export class PlaybackController {
     }
     this.attemptedKeys = this.attemptedKeys.slice(-MAX_ATTEMPTED_KEYS);
     this.mediaUrl = url;
+    this.buffering.adopted(reload);
     if (reload) {
       this.loadId += 1;
       this.playing = false;
@@ -423,6 +455,7 @@ export class PlaybackController {
     // The last position must be taken while the engine can still tell it.
     if (!engine) this.reading();
     this.engine = engine;
+    this.buffering.attach(engine);
     this.watchdog.expect(engine !== null && !this.stopped);
   }
 
@@ -469,10 +502,10 @@ export class PlaybackController {
     // A seek the viewer asked for during the replan that started this load replaces the plan's
     // start seek: one seek, from the new origin.
     const owed = this.replanner.takeLoadSeek(this.loadId);
-    if (owed !== null) {
-      void this.replanner.seekTo(owed);
-      return;
-    }
+    if (owed !== null) void this.replanner.seekTo(owed);
+    // A Restore that waited for this seek goes out now (after it, if the seek started a replan).
+    this.replanner.releaseRestore();
+    if (owed !== null) return;
     const start = plan.timeline.player_start_seconds;
     if (start > 0) engine.seek(this.origin + start);
   }
@@ -481,6 +514,7 @@ export class PlaybackController {
     if (this.stopped) return;
     this.hasPlayed = true;
     this.playing = true;
+    this.buffering.playing();
     this.viewerPaused = false;
     if (this.wasPaused) {
       this.wasPaused = false;
@@ -489,9 +523,20 @@ export class PlaybackController {
     this.progress.startHeartbeat();
   }
 
+  /** The player ran out of data: the buffering controller decides whether that is a stall. */
+  onWaiting(): void {
+    this.buffering.waiting();
+  }
+
+  /** The player seeks: the buffering that follows belongs to the seek. */
+  onSeeking(): void {
+    this.buffering.seeking();
+  }
+
   onPause(): void {
     // The element's own pause event follows a pause made here: report once.
     if (this.stopped || this.wasPaused) return;
+    this.buffering.paused();
     this.playing = false;
     this.wasPaused = true;
     this.viewerPaused = true;
@@ -501,12 +546,14 @@ export class PlaybackController {
   /** The stream played to its end: stop with the end position, then hand over. */
   onEnded(): void {
     if (this.stopped) return;
+    this.buffering.interrupted();
     void this.stop();
     if (!this.disposed) this.deps.onEnded();
   }
 
   /** A MediaError: a lost connection reconnects; any other failure replans for another route. */
   onMediaError(failure: MediaFailure, classification?: string): Promise<void> {
+    this.buffering.interrupted();
     return this.recovery.onMediaError(failure, classification);
   }
 
@@ -535,8 +582,23 @@ export class PlaybackController {
   }
 
   /** Switches to a quality label from the plan's `available_qualities` (or `auto`). */
-  qualityChange(label: string): Promise<ReplanResult> {
-    return this.replanner.qualityChange(label);
+  async qualityChange(label: string): Promise<ReplanResult> {
+    // The viewer's pick: its pills go now; the answer and the kept estimate change when it is adopted.
+    this.buffering.pickSent();
+    const result = await this.replanner.qualityChange(label);
+    if (result.kind === 'applied') this.buffering.pickApplied();
+    else this.buffering.pickFailed();
+    return result;
+  }
+
+  /** The viewer's answer to the buffering prompt or the undo pill, or its timeout. */
+  bufferingAnswer(answer: BufferingAnswer): void {
+    this.buffering.answer(answer);
+  }
+
+  /** The buffering offer with this id is on screen now. */
+  bufferingShown(id: number): void {
+    this.buffering.shown(id);
   }
 
   /** Any replan operation of the protocol; the result tells what happened. */
@@ -550,6 +612,7 @@ export class PlaybackController {
   stop(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     this.stopped = true;
+    this.buffering.dispose();
     this.replanner.dropQueuedSeek();
     this.progress.clearTimer();
     this.progress.dropPending();

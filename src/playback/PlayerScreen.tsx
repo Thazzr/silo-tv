@@ -3,7 +3,13 @@ import { suspendWheel, useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useT, type MessageKey } from '../i18n';
-import { useProfileSetting, useProfileSettings } from '../features/settings/profileSettings';
+import {
+  useProfileSetting,
+  useProfileSettings,
+  useServerKnowsSetting,
+} from '../features/settings/profileSettings';
+import { BufferingPill } from './buffering/BufferingPill';
+import { useBufferingPill } from './buffering/useBufferingPill';
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
@@ -31,6 +37,8 @@ import type { Heading, MediaFacts, PreviewFacts, Plan, SessionFailure } from './
 
 /** How long the hint about a quality that did not play stays on screen. */
 export const QUALITY_NOTICE_MS = 4_000;
+/** How long the buffering notices ("Quality lowered", "can't go lower") stay on screen. */
+export const BUFFERING_NOTICE_MS = 5_000;
 
 const ROUTE_TEXT: Record<Route, MessageKey> = {
   direct: 'player.info.routeDirect',
@@ -74,9 +82,18 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   const profileSettings = useProfileSettings();
   const preferredQuality = profileSettings.values['playback.preferred_quality'];
   const bandwidthCapKbps = profileSettings.values['playback.max_bitrate_kbps'];
+  const bufferingMode = profileSettings.values['playback.buffering_quality_mode'];
+  // A server whose settings do not know the key runs `always` and gets no buffering fields.
+  const bufferingKnown = useServerKnowsSetting('playback.buffering_quality_mode');
   const profile = useMemo(
-    () => ({ known: profileSettings.known, quality: preferredQuality, bandwidthCapKbps }),
-    [profileSettings.known, preferredQuality, bandwidthCapKbps],
+    () => ({
+      known: profileSettings.known,
+      quality: preferredQuality,
+      bandwidthCapKbps,
+      bufferingMode,
+      bufferingKnown,
+    }),
+    [profileSettings.known, preferredQuality, bandwidthCapKbps, bufferingMode, bufferingKnown],
   );
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
@@ -97,6 +114,17 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
     const handle = setTimeout(() => setNotice(false), QUALITY_NOTICE_MS);
     return () => clearTimeout(handle);
   }, [fallbacks]);
+
+  // The buffering controller's notices, with the same reason as above to live here.
+  const bufferingNotice = playback.buffering.notice;
+  const [goneNotice, setGoneNotice] = useState(0);
+  const noticeId = bufferingNotice?.id ?? 0;
+  useEffect(() => {
+    if (noticeId === 0) return undefined;
+    const handle = setTimeout(() => setGoneNotice(noticeId), BUFFERING_NOTICE_MS);
+    return () => clearTimeout(handle);
+  }, [noticeId]);
+  const shownNotice = bufferingNotice && bufferingNotice.id !== goneNotice ? bufferingNotice : null;
 
   if (state.kind === 'loading' || state.kind === 'starting') return <LoadingView onExit={onExit} />;
 
@@ -161,6 +189,15 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       {notice ? (
         <p className="player-notice" role="status" data-testid="player-quality-notice">
           {t('player.menu.quality.unavailable')}
+        </p>
+      ) : null}
+      {shownNotice ? (
+        <p className="player-notice" role="status" data-testid="player-buffering-notice">
+          {t(
+            shownNotice.kind === 'cantLower'
+              ? 'player.buffering.cantLower'
+              : 'player.buffering.lowered',
+          )}
         </p>
       ) : null}
     </>
@@ -232,6 +269,8 @@ function PlayingView({
     onLoadedMetadata,
     onPlaying,
     onPause,
+    onWaiting,
+    onSeeking,
     onEnded,
     onMediaError,
     seekTo,
@@ -316,6 +355,16 @@ function PlayingView({
     autoSkipCredits: settings.values['playback.auto_skip_credits'],
     seekTo: (sourceSeconds) => void seekTo(sourceSeconds),
   });
+  // The buffering prompt or undo pill takes the skip pill's corner once the skip pill is gone.
+  const skipShowing = skip.pill !== null && !popoverOpen;
+  const bufferingOffer = playback.buffering.offer;
+  const bufferingPill = useBufferingPill({
+    offer: bufferingOffer,
+    slotFree: started && !skipShowing && !popoverOpen,
+    paused,
+    answer: playback.bufferingAnswer,
+    shown: playback.bufferingShown,
+  });
   const bands = useMemo(
     () => bandFractions(previews.segments, duration),
     [previews.segments, duration],
@@ -334,12 +383,25 @@ function PlayingView({
     skipForwardSeconds: skipForward,
     menus,
     panel,
-    pill: {
-      shown: skip.pill !== null,
-      holdsFocus: skip.focusWindow,
-      activate: skip.activate,
-      dismiss: skip.dismiss,
-    },
+    pill:
+      skip.pill !== null || !bufferingPill.visible
+        ? {
+            shown: skip.pill !== null,
+            holdsFocus: skip.focusWindow,
+            activate: skip.activate,
+            dismiss: skip.dismiss,
+          }
+        : {
+            shown: true,
+            // The prompt holds the focus for its whole 15 s, not only for the first seconds.
+            holdsFocus: true,
+            activate: bufferingPill.activate,
+            dismiss: () => {
+              bufferingPill.dismiss();
+              return true;
+            },
+            move: bufferingPill.move,
+          },
   });
 
   // Back goes through the screen stack like everywhere else; the controls decide what it does.
@@ -367,7 +429,11 @@ function PlayingView({
         setShowing(true);
         onStarted();
       }),
-      engine.on('waiting', () => setShowing(false)),
+      engine.on('waiting', () => {
+        setShowing(false);
+        onWaiting();
+      }),
+      engine.on('seeking', onSeeking),
       engine.on('pause', () => {
         // The pause that comes with the end of the stream is not the viewer's.
         if (engine.ended) return;
@@ -411,6 +477,8 @@ function PlayingView({
     onLoadedMetadata,
     onPlaying,
     onPause,
+    onWaiting,
+    onSeeking,
     onEnded,
     onMediaError,
   ]);
@@ -509,6 +577,23 @@ function PlayingView({
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
       />
+      {bufferingOffer && bufferingPill.visible ? (
+        <BufferingPill
+          offer={bufferingOffer}
+          focused={controls.focus === 'pill'}
+          choice={bufferingPill.choice}
+          raised={controls.visible}
+          running={bufferingPill.running}
+          elapsedMs={bufferingPill.elapsedMs}
+          onLower={bufferingPill.lower}
+          onKeep={bufferingPill.keep}
+          onRestore={bufferingPill.restore}
+          onFocus={(choice) => {
+            bufferingPill.setChoice(choice);
+            controls.setFocus('pill');
+          }}
+        />
+      ) : null}
       {skip.pill && !popoverOpen ? (
         <SkipPillButton
           pill={skip.pill}

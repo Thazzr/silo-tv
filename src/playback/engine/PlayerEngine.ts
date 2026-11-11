@@ -20,6 +20,10 @@ export type EngineEvent =
   | 'playing'
   | 'pause'
   | 'waiting'
+  | 'seeking'
+  | 'seeked'
+  /** Media data arrived: a range or segment was received, or the buffer grew. Not subtitles. */
+  | 'data'
   | 'ended'
   | 'error';
 
@@ -66,6 +70,8 @@ export interface PlayerEngine {
   readonly ended: boolean;
   /** True from a stall until the next frame plays. */
   readonly waiting: boolean;
+  /** The element has data for the next frame (readyState HAVE_FUTURE_DATA or more). */
+  readonly hasFutureData: boolean;
   readonly error: EngineError | null;
   /** Which path decodes the source: the element's own player, or hls.js over MediaSource. */
   readonly decoder: 'native' | 'hlsjs';

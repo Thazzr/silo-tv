@@ -890,6 +890,87 @@ h3 {
   }
 }
 
+/* The buffering prompt and the undo pill share the skip pill's corner (the skip pill wins it).
+   The line at the bottom is the 15 s countdown: it shrinks with transform only and stops while
+   playback is paused. */
+.player-buffering {
+  position: absolute;
+  right: var(--safe-x);
+  bottom: var(--safe-y);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 28px 24px;
+  overflow: hidden;
+  color: var(--text);
+  background: rgba(21, 23, 28, 0.92);
+  border: 2px solid var(--chrome-border);
+  border-radius: 40px;
+}
+
+.player-buffering[data-raised='true'] {
+  bottom: calc(var(--safe-y) + 250px);
+}
+
+.player-buffering-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.player-buffering-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.player-buffering-button {
+  box-sizing: border-box;
+  min-width: 240px;
+  height: 80px;
+  padding: 0 32px;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--chrome-border);
+  border-radius: 40px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-buffering-button[data-focused='true'],
+.player-buffering-button:hover {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  transform: scale(1.05);
+}
+
+.player-buffering-line {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  background: var(--focus-fill);
+  transform: scaleX(1);
+  transform-origin: left center;
+  animation: player-buffering-line linear forwards;
+}
+
+.player-buffering-line[data-running='false'] {
+  animation-play-state: paused;
+}
+
+@keyframes player-buffering-line {
+  to {
+    transform: scaleX(0);
+  }
+}
+
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the
    avatar menu. Focus is always a fill or a ring; --accent only adds a small underline. */
 html {

@@ -154,6 +154,8 @@ export const PROFILE_SETTINGS = {
   'playback.subtitle_appearance': appearance(1),
   // Kbit/s; null = uncapped. Sent as `bandwidth_cap_kbps` on every start and replan.
   'playback.max_bitrate_kbps': optionalInteger(1, 100, 200000),
+  // What to do on Auto when playback keeps buffering; the server knows the key from revision 23.
+  'playback.buffering_quality_mode': oneOf(23, ['never', 'ask', 'always'] as const, 'always'),
   // Enums in the contract (not free integers), stored for the profile only.
   'player.video_skip_back_seconds': oneOf(9, SKIP_SECONDS, 10),
   'player.video_skip_forward_seconds': oneOf(9, SKIP_SECONDS, 30),
@@ -298,6 +300,7 @@ export type DeviceSettingKey =
   | 'playback.preferred_quality'
   | 'playback.subtitle_appearance'
   | 'playback.max_bitrate_kbps'
+  | 'playback.buffering_quality_mode'
   | 'player.sleep_timer_default_minutes';
 
 /**

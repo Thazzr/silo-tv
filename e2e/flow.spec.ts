@@ -94,6 +94,12 @@ interface FakeOptions {
    * it carries the translated text, marked as machine-translated.
    */
   translation?: 'auto' | 'button';
+  /**
+   * The server speaks the settings contract with the profile's `playback.buffering_quality_mode`
+   * set to this value, and the playing plan delivers 10 Mbit/s with a 5 Mbit/s replan behind it.
+   * Replans are recorded with their body.
+   */
+  buffering?: 'never' | 'ask' | 'always';
 }
 
 interface FakeProfile {
@@ -202,7 +208,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
     options.titleArt === undefined &&
     options.spoilers === undefined &&
     options.themeMusic === undefined &&
-    options.subtitles === undefined;
+    options.subtitles === undefined &&
+    options.buffering === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -267,6 +274,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           url.pathname === '/api/v2/auth/login' ||
           url.pathname === '/api/v2/profiles' ||
           url.pathname === '/api/v2/playback/start' ||
+          url.pathname === '/api/v2/playback/e2e-session/replan' ||
           (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/')) ||
           url.pathname.endsWith('/translate-description') ||
           url.pathname === '/api/v2/settings/values/playback.subtitle_appearance'
@@ -578,7 +586,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                     ? (options.spoilers ?? false)
                     : key === 'ui.theme_music_enabled'
                       ? (options.themeMusic ?? false)
-                      : false,
+                      : key === 'playback.buffering_quality_mode'
+                        ? (options.buffering ?? 'always')
+                        : false,
               source: 'profile',
               definition_revision: 1,
             })),
@@ -705,11 +715,30 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               delivery: 'original_http',
               session_id: 'e2e-session',
               selected_tracks: {},
-              effective_recipe: {},
+              effective_recipe: options.buffering ? { bitrate_kbps: 10_000 } : {},
               // A quality choice, so the options panel has a Video tab.
               available_qualities: [{ label: '1080p', preserves_source: false }],
               source: { duration_seconds: 5400 },
               stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
+              timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
+            },
+          });
+        case 'POST /api/v2/playback/e2e-session/replan':
+          return send(200, {
+            outcome: 'playable',
+            protocol_version: 3,
+            session_id: 'e2e-session',
+            playback_plan: {
+              plan_id: 'plan:2',
+              plan_attempt_key: 'v3:2',
+              delivery: 'original_http',
+              session_id: 'e2e-session',
+              selected_tracks: {},
+              effective_recipe: { bitrate_kbps: 5000 },
+              degradation_warnings: [],
+              available_qualities: [{ label: '1080p', preserves_source: false }],
+              source: { duration_seconds: 5400 },
+              stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=y' },
               timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
             },
           });
@@ -3340,4 +3369,70 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('player')).toHaveCount(0);
+});
+
+test('player: repeated stalls ask to lower the quality, Lower sends a quality_change replan and the undo pill follows, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ series: true, buffering: 'ask' });
+  // The stall rules run on real time (10 s grace); the clock is moved instead of waited for.
+  await page.clock.install();
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  await expect(play).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+
+  // Media never plays in this test: the first frame and the metadata are announced by hand, and
+  // the element is told it is not paused (autoplay may be blocked in the test browser).
+  await page.evaluate(`(() => {
+    const video = document.querySelector('video');
+    Object.defineProperty(video, 'paused', { value: false });
+    video.dispatchEvent(new Event('loadedmetadata'));
+    video.dispatchEvent(new Event('playing'));
+  })()`);
+  await expect(page.getByRole('button', { name: 'Pause', includeHidden: true })).toHaveCount(1);
+  // The startup grace is over; then two stalls of 1.5 s.
+  await page.clock.fastForward(11_000);
+  const stall = async () => {
+    // Media data arrived just before: the link is not silent.
+    await page.evaluate("document.querySelector('video').dispatchEvent(new Event('progress'))");
+    await page.evaluate("document.querySelector('video').dispatchEvent(new Event('waiting'))");
+    await page.clock.fastForward(1_500);
+    await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
+  };
+  await stall();
+  await page.clock.fastForward(1_000);
+  await stall();
+
+  const prompt = page.getByTestId('player-buffering');
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('Wiedergabe puffert immer wieder');
+  const lower = page.getByTestId('player-buffering-lower');
+  await expect(lower).toBeFocused();
+  await expect(lower).toHaveText('Qualität senken');
+  expect(seen.some((e) => e.path.endsWith('/replan'))).toBe(false);
+
+  await page.keyboard.press('Enter');
+  await expect.poll(() => seen.some((e) => e.path.endsWith('/replan'))).toBe(true);
+  const replan = JSON.parse(seen.find((e) => e.path.endsWith('/replan'))!.body) as Record<
+    string,
+    unknown
+  >;
+  expect(replan).toMatchObject({
+    operation: 'quality_change',
+    quality_preference: 'auto',
+    bandwidth_estimate_kbps: 7000,
+  });
+  await expect(page.getByTestId('player-buffering-restore')).toBeFocused();
+  await expect(page.getByTestId('player-buffering-restore')).toHaveText(
+    'Qualität wiederherstellen',
+  );
 });

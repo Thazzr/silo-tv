@@ -18,6 +18,7 @@ export class FakeEngine implements PlayerEngine {
   paused = true;
   ended = false;
   waiting = false;
+  hasFutureData = true;
   error: EngineError | null = null;
   decoder: 'native' | 'hlsjs' = 'native';
   bandwidthEstimate: number | null = null;

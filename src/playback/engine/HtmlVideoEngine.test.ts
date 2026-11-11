@@ -20,6 +20,7 @@ class FakeElement extends EventTarget {
   error: { code: number; message: string } | null = null;
   seekable = ranges([]);
   buffered = ranges([]);
+  readyState = 0;
   play = vi.fn(() => Promise.resolve());
   pause = vi.fn();
   load = vi.fn();
@@ -139,5 +140,35 @@ describe('HtmlVideoEngine', () => {
     expect(el.load).toHaveBeenCalledTimes(1);
     expect(el.removeAttribute).toHaveBeenCalledTimes(1);
     expect(removeListener).toHaveBeenCalledTimes(removed);
+  });
+});
+
+describe('HtmlVideoEngine readiness', () => {
+  it('has data for the next frame from readyState 3 on', () => {
+    const { el, engine } = setup();
+    el.readyState = 2;
+    expect(engine.hasFutureData).toBe(false);
+    el.readyState = 3;
+    expect(engine.hasFutureData).toBe(true);
+  });
+
+  it('reports the elements progress as media data on direct play', () => {
+    const { el, engine } = setup();
+    const data = vi.fn();
+    engine.on('data', data);
+    el.dispatchEvent(new Event('progress'));
+    expect(data).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HtmlVideoEngine data subscription', () => {
+  it('stops reporting the elements progress once the handler was unsubscribed', () => {
+    const { el, engine } = setup();
+    const data = vi.fn();
+    const off = engine.on('data', data);
+    el.dispatchEvent(new Event('progress'));
+    off();
+    el.dispatchEvent(new Event('progress'));
+    expect(data).toHaveBeenCalledTimes(1);
   });
 });

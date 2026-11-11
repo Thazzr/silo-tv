@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSilo } from '../app/SiloContext';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import type { StartIntent } from './resume';
+import type { BufferingMode } from './session/bufferingQuality';
+import {
+  NO_BUFFERING_VIEW,
+  type BufferingAnswer,
+  type BufferingView,
+} from './session/BufferingManager';
 import { PlaybackController } from './session/PlaybackController';
 import type {
   MediaFailure,
@@ -18,6 +24,10 @@ export interface ProfileQuality {
   quality: string;
   /** The profile's `playback.max_bitrate_kbps`: sent on every start and replan; null = uncapped. */
   bandwidthCapKbps?: number | null;
+  /** `playback.buffering_quality_mode`; absent = `always`. */
+  bufferingMode?: BufferingMode;
+  /** The server's settings know that key: the buffering request fields may be sent. */
+  bufferingKnown?: boolean;
 }
 
 const AUTO_PROFILE: ProfileQuality = { known: true, quality: 'auto' };
@@ -36,12 +46,18 @@ export interface PlaybackSession {
   onLoadedMetadata(): void;
   onPlaying(): void;
   onPause(): void;
+  onWaiting(): void;
+  onSeeking(): void;
   onEnded(): void;
   onMediaError(failure: MediaFailure): void;
   seekTo(sourceSeconds: number): Promise<void>;
   trackChange(selected: SelectedTracks): Promise<ReplanResult>;
   qualityChange(label: string): Promise<ReplanResult>;
   stop(): Promise<void>;
+  /** What the buffering controller offers: the prompt, the undo pill and the notices. */
+  buffering: BufferingView;
+  bufferingAnswer(answer: BufferingAnswer): void;
+  bufferingShown(id: number): void;
 }
 
 /**
@@ -57,6 +73,7 @@ export function usePlaybackSession(
 ): PlaybackSession {
   const { client, baseUrl, session } = useSilo();
   const [state, setState] = useState<SessionState>({ kind: 'loading' });
+  const [buffering, setBuffering] = useState<BufferingView>(NO_BUFFERING_VIEW);
   const [mediaError, setMediaError] = useState<MediaFailure | null>(null);
   const controller = useRef<PlaybackController | null>(null);
   const ended = useRef(onEnded);
@@ -71,6 +88,13 @@ export function usePlaybackSession(
     if (profile.known) entry.waiters.splice(0).forEach((resolve) => resolve(profile.quality));
   }, [profile]);
   const bandwidthCap = useCallback(() => profileRef.current.profile.bandwidthCapKbps ?? null, []);
+  const bufferingSettings = useCallback(
+    () => ({
+      feature: profileRef.current.profile.bufferingKnown ?? false,
+      mode: profileRef.current.profile.bufferingMode ?? 'always',
+    }),
+    [],
+  );
   const profileQuality = useCallback(
     () =>
       profileRef.current.profile.known
@@ -88,6 +112,8 @@ export function usePlaybackSession(
       intent,
       profileQuality,
       bandwidthCap,
+      buffering: bufferingSettings,
+      onBuffering: setBuffering,
       onState: setState,
       onMediaError: setMediaError,
       onEnded: () => ended.current?.(),
@@ -100,7 +126,16 @@ export function usePlaybackSession(
     };
     // The intent is a plain value: its kind restarts the session, a new object of the same kind must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, baseUrl, session, contentId, intent?.kind, profileQuality, bandwidthCap]);
+  }, [
+    client,
+    baseUrl,
+    session,
+    contentId,
+    intent?.kind,
+    profileQuality,
+    bandwidthCap,
+    bufferingSettings,
+  ]);
 
   const choose = useCallback((position: number) => void controller.current?.start(position), []);
   const resume = useCallback(() => void controller.current?.resume(), []);
@@ -116,6 +151,13 @@ export function usePlaybackSession(
   const onLoadedMetadata = useCallback(() => controller.current?.onLoadedMetadata(), []);
   const onPlaying = useCallback(() => controller.current?.onPlaying(), []);
   const onPause = useCallback(() => controller.current?.onPause(), []);
+  const onWaiting = useCallback(() => controller.current?.onWaiting(), []);
+  const onSeeking = useCallback(() => controller.current?.onSeeking(), []);
+  const bufferingAnswer = useCallback(
+    (answer: BufferingAnswer) => controller.current?.bufferingAnswer(answer),
+    [],
+  );
+  const bufferingShown = useCallback((id: number) => controller.current?.bufferingShown(id), []);
   const onEnd = useCallback(() => controller.current?.onEnded(), []);
   const onMediaError = useCallback(
     (failure: MediaFailure) => void controller.current?.onMediaError(failure),
@@ -149,12 +191,17 @@ export function usePlaybackSession(
       onLoadedMetadata,
       onPlaying,
       onPause,
+      onWaiting,
+      onSeeking,
       onEnded: onEnd,
       onMediaError,
       seekTo,
       trackChange,
       qualityChange,
       stop,
+      buffering,
+      bufferingAnswer,
+      bufferingShown,
     }),
     [
       state,
@@ -167,12 +214,17 @@ export function usePlaybackSession(
       onLoadedMetadata,
       onPlaying,
       onPause,
+      onWaiting,
+      onSeeking,
       onEnd,
       onMediaError,
       seekTo,
       trackChange,
       qualityChange,
       stop,
+      buffering,
+      bufferingAnswer,
+      bufferingShown,
     ],
   );
 }

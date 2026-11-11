@@ -7,13 +7,14 @@ const mock = vi.hoisted(() => {
     static supported = true;
     static instances: FakeHls[] = [];
     static isSupported = () => FakeHls.supported;
-    static Events = { ERROR: 'hlsError' };
+    static Events = { ERROR: 'hlsError', FRAG_LOADED: 'hlsFragLoaded' };
     static ErrorTypes = {
       NETWORK_ERROR: 'networkError',
       MEDIA_ERROR: 'mediaError',
       OTHER_ERROR: 'otherError',
     };
     handlers: Handler[] = [];
+    loadedHandlers: Handler[] = [];
     config: unknown;
     bandwidthEstimate = Number.NaN;
     attachMedia = vi.fn();
@@ -24,8 +25,12 @@ const mock = vi.hoisted(() => {
       this.config = config;
       FakeHls.instances.push(this);
     }
-    on(_name: string, handler: Handler) {
-      this.handlers.push(handler);
+    on(name: string, handler: Handler) {
+      if (name === 'hlsFragLoaded') this.loadedHandlers.push(handler);
+      else this.handlers.push(handler);
+    }
+    loadFragment() {
+      for (const handler of this.loadedHandlers) handler('hlsFragLoaded', {});
     }
     fail(data: Record<string, unknown>) {
       for (const handler of this.handlers) handler('hlsError', data);
@@ -336,5 +341,44 @@ describe('HtmlVideoEngine release with hls.js', () => {
     FakeHls.instances[0]!.fail({ fatal: true, type: 'networkError', details: 'late' });
     expect(seen).not.toHaveBeenCalled();
     expect(engine.error).toBeNull();
+  });
+});
+
+describe('HtmlVideoEngine media data', () => {
+  it('reports each loaded hls.js fragment and the elements progress, and stops after release', () => {
+    const { el, engine } = setup();
+    const data = vi.fn();
+    engine.on('data', data);
+    engine.setSource(URL, { hls: true });
+    FakeHls.instances[0]!.loadFragment();
+    expect(data).toHaveBeenCalledTimes(1);
+    el.dispatchEvent(new Event('progress'));
+    expect(data).toHaveBeenCalledTimes(2);
+    engine.release();
+    FakeHls.instances[0]!.loadFragment();
+    el.dispatchEvent(new Event('progress'));
+    expect(data).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a fragment that a replaced hls.js instance loads late', () => {
+    const { engine } = setup();
+    const data = vi.fn();
+    engine.on('data', data);
+    engine.setSource(URL, { hls: true });
+    engine.setSource(URL, { hls: true });
+    FakeHls.instances[0]!.loadFragment();
+    expect(data).not.toHaveBeenCalled();
+    FakeHls.instances[1]!.loadFragment();
+    expect(data).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops listening when unsubscribed', () => {
+    const { engine } = setup();
+    const data = vi.fn();
+    const off = engine.on('data', data);
+    engine.setSource(URL, { hls: true });
+    off();
+    FakeHls.instances[0]!.loadFragment();
+    expect(data).not.toHaveBeenCalled();
   });
 });

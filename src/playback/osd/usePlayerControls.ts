@@ -37,13 +37,18 @@ interface Args {
     /** The button a menu that just closed after a pick leaves this view to land on. */
     arrival(): OsdMenu | null;
   };
-  /** The skip pill (intro, recap, credits): whether it shows and holds the focus, and its actions. */
+  /**
+   * The corner pill (the skip pill, or the buffering prompt or undo pill that waits for its slot):
+   * whether it shows and holds the focus, and its actions.
+   */
   pill: {
     shown: boolean;
     holdsFocus: boolean;
     activate(): void;
-    /** Hides it for its segment; false when none was showing. */
+    /** Hides it (for its segment, or answers "Keep quality"); false when none was showing. */
     dismiss(): boolean;
+    /** Left or Right between the pill's own buttons; false when it has none to move to. */
+    move?(direction: 'left' | 'right'): boolean;
   };
 }
 
@@ -332,10 +337,13 @@ export function usePlayerControls(args: Args): PlayerControls {
         default:
           break;
       }
-      // OK on a pill that holds the focus skips; any other key only opens the overlay.
+      // OK on a pill that holds the focus acts; Left and Right move between a prompt's buttons;
+      // any other key only opens the overlay.
       if (!wasVisible) {
         if (key === 'enter' && current === 'pill') a.pill.activate();
-        else openOsd();
+        else if ((key === 'left' || key === 'right') && current === 'pill' && a.pill.move?.(key)) {
+          return;
+        } else openOsd();
         return;
       }
       o.poke();
@@ -409,8 +417,9 @@ export function usePlayerControls(args: Args): PlayerControls {
         return;
       }
 
-      // On the skip pill, which stands right of the last button.
+      // On the corner pill, which stands right of the last button.
       if (current === 'pill') {
+        if ((key === 'left' || key === 'right') && a.pill.move?.(key)) return;
         if (key === 'left') setFocusState(buttonRow(a.menus).at(-1)!);
         else if (key === 'up') setFocusState('scrubber');
         else if (key === 'enter') a.pill.activate();
