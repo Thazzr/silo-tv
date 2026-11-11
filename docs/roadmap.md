@@ -23,14 +23,14 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 ## Phase 1 – Foundation: server, account, profiles, shell (target v0.2.0)
 
 - ✅ Platform adapter: everything webOS-specific (Luna calls, device info, key codes, exit, launch parameters, secure storage, the player engine) behind one `Platform` interface with a webOS and a browser implementation, so a Samsung Tizen port (Phase 6) adds an adapter instead of touching the app (runs on webOS 24 and 26)
-- 🟨 Save several servers and switch between them; each keeps its sign-in
+- ✅ Save several servers and switch between them; each keeps its sign-in (TV 2026-11-11)
 - ✅ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out (TV 2026-11-09)
 - ✅ Profiles: picker, PIN, child profiles, create a profile (TV 2026-11-10); the PIN entry is centred like the picker and its delete key is a backspace icon
-- 🟨 Profile at launch: automatic, every time, after 1 hour, after 12 hours
-- 🟨 Switch profile and server (switching the profile checked on the TV, 2026-11-09)
+- ✅ Profile at launch: automatic, every time, after 1 hour, after 12 hours (TV 2026-11-11)
+- ✅ Switch profile and server (the profile switch on the TV 2026-11-09, both 2026-11-11)
 - ✅ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu; For You and Calendar show "Coming soon" until Phase 4 fills them (TV 2026-11-09)
 - ✅ Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen (TV 2026-11-09)
-- 🟨 Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package
+- ✅ Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package (TV 2026-11-11)
 - 🟨 Loading, empty and error states
 - ✅ German and English: following the TV's language (German when the TV is German, otherwise English), or chosen in the app's settings (Automatic, Deutsch, English; stored on the TV) (TV 2026-11-10)
 
@@ -42,7 +42,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - Recommended rows
   - Browse grid with sort, filters (genre, decade, content rating, and watch state – unwatched, watched, in progress – when a silent probe shows the server accepts its rules) and an alphabet rail
   - Collections
-- 🟨 Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV test 2026-11-09)
+- ✅ Tabs and pills switch only on OK or a pointer click, never on focus or hover (TV 2026-11-09, again 2026-11-11)
 - ✅ Search with an on-screen keyboard of our own (TV 2026-11-09) (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
 - ✅ Movie detail page: hero, description, credit line, external ratings, quality badges (TV 2026-11-09)
 - ✅ Series detail page with seasons and episodes, cast, recommendations (TV 2026-11-09)
@@ -58,8 +58,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5
 - 🟨 Similar titles
 - ✅ Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series (TV 2026-11-09)
-- 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages (the row checked on the TV, 2026-11-09)
-- 🟨 Long synopses and biographies scroll in the text dialog
+- ✅ Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages (the row on the TV 2026-11-09, the page 2026-11-11)
+- ✅ Long synopses and biographies scroll in the text dialog (TV 2026-11-11)
 - ✅ Smooth scrolling on TV hardware (TV 2026-11-09): memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
 - ✅ The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe (TV 2026-11-09)
 - ✅ The Magic Remote pointer moves the focus but never scrolls the page at the screen edge (TV 2026-11-10)
@@ -67,11 +67,11 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - it shows the featured section of the home layout or of the library ("Featured — No. 01", title, meta, synopsis, Play and More Info, a "01 — 09" indicator); a mixed library shows only the tab's kind
   - it turns every 8 s while the focus is elsewhere; Left/Right on the focusable indicator pages, OK pauses
   - in the rows below, the hero shows the focused card as before; the featured section is no longer a row of its own
-- 🟨 Profile settings read from the server (effective values, gated by the settings contract), shared by the features below
-- 🟨 Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (hand-off verified on webOS 26, 2026-11-10; an embedded YouTube player is not possible from `file://`, YouTube answers error 153)
-- 🟨 Theme music on detail pages when the profile turns it on (`ui.theme_music_enabled`, `ui.theme_music_loop`) and the server offers it: quiet, only while the page is on top, stopped at once for the player or any other screen; series use the series' theme (a season's own theme comes later)
+- ✅ Profile settings read from the server (effective values, gated by the settings contract), shared by the features below (TV 2026-11-11)
+- ✅ Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (hand-off verified on webOS 26, 2026-11-10; an embedded YouTube player is not possible from `file://`, YouTube answers error 153; TV 2026-11-11)
+- ✅ Theme music on detail pages when the profile turns it on (`ui.theme_music_enabled`, `ui.theme_music_loop`) and the server offers it: quiet, only while the page is on top, stopped at once for the player or any other screen; series use the series' theme (a season's own theme comes later) (TV 2026-11-11)
 - ✅ Title art (logo instead of text) following the profile setting `ui.title_art` (TV 2026-11-10)
-- 🟨 Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes
+- ✅ Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes (TV 2026-11-11)
 - 🟨 AI translation of descriptions when the server offers it: automatic or with a "Translate description" pill, as the server's mode says; the item's description and the shown season's episodes; "Translating…" and "Translated by AI" under the synopsis (detail page only for now)
 
 ## Phase 3 – Player (target v0.4.0)

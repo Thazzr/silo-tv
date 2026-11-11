@@ -72,9 +72,9 @@ Early development; there is no release yet. The goal is a listing in the LG Cont
 | Phase | Scope | State |
 |---|---|---|
 | 0 · Feasibility | build for webOS, CORS, API client, code sign-in, a first playback | ✅ on the TV (webOS 24 and 26); webOS 6 itself not yet tested on hardware |
-| 1 · Foundation | servers, sign-in, profiles, app shell, TV navigation | 🟨 on the TV, except two servers and the profile at launch |
-| 2 · Browse | home, libraries, detail pages, search, person pages, extras | 🟨 mostly on the TV; spoiler protection, theme music and AI translation still to check there, the featured hero still to build |
-| 3 · Player | playback, overlay, skips, quality, subtitles; next: audio and subtitle menus, Up Next, shuffle | 🟨 in progress; the playback core, the overlay, skips and the quality menu are checked on the TV |
+| 1 · Foundation | servers, sign-in, profiles, app shell, TV navigation | 🟨 on the TV (all flows, 2026-11-11); loading, empty and error states still to finish |
+| 2 · Browse | home, libraries, detail pages, search, person pages, extras | 🟨 mostly on the TV; AI translation still to check there; next: detail pages like Silo's web app (own season and episode pages), the featured hero |
+| 3 · Player | playback, overlay, skips, quality, audio and subtitles; next: the redesign after Silo's web player, Up Next, shuffle | 🟨 in progress; the playback core, the overlay, skips and the quality menu are checked on the TV |
 | 4 · Personal | For You, calendar, watchlist, requests, profile settings | ⬜ planned |
 | 5 · Extras | Watch Party, notifications, music and audiobooks | ⬜ planned |
 | 6 · Samsung Tizen | the same app for Samsung TVs | ⬜ after the LG release |
