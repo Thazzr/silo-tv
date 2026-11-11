@@ -39,7 +39,7 @@ const SERVER_DEFAULTS: Record<string, unknown> = {
   },
   'player.video_skip_back_seconds': 10,
   'player.video_skip_forward_seconds': 30,
-  'player.sleep_timer_default_minutes': 30,
+  'player.subtitle_sync_ms': 0,
 };
 
 export interface SettingsServe {
@@ -82,7 +82,7 @@ const INTRODUCED_IN: Record<string, number> = {
   'playback.subtitle_appearance': 1,
   'player.video_skip_back_seconds': 9,
   'player.video_skip_forward_seconds': 9,
-  'player.sleep_timer_default_minutes': 1,
+  'player.subtitle_sync_ms': 1,
 };
 
 /** Registers the two settings reads; the returned object records the requests. */

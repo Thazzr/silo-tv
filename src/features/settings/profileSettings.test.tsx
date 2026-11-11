@@ -133,6 +133,13 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(23)).toContain('playback.buffering_quality_mode');
   });
 
+  it('asks for the subtitle delay from revision 1 on, and no longer for the dropped sleep timer', () => {
+    expect(keysKnownAt(1)).toContain('player.subtitle_sync_ms');
+    expect(keysKnownAt(40)).not.toContain('player.sleep_timer_default_minutes');
+    expect(Object.keys(PROFILE_SETTINGS)).not.toContain('player.sleep_timer_default_minutes');
+    expect(Object.keys(defaultSettings())).not.toContain('player.sleep_timer_default_minutes');
+  });
+
   it('has the contract defaults for every key', () => {
     expect(defaultSettings()).toMatchObject({
       'playback.intro_skip_mode': 'ask',
@@ -146,7 +153,7 @@ describe('keysKnownAt', () => {
       'playback.buffering_quality_mode': 'always',
       'player.video_skip_back_seconds': 10,
       'player.video_skip_forward_seconds': 30,
-      'player.sleep_timer_default_minutes': 30,
+      'player.subtitle_sync_ms': 0,
       'playback.subtitle_appearance': DEFAULT_SUBTITLE_APPEARANCE,
     });
   });
@@ -158,8 +165,13 @@ describe('keysKnownAt', () => {
     ['playback.next_up_prompt_seconds', -1, 30],
     ['playback.next_up_prompt_seconds', 12.5, 30],
     ['playback.next_up_prompt_seconds', '45', 30],
-    ['player.sleep_timer_default_minutes', 240, 240],
-    ['player.sleep_timer_default_minutes', 241, 30],
+    ['player.subtitle_sync_ms', 10000, 10000],
+    ['player.subtitle_sync_ms', -10000, -10000],
+    ['player.subtitle_sync_ms', 300, 300],
+    ['player.subtitle_sync_ms', 10001, 0],
+    ['player.subtitle_sync_ms', -10001, 0],
+    ['player.subtitle_sync_ms', 12.5, 0],
+    ['player.subtitle_sync_ms', '300', 0],
     ['playback.intro_skip_mode', 'never', 'never'],
     ['playback.intro_skip_mode', 'sometimes', 'ask'],
     ['playback.intro_skip_mode', true, 'ask'],

@@ -286,6 +286,63 @@ describe('Replanner.replan', () => {
     expect(t.adopt).not.toHaveBeenCalled();
   });
 
+  describe('a subtitle no route shows', () => {
+    const subtitleTerminal = (reason: string): Decision => ({
+      ...terminalDecision('No route shows it.'),
+      terminal: { message: 'No route shows it.', reason, retryable: false },
+    });
+
+    it('is a refused track_change, not a terminal: the plan that plays goes on', async () => {
+      const t = setup([subtitleTerminal('subtitle_codec_unsupported')]);
+      expect(await t.replanner.trackChange({ subtitle: { id: 'sub:1', index: 1 } })).toEqual({
+        kind: 'refused',
+      });
+      expect(t.fail).not.toHaveBeenCalled();
+      expect(t.adopt).not.toHaveBeenCalled();
+    });
+
+    it.each(['subtitle_burn_in_unavailable', 'subtitle_anything'])(
+      'maps any reason that starts with subtitle_ (%s)',
+      async (reason) => {
+        const t = setup([subtitleTerminal(reason)]);
+        expect(await t.replanner.replan('track_change')).toEqual({ kind: 'refused' });
+      },
+    );
+
+    it('still ends playback for a terminal answer that names no reason', async () => {
+      const decision = terminalDecision('No route shows it.');
+      const bare: Decision = {
+        ...decision,
+        terminal: { message: 'No route shows it.', retryable: false } as NonNullable<
+          Decision['terminal']
+        >,
+      };
+      const t = setup([bare]);
+      expect(await t.replanner.trackChange({ audio: { id: 'a', index: 0 } })).toMatchObject({
+        kind: 'terminal',
+      });
+      expect(t.fail).toHaveBeenCalled();
+    });
+
+    it('still ends playback for another terminal reason of a track change', async () => {
+      const t = setup([subtitleTerminal('adaptation_exhausted')]);
+      expect(await t.replanner.trackChange({ audio: { id: 'a', index: 0 } })).toEqual({
+        kind: 'terminal',
+        message: 'No route shows it.',
+        reason: 'adaptation_exhausted',
+      });
+      expect(t.fail).toHaveBeenCalledWith('terminal', 'No route shows it.', 'adaptation_exhausted');
+    });
+
+    it('is a terminal for any other operation, as before', async () => {
+      const t = setup([subtitleTerminal('subtitle_codec_unsupported')]);
+      expect(await t.replanner.replan('quality_change', { quality: '720p' })).toMatchObject({
+        kind: 'terminal',
+        reason: 'subtitle_codec_unsupported',
+      });
+    });
+  });
+
   it('maps a refused request through classifyRefusal, and a thrown error to transient', async () => {
     const t = setup([{ status: 410 }, { status: 503 }, 'throw', { status: 400 }]);
     expect(await t.replanner.replan('track_change')).toEqual({ kind: 'ended' });

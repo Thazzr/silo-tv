@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { suspendWheel, useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
-import { useT, type MessageKey } from '../i18n';
+import { useLanguage, useT, type MessageKey } from '../i18n';
 import {
   useProfileSetting,
   useProfileSettings,
@@ -13,11 +13,20 @@ import { useBufferingPill } from './buffering/useBufferingPill';
 import { HtmlVideoEngine } from './engine/HtmlVideoEngine';
 import type { PlayerEngine } from './engine/PlayerEngine';
 import { formatClock, redact } from './format';
+import { AudioMenu } from './menus/AudioMenu';
 import { ChaptersMenu } from './menus/ChaptersMenu';
 import { currentChapter, routeOf, type Route } from './menus/info';
 import { InfoColumn } from './menus/InfoColumn';
 import { qualityLabel, qualityMenu } from './menus/qualityMenu';
 import { SettingsMenu, settingsRowKeys } from './menus/SettingsMenu';
+import { useSubtitleDelay } from './menus/subtitleDelay';
+import { SubtitlesMenu } from './menus/SubtitlesMenu';
+import {
+  audioRows,
+  subtitleRows,
+  tracksForAudioPick,
+  tracksForSubtitlePick,
+} from './menus/trackMenus';
 import { isPopover, MENU_ORDER, usePanelState, type PanelState } from './menus/usePanelState';
 import { PlayerOsd } from './osd/PlayerOsd';
 import { bufferedUntil, SPINNER_DELAY_MS, SPINNER_MIN_MS, titleBlock } from './osd/timing';
@@ -32,6 +41,7 @@ import type { StartIntent } from './resume';
 import { isHlsStream } from './engine/PlayerEngine';
 import { authHeadersFor, mediaUrlWithToken } from './mediaUrl';
 import { getTimeMode } from './timeDisplay';
+import { trackPrefKey, useTrackPrefs, type TrackPrefWriter } from './trackPrefs';
 import { usePlaybackSession, type PlaybackSession } from './usePlaybackSession';
 import type { Heading, MediaFacts, PreviewFacts, Plan, SessionFailure } from './session/types';
 
@@ -97,6 +107,10 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   );
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
+  // The subtitle delay and the track saves live here, above the playing view: a track change may
+  // reload the stream and mount a new view while a write is still due.
+  const subtitleDelay = useSubtitleDelay();
+  const trackPrefs = useTrackPrefs();
   const token = auth.get()?.accessToken;
   // A view that mounted for a pick that closed its menu has taken the arrival by now.
   const settlePanel = panel.settle;
@@ -178,6 +192,8 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
         quality={state.quality}
         activeQualityFeature={state.activeQualityFeature}
         panel={panel}
+        subtitleDelay={subtitleDelay}
+        trackPrefs={trackPrefs}
         started={started}
         onStarted={markStarted}
         contentId={contentId}
@@ -236,6 +252,8 @@ function PlayingView({
   quality,
   activeQualityFeature,
   panel,
+  subtitleDelay,
+  trackPrefs,
   started,
   onStarted,
   contentId,
@@ -253,6 +271,8 @@ function PlayingView({
   quality: string;
   activeQualityFeature: boolean;
   panel: PanelState;
+  subtitleDelay: ReturnType<typeof useSubtitleDelay>;
+  trackPrefs: TrackPrefWriter;
   started: boolean;
   onStarted(): void;
   contentId: string;
@@ -262,6 +282,7 @@ function PlayingView({
   onExit: () => void;
 }) {
   const t = useT();
+  const lang = useLanguage();
   const { baseUrl, session } = useSilo();
   const {
     attachEngine,
@@ -294,21 +315,28 @@ function PlayingView({
   const total = plan.source.duration_seconds;
   const popoverOpen = isPopover(panel.open);
 
-  // The menu buttons the playing file has something for, in the order of the row. Audio and
-  // Subtitles take their places here with their menus.
+  // The menu buttons the playing file has something for, in the order of the row. Audio needs a
+  // choice between tracks; Subtitles has the delay besides the tracks, so any subtitle is enough.
   const qualities = useMemo(
     () => qualityMenu(plan, quality, activeQualityFeature),
     [plan, quality, activeQualityFeature],
   );
   const hasSettings = settingsRowKeys(qualities, media.isEpisode).length > 0;
   const hasChapters = previews.chapters.length > 0;
+  const hasAudio = media.audioTracks.length > 1;
+  // A plan that leaves `subtitle` out (the schema requires it; a partial server may not) has none.
+  const hasSubtitles = (plan.subtitle?.inventory?.length ?? 0) > 0;
   const menus = useMemo(
     () =>
       MENU_ORDER.filter(
         (id) =>
-          id === 'info' || (id === 'chapters' && hasChapters) || (id === 'settings' && hasSettings),
+          id === 'info' ||
+          (id === 'audio' && hasAudio) ||
+          (id === 'subtitles' && hasSubtitles) ||
+          (id === 'chapters' && hasChapters) ||
+          (id === 'settings' && hasSettings),
       ),
-    [hasChapters, hasSettings],
+    [hasAudio, hasSubtitles, hasChapters, hasSettings],
   );
   // A menu the new stream has nothing for (its chapters or choices are gone) closes.
   const hidePanel = panel.hide;
@@ -495,8 +523,42 @@ function PlayingView({
     : null;
 
   /** The popover of the open menu, drawn above its button by the overlay. */
+  const unknownTrack = (n: number) => t('player.menu.track.unknown', { n });
+  // Where a pick is remembered: the episode's series, else the movie.
+  const prefKey = trackPrefKey(media, contentId);
   let popover = null;
-  if (panel.open === 'settings') {
+  if (panel.open === 'audio') {
+    popover = (
+      <AudioMenu
+        rows={audioRows(plan, media, lang, unknownTrack)}
+        pick={(index) => playback.trackChange(tracksForAudioPick(plan, index))}
+        save={(index, track) => {
+          if (prefKey) void trackPrefs.audio(prefKey, index, track);
+        }}
+        onApplied={() => panel.finish('audio')}
+        remember={panel.remember}
+        recall={panel.recall}
+        onSide={controls.menuSide}
+      />
+    );
+  } else if (panel.open === 'subtitles') {
+    popover = (
+      <SubtitlesMenu
+        rows={subtitleRows(plan, lang, unknownTrack)}
+        offChecked={plan.selected_tracks.subtitle === undefined}
+        delayMs={subtitleDelay.delayMs}
+        pick={(item) => playback.trackChange(tracksForSubtitlePick(plan, item))}
+        save={(item) => {
+          if (prefKey) void trackPrefs.subtitle(prefKey, item);
+        }}
+        onDelay={subtitleDelay.nudge}
+        onApplied={() => panel.finish('subtitles')}
+        remember={panel.remember}
+        recall={panel.recall}
+        onSide={controls.menuSide}
+      />
+    );
+  } else if (panel.open === 'settings') {
     popover = (
       <SettingsMenu
         menu={qualities}
@@ -536,7 +598,12 @@ function PlayingView({
         onClick={controls.videoClicked}
       />
       {cue ? <LoadingCue /> : null}
-      <PlayerSubtitles plan={plan} position={position} lifted={controls.visible} />
+      <PlayerSubtitles
+        plan={plan}
+        position={position}
+        lifted={controls.visible}
+        offsetMs={subtitleDelay.delayMs}
+      />
       <PlayerOsd
         visible={controls.visible}
         title={block.title}

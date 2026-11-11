@@ -3,6 +3,7 @@ import { useLanguage, useT, type MessageKey } from '../../i18n';
 import { timeParts, type TimeFormat, type TimeMode } from '../timeDisplay';
 import { isPopover, type OsdMenu } from '../menus/usePanelState';
 import {
+  AudioIcon,
   ChaptersIcon,
   CloseIcon,
   GearIcon,
@@ -10,6 +11,7 @@ import {
   PauseIcon,
   PlayIcon,
   SkipIcon,
+  SubtitlesIcon,
 } from './icons';
 import { PreviewCard } from './PreviewCard';
 import { chapterTickFractions, type Chapter } from './previewMath';
@@ -33,8 +35,10 @@ export const buttonRow = (menus: readonly OsdMenu[]): OsdAction[] => [
   ...menus,
 ];
 
-/** What the menu buttons look like. Audio and Subtitles are added with their menus. */
+/** What the menu buttons look like. */
 const MENU_BUTTON: Partial<Record<OsdMenu, { label: MessageKey; icon: ReactNode }>> = {
+  audio: { label: 'player.menu.audio', icon: <AudioIcon /> },
+  subtitles: { label: 'player.menu.subtitles', icon: <SubtitlesIcon /> },
   chapters: { label: 'player.menu.chapters', icon: <ChaptersIcon /> },
   settings: { label: 'player.menu.settings', icon: <GearIcon /> },
   info: { label: 'player.menu.info', icon: <InfoIcon /> },

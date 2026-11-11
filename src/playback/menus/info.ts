@@ -28,7 +28,9 @@ export function routeOf(delivery: string): Route | null {
 }
 
 /** The track's index from a plan identity: its `index`, else the number at the end of its id. */
-function trackIndex(identity: { id: string; index?: number } | undefined): number | undefined {
+export function trackIndex(
+  identity: { id: string; index?: number } | undefined,
+): number | undefined {
   if (!identity) return undefined;
   if (identity.index !== undefined) return identity.index;
   const tail = /(\d+)$/.exec(identity.id)?.[1];

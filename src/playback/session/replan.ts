@@ -200,7 +200,10 @@ export class Replanner {
     // transient, refused and busy: the current plan keeps playing and the request is dropped.
   }
 
-  /** Switches the audio and subtitle (an omitted subtitle means off); no UI calls this yet. */
+  /**
+   * Switches the audio and subtitle (an omitted subtitle means off). A `subtitle_*` terminal comes
+   * back as `refused`: the pick is refused and the old tracks play on.
+   */
   async trackChange(selected: SelectedTracks): Promise<ReplanResult> {
     const result = await this.replan('track_change', { tracks: selected });
     const state = this.deps.state();
@@ -237,7 +240,16 @@ export class Replanner {
    * decides what it means for the screen.
    */
   async replan(operation: ReplanOperation, options: ReplanOptions = {}): Promise<ReplanResult> {
-    const result = await this.run(operation, options);
+    let result = await this.run(operation, options);
+    // A subtitle no route shows ends in a `subtitle_*` terminal. The viewer's pick is refused; the
+    // plan that plays goes on (the session did not end).
+    if (
+      operation === 'track_change' &&
+      result.kind === 'terminal' &&
+      result.reason?.startsWith('subtitle_')
+    ) {
+      result = { kind: 'refused' };
+    }
     this.afterReplan(result);
     if (['terminal', 'ended', 'gone', 'loop'].includes(result.kind)) {
       // The session does not go on this way (the caller settles it): a Restore has nothing to do.

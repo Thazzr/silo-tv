@@ -81,14 +81,23 @@ export function PlayerSubtitles({
   plan,
   position,
   lifted,
+  offsetMs = 0,
 }: {
   plan: Plan;
   position: number;
   lifted: boolean;
+  /** Subtitle delay in ms (positive = later). */
+  offsetMs?: number;
 }) {
   const cues = useSubtitleCues(plan);
   const appearance = useProfileSetting('playback.subtitle_appearance').value;
   return (
-    <SubtitleOverlay cues={cues} position={position} appearance={appearance} lifted={lifted} />
+    <SubtitleOverlay
+      cues={cues}
+      position={position}
+      offsetMs={offsetMs}
+      appearance={appearance}
+      lifted={lifted}
+    />
   );
 }

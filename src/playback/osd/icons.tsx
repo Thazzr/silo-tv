@@ -64,6 +64,39 @@ export const GearIcon = () => (
   </Icon>
 );
 
+/** A speaker with two sound waves: the audio menu. */
+export const AudioIcon = () => (
+  <Icon size={40}>
+    <path d="M6 18h8l10-8v28l-10-8H6z" />
+    <path
+      d="M31 17a10 10 0 0 1 0 14M36 11a18 18 0 0 1 0 26"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="4"
+      strokeLinecap="round"
+    />
+  </Icon>
+);
+
+/** A caption box with two lines of text: the subtitles menu. */
+export const SubtitlesIcon = () => (
+  <Icon size={40}>
+    <rect
+      x="4"
+      y="9"
+      width="40"
+      height="30"
+      rx="4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <rect x="10" y="21" width="12" height="4" rx="2" />
+    <rect x="26" y="21" width="12" height="4" rx="2" />
+    <rect x="10" y="29" width="18" height="4" rx="2" />
+  </Icon>
+);
+
 /** An "i" in a circle: the playback info. */
 export const InfoIcon = () => (
   <Icon size={40}>

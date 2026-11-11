@@ -127,6 +127,11 @@ const appearance = (introducedIn: number): SettingDef<SubtitleAppearance> => ({
   },
 });
 
+/** The contract's bounds for the subtitle offset. */
+export const SUBTITLE_SYNC_MAX_MS = 10_000;
+/** The manifest revision that added the `profile` scope for `player.subtitle_sync_ms`. */
+export const SUBTITLE_SYNC_PROFILE_SCOPE_REVISION = 19;
+
 const SKIP_SECONDS = [5, 10, 15, 30, 45, 60, 90] as const;
 const QUALITIES = ['auto', '480p', '720p', '1080p', '2160p', 'original'] as const;
 
@@ -159,7 +164,9 @@ export const PROFILE_SETTINGS = {
   // Enums in the contract (not free integers), stored for the profile only.
   'player.video_skip_back_seconds': oneOf(9, SKIP_SECONDS, 10),
   'player.video_skip_forward_seconds': oneOf(9, SKIP_SECONDS, 30),
-  'player.sleep_timer_default_minutes': integer(1, 30, 0, 240),
+  // Subtitle delay in ms (positive = later). Written at `profile` from revision 19, before that at
+  // `profile_device`.
+  'player.subtitle_sync_ms': integer(1, 0, -SUBTITLE_SYNC_MAX_MS, SUBTITLE_SYNC_MAX_MS),
 } as const satisfies Record<string, SettingDef<unknown>>;
 
 export type ProfileSettingKey = keyof typeof PROFILE_SETTINGS;
@@ -238,6 +245,13 @@ function useManifestRevision(profileId: string) {
   });
 }
 
+/** The server's settings manifest revision; null until it answered or when there is no contract. */
+export function useSettingsRevision(): number | null {
+  const { session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  return useManifestRevision(profileId).data ?? null;
+}
+
 /** Whether the server's settings contract knows this key; false until it answered, or when it has no contract. */
 export function useServerKnowsSetting(key: ProfileSettingKey): boolean {
   const { session } = useSilo();
@@ -301,14 +315,14 @@ export type DeviceSettingKey =
   | 'playback.subtitle_appearance'
   | 'playback.max_bitrate_kbps'
   | 'playback.buffering_quality_mode'
-  | 'player.sleep_timer_default_minutes';
+  | 'player.subtitle_sync_ms';
 
 /**
- * Writes one setting of the active profile at the `profile_device` scope (this TV only) and puts
- * the stored value into the shared effective-values cache, so every consumer follows at once.
- * Rejects when the write fails; the caller decides whether that is worth telling the viewer.
+ * Writes one setting of the active profile at `scope` and puts the stored value into the shared
+ * effective-values cache, so every consumer follows at once. Rejects when the write fails; the
+ * caller decides whether that is worth telling the viewer.
  */
-export function useSetProfileDeviceSetting() {
+export function useSetProfileSettingAt(scope: 'profile' | 'profile_device') {
   const { client, baseUrl, session } = useSilo();
   const queryClient = useQueryClient();
   return useCallback(
@@ -319,7 +333,7 @@ export function useSetProfileDeviceSetting() {
         params: {
           header: { 'X-Profile-Id': profileId },
           path: { key },
-          query: { scope: 'profile_device' },
+          query: { scope },
         },
         body: { value },
       });
@@ -331,8 +345,13 @@ export function useSetProfileDeviceSetting() {
         (old) => (old ? { ...old, [key]: stored } : old),
       );
     },
-    [client, baseUrl, session, queryClient],
+    [client, baseUrl, session, queryClient, scope],
   );
+}
+
+/** Writes one setting at the `profile_device` scope (this TV only). */
+export function useSetProfileDeviceSetting() {
+  return useSetProfileSettingAt('profile_device');
 }
 
 /**

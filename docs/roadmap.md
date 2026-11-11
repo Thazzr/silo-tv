@@ -106,7 +106,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
     - an outage (no media data at all) is no reason to lower;
     - the prompt and the pill hold the focus for 15 s (user decision 2026-11-11)
     - still to check on the TV: whether webOS reports media data on direct play (`progress` events, a growing buffer)
-- ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
+- 🟨 Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client; a subtitle no route can show is refused with a note, and the old picture plays on (Audio shows from two tracks on)
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
 - 🟨 Subtitle appearance for this TV in the app's settings, with a live preview: size, font, colours, opacity, background style, outline, position; stored per profile for this TV (`playback.subtitle_appearance` at `profile_device`); Reset returns to the profile's own appearance
@@ -118,7 +118,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ On Deck at the end of a movie and of a series' last episode: Continue Watching and Next Up items, nothing starts on its own
 - ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people.
 - ⬜ Playback speed and aspect ratio, for the current title only (not possible in the Roku client; on webOS to be probed on the TV first)
-- ⬜ Subtitle delay (`player.subtitle_sync_ms`; the renderer already takes an offset); an audio delay is not possible with the webOS video element
+- 🟨 Subtitle delay in the Subtitles menu (`player.subtitle_sync_ms`, ±100 ms per press up to ±10 s, saved 600 ms after the last press for the profile, as Silo's web client does); an audio delay is not possible with the webOS video element
+- ⬜ Start subtitles from the profile's subtitle settings (mode, language, show forced subtitles) exactly as Silo's web app resolves them; with Silo's default settings that is the forced track in the playing audio's language, which also follows an audio change until the viewer picks a subtitle (user decisions 2026-11-11)
 - ❌ Sleep timer: dropped (user decision 2026-11-10). LG TVs have a sleep timer of their own, and the progress reported every 10 s keeps the resume point when the TV turns off.
 
 ## Phase 4 – Personal and discovery (target v0.5.0)
