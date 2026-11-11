@@ -84,11 +84,9 @@ describe('settings requests', () => {
   it('carry the TV client family, and no other request does', async () => {
     const { client, seen } = setup();
     await client.GET('/api/v2/system/info');
-    await client.GET('/api/v2/settings/contract/capabilities', {
-      params: { header: { 'X-Profile-Id': 'p1' } },
-    });
+    await client.GET('/api/v2/settings/contract/capabilities');
     await client.GET('/api/v2/settings/values/effective', {
-      params: { header: { 'X-Profile-Id': 'p1' }, query: { keys: ['a'] } },
+      params: { query: { keys: ['a'] } },
     });
     expect(seen[0]!.headers.get('X-Silo-Client-Family')).toBeNull();
     expect(seen[1]!.headers.get('X-Silo-Client-Family')).toBe('tv');
@@ -98,7 +96,7 @@ describe('settings requests', () => {
   it('send a list parameter once per value, never comma-separated', async () => {
     const { client, seen } = setup();
     await client.GET('/api/v2/settings/values/effective', {
-      params: { header: { 'X-Profile-Id': 'p1' }, query: { keys: ['ui.a', 'ui.b'] } },
+      params: { query: { keys: ['ui.a', 'ui.b'] } },
     });
     expect(new URL(seen[0]!.url).search).toBe('?keys=ui.a&keys=ui.b');
   });
@@ -130,6 +128,26 @@ describe('auth headers', () => {
     session.update({ profileToken: 'pt' });
     await client.GET('/api/v2/system/info');
     expect(seen[2]!.headers.get('X-Profile-Token')).toBe('pt');
+  });
+});
+
+describe('explicit profile headers', () => {
+  it('win over the session profile, each one on its own', async () => {
+    const session = new Session(memoryStorage());
+    session.set({ ...signedIn, profileId: 'p2', profileToken: 'secondary-token' });
+    const { client, seen } = setup(session);
+    await client.GET('/api/v2/system/info', {
+      headers: { 'X-Profile-Id': 'p1', 'X-Profile-Token': 'primary-token' },
+    });
+    await client.GET('/api/v2/system/info', { headers: { 'X-Profile-Id': 'p1' } });
+    await client.GET('/api/v2/system/info');
+    expect(seen[0]!.headers.get('X-Profile-Id')).toBe('p1');
+    expect(seen[0]!.headers.get('X-Profile-Token')).toBe('primary-token');
+    // A header the call does not name still comes from the session.
+    expect(seen[1]!.headers.get('X-Profile-Id')).toBe('p1');
+    expect(seen[1]!.headers.get('X-Profile-Token')).toBe('secondary-token');
+    expect(seen[2]!.headers.get('X-Profile-Id')).toBe('p2');
+    expect(seen[2]!.headers.get('X-Profile-Token')).toBe('secondary-token');
   });
 });
 

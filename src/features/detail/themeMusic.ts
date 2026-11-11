@@ -61,7 +61,6 @@ export function firstTheme(
 export async function requestThemeGrant(
   client: SiloClient,
   baseUrl: string,
-  profileId: string,
   theme: { ownerId: string; themeId: string },
   canPlayType: CanPlayType = elementCanPlayType,
 ): Promise<ThemeGrant> {
@@ -70,7 +69,6 @@ export async function requestThemeGrant(
     '/api/v2/catalog/items/{id}/themes/{theme_id}/playback',
     {
       params: {
-        header: { 'X-Profile-Id': profileId },
         path: { id: theme.ownerId, theme_id: theme.themeId },
       },
       // Without a playable candidate the server decides (and may convert).

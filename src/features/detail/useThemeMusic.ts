@@ -18,9 +18,7 @@ function useThemeCapability(enabled: boolean) {
     staleTime: ONE_MINUTE,
     retry: false,
     queryFn: async () => {
-      const { data, error, response } = await client.GET('/api/v2/catalog/themes/capabilities', {
-        params: { header: { 'X-Profile-Id': profileId } },
-      });
+      const { data, error, response } = await client.GET('/api/v2/catalog/themes/capabilities', {});
       if (!data) throw toApiError(error, response);
       return data.state === 'available' && data.allowed !== false;
     },
@@ -66,8 +64,7 @@ export function useThemeMusic(detail: ItemDetail): void {
     if (!plays || !visible || ownerId === undefined || themeId === undefined) return;
     // The grant is a credential: it only goes from the response to the audio element.
     return themeMusic.controller.start(
-      () =>
-        requestThemeGrant(client, baseUrl, profileId, { ownerId, themeId }, themeMusic.canPlayType),
+      () => requestThemeGrant(client, baseUrl, { ownerId, themeId }, themeMusic.canPlayType),
       () => loopRef.current,
     );
   }, [plays, visible, ownerId, themeId, client, baseUrl, profileId]);

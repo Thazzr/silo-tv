@@ -96,6 +96,56 @@ describe('filterSpec', () => {
   });
 });
 
+describe('filterSpec profile headers', () => {
+  const header = (name: string) => ({
+    name,
+    in: 'header',
+    required: true,
+    schema: { type: 'string' },
+  });
+  const profileSpec = {
+    openapi: '3.1.0',
+    info: { title: 'T', version: '2' },
+    paths: {
+      '/p/{id}': {
+        parameters: [
+          header('X-Profile-Id'),
+          { name: 'id', in: 'path', schema: { type: 'string' } },
+        ],
+        get: {
+          parameters: [
+            header('X-Profile-Id'),
+            header('x-profile-token'),
+            header('X-Other'),
+            { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'X-Profile-Id', in: 'query', schema: { type: 'string' } },
+          ],
+          responses: { '200': { description: 'ok' } },
+        },
+        put: {
+          parameters: [header('X-Profile-Id'), header('X-Profile-Token')],
+          responses: { '200': { description: 'ok' } },
+        },
+      },
+    },
+  };
+
+  it('strips both profile header parameters from every operation and keeps the others', () => {
+    const filtered = filterSpec(profileSpec, [
+      { path: '/p/{id}', method: 'get' },
+      { path: '/p/{id}', method: 'put' },
+    ]);
+    const item = filtered.paths['/p/{id}'];
+    expect(item.get.parameters).toEqual([
+      header('X-Other'),
+      { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+      { name: 'X-Profile-Id', in: 'query', schema: { type: 'string' } },
+    ]);
+    expect(item.put).not.toHaveProperty('parameters');
+    expect(item.parameters).toEqual([{ name: 'id', in: 'path', schema: { type: 'string' } }]);
+  });
+});
+
 describe('assertNoHost', () => {
   it('throws when the host remains in the output', () => {
     expect(() =>

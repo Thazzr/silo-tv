@@ -57,11 +57,10 @@ export function useCreateProfile() {
       isChild: boolean;
     }) => {
       const { data, error, response } = await client.POST('/api/v2/profiles', {
-        params: {
-          header: {
-            'X-Profile-Id': primaryId,
-            ...(primaryToken ? { 'X-Profile-Token': primaryToken } : {}),
-          },
+        // Explicit headers win over the session's profile, which may be a secondary one.
+        headers: {
+          'X-Profile-Id': primaryId,
+          ...(primaryToken ? { 'X-Profile-Token': primaryToken } : {}),
         },
         body: { name, is_child: isChild, ...(pin ? { pin } : {}) },
       });

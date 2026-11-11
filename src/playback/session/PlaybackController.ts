@@ -154,7 +154,6 @@ export class PlaybackController {
     this.subtitleAuto = deps.intent?.subtitle !== undefined ? 'manual' : 'pending';
     this.progress = new ProgressReporter({
       client: deps.client,
-      header: () => this.header(),
       installationId: () => this.server.id,
       sessionId: () => this.sessionId,
       isStopped: () => this.stopped,
@@ -166,7 +165,6 @@ export class PlaybackController {
     });
     this.stopSequence = new StopSequence({
       client: deps.client,
-      header: () => this.header(),
       installationId: () => this.server.id,
       nextSequence: () => this.progress.nextSequence(),
     });
@@ -178,7 +176,6 @@ export class PlaybackController {
     });
     this.replanner = new Replanner({
       client: deps.client,
-      header: () => this.header(),
       isStopped: () => this.stopped,
       plan: () => this.plan,
       capabilities: () => this.capabilities,
@@ -261,10 +258,6 @@ export class PlaybackController {
     return this.deps.buffering?.() ?? { feature: false, mode: 'always' };
   }
 
-  private header() {
-    return { 'X-Profile-Id': this.profileId };
-  }
-
   private set(state: SessionState): void {
     if (!this.disposed) this.deps.onState(state);
   }
@@ -305,8 +298,8 @@ export class PlaybackController {
     this.profileId = profileId;
     try {
       const [server, watch] = await Promise.all([
-        loadInstallation(this.deps.client, this.deps.baseUrl, this.header()),
-        loadWatch(this.deps.client, this.deps.contentId, this.deps.intent?.fileId, this.header()),
+        loadInstallation(this.deps.client, this.deps.baseUrl),
+        loadWatch(this.deps.client, this.deps.contentId, this.deps.intent?.fileId),
       ]);
       if (this.disposed) return;
       this.server = server;
@@ -361,7 +354,7 @@ export class PlaybackController {
       this.capabilities = profile.capabilities;
       this.context = profile.context;
       this.attemptId = uuidV4();
-      const answer = await requestStart(this.deps.client, this.header(), {
+      const answer = await requestStart(this.deps.client, {
         installationId: this.server.id,
         fileId: this.fileId,
         pinnedFile: this.pinnedFile,
@@ -385,7 +378,7 @@ export class PlaybackController {
       if (outcome.kind === 'installationChanged') {
         // The server was replaced or restored: read its capabilities again, new attempt.
         forgetInstallation(this.deps.baseUrl);
-        this.server = await loadInstallation(this.deps.client, this.deps.baseUrl, this.header());
+        this.server = await loadInstallation(this.deps.client, this.deps.baseUrl);
         await this.start(position, false);
       } else if (outcome.kind === 'failed') {
         this.fail(outcome.reason);

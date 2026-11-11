@@ -247,9 +247,10 @@ function useManifestRevision(profileId: string) {
     staleTime: THIRTY_MINUTES,
     retry: false,
     queryFn: async () => {
-      const { data, error, response } = await client.GET('/api/v2/settings/contract/capabilities', {
-        params: { header: { 'X-Profile-Id': profileId } },
-      });
+      const { data, error, response } = await client.GET(
+        '/api/v2/settings/contract/capabilities',
+        {},
+      );
       if (!data) throw toApiError(error, response);
       // Not offered (or not for this account): everything stays at its default.
       return data.state === 'available' && data.allowed !== false ? data.manifest_revision : null;
@@ -292,7 +293,7 @@ export function useProfileSettings(): { values: SettingValues; known: boolean } 
     retry: false,
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/settings/values/effective', {
-        params: { header: { 'X-Profile-Id': profileId }, query: { keys } },
+        params: { query: { keys } },
       });
       if (!data) throw toApiError(error, response);
       return settingValuesFrom(data.items);
@@ -343,7 +344,6 @@ export function useSetProfileSettingAt(scope: 'profile' | 'profile_device') {
       if (profileId === '') throw new Error('No profile is open');
       const { data, error, response } = await client.PUT('/api/v2/settings/values/{key}', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { key },
           query: { scope },
         },
@@ -380,7 +380,6 @@ export function useResetProfileDeviceSetting() {
       if (profileId === '') throw new Error('No profile is open');
       const { error, response } = await client.DELETE('/api/v2/settings/values/{key}', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { key },
           query: { scope: 'profile_device' },
         },

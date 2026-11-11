@@ -142,11 +142,6 @@ export type ReplanResult =
   /** Nothing was sent: no plan yet, another replan is running, or the session is stopped. */
   | { kind: 'busy' };
 
-/** The request header every call of a session carries. */
-export interface ProfileHeader {
-  'X-Profile-Id': string;
-}
-
 /** Thrown inside a start's preparation; the controller turns it into the failure it names. */
 export class SessionError extends Error {
   constructor(readonly reason: SessionFailure) {

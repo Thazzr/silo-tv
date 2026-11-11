@@ -1,6 +1,9 @@
 // Pure filter logic for the slim OpenAPI spec (no I/O, so it can be tested on its own).
 
 const METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
+// The client middleware sets these two headers from the session on every authenticated call, so
+// the generated types must not ask the call sites for them.
+const PROFILE_HEADERS = new Set(['x-profile-id', 'x-profile-token']);
 const COMPONENT_REF = /^#\/components\/([^/]+)\/(.+)$/;
 
 /** Recursively sorts object keys so the written file is stable across runs. */
@@ -29,6 +32,19 @@ function stripServers(value) {
   return value;
 }
 
+/** Returns the node without its profile header parameters; an emptied list is dropped. */
+function withoutProfileHeaders(node) {
+  if (!Array.isArray(node.parameters)) return node;
+  const parameters = node.parameters.filter(
+    (parameter) =>
+      !(parameter.in === 'header' && PROFILE_HEADERS.has(parameter.name?.toLowerCase())),
+  );
+  const rest = { ...node };
+  if (parameters.length > 0) rest.parameters = parameters;
+  else delete rest.parameters;
+  return rest;
+}
+
 function collectRefs(value, into) {
   if (Array.isArray(value)) {
     for (const child of value) collectRefs(child, into);
@@ -50,10 +66,10 @@ export function filterSpec(spec, allowlist) {
     const item = spec.paths?.[path];
     const operation = item?.[method];
     if (!operation) throw new Error(`Operation ${method.toUpperCase()} ${path} is not in the spec`);
-    paths[path] ??= Object.fromEntries(
-      Object.entries(item).filter(([key]) => !METHODS.includes(key)),
+    paths[path] ??= withoutProfileHeaders(
+      Object.fromEntries(Object.entries(item).filter(([key]) => !METHODS.includes(key))),
     );
-    paths[path][method] = operation;
+    paths[path][method] = withoutProfileHeaders(operation);
   }
 
   const components = {};

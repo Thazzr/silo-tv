@@ -3,7 +3,7 @@
 import type { SiloClient } from '../../api/client';
 import { stopTiming } from '../stopTiming';
 import { uuidV4 } from '../uuid';
-import type { PlayerReading, ProfileHeader } from './types';
+import type { PlayerReading } from './types';
 
 /** Waits before the retries of a stop that did not arrive (the stop_id stays the same). */
 export const STOP_RETRY_DELAYS_MS = [500, 1_500];
@@ -17,7 +17,6 @@ export const STOP_AFTER_UNLOAD_MS = 2_000;
 
 export interface StopDeps {
   client: SiloClient;
-  header(): ProfileHeader;
   installationId(): string;
   /** The next report sequence number: the final sample continues the heartbeat's count. */
   nextSequence(): number;
@@ -54,7 +53,7 @@ export class StopSequence {
     for (let attempt = 0; ; attempt += 1) {
       try {
         const { response } = await this.deps.client.DELETE('/api/v2/playback/{session_id}', {
-          params: { path: { session_id: sessionId }, header: this.deps.header() },
+          params: { path: { session_id: sessionId } },
           body,
         });
         const status = response.status;

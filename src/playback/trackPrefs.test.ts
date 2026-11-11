@@ -33,7 +33,6 @@ interface Call {
   params: {
     path: { series_id?: string; key?: string };
     query?: { scope: string; series_id: string };
-    header: { 'X-Profile-Id': string };
   };
   body: unknown;
 }
@@ -157,14 +156,14 @@ describe('subtitlePreferenceBody', () => {
 });
 
 describe('createTrackPrefWriter', () => {
-  it('puts an audio pick under the key with the profile header', async () => {
+  it('puts an audio pick under the key', async () => {
     const { client, calls } = fakeClient();
     const writer = createTrackPrefWriter(client, () => 'p1');
     await writer.audio('series-1', 1, { default: false, language: 'en' });
     expect(calls).toEqual([
       {
         path: '/api/v2/audio-prefs/{series_id}',
-        params: { path: { series_id: 'series-1' }, header: { 'X-Profile-Id': 'p1' } },
+        params: { path: { series_id: 'series-1' } },
         body: { audio_track_index: 1, audio_language: 'en', track_signature: { language: 'en' } },
       },
     ]);
@@ -192,7 +191,6 @@ describe('createTrackPrefWriter', () => {
       params: {
         path: { key },
         query: { scope: 'profile_series', series_id: 'series-1' },
-        header: { 'X-Profile-Id': 'p1' },
       },
       body: { value },
     });
@@ -201,7 +199,7 @@ describe('createTrackPrefWriter', () => {
       settings('playback.subtitle_mode', 'always'),
       {
         path: '/api/v2/subtitle-prefs/{series_id}',
-        params: { path: { series_id: 'series-1' }, header: { 'X-Profile-Id': 'p1' } },
+        params: { path: { series_id: 'series-1' } },
         body: subtitlePreferenceBody(inventoryItem()),
       },
     ]);
@@ -316,12 +314,11 @@ describe('createTrackPrefWriter', () => {
               params: {
                 path: { series_id?: string };
                 query?: { series_id: string };
-                header: { 'X-Profile-Id': string };
               };
             },
           ) => {
             const title = init.params.path.series_id ?? init.params.query?.series_id;
-            const label = `${init.params.header['X-Profile-Id']} ${path.split('/')[3]} ${title}`;
+            const label = `${path.split('/')[3]} ${title}`;
             starts.push(label);
             if (starts.length === 1) await gate;
             return { response: { ok: true } as Response };
@@ -344,12 +341,12 @@ describe('createTrackPrefWriter', () => {
       const other = writer.audio('s1', 0, track);
       await Promise.all([kind, title, other]);
       expect(starts).toEqual([
-        'p1 audio-prefs s1',
-        'p1 settings s1',
-        'p1 settings s1',
-        'p1 subtitle-prefs s1',
-        'p1 audio-prefs s2',
-        'p2 audio-prefs s1',
+        'audio-prefs s1',
+        'settings s1',
+        'settings s1',
+        'subtitle-prefs s1',
+        'audio-prefs s2',
+        'audio-prefs s1',
       ]);
       release();
       await held;
@@ -366,15 +363,15 @@ describe('createTrackPrefWriter', () => {
       await Promise.all([title, other]);
       // A subtitle save is its two settings rows and the track row, all sent at once.
       expect(starts).toEqual([
-        'p1 settings s1',
-        'p1 settings s1',
-        'p1 subtitle-prefs s1',
-        'p1 settings s2',
-        'p1 settings s2',
-        'p1 subtitle-prefs s2',
-        'p2 settings s1',
-        'p2 settings s1',
-        'p2 subtitle-prefs s1',
+        'settings s1',
+        'settings s1',
+        'subtitle-prefs s1',
+        'settings s2',
+        'settings s2',
+        'subtitle-prefs s2',
+        'settings s1',
+        'settings s1',
+        'subtitle-prefs s1',
       ]);
       release();
       await held;

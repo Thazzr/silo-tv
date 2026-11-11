@@ -146,7 +146,7 @@ export function createTrackPrefWriter(
       const body = audioPreferenceBody(index, track);
       return enqueue(profile, `${profile}\u0000audio\u0000${prefId}`, async () => {
         const { response } = await client.PUT('/api/v2/audio-prefs/{series_id}', {
-          params: { path: { series_id: prefId }, header: { 'X-Profile-Id': profile } },
+          params: { path: { series_id: prefId } },
           body,
         });
         return response.ok;
@@ -163,7 +163,6 @@ export function createTrackPrefWriter(
             params: {
               path: { key },
               query: { scope: 'profile_series', series_id: prefId },
-              header: { 'X-Profile-Id': profile },
             },
             body: { value },
           });
@@ -171,7 +170,7 @@ export function createTrackPrefWriter(
         });
         const prefs = (async () => {
           const { response } = await client.PUT('/api/v2/subtitle-prefs/{series_id}', {
-            params: { path: { series_id: prefId }, header: { 'X-Profile-Id': profile } },
+            params: { path: { series_id: prefId } },
             body,
           });
           return response.ok;

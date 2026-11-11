@@ -18,7 +18,7 @@ export function usePerson(personId: string) {
     retry: retryUnlessMissing,
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/people/{id}', {
-        params: { header: { 'X-Profile-Id': profileId }, path: { id: personId } },
+        params: { path: { id: personId } },
       });
       if (!data) throw toApiError(error, response);
       return data;
@@ -36,7 +36,6 @@ export function usePersonTitles(personId: string, filter: PersonFilter) {
     queryFn: async ({ pageParam }) => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             source: 'person',
             person_id: personId,
@@ -68,7 +67,6 @@ export function usePersonHas(personId: string, filter: 'movie' | 'series') {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             source: 'person',
             person_id: personId,

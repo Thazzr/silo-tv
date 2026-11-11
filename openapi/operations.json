@@ -70,5 +70,16 @@
   { "path": "/api/v2/shuffles/{shuffle_id}", "method": "get" },
   { "path": "/api/v2/shuffles/{shuffle_id}/advance", "method": "post" },
   { "path": "/api/v2/shuffles/{shuffle_id}/skip", "method": "post" },
-  { "path": "/api/v2/shuffles/{shuffle_id}", "method": "delete" }
+  { "path": "/api/v2/shuffles/{shuffle_id}", "method": "delete" },
+  { "path": "/api/v2/watched/{id}", "method": "post" },
+  { "path": "/api/v2/watched/{id}", "method": "delete" },
+  { "path": "/api/v2/favorites/{item_id}", "method": "put" },
+  { "path": "/api/v2/favorites/{item_id}", "method": "delete" },
+  { "path": "/api/v2/watchlist/{item_id}", "method": "put" },
+  { "path": "/api/v2/watchlist/{item_id}", "method": "delete" },
+  { "path": "/api/v2/ratings/{item_id}", "method": "put" },
+  { "path": "/api/v2/ratings/{item_id}", "method": "delete" },
+  { "path": "/api/v2/not-interested/{item_id}", "method": "put" },
+  { "path": "/api/v2/not-interested/{item_id}", "method": "delete" },
+  { "path": "/api/v2/subtitles/{media_file_id}", "method": "get" }
 ]

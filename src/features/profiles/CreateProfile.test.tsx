@@ -67,7 +67,7 @@ function refuseCreate(status: number, code: string) {
   );
 }
 
-function setup() {
+function setup(open?: { profileId: string; profileToken: string }) {
   const onSelected = vi.fn();
   const session = new Session(memoryStorage());
   session.set({
@@ -75,6 +75,7 @@ function setup() {
     refreshToken: 'r',
     expiresAt: Date.now() + 3600_000,
     user: account,
+    ...open,
   });
   const view = renderWithSilo(<ProfilesScreen autoSelect={false} onSelected={onSelected} />, {
     session,
@@ -180,6 +181,31 @@ describe('create profile', () => {
     // Creating chooses nothing: no profile is open.
     expect(onSelected).not.toHaveBeenCalled();
     expect(session.get()?.profileId).toBeUndefined();
+  });
+
+  it('names the primary profile even when the session holds a secondary one', async () => {
+    household([
+      profile({ id: 'p1', name: 'Alex', has_pin: true }),
+      profile({ id: 'p2', name: 'Sam', is_primary: false }),
+    ]);
+    const seen = acceptCreate();
+    server.use(
+      http.post(`${BASE_URL}/api/v2/profiles/p1/verify-pin`, () =>
+        HttpResponse.json({ valid: true, expires_at: null, profile_token: 'pvt_primary' }),
+      ),
+    );
+    const { session } = setup({ profileId: 'p2', profileToken: 'pvt_secondary' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add profile' }));
+    await screen.findByTestId('pin-entry');
+    for (const d of '2468') fireEvent.keyDown(window, { key: d, keyCode: 48 + Number(d) });
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await screen.findByTestId('create-profile');
+    typeName('Mia');
+    save();
+    await screen.findByRole('button', { name: /Mia/ });
+    expect(seen[0]).toMatchObject({ profileId: 'p1', profileToken: 'pvt_primary' });
+    // The open profile stays as it was.
+    expect(session.get()).toMatchObject({ profileId: 'p2', profileToken: 'pvt_secondary' });
   });
 
   it('shows the age-limit hint only while the kids switch is on', async () => {

@@ -31,7 +31,6 @@ export function useBoxSet(boxSetId: string, libraryId: string) {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/box-sets/{id}', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: boxSetId },
           query: { library_id: libraryId, ...BOXSET_IMAGE_QUERY },
         },
@@ -58,7 +57,6 @@ export function useItemBoxSet(itemId: string, libraryId: string | undefined, ena
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/items/{id}/box-set', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: itemId },
           query: { library_id: libraryId, ...BOXSET_ROW_IMAGE_QUERY },
         },

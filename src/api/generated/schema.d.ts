@@ -468,6 +468,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/favorites/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add the item to the acting profile's favorites. Adding an item already there succeeds and changes nothing, so a retry repeats no change or notification; it cannot resend notifications an interrupted earlier call never sent. */
+        put: operations["addFavorite"];
+        post?: never;
+        /** Remove the item from the acting profile's favorites. An absent entry succeeds and changes nothing, so a retry repeats no change or notification; it cannot resend notifications an interrupted earlier call never sent. */
+        delete: operations["deleteFavorite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/home/capabilities": {
         parameters: {
             query?: never;
@@ -509,7 +527,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The home page's sections with their cards, as the acting profile sees them. */
+        /** The home page's sections that have cards for the acting profile, with those cards. */
         get: operations["listHomeSections"];
         put?: never;
         post?: never;
@@ -594,7 +612,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The library's sections with their cards, as the acting profile sees them. */
+        /** The library's sections that have cards for the acting profile, with those cards. */
         get: operations["listLibrarySections"];
         put?: never;
         post?: never;
@@ -616,6 +634,24 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/not-interested/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark a movie or series Not interested for the acting profile: its recommendation and discovery rows leave it out and rank similar titles lower, after a rebuild that starts within seconds. Library browsing, search, item detail, playback, favorites and the watchlist are unchanged. Episodes and seasons are refused with 422; mark the series. Marking a marked title succeeds and changes nothing. */
+        put: operations["markNotInterested"];
+        post?: never;
+        /** Clear the acting profile's Not interested mark on the item. An absent mark succeeds and changes nothing. */
+        delete: operations["unmarkNotInterested"];
         options?: never;
         head?: never;
         patch?: never;
@@ -756,6 +792,24 @@ export interface paths {
          */
         post: operations["verifyProfilePIN"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/ratings/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the acting profile's rating of the item, replacing any earlier rating; automatic retries repeat the rating timestamp and recommendation refresh. */
+        put: operations["setRating"];
+        post?: never;
+        /** Remove the acting profile's rating of the item; an absent rating succeeds, but automatic retries repeat the recommendation refresh. */
+        delete: operations["deleteRating"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1003,6 +1057,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/subtitles/{media_file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read subtitles for an accessible media file. */
+        get: operations["listStoredSubtitles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/system/identity": {
         parameters: {
             query?: never;
@@ -1117,6 +1188,42 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/watched/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark an item watched for the acting profile; a season or series marks every episode. Marking an already watched item is a no-op, except a movie, episode or audiobook with a resume position from a rewatch: that records another play and clears the position. A season or series mark leaves such episodes alone. */
+        post: operations["markWatched"];
+        /** Mark an item unwatched for the acting profile; a season or series clears every episode. Clears the watched state and resume position and keeps watch history. Plays at or before the cutoff the server chooses when this request runs no longer count as watched. */
+        delete: operations["unmarkWatched"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/watchlist/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Add the item to the acting profile's watchlist. Adding an item already there succeeds and changes nothing, so a retry repeats no change or notification; it cannot resend notifications an interrupted earlier call never sent. */
+        put: operations["addToWatchlist"];
+        post?: never;
+        /** Remove the item from the acting profile's watchlist. An absent entry succeeds and changes nothing, so a retry repeats no change or notification; it cannot resend notifications an interrupted earlier call never sent. */
+        delete: operations["deleteWatchlistEntry"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2732,6 +2839,7 @@ export interface components {
              */
             user_code: string;
             /**
+             * Format: uri
              * @description Page on this server where the approver enters the user code; server.public_url when configured, otherwise the address the device used
              * @example https://silo.example.test/activate
              */
@@ -3054,6 +3162,11 @@ export interface components {
              * @example 100
              */
             section_item_limit_max?: number;
+            /**
+             * @description Sections, profile section settings, admin section definitions and recommendation rows carry title_key, with title_args when its message has placeholders, for titles the server writes, so a client can translate them (a few, such as a seasonal row's in-season title, have none; a client shows title whenever the key is absent or unknown), and profile section settings carry default_title_key and default_title_args the same way for default_title. Informational: clients act on title_key whenever it is present. Absent when the home sections service is not configured, and on a server that predates the fields
+             * @example true
+             */
+            section_title_keys?: boolean;
             /**
              * @description Support and configuration state, not health
              * @enum {string}
@@ -3884,7 +3997,10 @@ export interface components {
              * @example en
              */
             language: string;
-            /** @example false */
+            /**
+             * @description Whether the profile is limited to allowed_library_ids within its account's libraries. The primary profile is never limited: it sees every library its account can access and hides libraries through its settings instead
+             * @example false
+             */
             library_restrictions_enabled: boolean;
             /**
              * Format: int64
@@ -3951,6 +4067,12 @@ export interface components {
              * @example true
              */
             max_advisory_age_supported: boolean;
+            /**
+             * Format: int64
+             * @description How many profiles this account may have, from its effective access policy; createProfile answers 409 once the household holds this many. Omitted on a remote-playback handoff, which lists only its own profile and cannot create one, and when the server could not read the limit; in that second case a client keeps offering new profiles and createProfile stays the check
+             * @example 5
+             */
+            max_profiles?: number;
             /** @description Cursor state; absent for bounded unpaginated collections */
             page?: components["schemas"]["PageInfo"];
             /**
@@ -3961,7 +4083,7 @@ export interface components {
         };
         ProfileCreate: {
             /**
-             * @description Unique library identifiers the profile may see when restrictions are enabled
+             * @description Unique library identifiers the profile may see when restrictions are enabled. Must be empty on an account's first profile, which becomes its primary profile, even with restrictions off
              * @example [
              *       "1",
              *       "2"
@@ -3988,7 +4110,10 @@ export interface components {
              * @example en
              */
             language?: string;
-            /** @example false */
+            /**
+             * @description Limits the profile to allowed_library_ids. Must be false or omitted on an account's first profile, which becomes its primary profile
+             * @example false
+             */
             library_restrictions_enabled?: boolean;
             /**
              * Format: int64
@@ -4072,6 +4197,14 @@ export interface components {
              * @example true
              */
             valid: boolean;
+        };
+        RatingSet: {
+            /**
+             * Format: int64
+             * @description Stars, 1 to 5
+             * @example 4
+             */
+            rating: number;
         };
         RefreshSessionInputBody: {
             /**
@@ -4157,6 +4290,20 @@ export interface components {
             section_type: string;
             /** @example Recently Added */
             title: string;
+            /**
+             * @description Values of the title_key message's placeholders by name, such as library for a generated library row; present only with title_key, and absent when the message has none
+             * @example {
+             *       "library": "Movies"
+             *     }
+             */
+            title_args?: {
+                [key: string]: string;
+            };
+            /**
+             * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+             * @example home.section.recentlyAddedIn
+             */
+            title_key?: string;
             /**
              * Format: int64
              * @description Items the section has in total, at least the number returned
@@ -4470,6 +4617,9 @@ export interface components {
             sync?: components["schemas"]["SubtitleSyncJob"];
             timing: components["schemas"]["SubtitleTiming"];
         };
+        StoredSubtitles: {
+            subtitles: components["schemas"]["StoredSubtitle"][];
+        };
         StreamV3: {
             container?: string;
             header_refresh: string;
@@ -4567,6 +4717,11 @@ export interface components {
             /** @description Embedded tracks only: selecting this track, with the plan's delivery and audio, yields subtitle.embedded. The client may switch to it locally and report the change with a subtitle_track_changed replan, which returns a plan for the same media; url, when the row has one, stays the fallback; a bitmap track delivered only by burn-in has none. */
             native_selectable?: boolean;
             source: string;
+            /**
+             * Format: int64
+             * @description Stored subtitle row ID, matching subtitle_ready.subtitle_id. Present for downloaded, uploaded and generated tracks, including tracks without a URL or sync_key. Stable across inventory reordering; selection still uses combined_index.
+             */
+            stored_subtitle_id?: number;
             /**
              * Format: int64
              * @description Embedded tracks only: the absolute probed stream index, the namespace of subtitle.embedded.stream_index and the sidecar URL's embedded_stream_index
@@ -5590,12 +5745,7 @@ export interface operations {
     getAudioPreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -5699,12 +5849,7 @@ export interface operations {
     updateAudioPreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -5837,12 +5982,7 @@ export interface operations {
     deleteAudioPreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -6775,13 +6915,9 @@ export interface operations {
     getMetadataAICapability: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -6907,13 +7043,9 @@ export interface operations {
     getTrailersCapability: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -7095,12 +7227,7 @@ export interface operations {
                 /** @description Explicit zero-based window jump; the server locates a boundary without returning intermediate cards */
                 seek?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7217,12 +7344,7 @@ export interface operations {
                 /** @description Most box sets to return; default 5, maximum 20 */
                 limit?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7338,12 +7460,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The TMDB collection ID */
                 id: string;
@@ -7463,12 +7580,7 @@ export interface operations {
                 /** @description true omits the file-derived facets (resolutions, audio and subtitle languages) */
                 skip_technical?: boolean;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -7586,11 +7698,7 @@ export interface operations {
                 /** @description The version the viewer selected; affects the effective playback answer */
                 file_id?: string;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The stable device identifier used to resolve device-scoped playback preferences; absent resolves the profile's preferences */
                 "X-Silo-Device-Id"?: string;
             };
@@ -7712,12 +7820,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Content id of the movie */
                 id: string;
@@ -7821,12 +7924,7 @@ export interface operations {
     createThemeSongPlayback: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 id: string;
                 theme_id: string;
@@ -7962,12 +8060,7 @@ export interface operations {
     translateCatalogItemDescription: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Content id of the item, season, or episode */
                 id: string;
@@ -8111,12 +8204,7 @@ export interface operations {
     queryCatalogLetters: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -8264,12 +8352,7 @@ export interface operations {
                 /** @description Restrict people to accessible credits in this media scope; omitted searches all media scopes. video covers movies and series; video_with_episodes adds episodes (check getCatalogSearchCapabilities.video_with_episodes_scope first) */
                 media_scope?: "video" | "video_with_episodes" | "movie" | "series" | "episode" | "audiobook" | "ebook" | "manga";
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -8373,12 +8456,7 @@ export interface operations {
                 /** @description Marks a speculative read, such as warming a cache for a cast list. The read does not queue a provider refresh. */
                 prefetch?: boolean;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Person identifier */
                 id: string;
@@ -8482,13 +8560,9 @@ export interface operations {
     getCatalogSearchCapabilities: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -8640,12 +8714,7 @@ export interface operations {
                 /** @description Include poster URLs and thumbhashes; false skips poster preparation */
                 include_artwork?: boolean;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Series content id */
                 id: string;
@@ -8764,12 +8833,7 @@ export interface operations {
                 /** @description The library the series is being viewed in */
                 library_id?: string;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Series content id */
                 id: string;
@@ -8875,13 +8939,9 @@ export interface operations {
     getThemeSongsCapability: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -9004,16 +9064,216 @@ export interface operations {
             };
         };
     };
+    addFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getHomeCapabilities: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -9139,12 +9399,7 @@ export interface operations {
     dismissHomeItem: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The home surface the item is hidden from */
                 surface: "continue_watching" | "next_up";
@@ -9294,11 +9549,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
                 "X-Silo-Client-Family"?: string;
             };
@@ -9417,11 +9668,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
                 "X-Silo-Client-Family"?: string;
             };
@@ -9531,10 +9778,6 @@ export interface operations {
             header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -9660,12 +9903,7 @@ export interface operations {
     getLibraryCollections: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Library identifier */
                 id: string;
@@ -9773,12 +10011,7 @@ export interface operations {
                 limit?: number;
                 cursor?: string;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Opaque identifier */
                 id: string;
@@ -9899,11 +10132,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
                 "X-Silo-Client-Family"?: string;
             };
@@ -10023,11 +10252,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The caller's client family: tv, mobile, tablet, desktop or web. Only web receives a featured section an administrator limited to the web app (an admin section's web_only). For any other value, or none, layouts and lists leave that section out and reading it alone answers 404 */
                 "X-Silo-Client-Family"?: string;
             };
@@ -10133,16 +10358,216 @@ export interface operations {
             };
         };
     };
+    markNotInterested: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier of a movie or series */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unmarkNotInterested: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier of a movie or series */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getPlaybackCapabilities: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -10268,11 +10693,7 @@ export interface operations {
     reportPlaybackRouteEvent: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client's stable device identifier; a successful start records it in the profile's device registry (first 128 characters) */
                 "X-Silo-Device-Id"?: string;
                 "User-Agent"?: string;
@@ -10425,11 +10846,7 @@ export interface operations {
     startPlayback: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client's stable device identifier; a successful start records it in the profile's device registry (first 128 characters) */
                 "X-Silo-Device-Id"?: string;
                 "User-Agent"?: string;
@@ -10595,11 +11012,7 @@ export interface operations {
     stopPlayback: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client's stable device identifier; a successful start records it in the profile's device registry (first 128 characters) */
                 "X-Silo-Device-Id"?: string;
                 "User-Agent"?: string;
@@ -10764,11 +11177,7 @@ export interface operations {
     updatePlaybackProgress: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client's stable device identifier; a successful start records it in the profile's device registry (first 128 characters) */
                 "X-Silo-Device-Id"?: string;
                 "User-Agent"?: string;
@@ -10933,11 +11342,7 @@ export interface operations {
     replanPlayback: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client's stable device identifier; a successful start records it in the profile's device registry (first 128 characters) */
                 "X-Silo-Device-Id"?: string;
                 "User-Agent"?: string;
@@ -11102,12 +11507,7 @@ export interface operations {
     listProfiles: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -11208,12 +11608,7 @@ export interface operations {
     createProfile: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -11355,12 +11750,7 @@ export interface operations {
     verifyProfilePIN: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The profile whose PIN is checked */
                 id: string;
@@ -11492,6 +11882,241 @@ export interface operations {
             };
         };
     };
+    setRating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingSet"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteRating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listSimilar: {
         parameters: {
             query?: {
@@ -11510,12 +12135,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The item similar items are drawn from */
                 item_id: string;
@@ -11619,12 +12239,7 @@ export interface operations {
     getSettingsContract: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -11733,10 +12348,6 @@ export interface operations {
             header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -11873,11 +12484,7 @@ export interface operations {
                 /** @description Series whose profile_series values take part, one series_ids parameter per id */
                 series_ids?: string[];
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client family whose profile_client values take part; optional, and absence skips the profile_client layer */
                 "X-Silo-Client-Family"?: "tv" | "mobile" | "tablet" | "desktop" | "web";
                 /** @description The client's stable device identifier; its profile_device values take part */
@@ -11998,11 +12605,7 @@ export interface operations {
                 /** @description The series a profile_series value belongs to */
                 series_id?: string;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client family a profile_client value belongs to */
                 "X-Silo-Client-Family"?: "tv" | "mobile" | "tablet" | "desktop" | "web";
                 /** @description The client's stable device identifier; the profile_device scope stores against it when device_id is absent */
@@ -12157,11 +12760,7 @@ export interface operations {
                 /** @description The series a profile_series value belongs to */
                 series_id?: string;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
+            header?: {
                 /** @description The client family a profile_client value belongs to */
                 "X-Silo-Client-Family"?: "tv" | "mobile" | "tablet" | "desktop" | "web";
                 /** @description The client's stable device identifier; the profile_device scope stores against it when device_id is absent */
@@ -12285,12 +12884,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -12432,13 +13026,9 @@ export interface operations {
     getShuffleCapability: {
         parameters: {
             query?: never;
-            header: {
+            header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -12577,12 +13167,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Shuffle id */
                 shuffle_id: string;
@@ -12695,12 +13280,7 @@ export interface operations {
     deleteShuffle: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Shuffle id */
                 shuffle_id: string;
@@ -12815,12 +13395,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Shuffle id */
                 shuffle_id: string;
@@ -12977,12 +13552,7 @@ export interface operations {
                 /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
                 photo_width?: number;
             };
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description Shuffle id */
                 shuffle_id: string;
@@ -13126,12 +13696,7 @@ export interface operations {
     getSubtitlePreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -13235,12 +13800,7 @@ export interface operations {
     updateSubtitlePreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -13373,12 +13933,7 @@ export interface operations {
     deleteSubtitlePreference: {
         parameters: {
             query?: never;
-            header: {
-                /** @description The household profile acting for this request; it must belong to the authenticated account. */
-                "X-Profile-Id": string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path: {
                 /** @description The series content id */
                 series_id: string;
@@ -13480,12 +14035,7 @@ export interface operations {
     downloadSubtitle: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -13620,10 +14170,6 @@ export interface operations {
             header?: {
                 /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
                 "If-Match"?: string;
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 "If-None-Match"?: string;
             };
             path?: never;
@@ -13749,12 +14295,7 @@ export interface operations {
     searchSubtitles: {
         parameters: {
             query?: never;
-            header?: {
-                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -13838,6 +14379,110 @@ export interface operations {
             };
             /** @description Unsupported Media Type */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listStoredSubtitles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Opaque identifier */
+                media_file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredSubtitles"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14169,12 +14814,7 @@ export interface operations {
                 /** @description Also list libraries the profile hid itself (ui.disabled_library_ids), for a screen that shows them again. Without an account, profile, or policy library limit they are listed either way. Navigation should omit it and filter by the setting */
                 include_hidden?: boolean;
             };
-            header?: {
-                /** @description Optional. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -14293,10 +14933,6 @@ export interface operations {
                 photo_width?: number;
             };
             header?: {
-                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 /** @description The stable device identifier used to resolve playback preferences */
                 "X-Silo-Device-Id"?: string;
             };
@@ -14407,10 +15043,6 @@ export interface operations {
                 file_id: string;
             };
             header?: {
-                /** @description Optional while no profile on the authenticated account is PIN-protected or access-restricted (content-rating, advisory-age or library limits). Otherwise it is required: a request without it, or with an empty value, is refused with 422 validation_failed at header.x-profile-id; API keys are exempt. When present, it must name a profile of the authenticated account. */
-                "X-Profile-Id"?: string;
-                /** @description Verification proof for a PIN-locked profile, issued by POST /api/v2/profiles/{id}/verify-pin; required only when the declared profile is locked */
-                "X-Profile-Token"?: string;
                 /** @description The stable device identifier used to resolve playback preferences */
                 "X-Silo-Device-Id"?: string;
             };
@@ -14430,6 +15062,414 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WatchTrickplay"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markWatched: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A movie, audiobook, ebook, episode, season or series; a season or series expands to its episodes */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unmarkWatched: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A movie, audiobook, ebook, episode, season or series; a season or series expands to its episodes */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addToWatchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteWatchlistEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Catalog item identifier */
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

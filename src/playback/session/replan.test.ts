@@ -81,7 +81,6 @@ function setup(answers: Answer[] = [], overrides: { engine?: PlayerEngine | null
   });
   const replanner = new Replanner({
     client: { POST: post } as unknown as SiloClient,
-    header: () => ({ 'X-Profile-Id': 'p1' }),
     isStopped: () => world.stopped,
     plan: () => world.plan,
     capabilities: () => world.capabilities,

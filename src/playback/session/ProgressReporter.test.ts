@@ -50,7 +50,6 @@ function setup() {
   );
   const deps: ProgressDeps = {
     client: { POST: post } as unknown as SiloClient,
-    header: () => ({ 'X-Profile-Id': 'p1' }),
     installationId: () => 'install-1',
     sessionId: () => state.sessionId,
     isStopped: () => state.stopped,

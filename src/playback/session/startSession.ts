@@ -14,7 +14,7 @@ import { collectProfileProbe } from '../probe';
 import { resumePoint } from '../resume';
 import type { SubtitleWatchFields } from '../subtitleAuto';
 import { trackFields, type Item, type Tracks, type Version } from './facts';
-import { SessionError, type Heading, type Plan, type ProfileHeader } from './types';
+import { SessionError, type Heading, type Plan } from './types';
 
 /** What the capabilities document tells about the server. */
 export interface Installation {
@@ -39,16 +39,10 @@ export function forgetInstallation(baseUrl: string): void {
   installations.delete(baseUrl);
 }
 
-export async function loadInstallation(
-  client: SiloClient,
-  baseUrl: string,
-  header: ProfileHeader,
-): Promise<Installation> {
+export async function loadInstallation(client: SiloClient, baseUrl: string): Promise<Installation> {
   const cached = installations.get(baseUrl);
   if (cached) return cached;
-  const { data, response } = await client.GET('/api/v2/playback/capabilities', {
-    params: { header },
-  });
+  const { data, response } = await client.GET('/api/v2/playback/capabilities', {});
   if (!data) throw new SessionError(response.status === 404 ? 'unsupported' : 'failed');
   const supported =
     data.state === 'available' &&
@@ -81,10 +75,9 @@ export async function loadWatch(
   client: SiloClient,
   contentId: string,
   pickedFileId: string | undefined,
-  header: ProfileHeader,
 ): Promise<WatchData> {
   const { data, error, response } = await client.GET('/api/v2/watch/{id}', {
-    params: { path: { id: contentId }, header },
+    params: { path: { id: contentId } },
   });
   if (!data) throw toApiError(error, response);
   // The file the viewer picked, else the one watched last, else the first.
@@ -165,10 +158,9 @@ export interface StartRequest {
   context: PlaybackContext;
 }
 
-export function requestStart(client: SiloClient, header: ProfileHeader, start: StartRequest) {
+export function requestStart(client: SiloClient, start: StartRequest) {
   const buffering = start.buffering ?? { feature: false, mode: 'always' as const };
   return client.POST('/api/v2/playback/start', {
-    params: { header },
     body: {
       installation_id: start.installationId,
       protocol_version: 3,

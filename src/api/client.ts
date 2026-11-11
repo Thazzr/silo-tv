@@ -60,8 +60,11 @@ function authMiddleware(session: Session): Middleware {
       // refresh has run. An empty bearer is never sent.
       if (current.accessToken)
         request.headers.set('Authorization', `Bearer ${current.accessToken}`);
-      if (current.profileId) request.headers.set('X-Profile-Id', current.profileId);
-      if (current.profileToken) request.headers.set('X-Profile-Token', current.profileToken);
+      // A call that names another profile (creating one is the primary profile's job) wins.
+      if (current.profileId && !request.headers.has('X-Profile-Id'))
+        request.headers.set('X-Profile-Id', current.profileId);
+      if (current.profileToken && !request.headers.has('X-Profile-Token'))
+        request.headers.set('X-Profile-Token', current.profileToken);
       return request;
     },
   };

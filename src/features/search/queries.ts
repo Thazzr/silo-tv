@@ -72,7 +72,6 @@ export function useSearchTitles(query: string, segment: Segment) {
       if (pageParam === undefined) await quietPeriod(signal);
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: { q: query, type, limit: GRID_PAGE_SIZE, cursor: pageParam, ...GRID_IMAGE_QUERY },
         },
         signal,
@@ -107,7 +106,6 @@ export function useSearchBoxSets(query: string, segment: Segment) {
       await quietPeriod(signal);
       const { data, error, response } = await client.GET('/api/v2/catalog/box-sets', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: { q: query, limit: BOX_SET_LIMIT },
         },
         signal,
@@ -135,7 +133,6 @@ export function useSearchPeople(query: string, segment: Segment) {
       await quietPeriod(signal);
       const { data, error, response } = await client.GET('/api/v2/catalog/people', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             q: query,
             limit: PEOPLE_LIMIT,

@@ -51,7 +51,6 @@ export function useItemDetail(itemId: string) {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/items/{id}', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: itemId },
           query: DETAIL_IMAGE_QUERY,
         },
@@ -73,7 +72,6 @@ export function useSeasons(seriesId: string, enabled: boolean) {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/series/{id}/seasons', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: seriesId },
           query: DETAIL_IMAGE_QUERY,
         },
@@ -97,7 +95,6 @@ export function useSeasonEpisodes(seriesId: string, season: number | undefined) 
         '/api/v2/catalog/series/{id}/seasons/{num}/episodes',
         {
           params: {
-            header: { 'X-Profile-Id': profileId },
             path: { id: seriesId, num: season ?? 0 },
             query: DETAIL_IMAGE_QUERY,
           },
@@ -122,7 +119,6 @@ export function useSimilar(itemId: string, enabled: boolean) {
         '/api/v2/recommendations/similar/{item_id}',
         {
           params: {
-            header: { 'X-Profile-Id': profileId },
             path: { item_id: itemId },
             query: { limit: SIMILAR_LIMIT, ...DETAIL_IMAGE_QUERY },
           },

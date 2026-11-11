@@ -10,7 +10,6 @@ import { inRanges } from './facts';
 import type {
   Plan,
   PlayerReading,
-  ProfileHeader,
   ReplanOperation,
   ReplanOptions,
   ReplanResult,
@@ -54,7 +53,6 @@ export interface ReplanState {
 
 export interface ReplanDeps {
   client: SiloClient;
-  header(): ProfileHeader;
   isStopped(): boolean;
   plan(): Plan | null;
   capabilities(): ClientCapabilities | null;
@@ -330,7 +328,7 @@ export class Replanner {
       const { data, error, response } = await this.deps.client.POST(
         '/api/v2/playback/{session_id}/replan',
         {
-          params: { path: { session_id: before.sessionId }, header: this.deps.header() },
+          params: { path: { session_id: before.sessionId } },
           body: {
             installation_id: before.installationId,
             protocol_version: 3,

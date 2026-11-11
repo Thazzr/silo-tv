@@ -28,7 +28,6 @@ function setup(answers: (number | 'network')[], reading?: { position: number; pa
   const nextSequence = vi.fn(() => 42);
   const stop = new StopSequence({
     client: { DELETE: del } as unknown as SiloClient,
-    header: () => ({ 'X-Profile-Id': 'p1' }),
     installationId: () => 'install-1',
     nextSequence,
   });
@@ -110,7 +109,6 @@ describe('StopSequence body', () => {
           return { response: new Response(null, { status: 204 }) };
         },
       } as unknown as SiloClient,
-      header: () => ({ 'X-Profile-Id': 'p1' }),
       installationId: () => 'install-1',
       nextSequence: () => 9,
     });
@@ -210,25 +208,5 @@ describe('StopSequence contract pins', () => {
     await expect(finished).resolves.toBeUndefined();
     expect(del).toHaveBeenCalledTimes(3);
     expect(sent).toHaveLength(3);
-  });
-
-  it('sends the profile header from deps', async () => {
-    const del = vi.fn<(path: string, init: unknown) => Promise<{ response: Response }>>(
-      async () => ({
-        response: new Response(null, { status: 204 }),
-      }),
-    );
-    const header = { 'X-Profile-Id': 'profile-7' };
-    const stop = new StopSequence({
-      client: { DELETE: del } as unknown as SiloClient,
-      header: () => header,
-      installationId: () => 'i',
-      nextSequence: () => 1,
-    });
-    const finished = stop.send('s');
-    await vi.runAllTimersAsync();
-    await finished;
-    const init = del.mock.calls[0]![1] as { params: { header: unknown } };
-    expect(init.params.header).toEqual(header);
   });
 });

@@ -45,8 +45,7 @@ export function useSectionLimits(): () => { sectionLimit?: number; rowLimit?: nu
 
 /** What the server accepts as `item_limit`, for the list of sections and for one section. */
 export function useHomeCapabilities() {
-  const { client, baseUrl, session } = useSilo();
-  const profileId = session.get()?.profileId ?? '';
+  const { client, baseUrl } = useSilo();
   return useQuery({
     queryKey: homeCapabilitiesKey(baseUrl),
     // Read once per server and session: the answer only changes with a server update. It is kept
@@ -55,9 +54,7 @@ export function useHomeCapabilities() {
     gcTime: Infinity,
     retry: false,
     queryFn: async () => {
-      const { data, error, response } = await client.GET('/api/v2/home/capabilities', {
-        params: { header: { 'X-Profile-Id': profileId } },
-      });
+      const { data, error, response } = await client.GET('/api/v2/home/capabilities', {});
       if (!data) throw toApiError(error, response);
       return data;
     },
@@ -82,7 +79,6 @@ export function useHomeSections() {
       const { sectionLimit } = limits();
       const { data, error, response } = await client.GET('/api/v2/home/sections', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: { item_limit: sectionLimit, ...ROW_IMAGE_QUERY },
         },
       });
@@ -95,12 +91,10 @@ export function useHomeSections() {
 
 /** Reads one section again (after a removal, or "Try again"); throws when the read fails. */
 export function useSectionReader(rowLimit: number | undefined) {
-  const { client, session } = useSilo();
-  const profileId = session.get()?.profileId ?? '';
+  const { client } = useSilo();
   return async (sectionId: string): Promise<HomeSection> => {
     const { data, error, response } = await client.GET('/api/v2/home/sections/{id}/items', {
       params: {
-        header: { 'X-Profile-Id': profileId },
         path: { id: sectionId },
         query: { item_limit: rowLimit, ...ROW_IMAGE_QUERY },
       },
@@ -112,13 +106,11 @@ export function useSectionReader(rowLimit: number | undefined) {
 
 /** Hides a card from Continue Watching or Next Up (a series is dropped from both). */
 export function useDismissItem() {
-  const { client, session } = useSilo();
-  const profileId = session.get()?.profileId ?? '';
+  const { client } = useSilo();
   return useMutation({
     mutationFn: async ({ surface, item }: { surface: DismissSurface; item: HomeItem }) => {
       const { error, response } = await client.PUT('/api/v2/home/dismissals/{surface}/{item_id}', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { surface, item_id: item.content_id },
         },
         // Continue Watching holds until the item is played again; Next Up drops the series.
@@ -154,7 +146,6 @@ export function useSectionPages(sectionId: string, library?: { id: string; type?
     queryFn: async ({ pageParam }) => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             source: 'section',
             scope: library ? 'library' : 'home',

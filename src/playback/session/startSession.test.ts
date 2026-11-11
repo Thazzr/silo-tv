@@ -26,8 +26,6 @@ import {
 import { SessionError } from './types';
 import { CLIENT_FEATURES } from '../deviceProfile';
 
-const HEADER = { 'X-Profile-Id': 'p1' };
-
 type Answer = Parameters<typeof interpretStart>[0];
 
 const answer = (status: number, data?: unknown, error?: unknown): Answer =>
@@ -131,22 +129,22 @@ describe('loadInstallation cache', () => {
         ],
       }),
     );
-    const first = await loadInstallation(client, 'https://a.test', HEADER);
+    const first = await loadInstallation(client, 'https://a.test');
     expect(first).toEqual({
       id: INSTALLATION_ID,
       trickplay: true,
       markerList: true,
       activeQuality: true,
     });
-    expect(await loadInstallation(client, 'https://a.test', HEADER)).toBe(first);
+    expect(await loadInstallation(client, 'https://a.test')).toBe(first);
     expect(get).toHaveBeenCalledTimes(1);
-    await loadInstallation(client, 'https://b.test', HEADER);
+    await loadInstallation(client, 'https://b.test');
     expect(get).toHaveBeenCalledTimes(2);
   });
 
   it('reports the optional features as absent when the server does not list them', async () => {
     const { client } = clientFor(playbackCapabilities());
-    expect(await loadInstallation(client, 'https://a.test', HEADER)).toMatchObject({
+    expect(await loadInstallation(client, 'https://a.test')).toMatchObject({
       trickplay: false,
       markerList: false,
       activeQuality: false,
@@ -155,37 +153,35 @@ describe('loadInstallation cache', () => {
 
   it('forgetInstallation drops one server and leaves the others', async () => {
     const { client, get } = clientFor(playbackCapabilities());
-    await loadInstallation(client, 'https://a.test', HEADER);
-    await loadInstallation(client, 'https://b.test', HEADER);
+    await loadInstallation(client, 'https://a.test');
+    await loadInstallation(client, 'https://b.test');
     forgetInstallation('https://a.test');
-    await loadInstallation(client, 'https://b.test', HEADER);
+    await loadInstallation(client, 'https://b.test');
     expect(get).toHaveBeenCalledTimes(2);
-    await loadInstallation(client, 'https://a.test', HEADER);
+    await loadInstallation(client, 'https://a.test');
     expect(get).toHaveBeenCalledTimes(3);
   });
 
   it('clearInstallationCache drops every server', async () => {
     const { client, get } = clientFor(playbackCapabilities());
-    await loadInstallation(client, 'https://a.test', HEADER);
+    await loadInstallation(client, 'https://a.test');
     clearInstallationCache();
-    await loadInstallation(client, 'https://a.test', HEADER);
+    await loadInstallation(client, 'https://a.test');
     expect(get).toHaveBeenCalledTimes(2);
   });
 
   it('does not cache a failure', async () => {
     const { client, get } = clientFor(undefined, 500);
-    await expect(loadInstallation(client, 'https://a.test', HEADER)).rejects.toMatchObject({
+    await expect(loadInstallation(client, 'https://a.test')).rejects.toMatchObject({
       reason: 'failed',
     });
-    await expect(loadInstallation(client, 'https://a.test', HEADER)).rejects.toBeInstanceOf(
-      SessionError,
-    );
+    await expect(loadInstallation(client, 'https://a.test')).rejects.toBeInstanceOf(SessionError);
     expect(get).toHaveBeenCalledTimes(2);
   });
 
   it('is unsupported on 404 and on a server that cannot do protocol 3 with sequenced progress', async () => {
     await expect(
-      loadInstallation(clientFor(undefined, 404).client, 'https://a.test', HEADER),
+      loadInstallation(clientFor(undefined, 404).client, 'https://a.test'),
     ).rejects.toMatchObject({ reason: 'unsupported' });
     const unsupported = [
       playbackCapabilities({ state: 'unsupported' }),
@@ -196,16 +192,16 @@ describe('loadInstallation cache', () => {
     ];
     for (const capabilities of unsupported) {
       await expect(
-        loadInstallation(clientFor(capabilities).client, 'https://a.test', HEADER),
+        loadInstallation(clientFor(capabilities).client, 'https://a.test'),
       ).rejects.toMatchObject({ reason: 'unsupported' });
     }
   });
 });
 
 describe('requestStart', () => {
-  function send(start: Partial<Parameters<typeof requestStart>[2]> = {}) {
+  function send(start: Partial<Parameters<typeof requestStart>[1]> = {}) {
     const post = vi.fn(async () => ({ data: undefined, response: new Response(null) }));
-    void requestStart({ POST: post } as unknown as SiloClient, HEADER, {
+    void requestStart({ POST: post } as unknown as SiloClient, {
       installationId: INSTALLATION_ID,
       fileId: 'file-1',
       pinnedFile: false,
@@ -258,7 +254,7 @@ describe('requestStart body in full', () => {
     const post = vi.fn(async () => ({ data: undefined, response: new Response(null) }));
     const capabilities = { marker: 'caps', nested: { a: 1 } } as unknown as ClientCapabilities;
     const context = { marker: 'context', nested: { b: 2 } } as unknown as PlaybackContext;
-    void requestStart({ POST: post } as unknown as SiloClient, HEADER, {
+    void requestStart({ POST: post } as unknown as SiloClient, {
       installationId: INSTALLATION_ID,
       fileId: 'file-1',
       pinnedFile: false,
@@ -270,12 +266,8 @@ describe('requestStart body in full', () => {
       capabilities,
       context,
     });
-    const call = post.mock.calls[0] as unknown as [
-      string,
-      { params: { header: unknown }; body: Record<string, unknown> },
-    ];
-    const { body, params } = call[1];
-    expect(params.header).toEqual(HEADER);
+    const call = post.mock.calls[0] as unknown as [string, { body: Record<string, unknown> }];
+    const { body } = call[1];
     expect(body.client_features).toEqual(CLIENT_FEATURES);
     expect(body.client_features).not.toEqual([]);
     expect(body.subtitle_fidelity_preference).toBe('compatible');
@@ -305,7 +297,6 @@ describe('loadWatch', () => {
       } as unknown as SiloClient,
       'm1',
       picked,
-      HEADER,
     );
   const versions = [
     watchVersion({ file_id: 'a', duration_seconds: 1000 }),

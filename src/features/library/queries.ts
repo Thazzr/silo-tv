@@ -76,7 +76,6 @@ export function useLibrarySections(libraryId: string) {
       const limit = limits().sectionLimit;
       const { data, error, response } = await client.GET('/api/v2/library/{id}/sections', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: libraryId },
           query: { item_limit: limit, ...ROW_IMAGE_QUERY },
         },
@@ -112,7 +111,6 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
     queryFn: async ({ pageParam }) => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             library_id: libraryId,
             type: kind,
@@ -159,7 +157,6 @@ export function useBrowseWindow(
       queryFn: async () => {
         const { data, error, response } = await client.GET('/api/v2/catalog', {
           params: {
-            header: { 'X-Profile-Id': profileId },
             query: {
               library_id: libraryId,
               type: kind,
@@ -201,9 +198,7 @@ export function useSearchCapabilities() {
     staleTime: Infinity,
     retry: false,
     queryFn: async () => {
-      const { data, error, response } = await client.GET('/api/v2/catalog/search/capabilities', {
-        params: { header: { 'X-Profile-Id': profileId } },
-      });
+      const { data, error, response } = await client.GET('/api/v2/catalog/search/capabilities', {});
       if (!data) throw toApiError(error, response);
       return data;
     },
@@ -233,7 +228,6 @@ export function useCatalogFilters(libraryId: string, kind: LibraryKind) {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/filters', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: { library_id: libraryId, type: kind },
         },
       });
@@ -260,7 +254,6 @@ export function useWatchRules(libraryId: string, kind: LibraryKind): boolean {
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           query: {
             library_id: libraryId,
             type: kind,
@@ -305,7 +298,6 @@ export function useLetters(libraryId: string, kind: LibraryKind, selection: Brow
     retry: false,
     queryFn: async (): Promise<LetterIndex> => {
       const { data, error, response } = await client.POST('/api/v2/catalog/letters', {
-        params: { header: { 'X-Profile-Id': profileId } },
         body: { library_id: libraryId, type: kind, match: 'all', groups, order },
       });
       if (!data) throw toApiError(error, response);
@@ -346,7 +338,7 @@ export function useLibraryCollections(libraryId: string) {
     queryKey: ['library', 'collections', baseUrl, profileId, libraryId],
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/library/{id}/collections', {
-        params: { header: { 'X-Profile-Id': profileId }, path: { id: libraryId } },
+        params: { path: { id: libraryId } },
       });
       if (!data) throw toApiError(error, response);
       return {
@@ -369,7 +361,6 @@ export function useCollectionPages(libraryId: string, collectionId: string) {
         '/api/v2/library/{id}/collections/{collection_id}/items',
         {
           params: {
-            header: { 'X-Profile-Id': profileId },
             path: { id: libraryId, collection_id: collectionId },
             query: { limit: GRID_PAGE_SIZE, cursor: pageParam },
           },

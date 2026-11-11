@@ -1,14 +1,13 @@
 // The session's heartbeat: a progress report every 10 s while playing or paused, and the one-off
 // reports a pause or a lost connection asks for. Owns the report sequence the stop continues.
 import { toApiError, type SiloClient } from '../../api/client';
-import type { PlayerReading, ProfileHeader } from './types';
+import type { PlayerReading } from './types';
 
 /** Progress is reported every 10 s while the session is open, playing or paused (protocol §2.5). */
 export const PROGRESS_INTERVAL_MS = 10_000;
 
 export interface ProgressDeps {
   client: SiloClient;
-  header(): ProfileHeader;
   installationId(): string;
   /** The session to report for; empty before a plan and after a restart cleared it. */
   sessionId(): string;
@@ -95,7 +94,7 @@ export class ProgressReporter {
     this.pending = null;
     this.deps.client
       .POST('/api/v2/playback/{session_id}/progress', {
-        params: { path: { session_id: sessionId }, header: this.deps.header() },
+        params: { path: { session_id: sessionId } },
         body: {
           installation_id: this.deps.installationId(),
           sequence: this.sequence,

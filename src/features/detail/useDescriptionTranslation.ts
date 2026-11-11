@@ -75,9 +75,7 @@ export function useDescriptionTranslation(input: {
     staleTime: THIRTY_MINUTES,
     retry: false,
     queryFn: async () => {
-      const { data, error, response } = await client.GET('/api/v2/capabilities/metadata-ai', {
-        params: { header: { 'X-Profile-Id': profileId } },
-      });
+      const { data, error, response } = await client.GET('/api/v2/capabilities/metadata-ai', {});
       if (!data) throw toApiError(error, response);
       return data;
     },
@@ -143,7 +141,7 @@ export function useDescriptionTranslation(input: {
           const { data, error, response } = await client.POST(
             '/api/v2/catalog/items/{id}/translate-description',
             {
-              params: { header: { 'X-Profile-Id': profileId }, path: { id: target.id } },
+              params: { path: { id: target.id } },
               body: { target_language: target.language },
             },
           );

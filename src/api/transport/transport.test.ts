@@ -120,12 +120,10 @@ describe('directTransport', () => {
         session,
         device: { id: 'd'.repeat(32), name: 'tv' },
       });
-      const result = client
-        .GET('/api/v2/home/capabilities', { params: { header: { 'X-Profile-Id': 'p' } } })
-        .then(
-          () => 'resolved',
-          (error: unknown) => error,
-        );
+      const result = client.GET('/api/v2/home/capabilities').then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
       await vi.advanceTimersByTimeAsync(30_000);
       expect(await result).toBeInstanceOf(TypeError);
       expect(urls.some((u) => u.includes('/auth/refresh'))).toBe(false);

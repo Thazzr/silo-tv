@@ -48,7 +48,6 @@ export function useTrickplay(
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/watch/{id}/trickplay', {
         params: {
-          header: { 'X-Profile-Id': profileId },
           path: { id: contentId },
           query: { file_id: fileId },
         },
