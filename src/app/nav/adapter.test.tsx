@@ -258,3 +258,349 @@ describe('scrolling and the pointer', () => {
     expect(state.scrollTop).toBeGreaterThan(0);
   });
 });
+
+// --- Hardening: exact boxes, edge cases of the scroll maths -----------------------------------------
+
+const OFFSET_PROPS = ['offsetLeft', 'offsetTop', 'offsetWidth', 'offsetHeight'] as const;
+
+/** Runs `fn` with the offset reads of the DOM counted, so a slot-box read can be told from a DOM one. */
+async function countingDomReads<T>(fn: () => Promise<T>): Promise<{ value: T; reads: number }> {
+  let reads = 0;
+  for (const name of OFFSET_PROPS) {
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get() {
+        reads += 1;
+        return 0;
+      },
+    });
+  }
+  try {
+    const value = await fn();
+    return { value, reads };
+  } finally {
+    for (const name of OFFSET_PROPS) {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>)[name];
+    }
+  }
+}
+
+describe('NavAdapter measuring: the slot box', () => {
+  const service = { options: {} } as ConstructorParameters<typeof NavAdapter>[0];
+  const measure = (node: HTMLElement | undefined) =>
+    countingDomReads(() => new NavAdapter(service).measureLayout({ node } as never));
+
+  it('gives every edge of the box, from its position and size', async () => {
+    const host = html('<div data-nav-rect="10,20,30,40"><button id="c">c</button></div>');
+    const { value, reads } = await measure(host.querySelector<HTMLElement>('#c')!);
+    expect(reads).toBe(0);
+    expect(value).toMatchObject({
+      x: 10,
+      y: 20,
+      width: 30,
+      height: 40,
+      left: 10,
+      top: 20,
+      right: 40,
+      bottom: 60,
+    });
+  });
+
+  it('finds the slot when the node is the slot itself', async () => {
+    const host = html('<button id="c" data-nav-rect="1,2,3,4">c</button>');
+    const { value, reads } = await measure(host.querySelector<HTMLElement>('#c')!);
+    expect(reads).toBe(0);
+    expect(value).toMatchObject({ x: 1, y: 2, width: 3, height: 4 });
+  });
+
+  it.each([
+    ['too few numbers', '1,2,3'],
+    ['too many numbers', '1,2,3,4,5'],
+    ['an empty value', ''],
+    ['a number that is no number', '1,2,abc,4'],
+    ['an infinite number', '1,2,Infinity,4'],
+  ])('measures through the DOM when the slot holds %s', async (_name, value) => {
+    const host = html(`<div data-nav-rect="${value}"><button id="c">c</button></div>`);
+    const { reads } = await measure(host.querySelector<HTMLElement>('#c')!);
+    expect(reads).toBeGreaterThan(0);
+  });
+
+  it('does not throw for a component without a node', async () => {
+    await expect(measure(undefined)).resolves.toBeDefined();
+  });
+});
+
+/** Gives an element a scroll box that may be redefined and removed again (document elements too). */
+function tempBox(
+  el: HTMLElement,
+  box: { top: number; bottom: number; scrollHeight: number; scrollWidth?: number },
+) {
+  const state = { scrollTop: 0, scrollLeft: 0 };
+  const own: Record<string, PropertyDescriptor> = {
+    scrollTop: {
+      configurable: true,
+      get: () => state.scrollTop,
+      set: (v: number) => (state.scrollTop = v),
+    },
+    scrollLeft: {
+      configurable: true,
+      get: () => state.scrollLeft,
+      set: (v: number) => (state.scrollLeft = v),
+    },
+    scrollHeight: { configurable: true, value: box.scrollHeight },
+    clientHeight: { configurable: true, value: box.bottom - box.top },
+    scrollWidth: { configurable: true, value: box.scrollWidth ?? 100 },
+    clientWidth: { configurable: true, value: 100 },
+    getBoundingClientRect: {
+      configurable: true,
+      value: () => ({ top: box.top, bottom: box.bottom, left: 0, right: 100 }) as DOMRect,
+    },
+  };
+  Object.defineProperties(el, own);
+  return {
+    state,
+    undo: () => {
+      for (const key of Object.keys(own)) Reflect.deleteProperty(el, key);
+    },
+  };
+}
+
+function nodeAt(
+  host: HTMLElement,
+  rect: { top: number; bottom: number; left?: number; right?: number },
+) {
+  const node = host.querySelector<HTMLElement>('#c')!;
+  node.getBoundingClientRect = () => ({ left: 0, right: 50, ...rect }) as DOMRect;
+  return node;
+}
+
+/** jsdom resolves neither `scroll-margin` nor `scroll-padding`; this answers them for one element. */
+function withStyles(target: Element, values: Record<string, string>) {
+  const real = window.getComputedStyle.bind(window);
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
+    const style = real(el, pseudo);
+    return el === target
+      ? new Proxy(style, {
+          get: (t, prop) =>
+            typeof prop === 'string' && prop in values ? values[prop] : Reflect.get(t, prop),
+        })
+      : style;
+  });
+}
+
+describe('scrollFocusedIntoView: the list scroll maths', () => {
+  /** A list at 100..400 on screen; the room for a focused element is 124..376. */
+  function list(extraStyle = 'overflow-y:auto') {
+    const host = html(`<div id="list" style="${extraStyle}"><button id="c">c</button></div>`);
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 900,
+    });
+    return { host, state };
+  }
+
+  it('scrolls back by the distance an element starts before the room', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 110, bottom: 150 }));
+    expect(state.scrollTop).toBe(-14);
+  });
+
+  it('shows the start of an element that is taller than the room', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 200, bottom: 500 }));
+    expect(state.scrollTop).toBe(76);
+  });
+
+  it('scrolls forward by the distance an element ends after the room', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 300, bottom: 420 }));
+    expect(state.scrollTop).toBe(44);
+  });
+
+  it('leaves an element that is inside the room where it is', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 150, bottom: 200 }));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('keeps the margin the stylesheet asks for at the top', () => {
+    const { host, state } = list();
+    const node = nodeAt(host, { top: 130, bottom: 170 });
+    withStyles(node, { scrollMarginTop: '54px' });
+    scrollFocusedIntoView(node);
+    // Room starts at 100 + 54, not at 100 + 24.
+    expect(state.scrollTop).toBe(-24);
+  });
+
+  it('scrolls sideways by the distance an element starts before the room', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 150, bottom: 200, left: 10, right: 40 }));
+    // The list spans 0..100 across, so the room is 24..76.
+    expect(state.scrollLeft).toBe(-14);
+  });
+
+  it('scrolls sideways by the distance an element ends after the room', () => {
+    const { host, state } = list();
+    scrollFocusedIntoView(nodeAt(host, { top: 150, bottom: 200, left: 60, right: 90 }));
+    expect(state.scrollLeft).toBe(14);
+  });
+});
+
+describe('scrollFocusedIntoView: what counts as a scroll container', () => {
+  it('leaves an element alone whose content fits, even when it could scroll', () => {
+    const host = html('<div id="list" style="overflow:auto"><button id="c">c</button></div>');
+    // Content as high and as wide as the box.
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 300,
+    });
+    scrollFocusedIntoView(nodeAt(host, { top: 500, bottom: 560 }));
+    expect(state.scrollTop).toBe(0);
+    expect(state.scrollLeft).toBe(0);
+  });
+
+  it('leaves an element alone whose content is lower than the box and as wide', () => {
+    const host = html('<div id="list" style="overflow:auto"><button id="c">c</button></div>');
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 200,
+    });
+    scrollFocusedIntoView(nodeAt(host, { top: 500, bottom: 560 }));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it.each(['visible', 'clip'])('does not scroll an element with overflow %s', (overflow) => {
+    const host = html(
+      `<div id="list" style="overflow:${overflow}"><button id="c">c</button></div>`,
+    );
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 900,
+    });
+    scrollFocusedIntoView(nodeAt(host, { top: 500, bottom: 560 }));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it.each(['auto', 'scroll', 'hidden'])('scrolls an element with overflow %s', (overflow) => {
+    const host = html(
+      `<div id="list" style="overflow:${overflow}"><button id="c">c</button></div>`,
+    );
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 900,
+    });
+    scrollFocusedIntoView(nodeAt(host, { top: 500, bottom: 560 }));
+    expect(state.scrollTop).toBeGreaterThan(0);
+  });
+
+  it('never scrolls the body, but goes on to the document', () => {
+    const host = html('<button id="c">c</button>');
+    const node = nodeAt(host, { top: 1100, bottom: 1200 });
+    const box = tempBox(document.body, { top: 0, bottom: 1080, scrollHeight: 5000 });
+    document.body.style.overflow = 'auto';
+    const root = fakeRoot();
+    try {
+      scrollFocusedIntoView(node);
+      expect(box.state.scrollTop).toBe(0);
+      expect(root.scrollTop).toBe(1200 - (window.innerHeight - 24));
+    } finally {
+      document.body.style.overflow = '';
+      box.undo();
+      Reflect.deleteProperty(document, 'scrollingElement');
+    }
+  });
+
+  it('never scrolls the root element through the ancestor walk', () => {
+    const node = document.createElement('button');
+    node.id = 'c';
+    document.documentElement.append(node);
+    const box = tempBox(document.documentElement, { top: 0, bottom: 1080, scrollHeight: 5000 });
+    document.documentElement.style.overflow = 'auto';
+    // No document scrolling either, so only the ancestor walk could move the root element.
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, value: null });
+    try {
+      node.getBoundingClientRect = () =>
+        ({ top: 1100, bottom: 1200, left: 0, right: 50 }) as DOMRect;
+      scrollFocusedIntoView(node);
+      expect(box.state.scrollTop).toBe(0);
+    } finally {
+      Reflect.deleteProperty(document, 'scrollingElement');
+      document.documentElement.style.overflow = '';
+      box.undo();
+      node.remove();
+    }
+  });
+});
+
+describe('scrollFocusedIntoView: the document', () => {
+  function documentCase(root: object | null, rect: { top: number; bottom: number }) {
+    const host = html('<button id="c">c</button>');
+    const node = nodeAt(host, rect);
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, value: root });
+    return node;
+  }
+  afterEach(() => Reflect.deleteProperty(document, 'scrollingElement'));
+
+  it('does nothing without a scrolling element', () => {
+    const node = documentCase(null, { top: 1100, bottom: 1200 });
+    expect(() => scrollFocusedIntoView(node)).not.toThrow();
+  });
+
+  it('does nothing when the document is exactly as high as the window', () => {
+    const root = { scrollHeight: 1080, clientHeight: 1080, scrollTop: 0 };
+    const node = documentCase(root, { top: 1100, bottom: 1200 });
+    scrollFocusedIntoView(node);
+    expect(root.scrollTop).toBe(0);
+  });
+
+  it('does nothing when the document is lower than the window', () => {
+    const root = { scrollHeight: 500, clientHeight: 1080, scrollTop: 0 };
+    const node = documentCase(root, { top: 1100, bottom: 1200 });
+    scrollFocusedIntoView(node);
+    expect(root.scrollTop).toBe(0);
+  });
+
+  it('keeps the scroll padding of the document at the top', () => {
+    const root = { scrollHeight: 5000, clientHeight: 1080, scrollTop: 0 };
+    const node = documentCase(root, { top: 50, bottom: 100 });
+    withStyles(document.documentElement, { scrollPaddingTop: '80px' });
+    scrollFocusedIntoView(node);
+    expect(root.scrollTop).toBe(-30);
+  });
+
+  it('takes no padding when the document names none', () => {
+    const root = { scrollHeight: 5000, clientHeight: 1080, scrollTop: 0 };
+    const node = documentCase(root, { top: -10, bottom: 40 });
+    scrollFocusedIntoView(node);
+    expect(root.scrollTop).toBe(-10);
+  });
+
+  it('adds no padding to an element that starts at the very top', () => {
+    const root = { scrollHeight: 5000, clientHeight: 1080, scrollTop: 0 };
+    const node = documentCase(root, { top: 0, bottom: 40 });
+    scrollFocusedIntoView(node);
+    expect(root.scrollTop).toBe(0);
+  });
+
+  it('does not write the scroll position when nothing has to move', () => {
+    let writes = 0;
+    const root = {
+      scrollHeight: 5000,
+      clientHeight: 1080,
+      get scrollTop() {
+        return 0;
+      },
+      set scrollTop(_value: number) {
+        writes += 1;
+      },
+    };
+    const node = documentCase(root, { top: 200, bottom: 300 });
+    scrollFocusedIntoView(node);
+    expect(writes).toBe(0);
+  });
+});
