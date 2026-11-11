@@ -16,6 +16,9 @@ const siloServer = process.env.SILO_SERVER;
 // `npm run test:coverage` asks for coverage explicitly.
 const ci = Boolean(process.env.CI);
 
+// stryker.config.mjs sets this: a mutation run only needs the tests of src/ (see there).
+const mutation = Boolean(process.env.SILO_MUTATION);
+
 export default defineConfig(({ mode }) => ({
   base: './',
   plugins: [react(), webosHtml()],
@@ -45,13 +48,15 @@ export default defineConfig(({ mode }) => ({
     // Above Testing Library's asyncUtilTimeout (8 s, src/test/setup.ts), so a waitFor reports its
     // own error instead of the test timing out first.
     testTimeout: 15_000,
-    include: [
-      'src/**/*.test.{ts,tsx}',
-      'scripts/**/*.test.{ts,mjs}',
-      'build/**/*.test.ts',
-      'tests/**/*.test.{js,ts}',
-      'tools/**/*.test.{ts,mjs}',
-    ],
+    include: mutation
+      ? ['src/**/*.test.{ts,tsx}']
+      : [
+          'src/**/*.test.{ts,tsx}',
+          'scripts/**/*.test.{ts,mjs}',
+          'build/**/*.test.ts',
+          'tests/**/*.test.{js,ts}',
+          'tools/**/*.test.{ts,mjs}',
+        ],
     ...(ci
       ? { reporters: ['default', 'junit'], outputFile: { junit: 'reports/vitest-junit.xml' } }
       : {}),

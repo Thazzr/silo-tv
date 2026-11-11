@@ -1,0 +1,179 @@
+# Project-wide mutation score (StrykerJS), weekly on the default branch and on demand.
+#
+# A full run is about 16,000 mutants, far more than one 6 h job can test. The files are therefore
+# split into 24 shards (tools/mutation-shards.mjs: greedy by file size, deterministic), one matrix
+# job each, 12 at a time so the normal CI keeps its runner slots. A final job merges the shard
+# reports (tools/mutation-merge.mjs) into one report, one score and one badge, and publishes them:
+#   <pages url>/mutation/   the merged report
+#   <pages url>/badge.json  https://img.shields.io/endpoint?url=<pages url>/badge.json
+#
+# Incremental results: the merged report is also saved as the single cache entry, and each shard
+# restores it read-only as Stryker's incremental file. It is not kept per shard because a file
+# can move to another shard when its size changes. The cache is saved even if some shards failed
+# (with what finished), so a rerun only tests what is missing.
+name: Mutation testing
+
+on:
+  schedule:
+    # Sunday night, UTC. Scheduled runs always use the default branch.
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: mutation
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Keep in step with the matrix below.
+  SHARDS: 24
+
+jobs:
+  shard:
+    name: Shard ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        shard:
+          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Read-only: only the report job saves the cache. The newest entry whose key starts with the
+      # prefix wins. Entries for files outside this shard are harmless to Stryker's diff.
+      - name: Restore the incremental file
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/mutation/stryker-incremental.json
+          key: stryker-incremental-none
+          restore-keys: |
+            stryker-incremental-
+
+      - name: Run Stryker on this shard
+        run: npm run test:mutation
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}/${{ env.SHARDS }}
+
+      # Stryker's report of a shard also carries the cached results of every other shard's files.
+      # Cut it down to this shard's own files, so the merge sees each file once.
+      - name: Keep only this shard's files
+        if: always()
+        run: |
+          if [ -f reports/mutation/mutation.json ]; then
+            node tools/mutation-merge.mjs --no-html --shard "$STRYKER_SHARD" --out reports/shard reports/mutation/mutation.json
+          fi
+        env:
+          STRYKER_SHARD: ${{ matrix.shard }}/${{ env.SHARDS }}
+
+      - name: Upload the shard report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-shard-${{ matrix.shard }}
+          path: reports/shard/mutation.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  report:
+    name: Merge the reports
+    needs: shard
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # Needed for mutation-testing-elements (the report page).
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the shard reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mutation-shard-*
+          path: shards
+
+      # Whatever finished, even if some shards failed: the next run re-tests only what is missing.
+      - name: Merge the incremental file
+        id: incremental
+        run: |
+          node tools/mutation-merge.mjs --no-html --out merged shards
+          mkdir -p reports/mutation
+          cp merged/mutation.json reports/mutation/stryker-incremental.json
+
+      - name: Save the incremental file
+        if: always() && steps.incremental.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: reports/mutation/stryker-incremental.json
+          key: stryker-incremental-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # Fails unless every shard delivered a report: a partial run never gets a total score.
+      - name: Merge the report and build the site
+        run: |
+          node tools/mutation-merge.mjs --expect "$SHARDS" --out site/mutation shards
+          node tools/mutation-summary.mjs --report site/mutation/mutation.json --badge site/badge.json
+          touch site/.nojekyll
+
+      - name: Note the missing shards
+        if: failure()
+        run: echo "Not every shard delivered a report, so no score is published. The finished results are cached for the next run." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the merged report
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: site/mutation/
+          retention-days: 30
+
+      - name: Upload the Pages artifact
+        if: success() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  pages:
+    name: Publish on GitHub Pages
+    needs: report
+    # Only the default branch publishes, and only a complete report: a manual run on another branch
+    # still reports and uploads.
+    if: needs.report.result == 'success' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
