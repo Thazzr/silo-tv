@@ -46,6 +46,16 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Search with an on-screen keyboard of our own (TV 2026-11-09) (ä ö ü ß, results while typing): matching box sets first, then people (when the server offers them), then movies, series and episodes (episodes when the server offers them), filtered by All, Movies or Series
 - ✅ Movie detail page: hero, description, credit line, external ratings, quality badges (TV 2026-11-09)
 - ✅ Series detail page with seasons and episodes, cast, recommendations (TV 2026-11-09)
+- ⬜ Detail pages like Silo's web app (user decisions 2026-11-11, after measuring the web pages as a viewer). Order: after the player redesign; the missing API paths (watched, favorites, watchlist, ratings, not interested) come first in a package of their own:
+  - their own season and episode pages, as in the web app; OK on an episode card opens the episode page, and the remote's Play key plays from the card
+  - the hero: poster (not on episode pages), the kicker line ("Series · AMC", "Movie · Studio"), title art or text, tagline, chips (years, rating, seasons and episodes, or runtime and air date), quality badges, ratings as text, the synopsis with More, the credit line with creator, director or writers and the genres; a breadcrumb on season and episode pages
+  - TMDB's rating stays text; its logo only if TMDB's terms allow it, checked before the store submission
+  - the primary button as in the web app: "Start from Episode 1", "Play Next", "Resume", "Play First Episode", "Play Episode"; with progress, one Play button with a progress fill that asks "Resume playback?" (resume or start over), replacing the Resume and Start over pair
+  - the actions: mark watched or unwatched, favourite, a star rating (one focus stop: OK starts, Left/Right picks 1–5, OK saves, Back cancels, the set star again clears it), and a More menu with watchlist, not interested, mark unwatched and start over (shuffle joins with Shuffle)
+  - the series page: a row of season posters with the watched check and progress, specials first; the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis); the episode page: "More Episodes" with the current one marked
+  - cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
+  - quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`)
+  - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5
 - 🟨 Similar titles
 - ✅ Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series (TV 2026-11-09)
 - 🟨 Box sets: page with the films in release order and "Play" / "Continue" for the first unwatched film; a box set row on movie pages (the row checked on the TV, 2026-11-09)
@@ -128,8 +138,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ⬜ "For You" with the server's recommendation rows
 - ⬜ Calendar: one week of releases and airings for followed, trending or all titles
-- ⬜ Watchlist, favorites and history, each with removal
-- ⬜ Mark as watched or unwatched: movie, series, season, episode
+- ⬜ Watchlist, favorites and history pages, each with removal (marking watched, favourites, ratings and the watchlist on the detail page come with the detail pages in Phase 2)
 - ⬜ Requests, when the server offers them:
   - Discover rows
   - request, cancel, notify me
@@ -207,7 +216,7 @@ LG Content Store:
 ## Deliberately not planned
 
 - **Light mode:** the TV app stays dark only, like Silo's own TV apps (user decision 2026-11-08): bright surfaces glare in a dark room and wear OLED panels. Colours remain tokens, so the decision is cheap to revisit.
-- **Admin area:** server setup, libraries, users, plugins, metadata editing
+- **Admin area:** server setup, libraries, users, plugins, metadata editing, media locations (the web app shows file paths to curators only)
 - **Collections:** creating or editing them (no Silo TV app offers it)
 - **Reading:** e-books, comics, manga, documents
 - **Downloads** and offline playback
