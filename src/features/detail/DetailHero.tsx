@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { Artwork, useMediaUrl } from '../../ui/media';
@@ -6,10 +7,13 @@ import { useProfileSetting } from '../settings/profileSettings';
 import {
   detailChips,
   heroCredits,
+  isSeason,
   isSeries,
   kicker,
   qualityBadges,
   ratingEntries,
+  seasonLabel,
+  seasonSubtitle,
   type ItemDetail,
   type Season,
 } from './info';
@@ -102,7 +106,9 @@ export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrol
 /**
  * The top of a detail page, like the web's hero: the poster beside a column with the kicker, the
  * title art or the title, the tagline, the chips and quality badges, the external ratings, the
- * synopsis, the credit line and the action row (`actions`).
+ * synopsis, the credit line and the action row (`actions`). A season page has a breadcrumb in place
+ * of the kicker, the series' title (or its logo) with the season's own title under it, and no
+ * ratings or credits; its synopsis is the season's.
  */
 export function DetailHero({
   detail,
@@ -111,6 +117,7 @@ export function DetailHero({
   faded = false,
   translation = null,
   seasons,
+  loadedEpisodes = 0,
 }: {
   detail: ItemDetail;
   actions: ReactNode;
@@ -121,6 +128,8 @@ export function DetailHero({
   translation?: 'translating' | 'ai' | null;
   /** A series' season list, which its season and episode chips count; empty while it loads. */
   seasons: readonly Season[];
+  /** A season's number of loaded episodes, for the chip when the season carries no count. */
+  loadedEpisodes?: number;
 }) {
   const t = useT();
   const url = useMediaUrl();
@@ -132,11 +141,15 @@ export function DetailHero({
   // reserved (same size) so the page does not jump once the answer arrives.
   const showLogo = hasLogo && titleArt.known && titleArt.value;
   const reserveLogo = hasLogo && !titleArt.known;
+  const season = isSeason(detail);
   const { type, name: studio } = kicker(detail, t);
-  const chips = detailChips(detail, seasons, t);
+  const chips = detailChips(detail, seasons, t, loadedEpisodes);
   const badges = qualityBadges(detail);
-  const ratings = ratingEntries(detail);
-  const { credits, genres } = heroCredits(detail, t);
+  const ratings = season ? [] : ratingEntries(detail);
+  const { credits, genres } = season ? { credits: [], genres: [] } : heroCredits(detail, t);
+  // A season page is titled by its series; the season's own title is the line under it.
+  const heading = season ? (detail.series_title ?? detail.title) : detail.title;
+  const subtitle = season ? seasonSubtitle(detail, t) : (detail.tagline ?? null);
   // The credit line's pieces, joined by dots: the credits, then all genres as one piece.
   const creditPieces: ReactNode[] = credits.map((credit) => (
     <Fragment key={credit.label}>
@@ -160,19 +173,31 @@ export function DetailHero({
           <Artwork
             src={url(detail.poster_url)}
             thumbhash={detail.poster_thumbhash}
-            title={detail.title}
+            title={season ? seasonLabel(detail, t) : detail.title}
           />
         </div>
         <div className="detail-text" data-faded={faded}>
-          <p className="detail-kicker" data-testid="detail-kicker">
-            {type}
-            {studio ? (
-              <>
-                <span className="detail-kicker-dot" aria-hidden="true" />
-                <span className="detail-kicker-name">{studio}</span>
-              </>
-            ) : null}
-          </p>
+          {season ? (
+            <nav
+              className="detail-breadcrumb"
+              aria-label={t('detail.breadcrumb')}
+              data-testid="detail-breadcrumb"
+            >
+              <span>{heading}</span>
+              <ChevronRight size={22} aria-hidden="true" />
+              <span aria-current="page">{seasonLabel(detail, t)}</span>
+            </nav>
+          ) : (
+            <p className="detail-kicker" data-testid="detail-kicker">
+              {type}
+              {studio ? (
+                <>
+                  <span className="detail-kicker-dot" aria-hidden="true" />
+                  <span className="detail-kicker-name">{studio}</span>
+                </>
+              ) : null}
+            </p>
+          )}
           {reserveLogo ? (
             <div className="detail-logo" data-testid="detail-logo-reserve" />
           ) : showLogo ? (
@@ -180,17 +205,20 @@ export function DetailHero({
               className="detail-logo"
               data-testid="detail-logo"
               src={logo}
-              alt={detail.title}
+              alt={heading}
               onError={() => setFailed(logo)}
             />
           ) : (
             <h1 className="detail-title" data-testid="detail-title">
-              {detail.title}
+              {heading}
             </h1>
           )}
-          {detail.tagline ? (
-            <p className="detail-tagline" data-testid="detail-tagline">
-              {detail.tagline}
+          {subtitle ? (
+            <p
+              className={season ? 'detail-subtitle' : 'detail-tagline'}
+              data-testid={season ? 'detail-subtitle' : 'detail-tagline'}
+            >
+              {subtitle}
             </p>
           ) : null}
           {chips.length > 0 || badges.length > 0 ? (
@@ -231,7 +259,7 @@ export function DetailHero({
             <Synopsis
               text={detail.overview}
               onMore={onMore}
-              lines={series ? 3 : 6}
+              lines={series || season ? 3 : 6}
               dimmed={translation === 'translating'}
             />
           ) : null}

@@ -875,18 +875,13 @@ describe('SearchScreen: opening a result', () => {
     expect(opened('detail-stub')).toEqual({ name: 'detail', itemId: 'show-1' });
   });
 
-  it('opens an episode on its series with that season and episode', async () => {
+  it('opens an episode on its own page', async () => {
     setup({ capabilities: { video_with_episodes_scope: true }, titles: () => [episodeMatch()] });
     type('sag');
     await found('Sagas of Old');
     await focusOn(titleCard('ep-1'));
     await pressKey(KEY.enter);
-    expect(opened('detail-stub')).toEqual({
-      name: 'detail',
-      itemId: 'ser-1',
-      season: 1,
-      episodeId: 'ep-1',
-    });
+    expect(opened('detail-stub')).toEqual({ name: 'detail', itemId: 'ep-1' });
   });
 
   it('opens a box set on its page with its library', async () => {

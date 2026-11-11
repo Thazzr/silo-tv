@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
@@ -303,9 +304,8 @@ describe('DetailScreen: AI translation of a description', () => {
 
   describe('a series', () => {
     const series = () => itemDetail({ type: 'series', content_id: 's1', play_season_number: 1 });
-    const seasons = [seasonOf(1), seasonOf(2)];
 
-    function serveSeries() {
+    function serveSeries(seasons = [seasonOf(1)]) {
       const state = { posted: false, readsAfterPost: 0 };
       const calls = serveDetail(server, {
         translation: {
@@ -331,7 +331,7 @@ describe('DetailScreen: AI translation of a description', () => {
     const episodeReads = (calls: DetailCalls, key = 's1/1') =>
       calls.episodes.filter((read) => read === key).length;
 
-    it('translates the shown season by its content id and the episodes language, reading the episodes', async () => {
+    it('translates the listed season of a one-season series by its content id and the episodes language', async () => {
       const { calls } = serveSeries();
       setup({ itemId: 's1' });
       await until(() => expect(calls.translation.posts).toHaveLength(1));
@@ -354,24 +354,100 @@ describe('DetailScreen: AI translation of a description', () => {
       expect(pill()).toBeNull();
     });
 
-    it('stops the run when the season is switched away and starts it again when it shows again', async () => {
+    it('stops the run of the listed season when the seasons list grows and the page lists none', async () => {
       const { calls, state } = serveSeries();
-      setup({ itemId: 's1' });
+      const queryClient = newQueryClient();
+      setup({ itemId: 's1' }, queryClient);
       await until(() => expect(calls.translation.posts).toHaveLength(1));
       await settle();
-      state.readsAfterPost = -1000; // keeps season 1 pending however often it is read
-      fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
+      // Keeps season 1 pending however often it is read.
+      state.readsAfterPost = -1000;
+      server.use(
+        http.get(`${BASE_URL}/api/v2/catalog/series/:id/seasons`, () =>
+          HttpResponse.json({ items: [seasonOf(1), seasonOf(2)] }),
+        ),
+      );
+      await act(async () => {
+        await queryClient.invalidateQueries({ queryKey: ['detail', 'seasons'] });
+      });
       await settle();
+      await until(() => expect(screen.getByTestId('season-rail')).toBeInTheDocument());
       const reads = episodeReads(calls);
       await quiet(60);
+      // Stopped, not failed: no more reads, no pill, no second request.
       expect(episodeReads(calls)).toBe(reads);
-      // Stopped, not failed: no pill, and no second request while it shows season 2.
       expect(pill()).toBeNull();
       expect(calls.translation.posts).toHaveLength(1);
+    });
 
-      fireEvent.click(screen.getByRole('tab', { name: 'Season 1' }));
+    it('translates no season of a series that lists none: only the play target is read', async () => {
+      const { calls } = serveSeries([seasonOf(1), seasonOf(2)]);
+      setup({ itemId: 's1' });
+      await until(() => expect(calls.episodes).toContain('s1/1'));
+      await quiet(60);
+      expect(calls.translation.posts).toEqual([]);
+      expect(pill()).toBeNull();
+    });
+  });
+
+  describe('a season page', () => {
+    const seasonPage = (overrides = {}) =>
+      itemDetail({
+        type: 'season',
+        content_id: 'season-1',
+        series_id: 's1',
+        series_title: 'A Show',
+        season_number: 1,
+        ...overrides,
+      });
+
+    function serveSeasonPage(overrides = {}) {
+      const state = { posted: false, readsAfterPost: 0 };
+      const calls = serveDetail(server, {
+        translation: {
+          capability: { on_view: 'auto' },
+          translate: () => {
+            state.posted = true;
+            return {};
+          },
+        },
+        item: () => seasonPage(overrides),
+        episodes: () => {
+          if (state.posted) state.readsAfterPost += 1;
+          const done = state.readsAfterPost >= 2;
+          return [1, 2].map((n) =>
+            episodeOf(1, n, done ? {} : { pending_translation_language: 'de' }),
+          );
+        },
+      });
+      return { calls, state };
+    }
+
+    it('translates the episodes of the season by the season content id, reading its list again', async () => {
+      const { calls } = serveSeasonPage();
+      setup({ itemId: 'season-1' });
+      await until(() => expect(calls.translation.posts).toHaveLength(1));
+      await settle();
+      expect(calls.translation.posts[0]).toEqual({
+        id: 'season-1',
+        body: { target_language: 'de' },
+      });
+      const reads = () => calls.episodes.filter((read) => read === 's1/1').length;
+      const before = reads();
+      await advance(1);
+      expect(reads()).toBe(before + 1);
+      await advance(2);
+      expect(reads()).toBe(before + 2);
+      await quiet(60);
+      expect(reads()).toBe(before + 2);
+      expect(calls.translation.posts).toHaveLength(1);
+    });
+
+    it('translates the season overview and the episodes as two runs of their own', async () => {
+      const { calls } = serveSeasonPage({ pending_translation_language: 'de' });
+      setup({ itemId: 'season-1' });
       await until(() => expect(calls.translation.posts).toHaveLength(2));
-      expect(calls.translation.posts[1]?.id).toBe('season-1');
+      expect(calls.translation.posts.map((post) => post.id)).toEqual(['season-1', 'season-1']);
     });
   });
 

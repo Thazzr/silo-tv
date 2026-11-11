@@ -317,7 +317,7 @@ describe('the primary button of a series', () => {
     const { onPlay } = setup({ itemId: 's1' });
     await ready();
     await waitFor(() => expect(primary()).toHaveTextContent(label));
-    await screen.findByTestId('episode-strip');
+    await screen.findByTestId('episode-grid');
     fireEvent.click(primary());
     expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ contentId: 'e11' }));
   });
@@ -402,7 +402,7 @@ describe('the watched toggle', () => {
     });
     const writes = serveUserActions(server);
     setup({ itemId: 's1' }, queryClient);
-    await screen.findByTestId('episode-strip');
+    await screen.findByTestId('episode-grid');
     const before = { items: calls.items.length, episodes: calls.episodes.length };
     expect(button('Mark Series Watched')).toBeInTheDocument();
     played = true;
@@ -1069,12 +1069,12 @@ describe('round 2: what the first tests left open', () => {
         episodes: (season) => [episodeOf(season, 1)],
       });
       setup({ itemId: 's1' });
-      await screen.findByTestId('episode-strip');
+      await screen.findByTestId('episode-grid');
       await focusKeyIs('detail-play');
       await pressKey(KEY.right);
       await focusKeyIs('detail-watched');
       await pressKey(KEY.down);
-      await focusKeyIs('season:1');
+      await focusKeyIs('gcard:episodes:s1:e11');
       await pressKey(KEY.up);
       await focusKeyIs('detail-play');
     });
@@ -1082,12 +1082,12 @@ describe('round 2: what the first tests left open', () => {
     it('lands on the watched toggle when the primary button is disabled', async () => {
       serveDetail(server, {
         item: () => itemDetail({ content_id: 's1', type: 'series', versions: [] }),
-        seasons,
+        seasons: [seasonOf(1), seasonOf(2)],
         episodes: () => [],
       });
       setup({ itemId: 's1' });
       await waitFor(() => expect(primary()).toBeDisabled());
-      await screen.findByTestId('episodes-empty');
+      await screen.findByTestId('season-rail');
       await focusKeyIs('detail-watched');
       await pressKey(KEY.right);
       await focusKeyIs('detail-favorite');

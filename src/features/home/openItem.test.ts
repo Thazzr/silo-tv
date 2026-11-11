@@ -39,7 +39,7 @@ describe('openItem', () => {
     },
   );
 
-  it('opens the series of any other episode card, on its season and on that episode', () => {
+  it('opens the own page of any other episode card, by its content id', () => {
     const { play, openDetail } = open({
       type: 'episode',
       content_id: 'e7',
@@ -47,19 +47,44 @@ describe('openItem', () => {
       season_number: 2,
       episode_number: 7,
     });
-    expect(openDetail).toHaveBeenCalledWith({ itemId: 's1', season: 2, episodeId: 'e7' });
+    expect(openDetail).toHaveBeenCalledWith({ itemId: 'e7' });
     expect(play).not.toHaveBeenCalled();
   });
 
-  it('plays an episode that does not name its series, there is no page to open', () => {
-    const { play, openDetail, item } = open({ type: 'episode', content_id: 'e7' });
-    expect(play).toHaveBeenCalledWith(item, { kind: 'ask' });
-    expect(openDetail).not.toHaveBeenCalled();
+  it('opens the page of an episode that does not name its series too', () => {
+    const { play, openDetail } = open({ type: 'episode', content_id: 'e8' });
+    expect(openDetail).toHaveBeenCalledWith({ itemId: 'e8' });
+    expect(play).not.toHaveBeenCalled();
   });
 
-  it('opens the series of a season card on that season', () => {
-    const { openDetail } = open({ type: 'season', series_id: 's1', season_number: 3 });
-    expect(openDetail).toHaveBeenCalledWith({ itemId: 's1', season: 3 });
+  it('opens the own page of a season card, by its content id', () => {
+    const { play, openDetail } = open({
+      type: 'season',
+      content_id: 'season-s1-3',
+      series_id: 's1',
+      season_number: 3,
+    });
+    expect(openDetail).toHaveBeenCalledWith({ itemId: 'season-s1-3' });
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it.each(['movie', 'series', 'season'])(
+    'opens the page of a %s card even when its source says in progress',
+    (type) => {
+      const { play, openDetail } = open({ type, content_id: 'x1', item_source: 'in_progress' });
+      expect(openDetail).toHaveBeenCalledWith({ itemId: 'x1' });
+      expect(play).not.toHaveBeenCalled();
+    },
+  );
+
+  it('counts a source with stray spaces and capitals as a resume card too', () => {
+    const { play, openDetail, item } = open({
+      type: 'episode',
+      content_id: 'e1',
+      item_source: ' In_Progress ',
+    });
+    expect(play).toHaveBeenCalledWith(item, { kind: 'resume' });
+    expect(openDetail).not.toHaveBeenCalled();
   });
 
   it('plays anything else', () => {

@@ -63,6 +63,11 @@ interface FakeOptions {
   longBio?: boolean;
   /** How many seasons the series has (2 when omitted). */
   seasons?: number;
+  /**
+   * The series' seasons carry posters, the first one is watched and the second one is in progress
+   * (one of its two episodes watched), and every episode has a still.
+   */
+  posters?: boolean;
   /** Extra genres ("Genre 01", ...) after Action and Drama: a facet list longer than its panel. */
   genres?: number;
   /** An older server: the watch-state rules answer 422 (the Status section then stays out). */
@@ -471,7 +476,59 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             season_number: n,
             title: `Season ${n}`,
             episode_count: 2,
+            play_content_id: `e${n}1`,
+            ...(options.posters
+              ? {
+                  poster_url: `/img/poster-season${n}.png`,
+                  user_data:
+                    n === 1
+                      ? { played: true, in_progress_count: 0, unplayed_count: 0, watched_count: 2 }
+                      : n === 2
+                        ? {
+                            played: false,
+                            in_progress_count: 0,
+                            unplayed_count: 1,
+                            watched_count: 1,
+                          }
+                        : undefined,
+                }
+              : {}),
           })),
+        });
+      }
+      // A season's own page and an episode's own page, which the cards of the series open.
+      const seasonPage = /^\/api\/v2\/catalog\/items\/season-(\d+)$/.exec(url.pathname);
+      if (req.method === 'GET' && seasonPage) {
+        const n = Number(seasonPage[1]);
+        return send(200, {
+          ...baseItem,
+          content_id: `season-${n}`,
+          type: 'season',
+          title: `Season ${n}`,
+          series_id: 's1',
+          series_title: 'A Show',
+          season_number: n,
+          air_date: '2008-01-20',
+          episode_count: 2,
+          overview: tall
+            ? `What happens in season ${n}. ${'It goes on and on, over many lines. '.repeat(20)}`
+            : `What happens in season ${n}.`,
+          ...(options.posters ? { poster_url: `/img/poster-season${n}.png` } : {}),
+        });
+      }
+      const episodePage = /^\/api\/v2\/catalog\/items\/e(\d+)(\d)$/.exec(url.pathname);
+      if (req.method === 'GET' && episodePage) {
+        return send(200, {
+          ...baseItem,
+          content_id: `e${episodePage[1]}${episodePage[2]}`,
+          type: 'episode',
+          title: `Episode ${episodePage[1]}.${episodePage[2]}`,
+          series_id: 's1',
+          series_title: 'A Show',
+          season_number: Number(episodePage[1]),
+          episode_number: Number(episodePage[2]),
+          runtime: 45,
+          overview: `Synopsis of ${episodePage[1]}.${episodePage[2]}.`,
         });
       }
       const episodes = /^\/api\/v2\/catalog\/series\/s1\/seasons\/(\d+)\/episodes$/.exec(
@@ -487,6 +544,12 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             title: `Episode ${season}.${n}`,
             runtime: 45,
             overview: `Synopsis of ${season}.${n}.`,
+            ...(options.posters
+              ? {
+                  still_url: `/img/still-${season}${n}.png`,
+                  air_date: `2008-0${season}-${n === 1 ? '20' : '27'}`,
+                }
+              : {}),
             ...(options.spoilers === undefined
               ? {}
               : {
@@ -860,7 +923,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                       ]
                     : []),
                   ...(withLongRow
-                    ? Array.from({ length: 12 }, (_, i) => ({
+                    ? Array.from({ length: 25 }, (_, i) => ({
                         content_id: `x${i + 1}`,
                         title: `Extra ${i + 1}`,
                         type: 'movie',
@@ -1415,7 +1478,7 @@ test('Settings: subtitle appearance dialog from the avatar menu, change the size
     .toBe(true);
 });
 
-test('Home to a series, season 2, play an episode and Back to the same episode, keyboard only', async ({
+test('Home to a series, a season, an episode and Back to each card, then play the season, keyboard only', async ({
   page,
 }) => {
   const { origin, seen } = await startFakeSilo({ series: true });
@@ -1434,55 +1497,62 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('A Show');
-  // The server's play target (S1 E1) is on Play; the seasons come in order, season 1 selected.
+  // The server's play target (S1 E1) is on Play; the seasons are a row of cards, no grid.
   await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
-  // The label no longer waits for the episodes (it follows the series' counts), so wait for the
-  // pills and the strip before a key moves down to them.
-  await expect(page.getByTestId('episode-strip')).toBeVisible();
-  await expect(page.getByRole('tab')).toHaveText(['Staffel 1', 'Staffel 2']);
-  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
-  await expect(page.getByTestId('episode-title')).toHaveText([
-    'E1 · Episode 1.1',
-    'E2 · Episode 1.2',
-  ]);
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await expect(page.getByTestId('season-label')).toHaveText(['Staffel 1', 'Staffel 2']);
+  await expect(page.getByTestId('season-count')).toHaveText(['2 Folgen', '2 Folgen']);
+  await expect(page.getByTestId('seasons-head-total')).toHaveText('2 insgesamt');
+  await expect(page.getByTestId('episode-grid')).toHaveCount(0);
 
-  // Down to the pills, Right onto season 2: it shows only on OK, not while the focus rests there.
+  // Down to the first season, Right to the second, OK opens its page: the series title with the
+  // path above it, the season's chips and overview, and the grid of its episodes.
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toBeFocused();
-  await page.waitForTimeout(700);
-  await expect(page.getByTestId('episode-title').first()).toHaveText('E1 · Episode 1.1');
+  await expect(page.getByRole('button', { name: /Staffel 2/ })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('episode-title').first()).toHaveText('E1 · Episode 2.1');
-  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
-  // Down into the episodes, Right to the second one, OK plays it.
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 2');
+  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
+  await expect(page.locator('.detail-chip')).toHaveText(['2008', 'Staffel 2', '2 Folgen']);
+  await expect(page.getByTestId('detail-synopsis')).toHaveText('What happens in season 2.');
+  await expect(page.getByTestId('episode-title')).toHaveText([
+    'S02F01 · Episode 2.1',
+    'S02F02 · Episode 2.2',
+  ]);
+  await expect(page.getByTestId('episodes-head-total')).toHaveText('2 insgesamt');
+  await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
+
+  // Down into the grid, onward to the second episode, OK opens that episode's page.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 2.1/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Episode 2.2/ })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('player')).toBeVisible();
-  await expect.poll(() => seen.some((e) => e.path === '/api/v2/watch/e22')).toBe(true);
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 2.2');
+  expect(seen.some((e) => e.path === '/api/v2/catalog/items/e22')).toBe(true);
+  // Opening a page never plays.
+  expect(seen.some((e) => e.path === '/api/v2/watch/e22')).toBe(false);
 
-  // Back: the page is on season 2 and the same episode has the focus.
+  // Back: the season page, and the same episode card has the focus.
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
-  await expect(page.getByRole('tab', { name: 'Staffel 2' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 2');
   await expect(page.getByRole('button', { name: /Episode 2.2/ })).toBeFocused();
-  // Back once more is Home, on the series card.
+  // Back again: the series page, and the second season card has the focus.
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('home')).toBeVisible();
-  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Staffel 2/ })).toBeFocused();
+
+  // OK on the season again, then Play on the season page plays its first episode.
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/watch/e21')).toBe(true);
+  // Back from the player: the season page, on its Play button.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 2');
+  await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
 });
 
 test('Movies: Browse filtered by watch state with the remote; an older server shows no Status section', async ({
@@ -2097,7 +2167,7 @@ test('player Info (blue key): two columns of readable rows, inside the safe area
   await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
   // The label no longer waits for the episodes (it follows the series' counts), so wait for the
   // pills and the strip before a key moves down to them.
-  await expect(page.getByTestId('episode-strip')).toBeVisible();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -2211,8 +2281,16 @@ async function openSeriesDetail(
   seasons?: number,
   titleArt?: boolean,
   spoilers?: boolean,
+  posters?: boolean,
 ) {
-  const { origin, seen } = await startFakeSilo({ series: true, tall, seasons, titleArt, spoilers });
+  const { origin, seen } = await startFakeSilo({
+    series: true,
+    tall,
+    seasons,
+    titleArt,
+    spoilers,
+    posters,
+  });
   await page.goto(`${distIndexUrl}?server=${origin}`);
   await expect(page.getByLabel('Serveradresse')).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -2223,12 +2301,12 @@ async function openSeriesDetail(
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
   // The label no longer waits for the episodes (it follows the series' counts), so wait for the
-  // pills and the strip before a key moves down to them.
-  await expect(page.getByTestId('episode-strip')).toBeVisible();
+  // seasons row (or the grid of a one-season series) before a key moves down to it.
+  await expect(page.getByTestId(seasons === 1 ? 'episode-grid' : 'season-rail')).toBeVisible();
   return { seen };
 }
 
-test('detail page: focused pills have black content on white, the selected season keeps its style', async ({
+test('detail page: a focused action pill is black on white, a focused season card shows its ring and grows', async ({
   page,
 }) => {
   await openSeriesDetail(page);
@@ -2243,23 +2321,32 @@ test('detail page: focused pills have black content on white, the selected seaso
   const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   expect(await paint(play)).toEqual(white);
 
-  // The focused season pill, which is also the selected one.
+  // The focused season card: the ring is drawn and the poster has grown by 5 %.
+  const ring = (card: ReturnType<Page['locator']>) =>
+    card
+      .locator('.card-ring')
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
+  const scale = (card: ReturnType<Page['locator']>) =>
+    card.locator('.card-art').evaluate((el) => {
+      const w = el.ownerDocument.defaultView!;
+      return Math.round(new w.DOMMatrix(w.getComputedStyle(el).transform).a * 100);
+    });
   await page.keyboard.press('ArrowDown');
-  const season1 = page.getByRole('tab', { name: 'Staffel 1' });
+  const season1 = page.getByRole('button', { name: /Staffel 1/ });
   await expect(season1).toBeFocused();
-  expect(await paint(season1)).toEqual(white);
+  await expect.poll(() => ring(season1)).toBe('1');
+  await expect.poll(() => scale(season1)).toBe(105);
 
-  // Another season focused: it is white too, and the selected one is back to its resting style.
+  // Another season focused: the first is back to its resting look.
   await page.keyboard.press('ArrowRight');
-  const season2 = page.getByRole('tab', { name: 'Staffel 2' });
+  const season2 = page.getByRole('button', { name: /Staffel 2/ });
   await expect(season2).toBeFocused();
-  expect(await paint(season2)).toEqual(white);
-  const rest = await paint(season1);
-  expect(rest.color).not.toBe('rgb(0, 0, 0)');
-  expect(rest.background).not.toBe('rgb(255, 255, 255)');
+  await expect.poll(() => ring(season2)).toBe('1');
+  await expect.poll(() => ring(season1)).toBe('0');
+  await expect.poll(() => scale(season1)).toBe(100);
 });
 
-test('detail page: the backdrop stays, the page snaps to the season pills, the text column is narrow', async ({
+test('detail page: the backdrop stays, the page snaps to the seasons row, the text column is narrow', async ({
   page,
 }) => {
   await openSeriesDetail(page);
@@ -2273,15 +2360,13 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   const synopsis = await page.getByTestId('detail-synopsis').boundingBox();
   expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1267);
 
-  // Down to the season pills and into the episodes: the actions are out of view, and no pill
-  // reaches into the top safe-area band (54 px).
+  // Down to the seasons: the actions are out of view, and no pill reaches into the top
+  // safe-area band (54 px).
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('tab', { name: 'Staffel 1' })).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
-  // The page has scrolled (400 ms) when the season pills sit on the safe line.
-  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
-  await expect.poll(async () => Math.round((await seasonTab.boundingBox())!.y)).toBe(54);
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  // The page has scrolled (400 ms) when the heading of the row sits on the safe line.
+  const head = page.getByTestId('seasons-head');
+  await expect.poll(async () => Math.round((await head.boundingBox())!.y)).toBe(54);
   const pills = await page
     .locator('.detail-actions .detail-pill')
     .evaluateAll((els) =>
@@ -2291,8 +2376,7 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   for (const [top, bottom] of pills) {
     expect(bottom <= 0 || top >= 54).toBe(true);
   }
-  const seasons = await seasonTab.boundingBox();
-  expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(2);
+  expect(Math.abs((await head.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
   expect(await layer.boundingBox()).toEqual(before);
   await expect(page.getByTestId('detail-dim')).toHaveAttribute('data-scrolled', 'true');
 });
@@ -2459,11 +2543,12 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
       return new w.DOMMatrix(w.getComputedStyle(el).transform).f;
     });
 
-  // (a) On the hero the action pills end at least 40 px above the season pills, and the hero is
+  // (a) On the hero the action pills end at least 40 px above the seasons row, and the hero is
   // taller than its 760 px minimum, so an absolutely placed column would have overflowed it.
-  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
+  const seasonCard = page.getByRole('button', { name: /Staffel 1/ });
+  const seasonsHead = page.getByTestId('seasons-head');
   const actions = (await box('.detail-actions'))!;
-  const seasonsOnHero = (await seasonTab.boundingBox())!;
+  const seasonsOnHero = (await seasonsHead.boundingBox())!;
   expect(actions.y + actions.height + 40).toBeLessThanOrEqual(seasonsOnHero.y);
   expect((await box('.detail-hero'))!.height).toBeGreaterThan(760);
   expect(await opacity('.detail-text')).toBe('1');
@@ -2487,11 +2572,11 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
   }
   expect(await willChange('.detail-page')).toContain('transform');
 
-  // (b) Down to the season pills: they end on the top safe line, and the hero text is gone.
+  // (b) Down to the seasons: their heading ends on the top safe line, and the hero text is gone.
   await page.keyboard.press('ArrowDown');
-  await expect(seasonTab).toBeFocused();
+  await expect(seasonCard).toBeFocused();
   await expect
-    .poll(async () => Math.abs((await seasonTab.boundingBox())!.y - 54))
+    .poll(async () => Math.abs((await seasonsHead.boundingBox())!.y - 54))
     .toBeLessThanOrEqual(2);
   await expect.poll(() => opacity('.detail-text')).toBe('0');
   // The dim over the backdrop is at least 0.85 black once the focus has left the hero.
@@ -2508,14 +2593,13 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundColor),
   ).toBe('rgba(0, 0, 0, 0.85)');
 
-  // (c) Down to the episodes: the block stays where it is, the hero stays faded.
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
-  expect(Math.abs((await seasonTab.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
+  // (c) Along the row: the block stays where it is, the hero stays faded.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Staffel 2/ })).toBeFocused();
+  expect(Math.abs((await seasonsHead.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
   expect(await opacity('.detail-text')).toBe('0');
 
   // (d) Up to the action pills: the hero text is back and the page is at its origin.
-  await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
   await expect.poll(() => opacity('.detail-text')).toBe('1');
@@ -2525,8 +2609,7 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
 test('detail page: spoiler protection blurs an unwatched episode without requesting its still, a watched one shows it', async ({
   page,
 }) => {
-  const { seen } = await openSeriesDetail(page, false, undefined, undefined, true);
-  await page.keyboard.press('ArrowDown');
+  const { seen } = await openSeriesDetail(page, false, 1, undefined, true);
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
 
@@ -2883,16 +2966,48 @@ test('person page: a 4,000-character biography opens in full; Down scrolls it to
   await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
 });
 
+test('detail page: the synopsis dialog gives the focus back to More and keeps it past the navigation restore', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, true);
+  const more = page.getByRole('button', { name: 'Mehr' });
+  const dialog = page.getByTestId('synopsis-dialog');
+  const reopen = async () => {
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Schließen' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    // The navigation moves the focus 300 ms after a dialog went; it must not take it from More.
+    await page.waitForTimeout(400);
+    await expect(more).toBeFocused();
+  };
+  await page.keyboard.press('ArrowUp');
+  await expect(more).toBeFocused();
+  await reopen();
+
+  // The same on a season page: the title is the series', the synopsis the season's.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(more).toBeFocused();
+  await reopen();
+});
+
 test('detail page: going up animates the transform and never scrolls the clipping box natively', async ({
   page,
 }) => {
   await openSeriesDetail(page, true);
-  const seasonTab = page.getByRole('tab', { name: 'Staffel 1' });
+  const seasonCard = page.getByRole('button', { name: /Staffel 1/ });
   await page.keyboard.press('ArrowDown');
-  await expect(seasonTab).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
-  await expect.poll(async () => Math.round((await seasonTab.boundingBox())!.y)).toBe(54);
+  await expect(seasonCard).toBeFocused();
+  await expect
+    .poll(async () => Math.round((await page.getByTestId('seasons-head').boundingBox())!.y))
+    .toBe(54);
 
   // Capture phase on the window, so the record is taken before the page's own scroll handler
   // resets the box. A sampler records the page transform on every frame.
@@ -2922,8 +3037,6 @@ test('detail page: going up animates the transform and never scrolls the clippin
   expect(start).toBeLessThan(-100);
 
   await page.keyboard.press('ArrowUp');
-  await expect(seasonTab).toBeFocused();
-  await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
   await expect
     .poll(() =>
@@ -2941,20 +3054,20 @@ test('detail page: going up animates the transform and never scrolls the clippin
   expect(offsets.some((f) => f < -1 && f > start + 1)).toBe(true);
 });
 
-test('detail page: with many seasons the focused pill stays fully on screen at both ends', async ({
+test('detail page: with many seasons the focused card stays fully on screen at both ends', async ({
   page,
 }) => {
   await openSeriesDetail(page, false, 12);
   await page.keyboard.press('ArrowDown');
-  const first = page.getByRole('tab', { name: 'Staffel 1', exact: true });
+  const first = page.locator('[data-focus-key="season:1"]');
   await expect(first).toBeFocused();
   for (let n = 2; n <= 12; n += 1) await page.keyboard.press('ArrowRight');
-  const last = page.getByRole('tab', { name: 'Staffel 12' });
+  const last = page.locator('[data-focus-key="season:12"]');
   await expect(last).toBeFocused();
-  // Fully inside the screen.
+  // Fully inside the screen (the focused poster is 5 % larger than its slot).
   await expect
     .poll(async () => {
-      const box = (await last.boundingBox())!;
+      const box = (await last.locator('.card-art').boundingBox())!;
       return box.x >= 0 && box.x + box.width <= 1920;
     })
     .toBe(true);
@@ -2962,7 +3075,7 @@ test('detail page: with many seasons the focused pill stays fully on screen at b
   await expect(first).toBeFocused();
   await expect
     .poll(async () => {
-      const box = (await first.boundingBox())!;
+      const box = (await first.locator('.card-art').boundingBox())!;
       return box.x >= 0 && box.x + box.width <= 1920;
     })
     .toBe(true);
@@ -3553,7 +3666,7 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   await expect(play).toBeFocused();
   // The episodes tell Play what the watch state is; before that the player asks for itself.
-  await expect(page.getByTestId('episode-strip')).toBeVisible();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -3720,7 +3833,7 @@ test('player: repeated stalls ask to lower the quality, Lower sends a quality_ch
   const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   await expect(play).toBeFocused();
   // The episodes tell Play what the watch state is; before that the player asks for itself.
-  await expect(page.getByTestId('episode-strip')).toBeVisible();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -3852,4 +3965,42 @@ test('detail page: the action row shows a selection effect on the primary button
   await expect(stars).toBeFocused();
   await expect(stars).toHaveCSS('transform', 'matrix(1.04, 0, 0, 1.04, 0, 0)');
   await expect(stars).toHaveCSS('box-shadow', /0px 0px 0px 4px/);
+});
+
+test('detail page: scrolled down a long episode grid, no row above the viewport shows at its top edge', async ({
+  page,
+}) => {
+  await page.route('**/api/v2/catalog/series/s1/seasons/1/episodes*', async (route) => {
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      content_id: `e1${i + 1}`,
+      season_number: 1,
+      episode_number: i + 1,
+      title: `Episode 1.${i + 1}`,
+      runtime: 45,
+      overview:
+        'A synopsis that runs over the three lines of the caption and a bit further. '.repeat(3),
+    }));
+    await route.fulfill({ json: { items } });
+  });
+  await openSeriesDetail(page, false, 1);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.11/ })).toBeFocused();
+  await page.waitForTimeout(800);
+  const top = (await page.locator('.detail-episode-grid .grid-viewport').boundingBox())!.y;
+  // A card that starts above the viewport's top edge and is not drawn invisible.
+  const above = await page
+    .locator('.card-episode')
+    .evaluateAll(
+      (els, edge) =>
+        els.filter(
+          (el) =>
+            el.getBoundingClientRect().top < edge &&
+            el.ownerDocument.defaultView!.getComputedStyle(el.parentElement!).opacity !== '0',
+        ).length,
+      top,
+    );
+  expect(top).toBeGreaterThan(0);
+  expect(above).toBe(0);
 });

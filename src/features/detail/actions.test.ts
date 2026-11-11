@@ -6,7 +6,7 @@ const series = (user = rollup()) =>
   itemDetail({ type: 'series', versions: [], user_data: user, content_id: 's1' });
 
 describe('primaryAction: a movie', () => {
-  const base = { series: false, playable: true, totalSeconds: 5400 };
+  const base = { kind: 'item' as const, playable: true, totalSeconds: 5400 };
 
   it('plays from the start without a resume point', () => {
     expect(primaryAction({ ...base, detail: itemDetail(), resumeSeconds: null })).toEqual({
@@ -39,7 +39,7 @@ describe('primaryAction: a movie', () => {
 });
 
 describe('primaryAction: a series', () => {
-  const base = { series: true, playable: true, resumeSeconds: null, totalSeconds: 0 };
+  const base = { kind: 'series' as const, playable: true, resumeSeconds: null, totalSeconds: 0 };
   const label = (user: ReturnType<typeof rollup>) =>
     primaryAction({ ...base, detail: series(user) }).label;
 
@@ -74,6 +74,35 @@ describe('primaryAction: a series', () => {
   });
 });
 
+describe('primaryAction: a season', () => {
+  const season = (user = rollup()) =>
+    itemDetail({ type: 'season', versions: [], user_data: user, content_id: 'se1' });
+  const base = { kind: 'season' as const, resumeSeconds: null, totalSeconds: 0 };
+
+  it('plays the first episode from the start, whatever the season has watched', () => {
+    const started = season(rollup({ in_progress_count: 1, watched_count: 2 }));
+    expect(primaryAction({ ...base, playable: true, detail: started })).toEqual({
+      label: 'detail.playFirstEpisode',
+      mode: 'play',
+      fill: null,
+      startOverInMenu: false,
+    });
+  });
+
+  it('is disabled without an episode to play', () => {
+    expect(primaryAction({ ...base, playable: false, detail: season() })).toMatchObject({
+      label: 'detail.playFirstEpisode',
+      mode: 'none',
+    });
+  });
+
+  it('never resumes: a resume point of the episode is ignored', () => {
+    expect(
+      primaryAction({ ...base, resumeSeconds: 600, playable: true, detail: season() }).mode,
+    ).toBe('play');
+  });
+});
+
 describe('playedShare', () => {
   it('is the share within 0 to 1', () => {
     expect(playedShare(1350, 5400)).toBe(0.25);
@@ -90,36 +119,77 @@ describe('watchedState', () => {
   const movie = (user?: ReturnType<typeof rollup>) => itemDetail({ user_data: user });
 
   it('labels a movie by its played state', () => {
-    expect(watchedState(movie(), false)).toEqual({
+    expect(watchedState(movie(), 'item')).toEqual({
       played: false,
       hasProgress: false,
       label: 'detail.markWatched',
+      unwatchLabel: 'detail.markUnwatched',
     });
-    expect(watchedState(movie(rollup({ played: true })), false)).toMatchObject({
+    expect(watchedState(movie(rollup({ played: true })), 'item')).toMatchObject({
       played: true,
       label: 'detail.markUnwatched',
     });
   });
 
   it('labels a series by its played state', () => {
-    expect(watchedState(series(), true).label).toBe('detail.markSeriesWatched');
-    expect(watchedState(series(rollup({ played: true })), true).label).toBe(
+    expect(watchedState(series(), 'series').label).toBe('detail.markSeriesWatched');
+    expect(watchedState(series(rollup({ played: true })), 'series').label).toBe(
       'detail.markSeriesUnwatched',
     );
   });
 
   it('counts a movie with a saved position as not watched, even when it is played', () => {
-    expect(watchedState(movie(rollup({ played: true, position_seconds: 600 })), false)).toEqual({
+    expect(watchedState(movie(rollup({ played: true, position_seconds: 600 })), 'item')).toEqual({
       played: false,
       hasProgress: true,
       label: 'detail.markWatched',
+      unwatchLabel: 'detail.markUnwatched',
     });
   });
 
   it('has no progress for a series, whatever position its data carries', () => {
     expect(
-      watchedState(series(rollup({ played: true, position_seconds: 50 })), true).hasProgress,
+      watchedState(series(rollup({ played: true, position_seconds: 50 })), 'series').hasProgress,
     ).toBe(false);
-    expect(watchedState(series(rollup({ played: true })), true).hasProgress).toBe(false);
+    expect(watchedState(series(rollup({ played: true })), 'series').hasProgress).toBe(false);
+  });
+});
+
+describe('watchedState: a season', () => {
+  const season = (user?: ReturnType<typeof rollup>) =>
+    itemDetail({ type: 'season', versions: [], user_data: user });
+
+  it('marks a season that is not watched as watched', () => {
+    expect(watchedState(season(rollup()), 'season')).toEqual({
+      played: false,
+      hasProgress: false,
+      label: 'detail.markSeasonWatched',
+      unwatchLabel: 'detail.markSeasonUnwatched',
+    });
+  });
+
+  it('marks a watched season as unwatched', () => {
+    expect(watchedState(season(rollup({ played: true, watched_count: 3 })), 'season')).toEqual({
+      played: true,
+      hasProgress: false,
+      label: 'detail.markSeasonUnwatched',
+      unwatchLabel: 'detail.markSeasonUnwatched',
+    });
+  });
+
+  it('offers to clear a season that was started: the toggle still marks it watched', () => {
+    for (const started of [{ watched_count: 2 }, { in_progress_count: 1 }]) {
+      expect(watchedState(season(rollup(started)), 'season')).toMatchObject({
+        played: false,
+        hasProgress: true,
+        label: 'detail.markSeasonWatched',
+      });
+    }
+  });
+
+  it('counts a season with a saved position field as nothing special', () => {
+    expect(watchedState(season(rollup({ position_seconds: 600 })), 'season').hasProgress).toBe(
+      false,
+    );
   });
 });

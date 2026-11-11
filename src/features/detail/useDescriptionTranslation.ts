@@ -3,13 +3,14 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { toApiError } from '../../api/client';
 import { SiloApiError } from '../../api/problem';
 import { useSilo } from '../../app/SiloContext';
-import type { Episode, ItemDetail, Season } from './info';
+import type { Episode, ItemDetail } from './info';
 import { itemDetailKey, seasonEpisodesKey } from './queries';
 import {
   REREAD_DELAYS_S,
   itemMissing,
   pageTargets,
   seasonMissing,
+  type ListedSeason,
   translationMode,
   type TranslationMode,
   type TranslationTarget,
@@ -59,10 +60,10 @@ export interface DescriptionTranslation {
 export function useDescriptionTranslation(input: {
   itemId: string;
   detail: ItemDetail;
-  series: boolean;
+  /** The series whose episode lists the runs read again (the page's own, or its season's). */
   seriesId: string;
-  shownSeason: number | undefined;
-  seasons: readonly Season[];
+  /** The season whose episodes the page lists, when it lists any. */
+  listed: ListedSeason | undefined;
   episodes: readonly Episode[] | undefined;
 }): DescriptionTranslation {
   const { client, baseUrl, session } = useSilo();
@@ -82,11 +83,11 @@ export function useDescriptionTranslation(input: {
   });
   const mode = translationMode(capability.data);
 
-  const { itemId, detail, series, seriesId, shownSeason, seasons, episodes } = input;
+  const { itemId, detail, seriesId, listed, episodes } = input;
+  const listedNumber = listed?.number;
   const targets = useMemo(
-    () =>
-      mode === 'off' ? [] : pageTargets({ itemId, detail, series, shownSeason, seasons, episodes }),
-    [mode, itemId, detail, series, shownSeason, seasons, episodes],
+    () => (mode === 'off' ? [] : pageTargets({ itemId, detail, listed, episodes })),
+    [mode, itemId, detail, listed, episodes],
   );
 
   const runs = useRef(new Map<string, Run>());
@@ -96,7 +97,8 @@ export function useDescriptionTranslation(input: {
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set());
 
   const settleKey = useCallback(
-    (target: TranslationTarget) => `${baseUrl}|${profileId}|${target.id}|${target.language}`,
+    (target: TranslationTarget) =>
+      `${baseUrl}|${profileId}|${target.kind}|${target.id}|${target.language}`,
     [baseUrl, profileId],
   );
   const forget = useCallback((key: string) => {
@@ -196,16 +198,16 @@ export function useDescriptionTranslation(input: {
     };
   }, []);
 
-  // Leaving a season stops its run (stopped, not failed: it may start again when the season shows).
+  // A run of a season the page no longer lists stops (stopped, not failed: it may start again).
   useEffect(() => {
     for (const [key, run] of runs.current) {
-      if (run.season !== undefined && run.season !== shownSeason) {
+      if (run.season !== undefined && run.season !== listedNumber) {
         stopRun(run);
         runs.current.delete(key);
         forget(key);
       }
     }
-  }, [shownSeason, forget]);
+  }, [listedNumber, forget]);
 
   const settled = settledOf(queryClient);
 

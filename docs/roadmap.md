@@ -47,12 +47,13 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Movie detail page: hero, description, credit line, external ratings, quality badges (TV 2026-11-09)
 - ✅ Series detail page with seasons and episodes, cast, recommendations (TV 2026-11-09)
 - 🟨 Detail pages like Silo's web app (user decisions 2026-11-11, after measuring the web pages as a viewer). Order: after the player redesign; the missing API paths (watched, favorites, watchlist, ratings, not interested) come first in a package of their own:
-  - their own season and episode pages, as in the web app; OK on an episode card opens the episode page, and the remote's Play key plays from the card
+  - 🟨 their own season and episode pages, as in the web app; OK on a season or episode card opens its page (also on Home, in search and in the library; Continue Watching and Next Up still play at once), and the remote's Play key plays from the card
   - 🟨 the hero of movie and series pages: poster (not on episode pages), the kicker line ("Series · AMC", "Movie · Studio"), title art or text, tagline, chips (years, rating, seasons and episodes, or runtime and air date), quality badges, ratings as text, the synopsis with More, the credit line with creator, director or writers and the genres; a breadcrumb on season and episode pages
   - TMDB's rating stays text; its logo only if TMDB's terms allow it, checked before the store submission
   - 🟨 the primary button as in the web app: "Start from Episode 1", "Play Next", "Resume", "Play First Episode", "Play Episode"; with progress, one Play button with a progress fill that asks "Resume playback?" (resume or start over), replacing the Resume and Start over pair
   - 🟨 the actions: mark watched or unwatched, favourite, a star rating (one focus stop: OK starts, Left/Right picks 1–5, OK saves, Back cancels, the set star again clears it), and a More menu with watchlist, not interested, mark unwatched and start over (shuffle joins with Shuffle)
-  - the series page: a row of season posters with the watched check and progress, specials first; the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis); the episode page: "More Episodes" with the current one marked
+  - 🟨 the series page: a row of season posters with the watched check and progress, specials first (a series with one season lists its episodes directly); the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis)
+  - the episode page: "More Episodes" with the current one marked
   - cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
   - quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`)
   - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5
@@ -217,6 +218,19 @@ LG Content Store:
 - ⬜ Submission material: screenshots, UX scenario, filled-in self-checklist (always the current form from Seller Lounge)
 - ⬜ Device tests on as many webOS versions as possible (6, 22, 23, 24, 25)
 - ✅ For sideloading meanwhile: [`docs/install.md`](install.md) walks users through Developer Mode and installing a release with webOS Dev Manager, without a command line, including how to keep Developer Mode from expiring; installing from source is in [`docs/development.md`](development.md#install-it-on-a-tv)
+
+## Where the TV differs from Silo's web app
+
+The app follows the web app wherever a TV allows it (user decision 2026-11-11). These differences are forced by the remote, the distance or the TV's engine:
+
+- **No hover:** cards have no play disc and no More button (whether a remote key should offer the web's card actions is still open); OK on a card opens its page and the remote's Play key plays it. Rows have no scroll arrows; the focus moves them.
+- **Popovers become list dialogs** with 75 px rows (the More menu, the resume question, later the track pickers); Back closes them.
+- **Breadcrumbs are text:** Back is the way back, so the crumbs on season and episode pages are not focusable.
+- **The episode grid scrolls** inside the page instead of showing at most four rows first; a long season stays one grid.
+- **Translation of episode overviews** starts from the translate pill in the action row, not from a chip in the grid's heading.
+- **Sizes:** text is at least 20 px and targets at least 75 px at 1080p, so captions, badges and chips are larger than the web's, and section headings keep the app's TV type scale.
+- **No blur or filters:** glass surfaces are opaque; spoiler protection blurs with a ThumbHash picture instead of a CSS filter.
+- **Playback speed** is left out (see Phase 3): the TV's video element cannot play at another speed cleanly.
 
 ## Deliberately not planned
 

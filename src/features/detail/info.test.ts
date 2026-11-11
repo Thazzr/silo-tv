@@ -4,14 +4,24 @@ import { episodeOf, fileVersion, itemDetail, rollup, seasonOf } from '../../test
 import {
   defaultSeason,
   detailChips,
+  detailKind,
+  episodeCaptionTitle,
+  episodeCode,
+  episodeMetaLine,
   episodeProgress,
   episodeWatched,
   heroCredits,
   initials,
+  isSpecials,
   kicker,
   orderSeasons,
   qualityBadges,
   ratingEntries,
+  seasonCountText,
+  seasonIndicator,
+  seasonLabel,
+  seasonProgress,
+  seasonSubtitle,
   selectedVersion,
   videoRangeLabel,
 } from './info';
@@ -422,12 +432,177 @@ describe('heroCredits', () => {
 });
 
 describe('seasons', () => {
-  it('orders numbered seasons first and the specials last', () => {
+  it('orders the seasons by number, so the specials come first like on the web', () => {
     const seasons = [seasonOf(2), seasonOf(0), seasonOf(10), seasonOf(1)];
-    expect(orderSeasons(seasons).map((s) => s.season_number)).toEqual([1, 2, 10, 0]);
+    expect(orderSeasons(seasons).map((s) => s.season_number)).toEqual([0, 1, 2, 10]);
+  });
+
+  it('orders a specials season whose number is not 0 by its number too', () => {
+    const seasons = [seasonOf(3), seasonOf(1, { is_specials: true })];
+    expect(orderSeasons(seasons).map((s) => s.season_number)).toEqual([1, 3]);
+  });
+
+  it('plays from the first numbered season when the server names no target, else the first', () => {
+    const seasons = [seasonOf(2), seasonOf(0), seasonOf(1)];
     expect(defaultSeason(seasons)).toBe(1);
     expect(defaultSeason([seasonOf(0)])).toBe(0);
+    expect(defaultSeason([seasonOf(0), seasonOf(5, { is_specials: true })])).toBe(0);
     expect(defaultSeason([])).toBeUndefined();
+  });
+
+  describe('labels', () => {
+    it('numbers a season, and calls the specials Specials, in both languages', () => {
+      expect(seasonLabel(seasonOf(1), t)).toBe('Season 1');
+      expect(seasonLabel(seasonOf(0), t)).toBe('Specials');
+      expect(seasonLabel(seasonOf(1, { is_specials: true }), tFor('de'))).toBe('Specials');
+      expect(seasonLabel(seasonOf(2), tFor('de'))).toBe('Staffel 2');
+    });
+
+    it('uses the title the server gave a season, but not its placeholder', () => {
+      expect(seasonLabel(seasonOf(1, { title: 'The Beginning' }), t)).toBe('The Beginning');
+      expect(seasonLabel(seasonOf(1, { title: ' season 1 ' }), tFor('de'))).toBe('Staffel 1');
+      expect(seasonLabel(seasonOf(1, { title: '' }), t)).toBe('Season 1');
+      // A specials season keeps its label whatever its title says.
+      expect(seasonLabel(seasonOf(0, { title: 'Extras' }), t)).toBe('Specials');
+    });
+
+    it('keeps the indicator numbered when the season has a name', () => {
+      expect(seasonIndicator(seasonOf(2, { title: 'Rising' }), t)).toBe('Season 2');
+      expect(seasonIndicator(seasonOf(0), t)).toBe('Specials');
+    });
+
+    it('has a subtitle only when the label differs from the translated indicator', () => {
+      expect(seasonSubtitle(seasonOf(1, { title: 'The Beginning' }), t)).toBe('The Beginning');
+      expect(seasonSubtitle(seasonOf(1), t)).toBeNull();
+      expect(seasonSubtitle(seasonOf(0), t)).toBeNull();
+      expect(seasonSubtitle(seasonOf(0, { title: 'Extras' }), t)).toBeNull();
+    });
+
+    it('adds no subtitle for a title the server already localised', () => {
+      const de = tFor('de');
+      expect(seasonSubtitle(seasonOf(2, { title: 'Staffel 2' }), de)).toBeNull();
+      expect(seasonSubtitle(seasonOf(2, { title: 'Der Anfang' }), de)).toBe('Der Anfang');
+      // Another language's wording is a real name in this one.
+      expect(seasonSubtitle(seasonOf(2, { title: 'Staffel 2' }), t)).toBe('Staffel 2');
+    });
+
+    it('treats season 0 as the specials although is_specials is optional', () => {
+      expect(isSpecials({ season_number: 0 })).toBe(true);
+      expect(isSpecials({ season_number: 0, is_specials: false })).toBe(true);
+      expect(isSpecials({ season_number: 1 })).toBe(false);
+      expect(isSpecials({ season_number: 3, is_specials: true })).toBe(true);
+      const bare = { ...seasonOf(0), is_specials: undefined };
+      expect(defaultSeason([bare, seasonOf(1)])).toBe(1);
+      expect(seasonLabel(bare, t)).toBe('Specials');
+    });
+
+    it('keeps a title that only starts like the placeholder', () => {
+      const named = seasonOf(2, { title: 'Season 2: Rebirth' });
+      expect(seasonLabel(named, t)).toBe('Season 2: Rebirth');
+      expect(seasonSubtitle(named, t)).toBe('Season 2: Rebirth');
+      expect(seasonLabel(seasonOf(2, { title: 'The Season 2' }), t)).toBe('The Season 2');
+    });
+
+    it('shows a season without a number as season 0, the type allows it on an item', () => {
+      expect(seasonIndicator({}, t)).toBe('Season 0');
+    });
+  });
+
+  describe('progress', () => {
+    const started = (watched: number, count = 8, extra = {}) =>
+      seasonOf(1, {
+        episode_count: count,
+        user_data: rollup({ watched_count: watched, ...extra }),
+      });
+
+    it('is a full bar for a watched season, whatever the counts say', () => {
+      const played = seasonOf(1, { user_data: rollup({ played: true, watched_count: 1 }) });
+      expect(seasonProgress(played)).toBe(1);
+    });
+
+    it('is the share of watched episodes for a season that was started', () => {
+      expect(seasonProgress(started(2))).toBe(0.25);
+      expect(seasonProgress(started(3, 12))).toBe(0.25);
+      // An episode in progress alone starts the bar, at nothing.
+      expect(seasonProgress(started(0, 8, { in_progress_count: 1 }))).toBe(0);
+    });
+
+    it('has no bar for a season nothing was watched of, or one without episodes', () => {
+      expect(seasonProgress(seasonOf(1))).toBeNull();
+      expect(seasonProgress(seasonOf(1, { user_data: rollup() }))).toBeNull();
+      expect(seasonProgress(started(1, 0))).toBeNull();
+    });
+
+    it('never goes past full', () => {
+      expect(seasonProgress(started(9, 8))).toBe(1);
+    });
+
+    it('counts the episodes, and the watched ones while the season is being watched', () => {
+      expect(seasonCountText(seasonOf(1, { episode_count: 7 }), t)).toBe('7 episodes');
+      expect(seasonCountText(seasonOf(1, { episode_count: 7 }), tFor('de'))).toBe('7 Folgen');
+      expect(seasonCountText(seasonOf(1, { episode_count: 1 }), t)).toBe('1 episode');
+      expect(seasonCountText(started(3, 7), t)).toBe('3 of 7 episodes');
+      expect(seasonCountText(started(3, 7), tFor('de'))).toBe('3 von 7 Folgen');
+      expect(seasonCountText(started(1, 1, { in_progress_count: 1 }), tFor('de'))).toBe(
+        '1 von 1 Folge',
+      );
+      expect(seasonCountText(started(0, 7, { in_progress_count: 1 }), t)).toBe('0 of 7 episodes');
+    });
+
+    it('says only the count for a watched season', () => {
+      const played = seasonOf(1, {
+        episode_count: 7,
+        user_data: rollup({ played: true, watched_count: 7 }),
+      });
+      expect(seasonCountText(played, t)).toBe('7 episodes');
+    });
+  });
+});
+
+describe('detailKind', () => {
+  it('tells the layouts apart by the type, whatever its case', () => {
+    expect(detailKind(itemDetail({ type: 'series' }))).toBe('series');
+    expect(detailKind(itemDetail({ type: ' Season ' }))).toBe('season');
+    expect(detailKind(itemDetail({ type: 'movie' }))).toBe('item');
+    expect(detailKind(itemDetail({ type: 'episode' }))).toBe('item');
+  });
+});
+
+describe('detailChips: a season', () => {
+  const season = (overrides = {}) =>
+    itemDetail({
+      type: 'season',
+      season_number: 1,
+      title: 'Season 1',
+      air_date: '2008-01-20',
+      episode_count: 7,
+      content_rating: 'TV-MA',
+      ...overrides,
+    });
+
+  it('lists the year it aired, the season and the number of episodes, no rating', () => {
+    expect(detailChips(season(), [], t)).toEqual(['2008', 'Season 1', '7 episodes']);
+    expect(detailChips(season(), [], tFor('de'))).toEqual(['2008', 'Staffel 1', '7 Folgen']);
+  });
+
+  it('keeps the numbered indicator when the season has a name', () => {
+    expect(detailChips(season({ title: 'The Beginning' }), [], t)[1]).toBe('Season 1');
+    expect(detailChips(season({ season_number: 0, is_specials: true }), [], t)[1]).toBe('Specials');
+  });
+
+  it('prefers the count the season carries to the number of loaded episodes', () => {
+    expect(detailChips(season({ episode_count: 8 }), [], t, 5)[2]).toBe('8 episodes');
+  });
+
+  it('falls back to the loaded episodes, and leaves out what is missing', () => {
+    const bare = season({ episode_count: undefined, air_date: undefined });
+    expect(detailChips(bare, [], t, 5)).toEqual(['Season 1', '5 episodes']);
+    expect(detailChips(bare, [], t)).toEqual(['Season 1']);
+    expect(detailChips(season({ episode_count: 1 }), [], t)).toEqual([
+      '2008',
+      'Season 1',
+      '1 episode',
+    ]);
   });
 });
 
@@ -666,5 +841,66 @@ describe('details of the hero facts', () => {
     });
     expect(kicker(detail, t)).toEqual({ type: 'Series', name: 'AMC' });
     expect(heroCredits(detail, t).credits[0]?.label).toBe('Created by');
+  });
+});
+
+describe('an episode card caption', () => {
+  const ep = (season: number, number: number, overrides = {}) =>
+    episodeOf(season, number, { title: 'The Descent', ...overrides });
+  const nbsp = ' ';
+
+  it('writes the code with both numbers on two digits: S01F03 in German, S01E03 in English', () => {
+    expect(episodeCode(ep(1, 3), tFor('de'))).toBe('S01F03');
+    expect(episodeCode(ep(1, 3), t)).toBe('S01E03');
+    expect(episodeCode(ep(12, 104), t)).toBe('S12E104');
+    expect(episodeCode(ep(0, 9), t)).toBe('S00E09');
+  });
+
+  it('puts the title after the code, or shows the code alone without a title', () => {
+    expect(episodeCaptionTitle(ep(1, 3), tFor('de'))).toBe('S01F03 · The Descent');
+    expect(episodeCaptionTitle(ep(1, 3, { title: '' }), t)).toBe('S01E03');
+    expect(episodeCaptionTitle(ep(1, 3, { title: '   ' }), t)).toBe('S01E03');
+  });
+
+  it('writes the air date and the runtime with two no-break spaces round the dot', () => {
+    const both = ep(1, 1, { air_date: '2008-01-20', runtime: 58 });
+    expect(episodeMetaLine(both, 'de', tFor('de'))).toBe(
+      `20. Jan. 2008${nbsp}${nbsp}·${nbsp}${nbsp}58 Min.`,
+    );
+    expect(episodeMetaLine(both, 'en', t)).toBe(`Jan 20, 2008${nbsp}${nbsp}·${nbsp}${nbsp}58m`);
+  });
+
+  it('shows the runtime in hours and minutes when it is long', () => {
+    expect(episodeMetaLine(ep(1, 1, { air_date: undefined, runtime: 125 }), 'de', tFor('de'))).toBe(
+      '2 Std. 5 Min.',
+    );
+  });
+
+  it('shows either part alone, and nothing when both are missing', () => {
+    expect(episodeMetaLine(ep(1, 1, { air_date: '2008-01-20', runtime: 0 }), 'en', t)).toBe(
+      'Jan 20, 2008',
+    );
+    expect(episodeMetaLine(ep(1, 1, { air_date: undefined, runtime: 58 }), 'en', t)).toBe('58m');
+    expect(episodeMetaLine(ep(1, 1, { air_date: undefined, runtime: 0 }), 'en', t)).toBe('');
+  });
+
+  it('keeps the calendar day west of UTC, where local midnight is the day before', () => {
+    const before = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      const line = episodeMetaLine(ep(1, 1, { air_date: '2008-01-20', runtime: 0 }), 'en', t);
+      expect(line).toBe('Jan 20, 2008');
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
+  });
+
+  it('trims a date text it cannot read before showing it', () => {
+    expect(episodeMetaLine(ep(1, 1, { air_date: ' soon ', runtime: 0 }), 'en', t)).toBe('soon');
+  });
+
+  it('shows a date text it cannot read as sent', () => {
+    expect(episodeMetaLine(ep(1, 1, { air_date: '2008', runtime: 0 }), 'en', t)).toBe('2008');
   });
 });

@@ -4,10 +4,16 @@ import {
   DETAIL_SCROLLED_DIM_ALPHA,
   DETAIL_SHADE_MIN_ALPHA,
   DETAIL_TEXT_WIDTH,
+  EPISODE_GRID,
   SAFE_TOP,
+  SEASON_CARD,
+  SEASON_STEP,
+  SEASON_STRIP_HEIGHT,
   detailScrollOffset,
   isAbove,
+  seasonsVisible,
 } from './layout';
+import { SCREEN_WIDTH } from '../../ui/media';
 
 describe('detailScrollOffset', () => {
   it('scrolls a block to the safe line: its measured top minus 54', () => {
@@ -31,6 +37,38 @@ describe('detailScrollOffset', () => {
     expect(detailScrollOffset('similar', { cast: 760 })).toBe(0);
     // Never above the origin, even for a block that starts within the safe area.
     expect(detailScrollOffset('cast', { cast: 20 })).toBe(0);
+  });
+});
+
+describe('the seasons row and the episode grid', () => {
+  it('scrolls the seasons block to the safe line like any other block', () => {
+    expect(detailScrollOffset('seasons', { seasons: 812 })).toBe(758);
+    expect(detailScrollOffset('seasons', { episodes: 812 })).toBe(0);
+  });
+
+  it('puts the seasons row above the episode grid and both above the cast', () => {
+    expect(isAbove('hero', 'seasons')).toBe(true);
+    expect(isAbove('seasons', 'episodes')).toBe(true);
+    expect(isAbove('seasons', 'cast')).toBe(true);
+    expect(isAbove('episodes', 'seasons')).toBe(false);
+    expect(isAbove('seasons', 'seasons')).toBe(false);
+  });
+
+  it('draws season posters of 220 x 330, 260 px apart, six and a bit across', () => {
+    expect(SEASON_CARD).toEqual({ width: 220, height: 330 });
+    expect(SEASON_STEP).toBe(260);
+    expect(seasonsVisible()).toBe(6);
+    // Poster, 22 px, the 57 px caption and the 14 px padding above and below.
+    expect(SEASON_STRIP_HEIGHT).toBe(437);
+  });
+
+  it('fills the width between the insets with five stills, 16:9, 25 px apart', () => {
+    const { columns, card, gap, inset, rowPitch } = EPISODE_GRID;
+    expect(inset).toBe(DETAIL_INSET);
+    expect(columns * card.width + (columns - 1) * gap).toBe(SCREEN_WIDTH - 2 * DETAIL_INSET);
+    expect(Math.abs(card.width / card.height - 16 / 9)).toBeLessThan(0.01);
+    // Still, 14 px, three caption lines of 31 + 26 + 78 px, a 40 px gap between the rows.
+    expect(rowPitch).toBe(182 + 14 + 135 + 40);
   });
 });
 

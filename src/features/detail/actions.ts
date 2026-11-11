@@ -1,6 +1,6 @@
 // What the action row of a detail page says and does, as pure functions of the item's state.
 import type { MessageKey } from '../../i18n';
-import type { ItemDetail } from './info';
+import type { DetailKind, ItemDetail } from './info';
 
 /** What OK on the primary button does. */
 export type PrimaryMode =
@@ -31,20 +31,28 @@ export function playedShare(seconds: number, totalSeconds: number): number {
  * The primary button, as Silo's web app words it. A movie with a resume point shows "Play" with a
  * progress fill and asks what to do when it has one version; with several versions it says
  * "Resume" and resumes at once (the web puts "Play from beginning" into the More menu then). A
- * series says what its play target is: the episode in progress, the next one, or the first.
- * `resumeSeconds` is the app's own resume point (`resumePoint`), so the button resumes exactly
+ * series says what its play target is: the episode in progress, the next one, or the first. A
+ * season plays its first listed episode from the start, as the web does. `resumeSeconds` is the app's own resume point (`resumePoint`), so the button resumes exactly
  * when the player would.
  */
 export function primaryAction(input: {
   detail: ItemDetail;
-  series: boolean;
-  /** Whether something plays: the item itself, or a series' target episode. */
+  kind: DetailKind;
+  /** Whether something plays: the item itself, a series' target episode, a season's first episode. */
   playable: boolean;
   resumeSeconds: number | null;
   totalSeconds: number;
 }): PrimaryAction {
-  const { detail, series, playable, resumeSeconds, totalSeconds } = input;
-  if (series) {
+  const { detail, kind, playable, resumeSeconds, totalSeconds } = input;
+  if (kind === 'season') {
+    return {
+      label: 'detail.playFirstEpisode',
+      mode: playable ? 'play' : 'none',
+      fill: null,
+      startOverInMenu: false,
+    };
+  }
+  if (kind === 'series') {
     const user = detail.user_data;
     let label: MessageKey = 'detail.startFromFirst';
     if (!playable) label = 'detail.browseSeries';
@@ -67,18 +75,31 @@ export function primaryAction(input: {
 }
 
 /**
- * Whether the title counts as watched for the toggle. A movie with a saved position counts as not
- * watched, even when the server also marks it played (a rewatch stopped partway): the toggle then
- * records a play, and "Mark unwatched" in the More menu clears the progress.
+ * Whether the title counts as watched for the toggle, and what the More menu offers to undo. A
+ * movie with a saved position counts as not watched, even when the server also marks it played (a
+ * rewatch stopped partway): the toggle then records a play, and "Mark unwatched" in the More menu
+ * clears the progress. A season that was started but not finished does the same with its episodes.
  */
 export function watchedState(
   detail: ItemDetail,
-  series: boolean,
-): { played: boolean; hasProgress: boolean; label: MessageKey } {
-  const hasProgress = !series && (detail.user_data?.position_seconds ?? 0) > 0;
-  const played = !hasProgress && (detail.user_data?.played ?? false);
+  kind: DetailKind,
+): { played: boolean; hasProgress: boolean; label: MessageKey; unwatchLabel: MessageKey } {
+  const state = detail.user_data;
+  if (kind === 'season') {
+    const played = state?.played ?? false;
+    const hasProgress =
+      !played && ((state?.watched_count ?? 0) > 0 || (state?.in_progress_count ?? 0) > 0);
+    return {
+      played,
+      hasProgress,
+      label: played ? 'detail.markSeasonUnwatched' : 'detail.markSeasonWatched',
+      unwatchLabel: 'detail.markSeasonUnwatched',
+    };
+  }
+  const hasProgress = kind === 'item' && (state?.position_seconds ?? 0) > 0;
+  const played = !hasProgress && (state?.played ?? false);
   let label: MessageKey;
-  if (series) label = played ? 'detail.markSeriesUnwatched' : 'detail.markSeriesWatched';
+  if (kind === 'series') label = played ? 'detail.markSeriesUnwatched' : 'detail.markSeriesWatched';
   else label = played ? 'detail.markUnwatched' : 'detail.markWatched';
-  return { played, hasProgress, label };
+  return { played, hasProgress, label, unwatchLabel: 'detail.markUnwatched' };
 }

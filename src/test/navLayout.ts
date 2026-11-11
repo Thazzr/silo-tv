@@ -46,7 +46,7 @@ function measure(node: HTMLElement): ReturnType<typeof rect> {
     return rect(5000, top + letters.indexOf(node) * 40, 40, 40);
   }
   const row = node.closest<HTMLElement>(
-    '.topbar, .server-row, .row-strip, .detail-row, .detail-episode-strip, .lib-pills, .browse-toolbar, .settings-choices',
+    '.topbar, .server-row, .row-strip, .detail-row, .detail-season-strip, .lib-pills, .browse-toolbar, .settings-choices',
   );
   if (row) {
     const cells = all.filter((el) => row.contains(el));

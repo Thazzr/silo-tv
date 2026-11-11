@@ -375,7 +375,7 @@ describe('FlowApp', () => {
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
 
-  it('opens the series of an episode card on its season and episode, and plays a Continue Watching episode directly', async () => {
+  it('opens the own page of an episode card, and plays a Continue Watching episode directly', async () => {
     serveData();
     const plain = catalogItem({
       content_id: 'e23',
@@ -401,8 +401,14 @@ describe('FlowApp', () => {
       ),
     );
     const calls = servePlayback(server);
-    serveDetail(server, {
-      item: () => itemDetail({ content_id: 's1', type: 'series', title: 'A Show', versions: [] }),
+    const detailCalls = serveDetail(server, {
+      item: (id) =>
+        itemDetail({
+          content_id: id,
+          type: id === 's1' ? 'series' : 'episode',
+          title: id === 's1' ? 'A Show' : 'Episode 2.3',
+          versions: [],
+        }),
       seasons: [seasonOf(1), seasonOf(2)],
       episodes: (season) => [1, 2, 3].map((n) => episodeOf(season, n)),
     });
@@ -419,15 +425,11 @@ describe('FlowApp', () => {
     fireEvent.keyDown(window, { keyCode: 461 });
     await screen.findByTestId('home');
     await waitFor(() => expect(screen.getByRole('button', { name: /Show e1/ })).toHaveFocus());
-    // Any other episode card opens the series on that season, focused on that episode.
+    // Any other episode card opens the episode's own page, by its content id.
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
-    expect(await screen.findByTestId('detail-title')).toHaveTextContent('A Show');
-    await screen.findByTestId('episode-strip');
-    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-    await waitFor(() =>
-      expect(document.querySelector('[data-focus-key="episode:e23"]')).toHaveFocus(),
-    );
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('Episode 2.3');
+    expect(detailCalls.items).toEqual(['e23']);
   });
 
   it('replaces the player with the next episode: the old session stops, the new one starts by the resume rule with no tracks, and Back goes where it would have', async () => {

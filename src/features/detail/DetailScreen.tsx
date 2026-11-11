@@ -14,16 +14,18 @@ import { ActionRow, PLAY_KEY, TRANSLATE_KEY } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
-import { EpisodeRow, EpisodeStripSkeleton } from './EpisodeRow';
+import { EpisodeGrid, EpisodeGridSkeleton } from './EpisodeGrid';
 import { extraEntries } from './extras';
 import { ExtrasRow } from './ExtrasRow';
 import {
   defaultSeason,
+  detailKind,
   initials,
-  isSeries,
   orderSeasons,
+  seasonLabel,
   type Episode,
   type ItemDetail,
+  type Season,
 } from './info';
 import {
   DETAIL_INSET,
@@ -32,8 +34,6 @@ import {
   type DetailBlockTops,
   type DetailBlockZone,
   type DetailZone,
-  SEASON_PILLS_GAP,
-  SEASON_PILLS_HEIGHT,
 } from './layout';
 import { useItemBoxSet } from '../boxset/queries';
 import {
@@ -44,7 +44,8 @@ import {
   useSeasons,
   useSimilar,
 } from './queries';
-import { SeasonPills } from './SeasonPills';
+import { SeasonRail, SeasonRailSkeleton } from './SeasonRail';
+import { SectionHead } from './SectionHead';
 import { SynopsisDialog } from './SynopsisDialog';
 import { useDescriptionTranslation } from './useDescriptionTranslation';
 import { useThemeMusic } from './useThemeMusic';
@@ -70,17 +71,25 @@ export interface DetailScreenProps {
   onBack: () => void;
 }
 
-const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'extras', 'boxSet', 'similar'];
+const BLOCK_ZONES: readonly DetailBlockZone[] = [
+  'seasons',
+  'episodes',
+  'cast',
+  'extras',
+  'boxSet',
+  'similar',
+];
 
 /** How long a short notice (YouTube is not available) stays on the page. */
 const NOTICE_MS = 4000;
 
 /**
- * The detail page of a movie or a series: hero with the primary actions, then the seasons and
- * episodes of a series or the cast of a movie, then "More like this". The page loads its item
- * first (a skeleton shaped like the page stands in); a title that is gone shows a message with
- * Back, any other failure offers Try again. It is read again whenever it shows again, so the
- * buttons follow what the player changed.
+ * The detail page of any title, like the web's one route for every type: hero with the primary
+ * actions, then the seasons of a series (or, with one season, its episodes), the episodes of a
+ * season, or the cast of a movie, then "More like this". The page loads its item first (a skeleton
+ * shaped like the page stands in) and lays itself out by the item's type; a title that is gone
+ * shows a message with Back, any other failure offers Try again. It is read again whenever it
+ * shows again, so the buttons follow what the player changed.
  */
 export function DetailScreen(props: DetailScreenProps) {
   const t = useT();
@@ -128,8 +137,17 @@ function DetailBody({
   onOpenBoxSet,
 }: DetailScreenProps & { detail: ItemDetail }) {
   const t = useT();
-  const series = isSeries(detail);
-  const seriesId = detail.content_id;
+  const kind = detailKind(detail);
+  const series = kind === 'series';
+  const season = kind === 'season';
+  // The title the player shows for any episode played from this page: the series'.
+  const playTitle = season ? (detail.series_title ?? detail.title) : detail.title;
+  // A season page lists the episodes of its own season of its series.
+  const parent =
+    season && detail.series_id !== undefined && detail.season_number !== undefined
+      ? { seriesId: detail.series_id, number: detail.season_number }
+      : undefined;
+  const seriesId = parent?.seriesId ?? detail.content_id;
   // The title's theme song plays while this page is the screen on top.
   useThemeMusic(detail);
 
@@ -137,38 +155,33 @@ function DetailBody({
   // Back closes the synopsis first; without a handler it leaves the page.
   useBackHandler(synopsisOpen ? () => setSynopsisOpen(false) : undefined);
 
-  // The card the page was opened on takes the focus once; later season changes must not steal it.
-  const [openedOn, setOpenedOn] = useState(target.episodeId);
-  const clearOpenedOn = useCallback(() => setOpenedOn(undefined), []);
-
   // --- Seasons and episodes --------------------------------------------------------------------
   const seasonsQuery = useSeasons(seriesId, series);
   const seasons = useMemo(() => orderSeasons(seasonsQuery.data ?? []), [seasonsQuery.data]);
-  const [picked, setPicked] = useState<number | undefined>(memory.season);
-  const wanted = picked ?? target.season ?? detail.play_season_number;
-  const seasonKnown = seasons.some((season) => season.season_number === wanted);
-  // A season the server does not list (or none given) falls back to the first one.
-  const shown = !series
-    ? undefined
-    : wanted !== undefined && (seasonsQuery.isPending || seasonKnown)
-      ? wanted
-      : defaultSeason(seasons);
-  const episodesQuery = useSeasonEpisodes(seriesId, shown);
+  // A series with exactly one season has no seasons row: its episodes are listed on its own page.
+  const singleSeason: Season | undefined = series && seasons.length === 1 ? seasons[0] : undefined;
+  const listedNumber = parent?.number ?? singleSeason?.season_number;
+  const listedId = season ? detail.content_id : singleSeason?.content_id;
+  const episodesQuery = useSeasonEpisodes(seriesId, listedNumber);
   const episodes = episodesQuery.data;
 
-  // The episode "Play" plays: the one the page was opened on, else the server's play target.
-  const targetId = series ? (target.episodeId ?? detail.play_content_id) : undefined;
-  const explicitSeason = target.episodeId !== undefined ? target.season : detail.play_season_number;
-  const primarySeason = series ? (explicitSeason ?? defaultSeason(seasons)) : undefined;
+  // The episode "Play" plays: a series' target (the server's), else the first of its play season;
+  // a season's first listed episode.
+  const targetId = series ? detail.play_content_id : undefined;
+  const primarySeason = series ? (detail.play_season_number ?? defaultSeason(seasons)) : undefined;
   const primaryQuery = useSeasonEpisodes(seriesId, primarySeason);
-  const primaryEpisode: Episode | undefined = series
-    ? targetId
+  let primaryEpisode: Episode | undefined;
+  if (series) {
+    primaryEpisode = targetId
       ? primaryQuery.data?.find((episode) => episode.content_id === targetId)
-      : primaryQuery.data?.[0]
-    : undefined;
+      : primaryQuery.data?.[0];
+  } else if (season) {
+    primaryEpisode = episodes?.[0];
+  }
 
-  const playId = series ? (targetId ?? primaryEpisode?.content_id) : detail.content_id;
-  // Whether the watch state of what plays is known; before that the player asks itself.
+  const playId = kind === 'item' ? detail.content_id : (targetId ?? primaryEpisode?.content_id);
+  // Whether the watch state of what plays is known; before that the player asks itself. A season
+  // always plays from the start, so it needs none.
   const stateKnown = series ? primaryEpisode !== undefined : true;
   const watchState = series ? primaryEpisode?.user_data : detail.user_data;
   const runtimeSeconds = (series ? primaryEpisode?.runtime : detail.runtime) ?? 0;
@@ -176,24 +189,53 @@ function DetailBody({
   const resumeSeconds = stateKnown ? resumePoint(watchState, fallbackSeconds) : null;
   const totalSeconds = watchState?.duration_seconds || fallbackSeconds;
   // A series whose target episode is still being looked up has no action row yet (the primary
-  // button would flicker from "Browse series" to its label).
-  const resolvingTarget =
-    series &&
-    playId === undefined &&
-    (seasonsQuery.isPending || (primarySeason !== undefined && primaryQuery.isPending));
+  // button would flicker from "Browse series" to its label); a season waits for its first episode.
+  const resolvingTarget = season
+    ? episodesQuery.isLoading
+    : series &&
+      playId === undefined &&
+      (seasonsQuery.isPending || (primarySeason !== undefined && primaryQuery.isPending));
 
   const play = (intent: StartIntent) => {
-    if (playId) onPlay({ contentId: playId, title: detail.title, intent });
+    if (playId) onPlay({ contentId: playId, title: playTitle, intent });
   };
 
+  // --- Opening and playing the cards of the seasons row and the episode grid ---------------------
+  const openSeason = useCallback(
+    (card: Season) => onOpenDetail({ itemId: card.content_id }),
+    [onOpenDetail],
+  );
+  const playSeason = useCallback(
+    (card: Season) => {
+      if (card.play_content_id) {
+        onPlay({ contentId: card.play_content_id, title: playTitle, intent: { kind: 'ask' } });
+      }
+    },
+    [onPlay, playTitle],
+  );
+  const openEpisode = useCallback(
+    (episode: Episode) => onOpenDetail({ itemId: episode.content_id }),
+    [onOpenDetail],
+  );
+  const playEpisode = useCallback(
+    (episode: Episode) =>
+      onPlay({ contentId: episode.content_id, title: playTitle, intent: { kind: 'ask' } }),
+    [onPlay, playTitle],
+  );
+
   // --- AI translation of the descriptions ----------------------------------------------------------
+  const listed = useMemo(
+    () =>
+      listedId !== undefined && listedNumber !== undefined
+        ? { id: listedId, number: listedNumber }
+        : undefined,
+    [listedId, listedNumber],
+  );
   const translation = useDescriptionTranslation({
     itemId: target.itemId,
     detail,
-    series,
     seriesId,
-    shownSeason: shown,
-    seasons,
+    listed,
     episodes,
   });
   const translateShown = translation.showPill && playId !== undefined;
@@ -207,19 +249,9 @@ function DetailBody({
       ? 'ai'
       : null;
 
-  // --- Season switch: a season shows only when its pill is activated (OK or a click) -------------
-  const selectSeason = useCallback(
-    (season: number) => {
-      memory.pickSeason(season);
-      setPicked(season);
-      // Choosing a season ends the page's own claim on the focus.
-      setOpenedOn(undefined);
-    },
-    [memory],
-  );
-
   // --- More like this ---------------------------------------------------------------------------
-  const similar = useSimilar(detail.content_id, true);
+  // A season page has no such row, as on the web.
+  const similar = useSimilar(detail.content_id, !season);
   const playItem = useCallback(
     (item: CatalogItem, intent?: StartIntent) =>
       onPlay({ contentId: item.content_id, title: item.title, intent }),
@@ -267,8 +299,10 @@ function DetailBody({
   // Only a movie, and only on a server that has box sets; a movie in none (or a failed read) has
   // no row. The detail carries no library, so the server picks the movie's own.
   const boxSetsAvailable = useBoxSetsAvailable();
-  const boxSetQuery = useItemBoxSet(detail.content_id, undefined, !series && boxSetsAvailable);
-  const boxSet = !series && boxSetsAvailable ? (boxSetQuery.data ?? null) : null;
+  // Only a movie has a box set: an episode's page (movie layout for now) asks nothing.
+  const isMovie = detail.type.trim().toLowerCase() === 'movie';
+  const boxSetQuery = useItemBoxSet(detail.content_id, undefined, isMovie && boxSetsAvailable);
+  const boxSet = boxSetQuery.data ?? null;
   const boxSetFilms = useMemo(() => boxSet?.items.slice(0, BOXSET_ROW_LIMIT) ?? [], [boxSet]);
   const openBoxSet = useCallback(() => {
     if (!boxSet) return;
@@ -303,10 +337,106 @@ function DetailBody({
     }
     setTops((old) => (BLOCK_ZONES.every((block) => old[block] === next[block]) ? old : next));
   }, []);
+  const offset = detailScrollOffset(zone, tops);
+  const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
+  // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
+  const enter = useCallback((next: DetailZone) => {
+    if (!focusFromPointer()) setZone(next);
+  }, []);
+  const inHero = useCallback(() => enter('hero'), [enter]);
+  const inSeasons = useCallback(() => enter('seasons'), [enter]);
+  const inEpisodes = useCallback(() => enter('episodes'), [enter]);
+  const inCast = useCallback(() => enter('cast'), [enter]);
+  const inExtras = useCallback(() => enter('extras'), [enter]);
+  const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
+  const inSimilar = useCallback(() => enter('similar'), [enter]);
+
+  // --- The block under the hero: the seasons row, or the episode grid --------------------------
+  // A series with several seasons shows them as a row of cards (a failed or pending read shows its
+  // own stand-in there); a season, and a series with exactly one season, list the episodes.
+  let seasonsBlock = null;
+  if (series && seasonsQuery.isError && !seasonsQuery.data) {
+    seasonsBlock = (
+      <div className="detail-section-message" role="alert" data-testid="seasons-error">
+        <p className="error">{t('detail.seasonsError')}</p>
+        <Button
+          focusKey="detail-seasons-retry"
+          onFocused={inSeasons}
+          onClick={() => void seasonsQuery.refetch()}
+        >
+          {t('common.retry')}
+        </Button>
+      </div>
+    );
+  } else if (series && seasonsQuery.isPending) {
+    seasonsBlock = <SeasonRailSkeleton />;
+  } else if (series && seasons.length > 1) {
+    seasonsBlock = (
+      <SeasonRail
+        seasons={seasons}
+        memory={memory.rows}
+        onOpen={openSeason}
+        onPlay={playSeason}
+        onFocused={inSeasons}
+      />
+    );
+  }
+
+  let episodesBlock = null;
+  if (season || singleSeason) {
+    let grid;
+    if (episodesQuery.isError && !episodes) {
+      grid = (
+        <div className="detail-section-message" role="alert" data-testid="episodes-error">
+          <p className="error">{t('detail.episodesError')}</p>
+          <Button
+            focusKey="detail-episodes-retry"
+            onFocused={inEpisodes}
+            onClick={() => void episodesQuery.refetch()}
+          >
+            {t('common.retry')}
+          </Button>
+        </div>
+      );
+    } else if (!episodes && episodesQuery.isLoading) {
+      grid = <EpisodeGridSkeleton />;
+    } else if (!episodes || episodes.length === 0) {
+      grid = (
+        <p className="note detail-section-message" data-testid="episodes-empty">
+          {t('detail.episodesEmpty')}
+        </p>
+      );
+    } else {
+      grid = (
+        <EpisodeGrid
+          gridId={`episodes:${detail.content_id}`}
+          episodes={episodes}
+          memory={memory.rows}
+          onOpen={openEpisode}
+          onPlay={playEpisode}
+          onFocused={inEpisodes}
+        />
+      );
+    }
+    episodesBlock = (
+      <section
+        className="detail-section detail-episodes"
+        data-testid="detail-episodes"
+        data-zone="episodes"
+        data-faded={fade('episodes')}
+      >
+        <SectionHead title={t('detail.episodes')} count={episodes?.length} testId="episodes-head" />
+        {grid}
+      </section>
+    );
+  }
+
   // Which blocks exist below the hero: the observer is attached once per such set, and the tops
   // are measured when it changes (blocks appear as their data arrives).
   const blockSet = [
-    series ? 'episodes' : cast.length > 0 ? 'cast' : '',
+    seasonsBlock ? 'seasons' : '',
+    episodesBlock ? 'episodes' : '',
+    kind === 'item' && cast.length > 0 ? 'cast' : '',
     extras.length > 0 ? 'extras' : '',
     boxSetFilms.length > 0 ? 'boxSet' : '',
     similarItems.length > 0 ? 'similar' : '',
@@ -321,109 +451,6 @@ function DetailBody({
     page.querySelectorAll('[data-zone], .detail-hero').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [measure, blockSet]);
-  const offset = detailScrollOffset(zone, tops);
-  const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
-  // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
-  const enter = useCallback((next: DetailZone) => {
-    if (!focusFromPointer()) setZone(next);
-  }, []);
-  const inHero = useCallback(() => enter('hero'), [enter]);
-  const inEpisodes = useCallback(() => enter('episodes'), [enter]);
-  const inCast = useCallback(() => enter('cast'), [enter]);
-  const inExtras = useCallback(() => enter('extras'), [enter]);
-  const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
-  const inSimilar = useCallback(() => enter('similar'), [enter]);
-
-  const openedIndex = episodes?.findIndex((episode) => episode.content_id === openedOn) ?? -1;
-
-  let episodeBlock = null;
-  if (series) {
-    let strip;
-    if (episodesQuery.isError && !episodes) {
-      strip = (
-        <div className="detail-section-message" role="alert" data-testid="episodes-error">
-          <p className="error">{t('detail.episodesError')}</p>
-          <Button
-            focusKey="detail-episodes-retry"
-            onFocused={inEpisodes}
-            onClick={() => void episodesQuery.refetch()}
-          >
-            {t('common.retry')}
-          </Button>
-        </div>
-      );
-    } else if (!episodes) {
-      strip = <EpisodeStripSkeleton />;
-    } else if (episodes.length === 0) {
-      strip = (
-        <p className="note detail-section-message" data-testid="episodes-empty">
-          {t('detail.episodesEmpty')}
-        </p>
-      );
-    } else {
-      strip = (
-        <EpisodeRow
-          key={shown}
-          episodes={episodes}
-          memory={memory.rows}
-          memoryId={`season-${shown}`}
-          initialIndex={Math.max(0, openedIndex)}
-          autoFocusId={openedOn}
-          onAutoFocused={clearOpenedOn}
-          onOpen={(episode) => onPlay({ contentId: episode.content_id, title: detail.title })}
-          onFocused={inEpisodes}
-        />
-      );
-    }
-    let pills;
-    if (seasonsQuery.isError && !seasonsQuery.data) {
-      pills = (
-        <div className="detail-section-message" role="alert" data-testid="seasons-error">
-          <p className="error">{t('detail.seasonsError')}</p>
-          <Button
-            focusKey="detail-seasons-retry"
-            onFocused={inEpisodes}
-            onClick={() => void seasonsQuery.refetch()}
-          >
-            {t('common.retry')}
-          </Button>
-        </div>
-      );
-    } else if (seasonsQuery.isPending) {
-      pills = (
-        <div
-          className="detail-seasons-skeleton"
-          aria-hidden="true"
-          data-testid="seasons-skeleton"
-        />
-      );
-    } else {
-      pills = (
-        <SeasonPills
-          seasons={seasons}
-          selected={shown}
-          onPick={selectSeason}
-          onFocused={inEpisodes}
-        />
-      );
-    }
-    episodeBlock = (
-      <section
-        className="detail-section detail-episodes"
-        data-testid="detail-episodes"
-        data-zone="episodes"
-        data-faded={fade('episodes')}
-      >
-        <div
-          className="detail-pills-box"
-          style={{ height: SEASON_PILLS_HEIGHT, marginBottom: SEASON_PILLS_GAP }}
-        >
-          {pills}
-        </div>
-        {strip}
-      </section>
-    );
-  }
 
   return (
     <>
@@ -445,17 +472,17 @@ function DetailBody({
             faded={fade('hero') === 'true'}
             translation={translationLine}
             seasons={seasons}
+            loadedEpisodes={episodes?.length}
             onMore={() => setSynopsisOpen(true)}
             actions={
               resolvingTarget ? null : (
                 <ActionRow
                   detail={detail}
-                  series={series}
+                  kind={kind}
                   playable={playId !== undefined}
                   resumeSeconds={resumeSeconds}
                   totalSeconds={totalSeconds}
                   stateKnown={stateKnown}
-                  autoFocus={openedOn === undefined}
                   onPlay={play}
                   onFocused={inHero}
                   onNotice={setNotice}
@@ -472,8 +499,18 @@ function DetailBody({
               )
             }
           />
-          {episodeBlock}
-          {!series && cast.length > 0 ? (
+          {seasonsBlock ? (
+            <section
+              className="detail-section detail-seasons-block"
+              data-testid="detail-seasons"
+              data-zone="seasons"
+              data-faded={fade('seasons')}
+            >
+              {seasonsBlock}
+            </section>
+          ) : null}
+          {episodesBlock}
+          {kind === 'item' && cast.length > 0 ? (
             <div data-zone="cast" data-faded={fade('cast')}>
               <Row
                 rowId="cast"
@@ -570,7 +607,7 @@ function DetailBody({
         ) : null}
         {synopsisOpen && detail.overview ? (
           <SynopsisDialog
-            title={detail.title}
+            title={season ? seasonLabel(detail, t) : detail.title}
             text={detail.overview}
             onClose={() => setSynopsisOpen(false)}
           />

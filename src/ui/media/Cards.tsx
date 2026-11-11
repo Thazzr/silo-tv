@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, type KeyboardEventHandler, type ReactNode } from 'react';
 import { Focusable } from '../../app/nav';
 import { useT } from '../../i18n';
 import { Artwork } from './Artwork';
@@ -34,6 +34,8 @@ export interface FrameProps {
   label?: string;
   onClick: () => void;
   onFocused?: () => void;
+  /** Keys the card handles itself (the remote's Play key plays the card). */
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   autoFocus?: boolean;
   art: ReactNode;
   caption?: ReactNode;
@@ -51,6 +53,7 @@ export function CardFrame({
   label,
   onClick,
   onFocused,
+  onKeyDown,
   autoFocus,
   art,
   caption,
@@ -63,6 +66,7 @@ export function CardFrame({
       aria-label={label}
       onClick={onClick}
       onFocused={onFocused}
+      onKeyDown={onKeyDown}
     >
       <span className="card-art">
         {art}

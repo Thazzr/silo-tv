@@ -24,8 +24,10 @@ function TestGrid({
   loadingMore = false,
   onLoadMore = () => {},
   memory,
+  hideRowsAbove,
 }: {
   items: Item[];
+  hideRowsAbove?: boolean;
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
@@ -40,6 +42,7 @@ function TestGrid({
       loadingMore={loadingMore}
       onLoadMore={onLoadMore}
       memory={memory}
+      hideRowsAbove={hideRowsAbove}
       renderCard={(item, ctx) => (
         <PosterCard
           grid
@@ -151,6 +154,32 @@ describe('Grid', () => {
     expect(document.querySelector(`[data-focus-key="${key('g49')}"]`)).not.toBeNull();
     expect(document.querySelector(`[data-focus-key="${key('g55')}"]`)).toBeNull();
     expect(mounted()).toBeLessThanOrEqual(30);
+  });
+
+  it('keeps the row above the scrolled-to one mounted but invisible when asked to', async () => {
+    renderWithSilo(<TestGrid items={makeItems(0, 120)} hideRowsAbove />);
+    await act(async () => {});
+    await down(3);
+    expect(getCurrentFocusKey()).toBe(key('g19'));
+    const opacityOf = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-focus-key="${key(id)}"]`)!.parentElement!.style
+        .opacity;
+    // Row 3 is the scrolled-to row; row 2 stays mounted (Up lands there) but is not drawn.
+    expect(opacityOf('g19')).toBe('');
+    expect(opacityOf('g13')).toBe('0');
+    await pressKey(KEY.up);
+    expect(getCurrentFocusKey()).toBe(key('g13'));
+    expect(opacityOf('g13')).toBe('');
+  });
+
+  it('draws every mounted row by default', async () => {
+    renderWithSilo(<TestGrid items={makeItems(0, 120)} />);
+    await act(async () => {});
+    await down(3);
+    expect(
+      document.querySelector<HTMLElement>(`[data-focus-key="${key('g13')}"]`)!.parentElement!.style
+        .opacity,
+    ).toBe('');
   });
 
   it('focuses a hovered card in a lower row without moving the grid; the next key scrolls as before', async () => {

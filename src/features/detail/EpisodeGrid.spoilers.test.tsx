@@ -8,10 +8,13 @@ import { serveSettings } from '../../test/settingsFixtures';
 import { holdAnswers, signedInSession, spoilerValues } from '../../test/spoilerFixtures';
 import { PORTRAIT_HASH, stubCanvas } from '../../test/thumbhashFixtures';
 import { FocusIndexMemory } from '../../ui/media';
-import { EpisodeRow } from './EpisodeRow';
+import { prefetchImage } from '../../ui/media/prefetch';
+import { EpisodeGrid } from './EpisodeGrid';
 import type { Episode } from './info';
 
-// Spoiler protection on the series page's episode row. Real timers: the settings come through
+vi.mock('../../ui/media/prefetch', () => ({ prefetchImage: vi.fn() }));
+
+// Spoiler protection on the episode grid. Real timers: the settings come through
 // MSW and React Query.
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -38,12 +41,12 @@ function episode(number: number, overrides: Partial<Episode> = {}): Episode {
 
 function renderRow(episodes: Episode[]) {
   return renderWithSilo(
-    <EpisodeRow
+    <EpisodeGrid
+      gridId="episodes:s1"
       episodes={episodes}
       memory={new FocusIndexMemory()}
-      memoryId="s1:1"
-      initialIndex={0}
       onOpen={() => undefined}
+      onPlay={() => undefined}
       onFocused={() => undefined}
     />,
     { session: signedInSession() },
@@ -53,7 +56,7 @@ function renderRow(episodes: Episode[]) {
 const stillImages = () => document.querySelectorAll(`img[src^="${STILL}"]`);
 const previews = () => document.querySelectorAll(`img[src="${PREVIEW}"]`);
 
-describe('EpisodeRow: spoiler protection', () => {
+describe('EpisodeGrid: spoiler protection', () => {
   it('shows an unwatched episode as its decoded preview and never requests the still', async () => {
     serveSettings(server, { values: spoilerValues(true, true) });
     renderRow([episode(1)]);
@@ -145,5 +148,21 @@ describe('EpisodeRow: spoiler protection', () => {
     await view.queryClient.invalidateQueries({ queryKey: ['settings'] });
     await waitFor(() => expect(stillImages()).toHaveLength(1));
     expect(screen.getByTestId('episode-synopsis')).toHaveTextContent('Secret of 1.');
+  });
+
+  it('does not prefetch the still of a protected episode, but the others', async () => {
+    // Until the settings are known nothing is hidden, so the first prefetch is unprotected.
+    const { gate, release } = holdAnswers();
+    serveSettings(server, { gate, values: spoilerValues(true, false) });
+    // Thirty-six episodes: rows 4 and 5 (episodes 21 to 30) lie just past the mounted rows.
+    const episodes = Array.from({ length: 36 }, (_, i) =>
+      episode(i + 1, i === 25 ? { user_data: rollup({ played: true }) } : {}),
+    );
+    renderRow(episodes);
+    vi.mocked(prefetchImage).mockClear();
+    await release();
+    const urls = () => vi.mocked(prefetchImage).mock.calls.map(([url]) => url);
+    await waitFor(() => expect(urls()).toContain(`${STILL}26.webp`));
+    expect(urls()).not.toContain(`${STILL}25.webp`);
   });
 });

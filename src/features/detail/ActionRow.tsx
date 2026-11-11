@@ -17,7 +17,7 @@ import { formatClock } from '../../playback/format';
 import type { StartIntent } from '../../playback/resume';
 import { playedShare, primaryAction, watchedState } from './actions';
 import { ChoiceDialog, type Choice } from './ChoiceDialog';
-import type { ItemDetail } from './info';
+import type { DetailKind, ItemDetail } from './info';
 import { useSetRating, useSetUserFlag, useSetWatched, type UserFlag } from './itemActions';
 import { MAX_STARS, RATING_KEY, StarRating } from './StarRating';
 
@@ -28,27 +28,27 @@ const FAVORITE_KEY = 'detail-favorite';
 const MENU_KEY = 'detail-menu';
 
 /**
- * The action row of a movie or series page, like Silo's web app: the primary button (Play,
- * Resume, ...), the watched toggle, the favourite heart, the star rating and the More menu, then
- * the translate pill when the page offers it. Left and Right walk the row (the stars take them
- * while a rating is being picked); the dialogs the buttons open hold the focus until they close.
+ * The action row of a detail page, like Silo's web app: the primary button (Play, Resume, ...), the
+ * watched toggle, the favourite heart, the star rating and the More menu, then the translate pill
+ * when the page offers it. A season page has no heart, stars or watchlist, and its More menu shows
+ * only when it holds something. Left and Right walk the row (the stars take them while a rating is
+ * being picked); the dialogs the buttons open hold the focus until they close.
  */
 export function ActionRow({
   detail,
-  series,
+  kind,
   playable,
   resumeSeconds,
   totalSeconds,
   stateKnown,
-  autoFocus,
   onPlay,
   onFocused,
   onNotice,
   onTranslate,
 }: {
   detail: ItemDetail;
-  series: boolean;
-  /** Whether something plays: the movie itself, or a series' target episode. */
+  kind: DetailKind;
+  /** Whether something plays: the movie itself, a series' target episode, a season's first one. */
   playable: boolean;
   /** The resume point of what plays, or null when it plays from the start. */
   resumeSeconds: number | null;
@@ -56,7 +56,6 @@ export function ActionRow({
   totalSeconds: number;
   /** Whether the watch state of what plays is known; before that the player asks itself. */
   stateKnown: boolean;
-  autoFocus: boolean;
   onPlay: (intent: StartIntent) => void;
   onFocused: () => void;
   /** Shows a short confirmation or failure line on the page. */
@@ -71,8 +70,9 @@ export function ActionRow({
   // The star being picked (1 to 5), or null while no rating is being picked.
   const [picking, setPicking] = useState<number | null>(null);
 
-  const action = primaryAction({ detail, series, playable, resumeSeconds, totalSeconds });
-  const watched = watchedState(detail, series);
+  const action = primaryAction({ detail, kind, playable, resumeSeconds, totalSeconds });
+  const watched = watchedState(detail, kind);
+  const season = kind === 'season';
   const setWatched = useSetWatched();
   const setFlag = useSetUserFlag(detail.content_id);
   const setRating = useSetRating(detail.content_id);
@@ -140,7 +140,7 @@ export function ActionRow({
   if (watched.hasProgress) {
     menu.push({
       key: 'detail-menu-unwatched',
-      label: t('detail.markUnwatched'),
+      label: t(watched.unwatchLabel),
       icon: <Eye size={28} aria-hidden="true" />,
       onSelect: () => {
         closeDialog();
@@ -148,20 +148,22 @@ export function ActionRow({
       },
     });
   }
-  menu.push({
-    key: 'detail-menu-watchlist',
-    label: t(inWatchlist ? 'detail.removeFromWatchlist' : 'detail.addToWatchlist'),
-    icon: inWatchlist ? (
-      <Check size={28} aria-hidden="true" />
-    ) : (
-      <Plus size={28} aria-hidden="true" />
-    ),
-    onSelect: () => {
-      closeDialog();
-      toggleWatchlist();
-    },
-  });
-  if (detail.user_state) {
+  if (!season) {
+    menu.push({
+      key: 'detail-menu-watchlist',
+      label: t(inWatchlist ? 'detail.removeFromWatchlist' : 'detail.addToWatchlist'),
+      icon: inWatchlist ? (
+        <Check size={28} aria-hidden="true" />
+      ) : (
+        <Plus size={28} aria-hidden="true" />
+      ),
+      onSelect: () => {
+        closeDialog();
+        toggleWatchlist();
+      },
+    });
+  }
+  if (!season && detail.user_state) {
     menu.push({
       key: 'detail-menu-not-interested',
       label: t(notInterested ? 'detail.showInRecommendations' : 'detail.notInterested'),
@@ -173,16 +175,18 @@ export function ActionRow({
     });
   }
 
+  // Which buttons the row mounts. The focus order below and the buttons rendered further down
+  // both read these, so the order never names a button that is not there.
+  const hasHeartAndStars = !season;
+  const hasMenu = menu.length > 0;
+  const hasTranslate = onTranslate !== undefined;
   // The focus order of the row, left to right: what Left and Right walk.
   const keys = [
     ...(primaryDisabled ? [] : [PLAY_KEY]),
     WATCHED_KEY,
-    FAVORITE_KEY,
-    RATING_KEY,
-    MENU_KEY,
-    // Not mounted without the pill: a press that targets it is dropped (moveFocusTo), so Right on
-    // More holds.
-    TRANSLATE_KEY,
+    ...(hasHeartAndStars ? [FAVORITE_KEY, RATING_KEY] : []),
+    ...(hasMenu ? [MENU_KEY] : []),
+    ...(hasTranslate ? [TRANSLATE_KEY] : []),
   ];
   const onArrow: ArrowHandler = (direction, fromKey) => {
     if (picking !== null) {
@@ -215,7 +219,7 @@ export function ActionRow({
         <Button
           focusKey={PLAY_KEY}
           className="detail-pill detail-play"
-          autoFocus={autoFocus}
+          autoFocus
           disabled={primaryDisabled}
           onFocused={onFocused}
           onClick={press}
@@ -235,7 +239,7 @@ export function ActionRow({
         <Button
           focusKey={WATCHED_KEY}
           className="detail-pill"
-          autoFocus={autoFocus && primaryDisabled}
+          autoFocus={primaryDisabled}
           disabled={setWatched.isPending}
           onFocused={onFocused}
           onClick={() => markWatched(!watched.played)}
@@ -243,42 +247,48 @@ export function ActionRow({
           <Check size={28} aria-hidden="true" />
           {t(watched.label)}
         </Button>
-        <Button
-          focusKey={FAVORITE_KEY}
-          className="detail-pill detail-round"
-          aria-label={t(favorite ? 'detail.unfavorite' : 'detail.favorite')}
-          aria-pressed={favorite}
-          onFocused={onFocused}
-          onClick={() =>
-            flag(
-              'is_favorite',
-              !favorite,
-              t(favorite ? 'detail.favoritesRemoved' : 'detail.favoritesAdded'),
-              t('detail.favoritesFailed'),
-            )
-          }
-        >
-          <Heart size={36} aria-hidden="true" className="detail-heart" data-filled={favorite} />
-        </Button>
-        <StarRating
-          value={rating}
-          picking={picking}
-          onFocused={onFocused}
-          onPress={() => (picking === null ? setPicking(rating ?? 1) : commitRating(picking))}
-          onPickStar={commitRating}
-          onBlur={() => setPicking(null)}
-        />
-        <Button
-          focusKey={MENU_KEY}
-          className="detail-pill detail-round"
-          aria-label={t('detail.moreActions')}
-          aria-haspopup="dialog"
-          onFocused={onFocused}
-          onClick={() => setDialog('menu')}
-        >
-          <EllipsisVertical size={36} aria-hidden="true" />
-        </Button>
-        {onTranslate ? (
+        {hasHeartAndStars ? (
+          <>
+            <Button
+              focusKey={FAVORITE_KEY}
+              className="detail-pill detail-round"
+              aria-label={t(favorite ? 'detail.unfavorite' : 'detail.favorite')}
+              aria-pressed={favorite}
+              onFocused={onFocused}
+              onClick={() =>
+                flag(
+                  'is_favorite',
+                  !favorite,
+                  t(favorite ? 'detail.favoritesRemoved' : 'detail.favoritesAdded'),
+                  t('detail.favoritesFailed'),
+                )
+              }
+            >
+              <Heart size={36} aria-hidden="true" className="detail-heart" data-filled={favorite} />
+            </Button>
+            <StarRating
+              value={rating}
+              picking={picking}
+              onFocused={onFocused}
+              onPress={() => (picking === null ? setPicking(rating ?? 1) : commitRating(picking))}
+              onPickStar={commitRating}
+              onBlur={() => setPicking(null)}
+            />
+          </>
+        ) : null}
+        {hasMenu ? (
+          <Button
+            focusKey={MENU_KEY}
+            className="detail-pill detail-round"
+            aria-label={t('detail.moreActions')}
+            aria-haspopup="dialog"
+            onFocused={onFocused}
+            onClick={() => setDialog('menu')}
+          >
+            <EllipsisVertical size={36} aria-hidden="true" />
+          </Button>
+        ) : null}
+        {hasTranslate ? (
           <Button
             focusKey={TRANSLATE_KEY}
             className="detail-pill"

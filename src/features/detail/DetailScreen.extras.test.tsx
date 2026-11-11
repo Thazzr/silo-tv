@@ -203,7 +203,7 @@ describe('DetailScreen: Trailer & More', () => {
     });
     setup({ itemId: 's1' });
     await ready();
-    await screen.findByTestId('episode-strip');
+    await screen.findByTestId('episode-grid');
     await screen.findByRole('button', { name: /Similar One/ });
     const zones = Array.from(document.querySelectorAll('[data-zone]')).map((el) =>
       el.getAttribute('data-zone'),

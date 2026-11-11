@@ -1,7 +1,7 @@
 // Sizes of the detail page (docs/design.md). All values are CSS pixels on the 1920x1080 layout and
 // must match src/styles/detail.css. The page scrolls in steps from one section to the next; the
 // offsets come from the measured block tops, not from heights kept here.
-import { CARD_GAP, SCREEN_WIDTH, STRIP_PADDING } from '../../ui/media';
+import { CARD_GAP, SCREEN_WIDTH, STRIP_PADDING, type GridMetrics } from '../../ui/media';
 
 /** Side inset of the detail pages. */
 export const DETAIL_INSET = 100;
@@ -26,7 +26,7 @@ export const DETAIL_SCROLLED_DIM_ALPHA = 0.85;
 export const SAFE_TOP = 54;
 
 /** The blocks of the page the view snaps between, in page order. */
-export type DetailZone = 'hero' | 'episodes' | 'cast' | 'extras' | 'boxSet' | 'similar';
+export type DetailZone = 'hero' | 'seasons' | 'episodes' | 'cast' | 'extras' | 'boxSet' | 'similar';
 /** The zones below the hero, which have a block of their own to scroll to. */
 export type DetailBlockZone = Exclude<DetailZone, 'hero'>;
 /** The measured top of each block below the hero inside the page (layout position, in px). */
@@ -34,7 +34,7 @@ export type DetailBlockTops = Partial<Record<DetailBlockZone, number>>;
 
 /**
  * How far the page is scrolled while the focus is in `zone`: the hero stays at the origin, and any
- * other block is scrolled so its first line (the season pills, a row's title) sits on the top
+ * other block is scrolled so its first line (a row's or a grid's heading) sits on the top
  * safe-area line. The tops are measured from the layout (a tall hero pushes every block down), so
  * no height is assumed here. A block that is not on the page (or not measured yet) leaves the
  * page where it is, and the page never scrolls above its origin.
@@ -47,6 +47,7 @@ export function detailScrollOffset(zone: DetailZone, tops: DetailBlockTops): num
 
 const ZONE_ORDER: readonly DetailZone[] = [
   'hero',
+  'seasons',
   'episodes',
   'cast',
   'extras',
@@ -59,21 +60,37 @@ export function isAbove(zone: DetailZone, focused: DetailZone): boolean {
   return ZONE_ORDER.indexOf(zone) < ZONE_ORDER.indexOf(focused);
 }
 
-/** An episode card: a 360x200 still with the title, the runtime and two lines of synopsis. */
-export const EPISODE_CARD = { width: 360, height: 200 } as const;
-export const EPISODE_STEP = EPISODE_CARD.width + CARD_GAP;
-/** Space between the still and its caption. */
-export const EPISODE_CAPTION_OFFSET = 14;
-/** Title (31), runtime (26) and two synopsis lines (2 x 26). */
-export const EPISODE_CAPTION_HEIGHT = 109;
-export const EPISODE_STRIP_HEIGHT =
-  EPISODE_CARD.height + EPISODE_CAPTION_OFFSET + EPISODE_CAPTION_HEIGHT + 2 * STRIP_PADDING;
+/** A season card: a 220x330 poster (the web's 140x210, scaled) with its label and episode count. */
+export const SEASON_CARD = { width: 220, height: 330 } as const;
+export const SEASON_STEP = SEASON_CARD.width + CARD_GAP;
+/** Space between the poster and its caption. */
+export const SEASON_CAPTION_OFFSET = 22;
+/** Label (31) and episode count (26). */
+export const SEASON_CAPTION_HEIGHT = 57;
+export const SEASON_STRIP_HEIGHT =
+  SEASON_CARD.height + SEASON_CAPTION_OFFSET + SEASON_CAPTION_HEIGHT + 2 * STRIP_PADDING;
+/** The heading line of the seasons row and of the episode grid ("Seasons", "N total"). */
+export const SECTION_HEAD_HEIGHT = 48;
 
-/** The season pills (75 px tall, like every target) and the space below them. */
-export const SEASON_PILLS_HEIGHT = 75;
-export const SEASON_PILLS_GAP = 24;
-
-/** Episode cards that fit across the screen between the insets, the next one only partly. */
-export function episodesVisible(): number {
-  return Math.floor((SCREEN_WIDTH - 2 * DETAIL_INSET + CARD_GAP) / EPISODE_STEP);
+/** Season cards that fit across the screen between the insets, the next one only partly. */
+export function seasonsVisible(): number {
+  return Math.floor((SCREEN_WIDTH - 2 * DETAIL_INSET + CARD_GAP) / SEASON_STEP);
 }
+
+/**
+ * The episode grid: five columns of 324x182 stills (16:9) between the insets, 25 px apart. A card's
+ * caption sits 14 px under the still: the code and title (31), the date and runtime (26) and three
+ * lines of synopsis (3 x 26) make 135 px; 40 px separate the rows. src/styles/detail.css draws
+ * the same numbers.
+ */
+export const EPISODE_CARD = { width: 324, height: 182 } as const;
+const EPISODE_CAPTION_OFFSET = 14;
+const EPISODE_CAPTION_HEIGHT = 135;
+const EPISODE_ROW_GAP = 40;
+export const EPISODE_GRID: GridMetrics = {
+  columns: 5,
+  card: EPISODE_CARD,
+  gap: 25,
+  inset: DETAIL_INSET,
+  rowPitch: EPISODE_CARD.height + EPISODE_CAPTION_OFFSET + EPISODE_CAPTION_HEIGHT + EPISODE_ROW_GAP,
+};

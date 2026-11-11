@@ -73,6 +73,11 @@ export interface GridProps<T> {
    * where it is (a jump from outside the grid), and only the remembered index follows.
    */
   jumpTo?: { index: number } | null;
+  /**
+   * Draws the rows above the scrolled-to row invisible. They stay mounted (Up needs a card to
+   * land on) but must not peek into the top of a viewport that is cut mid-page.
+   */
+  hideRowsAbove?: boolean;
 }
 
 /**
@@ -93,6 +98,7 @@ export function Grid<T>({
   layout = DEFAULT_GRID,
   onWindow,
   jumpTo,
+  hideRowsAbove = false,
 }: GridProps<T>) {
   const { columns, rowPitch } = layout;
   const loadAhead = columns * 3;
@@ -260,7 +266,11 @@ export function Grid<T>({
           const cells: ReactNode[] = [];
           for (let col = 0; col < columns; col += 1) {
             const index = row * columns + col;
-            const style = { left: col * step, top: row * rowPitch };
+            const style = {
+              left: col * step,
+              top: row * rowPitch,
+              ...(hideRowsAbove && row < effectiveScroll ? { opacity: 0 } : {}),
+            };
             const item = items[index];
             if (item === undefined) {
               // A title that is not loaded yet, and the row of placeholders that stands in for the

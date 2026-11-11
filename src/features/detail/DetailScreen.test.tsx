@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { HttpResponse, http } from 'msw';
+import { HttpResponse, delay, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
@@ -32,20 +32,7 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 const sleep = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-/**
- * A key press that needs no timer, for tests that fake setTimeout: the navigation decides within
- * a few promise ticks (pressKey itself waits on a timer).
- */
-const pressFaked = (keyCode: number) =>
-  act(async () => {
-    fireEvent.keyDown(window, { keyCode });
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
-  });
 const focusKeyIs = (focusKey: string) => waitFor(() => expect(getCurrentFocusKey()).toBe(focusKey));
-
-/** Short enough to keep the tests quick, long enough to tell "rested" from "passed over". */
-/** Far longer than the old rest delay: focus alone must not switch a season in this time. */
-const LONG_REST = 5000;
 
 type Screen =
   | { name: 'detail'; target: DetailTarget }
@@ -975,266 +962,226 @@ describe('DetailScreen: a series', () => {
       versions: [],
       ...overrides,
     });
+  const seasonItem = (number: number) =>
+    itemDetail({
+      content_id: `season-${number}`,
+      type: 'season',
+      title: `Season ${number}`,
+      series_id: 's1',
+      series_title: 'A Show',
+      season_number: number,
+      episode_count: 3,
+      versions: [],
+    });
+  /** The series, or the season page a season card opens. */
+  const item = (id: string) => (id === 's1' ? series() : seasonItem(Number(id.split('-')[1])));
   const episodes: DetailServe['episodes'] = (season) =>
     season === 0
       ? [episodeOf(0, 1, { title: 'Special' })]
       : [1, 2, 3].map((number) => episodeOf(season, number));
-  const pills = () =>
-    within(screen.getByTestId('season-pills'))
-      .getAllByRole('tab')
-      .map((el) => el.textContent);
-  const titles = () => screen.getAllByTestId('episode-title').map((el) => el.textContent);
+  const labels = () => screen.getAllByTestId('season-label').map((el) => el.textContent);
+  const card = (name: string | RegExp) => screen.getByRole('button', { name });
+  const inActions = () =>
+    screen.getByTestId('detail-actions').contains(document.activeElement as Node);
 
-  it('shows the seasons in order with the specials last, on the first season by default', async () => {
+  it('shows the seasons as a row of cards, the specials first, and no episode grid', async () => {
     const calls = serveDetail(server, { item: () => series(), seasons, episodes });
     setup({ itemId: 's1' });
     await ready();
-    await screen.findByTestId('season-pills');
-    expect(pills()).toEqual(['Season 1', 'Season 2', 'Specials']);
-    expect(screen.getByRole('tab', { name: 'Season 1' })).toHaveAttribute('aria-selected', 'true');
-    await screen.findByTestId('episode-strip');
-    expect(titles()).toEqual(['E1 · Episode 1.1', 'E2 · Episode 1.2', 'E3 · Episode 1.3']);
+    await screen.findByTestId('season-rail');
+    expect(labels()).toEqual(['Specials', 'Season 1', 'Season 2']);
+    expect(screen.getByRole('heading', { name: 'Seasons' })).toBeInTheDocument();
+    expect(screen.getByTestId('seasons-head-total')).toHaveTextContent('3 total');
+    expect(screen.queryByTestId('episode-grid')).toBeNull();
     expect(calls.seasons).toEqual(['s1']);
+    // Only the episode "Play" needs is read: no season is listed on the series page.
+    expect(calls.episodes).toEqual(['s1/1']);
     // The chips count the seasons and the episodes of the season list instead of a runtime.
     expect(screen.getByTestId('detail-chips')).toHaveTextContent('2019PG-133 seasons9 episodes');
   });
 
-  it('shows number, title, runtime, synopsis, progress and the watched mark of each episode', async () => {
+  it('draws the label, the count, the watched check and the progress bar of each season', async () => {
     serveDetail(server, {
       item: () => series(),
-      seasons,
-      episodes: (season) => [
-        episodeOf(season, 1, { user_data: rollup({ played: true }) }),
-        episodeOf(season, 2, {
-          runtime: 50,
-          user_data: rollup({ position_seconds: 750, duration_seconds: 3000 }),
+      seasons: [
+        seasonOf(1, {
+          episode_count: 7,
+          user_data: rollup({ played: true, watched_count: 7, unplayed_count: 0 }),
         }),
-        episodeOf(season, 3, { overview: undefined }),
-        // Watched and being watched again: the check and the bar together.
-        episodeOf(season, 4, {
-          user_data: rollup({ played: true, position_seconds: 360, duration_seconds: 3000 }),
+        seasonOf(2, {
+          episode_count: 8,
+          title: 'The Rising',
+          user_data: rollup({ watched_count: 2 }),
         }),
+        seasonOf(3, { episode_count: 4 }),
       ],
+      episodes,
     });
     setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    const cards = screen.getAllByTestId('episode-title');
-    expect(cards.map((el) => el.textContent)).toEqual([
-      'E1 · Episode 1.1',
-      'E2 · Episode 1.2',
-      'E3 · Episode 1.3',
-      'E4 · Episode 1.4',
+    await screen.findByTestId('season-rail');
+    expect(labels()).toEqual(['Season 1', 'The Rising', 'Season 3']);
+    expect(screen.getAllByTestId('season-count').map((el) => el.textContent)).toEqual([
+      '7 episodes',
+      '2 of 8 episodes',
+      '4 episodes',
     ]);
-    expect(screen.getAllByTestId('episode-runtime').map((el) => el.textContent)).toEqual([
-      '45 min',
-      '50 min',
-      '45 min',
-      '45 min',
-    ]);
-    expect(screen.getAllByTestId('episode-synopsis')[1]).toHaveTextContent('Synopsis of 1.2.');
-    // The first and the fourth are watched; the second is partway (a quarter of 50 minutes) and
-    // the fourth is being watched again (360 s of 50 minutes), so it has both.
-    expect(screen.getAllByTestId('episode-watched')).toHaveLength(2);
-    const first = within(screen.getByRole('button', { name: /Episode 1.1/ }));
-    expect(first.getByTestId('episode-watched')).toBeInTheDocument();
-    expect(first.queryByTestId('card-progress')).toBeNull();
-    const fourth = within(screen.getByRole('button', { name: /Episode 1.4/ }));
-    expect(fourth.getByTestId('episode-watched')).toBeInTheDocument();
-    expect(fourth.getByTestId('card-progress')).toHaveAttribute(
+    const first = within(card(/Season 1/));
+    const second = within(card(/The Rising/));
+    const third = within(card(/Season 3/));
+    expect(first.getByTestId('season-watched')).toBeInTheDocument();
+    expect(second.queryByTestId('season-watched')).toBeNull();
+    expect(third.queryByTestId('season-watched')).toBeNull();
+    expect(first.getByTestId('season-progress')).toHaveAttribute(
       'style',
-      expect.stringContaining('width: 12%'),
+      expect.stringContaining('width: 100%'),
     );
-    const bars = screen.getAllByTestId('card-progress');
-    expect(bars).toHaveLength(2);
-    expect(bars[0]).toHaveAttribute('style', expect.stringContaining('width: 25%'));
+    expect(second.getByTestId('season-progress')).toHaveAttribute(
+      'style',
+      expect.stringContaining('width: 25%'),
+    );
+    expect(third.queryByTestId('season-progress')).toBeNull();
   });
 
-  it('shows a skeleton of cards while the episodes load, then the strip', async () => {
+  it('shows the poster of a season, and its label on a tile when it has none', async () => {
     serveDetail(server, {
       item: () => series(),
-      seasons,
-      episodes: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 80));
-        return [episodeOf(1, 1)];
-      },
+      seasons: [seasonOf(1, { poster_url: '/img/season-1.webp' }), seasonOf(2)],
+      episodes,
     });
     setup({ itemId: 's1' });
-    await ready();
-    expect(await screen.findByTestId('episode-skeleton')).toBeInTheDocument();
-    expect(screen.getAllByTestId('card-skeleton').length).toBeGreaterThan(3);
-    await screen.findByTestId('episode-strip');
-    expect(screen.queryByTestId('episode-skeleton')).toBeNull();
+    await screen.findByTestId('season-rail');
+    expect(
+      within(card(/Season 1/))
+        .getByTestId('art')
+        .querySelector('img'),
+    ).toHaveAttribute('src', `${BASE_URL}/img/season-1.webp`);
+    expect(within(card(/Season 2/)).getByTestId('art-tile')).toHaveTextContent('Season 2');
   });
 
-  it('plays an episode with OK, with the series title and the player asking about resuming', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
+  it('opens the page of a season on OK, and Back returns onto its card', async () => {
+    const calls = serveDetail(server, { item, seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('season-rail');
+    await pressKey(KEY.down);
+    await focusKeyIs('season:0');
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    await focusKeyIs('season:2');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('detail-breadcrumb')).toHaveTextContent('A Show');
+    expect(calls.items).toContain('season-2');
+    await pressKey(KEY.back);
+    await screen.findByTestId('season-rail');
+    await focusKeyIs('season:2');
+  });
+
+  it('remembers a season far along a long row when the page comes back from its page', async () => {
+    const many = Array.from({ length: 14 }, (_, i) => seasonOf(i + 1));
+    serveDetail(server, { item, seasons: many, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('season-rail');
+    await pressKey(KEY.down);
+    await focusKeyIs('season:1');
+    for (let n = 2; n <= 12; n += 1) await pressKey(KEY.right);
+    await focusKeyIs('season:12');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('detail-breadcrumb')).toHaveTextContent('A Show');
+    await pressKey(KEY.back);
+    await screen.findByTestId('season-rail');
+    await focusKeyIs('season:12');
+  });
+
+  it('opens a season on a click', async () => {
+    serveDetail(server, { item, seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('season-rail');
+    fireEvent.click(card(/Season 1/));
+    expect(await screen.findByTestId('detail-breadcrumb')).toHaveTextContent('Season 1');
+  });
+
+  it('plays what the season continues with from the remote Play key, asking about resuming', async () => {
+    serveDetail(server, {
+      item: () => series(),
+      seasons: [seasonOf(1, { play_content_id: 'e13' }), seasonOf(2, { play_content_id: 'e22' })],
+      episodes,
+    });
     const { onPlay } = setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    fireEvent.click(screen.getByRole('button', { name: /Episode 1.2/ }));
+    await screen.findByTestId('season-rail');
+    fireEvent.keyDown(card(/Season 2/), { keyCode: 415 });
+    expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledWith({
-      contentId: 'e12',
+      contentId: 'e22',
       title: 'A Show',
-      intent: undefined,
+      intent: { kind: 'ask' },
     });
   });
 
-  it('never switches the season when the focus only passes over or rests on a pill', async () => {
-    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e11');
-    await pressKey(KEY.up);
-    await focusKeyIs('season:1');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await pressFaked(KEY.right);
-      expect(getCurrentFocusKey()).toBe('season:2');
-      await pressFaked(KEY.right);
-      expect(getCurrentFocusKey()).toBe('season:0');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(LONG_REST);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(titles()[0]).toBe('E1 · Episode 1.1');
-    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 1');
-    expect(calls.episodes).toEqual(['s1/1']);
+  it('does nothing on the Play key for a season without a play target, and OK never plays', async () => {
+    serveDetail(server, {
+      item,
+      seasons: [seasonOf(1), seasonOf(2, { play_content_id: 'e22' })],
+      episodes,
+    });
+    const { onPlay } = setup({ itemId: 's1' });
+    await screen.findByTestId('season-rail');
+    fireEvent.keyDown(card(/Season 1/), { keyCode: 415 });
+    fireEvent.keyDown(card(/Season 2/), { keyCode: 13 });
+    expect(onPlay).not.toHaveBeenCalled();
   });
 
-  it('switches the season on OK on its pill', async () => {
-    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
+  it('goes from the actions down to the first season, along the row and back up', async () => {
+    serveDetail(server, { item: () => series(), seasons, episodes });
     setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
+    await screen.findByTestId('season-rail');
+    await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('season:0');
+    await pressKey(KEY.right);
     await focusKeyIs('season:1');
     await pressKey(KEY.right);
     await focusKeyIs('season:2');
-    expect(titles()[0]).toBe('E1 · Episode 1.1');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 2');
-    expect(calls.episodes).toEqual(['s1/1', 's1/2']);
-  });
-
-  it('hovering a season pill with the pointer does not switch; a click does', async () => {
-    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      await act(async () => {
-        fireEvent.mouseEnter(screen.getByRole('tab', { name: 'Season 2' }));
-        for (let i = 0; i < 20; i += 1) await Promise.resolve();
-      });
-      expect(getCurrentFocusKey()).toBe('season:2');
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(LONG_REST);
-      });
-      expect(titles()[0]).toBe('E1 · Episode 1.1');
-      expect(calls.episodes).toEqual(['s1/1']);
-    } finally {
-      vi.useRealTimers();
-    }
-    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-  });
-
-  it('Down from a focused season that is not selected enters the episodes that are shown', async () => {
-    const calls = serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    await pressKey(KEY.down);
-    await focusKeyIs('season:1');
+    // The end of the row holds the focus.
     await pressKey(KEY.right);
-    await focusKeyIs('season:2');
-    await pressKey(KEY.down);
-    expect(getCurrentFocusKey()).toBe('episode:e11');
-    expect(titles()[0]).toBe('E1 · Episode 1.1');
-    expect(screen.getByRole('tab', { selected: true }).textContent).toBe('Season 1');
-    expect(calls.episodes).toEqual(['s1/1']);
-  });
-
-  it('lands on the selected season when Up comes back from the episodes', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    await pressKey(KEY.down);
-    await focusKeyIs('season:1');
-    await pressKey(KEY.right);
-    await focusKeyIs('season:2');
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e11');
-    await pressKey(KEY.up);
-    await focusKeyIs('season:1');
-  });
-
-  it('marks exactly one season pill as selected, and the mark follows the season', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    const marked = () => screen.getAllByRole('tab', { selected: true }).map((el) => el.textContent);
-    expect(marked()).toEqual(['Season 1']);
-    expect(document.querySelectorAll('.detail-season.selected')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
-    await waitFor(() => expect(marked()).toEqual(['Season 2']));
-    expect(document.querySelectorAll('.detail-season.selected')).toHaveLength(1);
-    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveClass('selected');
-  });
-
-  it('shows the season at once on OK', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    fireEvent.click(screen.getByRole('tab', { name: 'Season 2' }));
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-  });
-
-  it('remembers the focused episode of each season when switching back', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    // Season 1: second episode.
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e11');
-    await pressKey(KEY.right);
-    await focusKeyIs('episode:e12');
-    // Season 2: third episode.
-    await pressKey(KEY.up);
-    await focusKeyIs('season:1');
-    await pressKey(KEY.right);
-    await focusKeyIs('season:2');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e21');
-    await pressKey(KEY.right);
-    await pressKey(KEY.right);
-    await focusKeyIs('episode:e23');
-    // Back to season 1: Down from its pill lands on the second episode, not the first.
-    await pressKey(KEY.up);
     await focusKeyIs('season:2');
     await pressKey(KEY.left);
     await focusKeyIs('season:1');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 1.1'));
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e12');
-    // And season 2 still has its own.
     await pressKey(KEY.up);
-    await pressKey(KEY.right);
-    await focusKeyIs('season:2');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e23');
+    await waitFor(() => expect(inActions()).toBe(true));
   });
 
-  it("plays the server's target episode from Play, which opens on that season", async () => {
-    const calls = serveDetail(server, {
+  it('fades the hero and scrolls the page to the row once a season has the focus', async () => {
+    serveDetail(server, { item: () => series(), seasons, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('season-rail');
+    expect(screen.getByTestId('detail-seasons')).toHaveAttribute('data-faded', 'false');
+    await pressKey(KEY.down);
+    await focusKeyIs('season:0');
+    expect(screen.getByTestId('detail-hero').querySelector('.detail-text')).toHaveAttribute(
+      'data-faded',
+      'true',
+    );
+  });
+
+  it('shows a row of poster cards while the seasons load', async () => {
+    serveDetail(server, { item: () => series(), seasons, episodes });
+    server.use(
+      http.get(`${BASE_URL}/api/v2/catalog/series/:id/seasons`, async () => {
+        await delay(80);
+        return HttpResponse.json({ items: seasons });
+      }),
+    );
+    setup({ itemId: 's1' });
+    await ready();
+    expect(await screen.findByTestId('seasons-skeleton')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('seasons-skeleton')).getAllByTestId('card-skeleton').length,
+    ).toBeGreaterThan(5);
+    await screen.findByTestId('season-rail');
+    expect(screen.queryByTestId('seasons-skeleton')).toBeNull();
+  });
+
+  it("plays the server's target episode from Play", async () => {
+    serveDetail(server, {
       item: () => series({ play_content_id: 'e22', play_season_number: 2 }),
       seasons,
       episodes,
@@ -1242,8 +1189,6 @@ describe('DetailScreen: a series', () => {
     const { onPlay } = setup({ itemId: 's1' });
     await ready();
     expect(await screen.findByRole('button', { name: 'Start From Episode 1' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-    expect(calls.episodes).toEqual(['s1/2']);
     await focusKeyIs('detail-play');
     fireEvent.click(button('Start From Episode 1'));
     expect(onPlay).toHaveBeenCalledWith({
@@ -1254,7 +1199,7 @@ describe('DetailScreen: a series', () => {
   });
 
   it('resumes the target episode from its position', async () => {
-    serveDetail(server, {
+    const calls = serveDetail(server, {
       item: () =>
         series({
           play_content_id: 'e12',
@@ -1271,7 +1216,8 @@ describe('DetailScreen: a series', () => {
     });
     const { onPlay } = setup({ itemId: 's1' });
     // The episode's watch state is known once its season has loaded.
-    await screen.findByTestId('episode-strip');
+    await waitFor(() => expect(calls.episodes).toEqual(['s1/1']));
+    await sleep(50);
     fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'e12',
@@ -1280,82 +1226,12 @@ describe('DetailScreen: a series', () => {
     });
   });
 
-  it('still plays the target when another season is shown', async () => {
-    serveDetail(server, {
-      item: () => series({ play_content_id: 'e22', play_season_number: 2 }),
-      seasons,
-      episodes,
-    });
-    const { onPlay } = setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    fireEvent.click(screen.getByRole('tab', { name: 'Season 1' }));
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 1.1'));
-    fireEvent.click(button('Start From Episode 1'));
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ contentId: 'e22' }));
-  });
-
-  it('plays the first episode of the first season when the server names no target', async () => {
+  it('plays the first episode of the first numbered season when the server names no target', async () => {
     serveDetail(server, { item: () => series(), seasons, episodes });
     const { onPlay } = setup({ itemId: 's1' });
     fireEvent.click(await screen.findByRole('button', { name: 'Start From Episode 1' }));
+    // The specials come first in the row, but the series does not start there.
     expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ contentId: 'e11' }));
-  });
-
-  it('opens on the season of the episode card it came from and focuses that episode, and Play plays it', async () => {
-    serveDetail(server, {
-      item: () => series({ play_content_id: 'e11', play_season_number: 1 }),
-      seasons,
-      episodes,
-    });
-    const { onPlay } = setup({ itemId: 's1', season: 2, episodeId: 'e23' });
-    await screen.findByTestId('episode-strip');
-    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-    expect(titles()[0]).toBe('E1 · Episode 2.1');
-    await focusKeyIs('episode:e23');
-    // Play plays the episode the page was opened on, not the server's target.
-    fireEvent.click(await screen.findByRole('button', { name: 'Start From Episode 1' }));
-    expect(onPlay).toHaveBeenCalledWith({
-      contentId: 'e23',
-      title: 'A Show',
-      intent: { kind: 'beginning' },
-    });
-  });
-
-  it('comes back from the player on the same season and episode', async () => {
-    serveDetail(server, { item: () => series(), seasons, episodes });
-    setup({ itemId: 's1' });
-    await screen.findByTestId('episode-strip');
-    await pressKey(KEY.down);
-    await focusKeyIs('season:1');
-    await pressKey(KEY.right);
-    await focusKeyIs('season:2');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 2.1'));
-    await pressKey(KEY.down);
-    await focusKeyIs('episode:e21');
-    await pressKey(KEY.right);
-    await focusKeyIs('episode:e22');
-    await pressKey(KEY.enter);
-    expect(await screen.findByTestId('player-stub')).toHaveTextContent('e22');
-    await pressKey(KEY.back);
-    await screen.findByTestId('episode-strip');
-    expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
-    await focusKeyIs('episode:e22');
-  });
-
-  it('says so and offers Try again when the episodes cannot be read', async () => {
-    let fail = true;
-    serveDetail(server, {
-      item: () => series(),
-      seasons,
-      episodes: (season) => (fail ? 'fail' : [episodeOf(season, 1)]),
-    });
-    setup({ itemId: 's1' });
-    const message = await screen.findByTestId('episodes-error');
-    expect(message).toHaveTextContent('The episodes could not be loaded.');
-    fail = false;
-    fireEvent.click(within(message).getByRole('button', { name: 'Try again' }));
-    await screen.findByTestId('episode-strip');
   });
 
   it('says so when the seasons cannot be read and recovers', async () => {
@@ -1365,10 +1241,10 @@ describe('DetailScreen: a series', () => {
     expect(message).toHaveTextContent('The seasons could not be loaded.');
     serveDetail(server, { item: () => series(), seasons, episodes });
     fireEvent.click(within(message).getByRole('button', { name: 'Try again' }));
-    await screen.findByTestId('season-pills');
+    await screen.findByTestId('season-rail');
   });
 
-  it('shows no cast row for a series, and More like this after the episodes', async () => {
+  it('shows no cast row for a series, and More like this after the seasons', async () => {
     serveDetail(server, {
       item: () => series({ cast: [{ name: 'An Actor', character: 'X', order: 0 }] }),
       seasons,
@@ -1383,6 +1259,137 @@ describe('DetailScreen: a series', () => {
       'Drama · Mystery · Thriller · Comedy',
     );
     expect(screen.getByTestId('detail-credits')).not.toHaveTextContent('An Actor');
+  });
+});
+
+describe('DetailScreen: a series with one season', () => {
+  const only = [seasonOf(1)];
+  const series = () =>
+    itemDetail({ content_id: 's1', type: 'series', title: 'A Show', versions: [] });
+  const episodes: DetailServe['episodes'] = (season) =>
+    [1, 2, 3].map((number) => episodeOf(season, number));
+  const cardOf = (name: string | RegExp) => screen.getByRole('button', { name });
+  /** The series, or an episode page. */
+  const item = (id: string) =>
+    id === 's1' ? series() : itemDetail({ content_id: id, type: 'episode', title: 'An Episode' });
+
+  it('has no seasons row: its episodes are the grid under the hero', async () => {
+    const calls = serveDetail(server, { item: () => series(), seasons: only, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    expect(screen.queryByTestId('season-rail')).toBeNull();
+    expect(screen.queryByTestId('seasons-skeleton')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Episodes' })).toBeInTheDocument();
+    expect(screen.getByTestId('episodes-head-total')).toHaveTextContent('3 total');
+    expect(screen.getAllByTestId('episode-title').map((el) => el.textContent)).toEqual([
+      'S01E01 · Episode 1.1',
+      'S01E02 · Episode 1.2',
+      'S01E03 · Episode 1.3',
+    ]);
+    // The grid and the episode "Play" plays share one read.
+    expect(calls.episodes).toEqual(['s1/1']);
+    expect(screen.getByTestId('detail-chips')).toHaveTextContent('2019PG-131 season3 episodes');
+  });
+
+  it('shows the grid of the only season even when it is the specials', async () => {
+    serveDetail(server, { item: () => series(), seasons: [seasonOf(0)], episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    expect(screen.queryByTestId('season-rail')).toBeNull();
+  });
+
+  it('shows a skeleton of stills in the grid while the episodes load, then the grid', async () => {
+    serveDetail(server, {
+      item: () => series(),
+      seasons: only,
+      episodes: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        return [episodeOf(1, 1)];
+      },
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    expect(await screen.findByTestId('episode-skeleton')).toBeInTheDocument();
+    expect(screen.getAllByTestId('card-skeleton').length).toBeGreaterThan(5);
+    await screen.findByTestId('episode-grid');
+    expect(screen.queryByTestId('episode-skeleton')).toBeNull();
+  });
+
+  it('opens the page of an episode on OK, by its content id, and Back returns onto its card', async () => {
+    const calls = serveDetail(server, { item, seasons: only, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    await pressKey(KEY.down);
+    await focusKeyIs('gcard:episodes:s1:e11');
+    await pressKey(KEY.right);
+    await focusKeyIs('gcard:episodes:s1:e12');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('detail-title')).toHaveTextContent('An Episode');
+    expect(calls.items).toContain('e12');
+    await pressKey(KEY.back);
+    await screen.findByTestId('episode-grid');
+    await focusKeyIs('gcard:episodes:s1:e12');
+  });
+
+  it('plays an episode from the remote Play key, with the series title and asking about resuming', async () => {
+    serveDetail(server, { item: () => series(), seasons: only, episodes });
+    const { onPlay } = setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    fireEvent.keyDown(cardOf(/Episode 1.2/), { keyCode: 415 });
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPlay).toHaveBeenCalledWith({
+      contentId: 'e12',
+      title: 'A Show',
+      intent: { kind: 'ask' },
+    });
+  });
+
+  it('does not play on OK, and does not open a page on the Play key', async () => {
+    serveDetail(server, { item, seasons: only, episodes });
+    const { onPlay } = setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    fireEvent.click(cardOf(/Episode 1.1/));
+    await screen.findByTestId('detail-title');
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('comes back from the player onto the same episode card', async () => {
+    serveDetail(server, { item: () => series(), seasons: only, episodes });
+    setup({ itemId: 's1' });
+    await screen.findByTestId('episode-grid');
+    await pressKey(KEY.down);
+    await focusKeyIs('gcard:episodes:s1:e11');
+    await pressKey(KEY.right);
+    await focusKeyIs('gcard:episodes:s1:e12');
+    fireEvent.keyDown(cardOf(/Episode 1.2/), { keyCode: 415 });
+    expect(await screen.findByTestId('player-stub')).toHaveTextContent('e12');
+    await pressKey(KEY.back);
+    await screen.findByTestId('episode-grid');
+    await focusKeyIs('gcard:episodes:s1:e12');
+  });
+
+  it('says so and offers Try again when the episodes cannot be read', async () => {
+    let fail = true;
+    serveDetail(server, {
+      item: () => series(),
+      seasons: only,
+      episodes: (season) => (fail ? 'fail' : [episodeOf(season, 1)]),
+    });
+    setup({ itemId: 's1' });
+    const message = await screen.findByTestId('episodes-error');
+    expect(message).toHaveTextContent('The episodes could not be loaded.');
+    fail = false;
+    fireEvent.click(within(message).getByRole('button', { name: 'Try again' }));
+    await screen.findByTestId('episode-grid');
+  });
+
+  it('says that the season has no episodes yet', async () => {
+    serveDetail(server, { item: () => series(), seasons: only, episodes: () => [] });
+    setup({ itemId: 's1' });
+    expect(await screen.findByTestId('episodes-empty')).toHaveTextContent(
+      'No episodes are available for this season yet.',
+    );
+    expect(screen.getByTestId('episodes-head-total')).toHaveTextContent('0 total');
   });
 });
 

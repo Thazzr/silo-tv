@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { episodeOf, itemDetail, seasonOf } from '../../test/detailFixtures';
+import { episodeOf, itemDetail } from '../../test/detailFixtures';
 import {
   REREAD_DELAYS_S,
   itemMissing,
@@ -62,13 +62,11 @@ describe('what is still missing', () => {
 });
 
 describe('pageTargets', () => {
-  const seasons = [seasonOf(1), seasonOf(2)];
+  const listed = { id: 'season-2', number: 2 };
   const base = {
     itemId: 'm1',
     detail: itemDetail(),
-    series: false,
-    shownSeason: undefined,
-    seasons: [],
+    listed: undefined,
     episodes: undefined,
   };
 
@@ -83,15 +81,13 @@ describe('pageTargets', () => {
     ]);
   });
 
-  it('names the shown season by its content id and the language of a pending episode', () => {
+  it('names the listed season by its content id and the language of a pending episode', () => {
     const episodes = [episodeOf(2, 1), episodeOf(2, 2, { pending_translation_language: 'de' })];
     expect(
       pageTargets({
         ...base,
         detail: itemDetail({ type: 'series', pending_translation_language: 'de' }),
-        series: true,
-        shownSeason: 2,
-        seasons,
+        listed,
         episodes,
       }),
     ).toEqual([
@@ -100,12 +96,22 @@ describe('pageTargets', () => {
     ]);
   });
 
-  it('has no season target on a movie, without a known season or without a pending episode', () => {
+  it('names a season page as both: its own description and the descriptions of its episodes', () => {
+    const detail = itemDetail({
+      type: 'season',
+      content_id: 'season-2',
+      pending_translation_language: 'de',
+    });
+    const episodes = [episodeOf(2, 1, { pending_translation_language: 'de' })];
+    expect(pageTargets({ ...base, itemId: 'season-2', detail, listed, episodes })).toEqual([
+      { kind: 'item', id: 'season-2', language: 'de' },
+      { kind: 'season', id: 'season-2', language: 'de', season: 2 },
+    ]);
+  });
+
+  it('has no season target when the page lists no season or no episode is pending', () => {
     const episodes = [episodeOf(1, 1, { pending_translation_language: 'de' })];
-    const series = { ...base, series: true, shownSeason: 1, seasons, episodes };
-    expect(pageTargets({ ...series, series: false })).toEqual([]);
-    expect(pageTargets({ ...series, seasons: [] })).toEqual([]);
-    expect(pageTargets({ ...series, episodes: [episodeOf(1, 1)] })).toEqual([]);
-    expect(pageTargets({ ...series, shownSeason: undefined })).toEqual([]);
+    expect(pageTargets({ ...base, listed, episodes: [episodeOf(1, 1)] })).toEqual([]);
+    expect(pageTargets({ ...base, listed: undefined, episodes })).toEqual([]);
   });
 });

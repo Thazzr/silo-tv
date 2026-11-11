@@ -1,5 +1,5 @@
 import type { components } from '../../api/generated/schema';
-import type { Episode, ItemDetail, Season } from './info';
+import type { Episode, ItemDetail } from './info';
 
 /** How the server wants descriptions translated for a viewer: not at all, on request, or by itself. */
 export type TranslationMode = 'off' | 'button' | 'auto';
@@ -44,32 +44,34 @@ export interface TranslationTarget {
   season?: number;
 }
 
+/** The season whose episodes a page lists: its content id (the request's id) and its number. */
+export interface ListedSeason {
+  id: string;
+  number: number;
+}
+
 /**
- * The targets a page has: its item when that reports a pending language, and on a series the
- * shown season when one of its loaded episodes does (the season's content id is the request's id).
+ * The targets a page has: its item when that reports a pending language, and the season whose
+ * episodes the page lists (a season page's own, or a single-season series') when one of the loaded
+ * episodes does.
  */
 export function pageTargets(input: {
   itemId: string;
   detail: ItemDetail;
-  series: boolean;
-  shownSeason: number | undefined;
-  seasons: readonly Season[];
+  listed: ListedSeason | undefined;
   episodes: readonly Episode[] | undefined;
 }): TranslationTarget[] {
   const targets: TranslationTarget[] = [];
   const own = input.detail.pending_translation_language;
   if (own) targets.push({ kind: 'item', id: input.itemId, language: own });
-  if (input.series && input.shownSeason !== undefined) {
-    const season = input.seasons.find((s) => s.season_number === input.shownSeason);
-    const pending = (input.episodes ?? []).find((e) => e.pending_translation_language);
-    if (season && pending?.pending_translation_language) {
-      targets.push({
-        kind: 'season',
-        id: season.content_id,
-        language: pending.pending_translation_language,
-        season: season.season_number,
-      });
-    }
+  const pending = (input.episodes ?? []).find((e) => e.pending_translation_language);
+  if (input.listed && pending?.pending_translation_language) {
+    targets.push({
+      kind: 'season',
+      id: input.listed.id,
+      language: pending.pending_translation_language,
+      season: input.listed.number,
+    });
   }
   return targets;
 }

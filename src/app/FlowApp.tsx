@@ -50,7 +50,7 @@ type FlowScreen =
     }
   /** One collection of a library, read-only. */
   | ({ name: 'collection' } & CollectionTarget)
-  /** A movie or series; the season and episode are set when an episode card opened it. */
+  /** A movie, series, season or episode page. */
   | ({ name: 'detail' } & DetailTarget)
   /** A person (a cast member): portrait, biography and filmography. */
   | ({ name: 'person' } & PersonTarget)

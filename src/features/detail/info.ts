@@ -1,9 +1,10 @@
 // What the detail page says about an item, as pure functions: the resume point, the metadata and
 // credit lines, the quality badges and an episode's progress.
 import type { components } from '../../api/generated/schema';
-import type { MessageKey } from '../../i18n';
+import type { Language, MessageKey } from '../../i18n';
 import { audioCodecBadge, type AudioTrackFormat } from '../../playback/audioLabel';
 import { resumePoint } from '../../playback/resume';
+import { parseDate } from '../person/info';
 
 type S = components['schemas'];
 export type ItemDetail = S['CatalogItemDetail'];
@@ -12,18 +13,18 @@ export type Episode = S['Episode'];
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
-function runtimeText(minutes: number, t: Translate): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return t('media.runtime.minutes', { m });
-  return m === 0 ? t('media.runtime.hours', { h }) : t('media.runtime.hoursMinutes', { h, m });
-}
-
-export function runtimeLabel(minutes: number | undefined, t: Translate): string | null {
-  return minutes && minutes > 0 ? runtimeText(minutes, t) : null;
-}
-
 export const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
+export const isSeason = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'season';
+
+/**
+ * Which page layout an item gets: a series, a season, or the movie layout (a movie, and for now an
+ * episode, which has no page of its own yet).
+ */
+export type DetailKind = 'series' | 'season' | 'item';
+export function detailKind(detail: ItemDetail): DetailKind {
+  if (isSeries(detail)) return 'series';
+  return isSeason(detail) ? 'season' : 'item';
+}
 
 type FileVersion = S['FileVersion'];
 
@@ -87,13 +88,24 @@ function runtimeChip(minutes: number, t: Translate): string | null {
 /**
  * The chips under the title, in the web's order. A movie: year, content rating, runtime of the
  * selected version. A series: years, content rating, the numbers of seasons and episodes (from the
- * season list, so they are missing until that has loaded: it is empty before).
+ * season list, so they are missing until that has loaded: it is empty before). A season: the year
+ * it first aired, its indicator ("Season 1", "Specials") and its number of episodes, which falls
+ * back to `loadedEpisodes` when the item carries none.
  */
 export function detailChips(
   detail: ItemDetail,
   seasons: readonly Season[],
   t: Translate,
+  loadedEpisodes = 0,
 ): string[] {
+  if (isSeason(detail)) {
+    const count = detail.episode_count ?? loadedEpisodes;
+    return [
+      yearOf(detail.air_date)?.toString() ?? '',
+      seasonIndicator(detail, t),
+      count > 0 ? episodeCountText(count, t) : '',
+    ].filter(Boolean);
+  }
   const chips: (string | null)[] = [yearChip(detail), detail.content_rating ?? null];
   if (isSeries(detail)) {
     const episodes = seasons.reduce((sum, season) => sum + (season.episode_count ?? 0), 0);
@@ -101,16 +113,17 @@ export function detailChips(
     if (count > 0) {
       chips.push(count === 1 ? t('detail.seasonOne') : t('detail.seasonCount', { count }));
     }
-    if (episodes > 0) {
-      chips.push(
-        episodes === 1 ? t('detail.episodeOne') : t('detail.episodeCount', { count: episodes }),
-      );
-    }
+    if (episodes > 0) chips.push(episodeCountText(episodes, t));
   } else {
     const seconds = selectedVersion(detail)?.duration ?? 0;
     chips.push(runtimeChip(seconds > 0 ? Math.round(seconds / 60) : (detail.runtime ?? 0), t));
   }
   return chips.filter((chip): chip is string => Boolean(chip));
+}
+
+/** "1 episode" / "7 episodes" (German "1 Folge" / "7 Folgen"). */
+export function episodeCountText(count: number, t: Translate): string {
+  return count === 1 ? t('detail.episodeOne') : t('detail.episodeCount', { count });
 }
 
 /** The type and, when the item has one, its first studio (movie) or network (series). */
@@ -268,18 +281,113 @@ export function episodeWatched(episode: Episode): boolean {
   return episode.user_data?.played === true;
 }
 
-/** Numbered seasons in order, then the specials. */
+/** A season the server marks as the specials, or season 0. */
+export const isSpecials = (season: { is_specials?: boolean; season_number?: number }) =>
+  season.is_specials === true || season.season_number === 0;
+
+/** The seasons by number, as the web lists them: the specials (season 0) come first. */
 export function orderSeasons(seasons: readonly Season[]): Season[] {
-  const specials = (season: Season) => season.is_specials === true || season.season_number === 0;
-  return [...seasons].sort((a, b) => {
-    if (specials(a) !== specials(b)) return specials(a) ? 1 : -1;
-    return a.season_number - b.season_number;
+  return [...seasons].sort((a, b) => a.season_number - b.season_number);
+}
+
+/** The season a series plays from when the server names no target: the first numbered one, else the first. */
+export function defaultSeason(seasons: readonly Season[]): number | undefined {
+  const ordered = orderSeasons(seasons);
+  return (ordered.find((season) => !isSpecials(season)) ?? ordered[0])?.season_number;
+}
+
+interface SeasonNames {
+  title?: string;
+  season_number?: number;
+  is_specials?: boolean;
+}
+
+/** A season title the server filled in itself ("Season 1" is its placeholder, not a name). */
+function customSeasonTitle(season: SeasonNames): string | null {
+  const title = season.title?.trim() ?? '';
+  return title === '' || /^season\s+\d+$/i.test(title) || isSpecials(season) ? null : title;
+}
+
+/** "Season 1" or "Specials": what numbers the season, whatever its title says. */
+export function seasonIndicator(season: SeasonNames, t: Translate): string {
+  return isSpecials(season)
+    ? t('detail.specials')
+    : t('detail.season', { number: season.season_number ?? 0 });
+}
+
+/** What a season is called: its own title when it has one, else its indicator. */
+export function seasonLabel(season: SeasonNames, t: Translate): string {
+  return customSeasonTitle(season) ?? seasonIndicator(season, t);
+}
+
+/**
+ * The line under the series title: the season's label when it differs from the (translated)
+ * indicator. A server that sends "Staffel 2" for a German viewer therefore adds no line.
+ */
+export function seasonSubtitle(season: SeasonNames, t: Translate): string | null {
+  const label = seasonLabel(season, t);
+  return label === seasonIndicator(season, t) ? null : label;
+}
+
+/** Whether the profile has started the season without finishing it. */
+function seasonStarted(season: Season): boolean {
+  const state = season.user_data;
+  return (
+    state?.played !== true &&
+    ((state?.watched_count ?? 0) > 0 || (state?.in_progress_count ?? 0) > 0)
+  );
+}
+
+/** The bar on a season's poster, 0 to 1: full once watched, else the watched share of its episodes. */
+export function seasonProgress(season: Season): number | null {
+  if (season.user_data?.played === true) return 1;
+  if (!seasonStarted(season) || season.episode_count <= 0) return null;
+  return Math.min(1, (season.user_data?.watched_count ?? 0) / season.episode_count);
+}
+
+/** "7 episodes", or "3 of 7 episodes" while the season is being watched. */
+export function seasonCountText(season: Season, t: Translate): string {
+  if (!seasonStarted(season)) return episodeCountText(season.episode_count, t);
+  const watched = season.user_data?.watched_count ?? 0;
+  return season.episode_count === 1
+    ? t('detail.seasonProgressOne', { watched })
+    : t('detail.seasonProgress', { watched, count: season.episode_count });
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** "S01E03" (German "S01F03"): the code in front of an episode's title. */
+export function episodeCode(episode: Episode, t: Translate): string {
+  return t('detail.episodeCode', {
+    season: pad2(episode.season_number),
+    episode: pad2(episode.episode_number),
   });
 }
 
-/** The season shown when nothing says otherwise: the first numbered season, else the first. */
-export function defaultSeason(seasons: readonly Season[]): number | undefined {
-  return orderSeasons(seasons)[0]?.season_number;
+/** The first line of an episode's caption: "S01E03 · Title", or the code alone without a title. */
+export function episodeCaptionTitle(episode: Episode, t: Translate): string {
+  const title = episode.title.trim();
+  return title === '' ? episodeCode(episode, t) : `${episodeCode(episode, t)} · ${title}`;
+}
+
+/** "Jan 20, 2008" / "20. Jan. 2008": the web's medium date; text that is not a date shows as sent. */
+function mediumDate(iso: string | undefined, lang: Language): string | null {
+  const date = parseDate(iso);
+  if (!date) return iso?.trim() || null;
+  // UTC on both sides: a calendar date has no time zone.
+  return new Intl.DateTimeFormat(lang, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(date.year, date.month - 1, date.day)));
+}
+
+/** The second line of an episode's caption: air date and runtime; either may be missing. */
+export function episodeMetaLine(episode: Episode, lang: Language, t: Translate): string {
+  const parts = [mediumDate(episode.air_date, lang), runtimeChip(episode.runtime, t)];
+  // Two no-break spaces on each side of the dot, as the web sets it.
+  return parts.filter(Boolean).join('  ·  ');
 }
 
 /** "AB" for "Alex Black": what stands in for a portrait that is missing. */

@@ -204,6 +204,31 @@
   color: rgba(237, 237, 237, 0.72);
 }
 
+/* The line under a season page's series title: the season's own name, upright. */
+.detail-subtitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 36px;
+  color: rgba(237, 237, 237, 0.72);
+}
+
+/* The path above a season page's title: series, then season. Text only; Back is the way up. */
+.detail-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 30px;
+  color: var(--text-secondary);
+}
+
+.detail-breadcrumb [aria-current='page'] {
+  color: rgba(237, 237, 237, 0.85);
+}
+
 /* The chips and the quality badges wrap as one row; the two lists only group them. */
 .detail-chiprow {
   display: flex;
@@ -500,60 +525,142 @@
   box-sizing: border-box;
 }
 
-.detail-episodes {
+.detail-episodes,
+.detail-seasons-block {
   padding-bottom: 30px;
 }
 
-.detail-pills-box {
+/* The heading line of the seasons row and of the episode grid (SECTION_HEAD_HEIGHT): the title at
+   the left, "N total" at the right, on the same 100 px insets as the cards. */
+.detail-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   box-sizing: border-box;
-}
-
-/* A long list of seasons runs past the edge; focus scrolls it into view natively. */
-.detail-seasons {
-  gap: 16px;
+  height: 48px;
   padding: 0 100px;
-  overflow: hidden;
 }
 
-.detail-season {
-  font-size: 26px;
-  flex: none;
+.detail-section-title {
+  margin: 0;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+  line-height: 48px;
 }
 
-.detail-season.selected {
-  font-weight: 700;
-  color: var(--text);
-  background: var(--chrome-selected);
-  border-color: rgba(255, 255, 255, 0.1);
-  /* Like the selected top-bar tab: the accent underlines it, the fill carries the state. */
-  border-bottom-color: var(--accent, rgba(255, 255, 255, 0.1));
+.detail-section-total {
+  font-size: var(--fs-small);
+  line-height: 48px;
+  color: var(--text-secondary);
 }
 
-/* Focus wins over every resting or selected style, and over hover: black on white. */
-.detail-pill:focus,
-.detail-pill:hover:focus,
-.detail-season.selected:focus,
-.detail-season.selected:hover:focus {
-  color: var(--focus-content);
-  background: var(--focus-fill);
-  border-color: var(--focus-fill);
+.detail-section-head-skeleton {
+  width: 240px;
+  height: 36px;
+  margin: 6px 0 0 100px;
+  background: var(--surface-raised);
+  border-radius: 8px;
 }
 
-.detail-episode-strip {
+/* The seasons row: 220 x 330 posters (SEASON_CARD) with a label and a count under them. */
+.detail-season-strip {
   position: relative;
 }
 
-.card-episode .card-caption {
-  /* EPISODE_CAPTION_HEIGHT */
-  height: 109px;
+.card-season,
+.detail-season-skeleton .card-poster {
+  width: 220px;
 }
 
+.card-season .card-art,
+.detail-season-skeleton .card-art {
+  height: 330px;
+}
+
+.card-season:focus .card-art {
+  transform: scale(1.05);
+}
+
+/* The watched mark of a season: a green disc at the top right of the poster. */
+.season-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  color: #ffffff;
+  background: rgba(34, 160, 80, 0.92);
+  border-radius: 50%;
+}
+
+/* The episode grid (EPISODE_GRID in layout.ts): five 324 x 182 stills a row. It is as tall as its
+   rows but ends at the foot of the screen: the page is scrolled so the heading sits on the safe
+   line (54 px), under it 48 px of heading and 16 px of space. */
+.detail-episode-grid {
+  margin-top: 16px;
+}
+
+.detail-episode-grid .grid-viewport {
+  height: min(var(--grid-rows-height), calc(100vh - 118px));
+}
+
+.detail-episode-grid .card-landscape {
+  width: 324px;
+}
+
+.detail-episode-grid .card-art {
+  height: 182px;
+}
+
+.detail-episode-grid .card-caption {
+  /* EPISODE_CAPTION_HEIGHT */
+  height: 135px;
+}
+
+.detail-episode-grid .card-art,
+.detail-episode-grid .art,
+.detail-episode-grid .card-shadow,
+.detail-episode-grid .card-ring {
+  border-radius: var(--radius-still);
+}
+
+/* The code and title with the watched mark at the right end of the line. */
+.episode-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.episode-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.episode-check {
+  display: flex;
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.card:focus .episode-check {
+  color: var(--text);
+}
+
+/* Three lines, and the box keeps its height so the rows stay even. */
 .episode-synopsis {
   display: -webkit-box;
+  height: 78px;
   overflow: hidden;
   font-size: var(--fs-small);
   line-height: 26px;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -567,37 +674,6 @@
   font-style: italic;
 }
 
-/* A watched episode is dimmed and carries a check; the progress bar shows a resume point. */
-.episode-dim {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: var(--radius-still);
-}
-
-.episode-check {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 50%;
-}
-
-.card-episode .card-art,
-.card-episode .art,
-.card-episode .card-shadow,
-.card-episode .card-ring {
-  border-radius: var(--radius-still);
-}
-
 /* ---- Messages and skeletons ---- */
 .detail-message {
   max-width: 900px;
@@ -606,14 +682,6 @@
 
 .detail-section-message {
   padding: 0 100px;
-}
-
-.detail-seasons-skeleton {
-  width: 680px;
-  height: 75px;
-  margin-left: 100px;
-  background: var(--surface-raised);
-  border-radius: 38px;
 }
 
 .detail-skeleton-title {
