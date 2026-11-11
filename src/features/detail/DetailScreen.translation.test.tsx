@@ -435,7 +435,8 @@ describe('DetailScreen: translation on request (button mode)', () => {
     expect(calls.translation.posts).toEqual([]);
     expect(line()).toBeNull();
 
-    await pressKey(KEY.right);
+    // Play, watched, favourite, rating, More, then the pill.
+    for (let i = 0; i < 5; i += 1) await pressKey(KEY.right);
     await waitFor(() => expect(getCurrentFocusKey()).toBe('detail-translate'));
     await pressKey(KEY.enter);
     await waitFor(() => expect(getCurrentFocusKey()).toBe('detail-play'));

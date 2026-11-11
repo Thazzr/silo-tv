@@ -10,14 +10,21 @@ import { useBoxSetsAvailable } from '../library/queries';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import type { PersonTarget } from '../person/personMemory';
-import { ActionRow, PLAY_KEY, type EpisodeRef } from './ActionRow';
+import { ActionRow, PLAY_KEY, TRANSLATE_KEY } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeRow, EpisodeStripSkeleton } from './EpisodeRow';
 import { extraEntries } from './extras';
 import { ExtrasRow } from './ExtrasRow';
-import { defaultSeason, initials, orderSeasons, type Episode, type ItemDetail } from './info';
+import {
+  defaultSeason,
+  initials,
+  isSeries,
+  orderSeasons,
+  type Episode,
+  type ItemDetail,
+} from './info';
 import {
   DETAIL_INSET,
   detailScrollOffset,
@@ -67,10 +74,6 @@ const BLOCK_ZONES: readonly DetailBlockZone[] = ['episodes', 'cast', 'extras', '
 
 /** How long a short notice (YouTube is not available) stays on the page. */
 const NOTICE_MS = 4000;
-
-const TRANSLATE_KEY = 'detail-translate';
-
-const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
 /**
  * The detail page of a movie or a series: hero with the primary actions, then the seasons and
@@ -169,12 +172,15 @@ function DetailBody({
   const stateKnown = series ? primaryEpisode !== undefined : true;
   const watchState = series ? primaryEpisode?.user_data : detail.user_data;
   const runtimeSeconds = (series ? primaryEpisode?.runtime : detail.runtime) ?? 0;
-  const resumeSeconds = stateKnown
-    ? resumePoint(watchState, detail.duration_seconds ?? runtimeSeconds * 60)
-    : null;
-  const episodeRef: EpisodeRef | undefined = primaryEpisode
-    ? { season: primaryEpisode.season_number, episode: primaryEpisode.episode_number }
-    : undefined;
+  const fallbackSeconds = detail.duration_seconds ?? runtimeSeconds * 60;
+  const resumeSeconds = stateKnown ? resumePoint(watchState, fallbackSeconds) : null;
+  const totalSeconds = watchState?.duration_seconds || fallbackSeconds;
+  // A series whose target episode is still being looked up has no action row yet (the primary
+  // button would flicker from "Browse series" to its label).
+  const resolvingTarget =
+    series &&
+    playId === undefined &&
+    (seasonsQuery.isPending || (primarySeason !== undefined && primaryQuery.isPending));
 
   const play = (intent: StartIntent) => {
     if (playId) onPlay({ contentId: playId, title: detail.title, intent });
@@ -441,33 +447,29 @@ function DetailBody({
             seasons={seasons}
             onMore={() => setSynopsisOpen(true)}
             actions={
-              playId ? (
+              resolvingTarget ? null : (
                 <ActionRow
+                  detail={detail}
+                  series={series}
+                  playable={playId !== undefined}
                   resumeSeconds={resumeSeconds}
-                  episode={series ? episodeRef : undefined}
+                  totalSeconds={totalSeconds}
+                  stateKnown={stateKnown}
                   autoFocus={openedOn === undefined}
-                  onPlay={() => play({ kind: stateKnown ? 'beginning' : 'ask' })}
-                  onResume={() => play({ kind: 'resume' })}
-                  onStartOver={() => play({ kind: 'beginning' })}
+                  onPlay={play}
                   onFocused={inHero}
-                  extras={
-                    translateShown ? (
-                      <Button
-                        focusKey={TRANSLATE_KEY}
-                        className="detail-pill"
-                        onFocused={inHero}
-                        onClick={() => {
+                  onNotice={setNotice}
+                  onTranslate={
+                    translateShown
+                      ? () => {
                           // The pill leaves with the run: hand the focus over before it does.
                           moveFocusTo(PLAY_KEY);
                           translation.start();
-                        }}
-                      >
-                        {t('detail.translate')}
-                      </Button>
-                    ) : null
+                        }
+                      : undefined
                   }
                 />
-              ) : null
+              )
             }
           />
           {episodeBlock}

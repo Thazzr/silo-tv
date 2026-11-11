@@ -126,6 +126,48 @@ export interface DetailServe {
   translation?: TranslationServe;
 }
 
+/** One write a detail page sent: the verb, the endpoint group (`favorites`, ...), the item and the body. */
+export interface UserActionCall {
+  method: 'POST' | 'PUT' | 'DELETE';
+  group: string;
+  id: string;
+  body: unknown;
+}
+
+export interface UserActionsServe {
+  /** Answers 500 for the writes this returns true for. */
+  fail?: (call: UserActionCall) => boolean;
+  /** Held back until this settles, so a test can look at the page while a write is under way. */
+  gate?: Promise<void>;
+}
+
+const USER_ACTION_GROUPS = ['watched', 'favorites', 'watchlist', 'ratings', 'not-interested'];
+
+/** Registers the viewer's own writes (watched, favourite, watchlist, rating, not interested). */
+export function serveUserActions(
+  server: SetupServer,
+  options: UserActionsServe = {},
+): UserActionCall[] {
+  const calls: UserActionCall[] = [];
+  const answer = async (method: UserActionCall['method'], request: Request, group: string) => {
+    const id = new URL(request.url).pathname.split('/').pop() ?? '';
+    const text = await request.text();
+    const call: UserActionCall = { method, group, id, body: text ? JSON.parse(text) : undefined };
+    calls.push(call);
+    await options.gate;
+    return new HttpResponse(null, { status: options.fail?.(call) ? 500 : 204 });
+  };
+  for (const group of USER_ACTION_GROUPS) {
+    const url = `${BASE_URL}/api/v2/${group}/:id`;
+    server.use(
+      http.post(url, ({ request }) => answer('POST', request, group)),
+      http.put(url, ({ request }) => answer('PUT', request, group)),
+      http.delete(url, ({ request }) => answer('DELETE', request, group)),
+    );
+  }
+  return calls;
+}
+
 /** Registers the detail endpoints; the returned object records what the app asked for. */
 export function serveDetail(server: SetupServer, options: DetailServe = {}): DetailCalls {
   const calls: DetailCalls = {

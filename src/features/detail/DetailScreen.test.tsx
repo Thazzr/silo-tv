@@ -207,47 +207,13 @@ describe('DetailScreen: a movie', () => {
     expect(screen.queryByTestId('detail-credits')).toBeNull();
   });
 
-  it('plays from the start when nothing was watched, with no Start over', async () => {
+  it('plays from the start when nothing was watched, without a dialog', async () => {
     serveDetail(server);
     const { onPlay } = setup({ itemId: 'm1' });
     await ready();
-    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
+    expect(screen.queryByTestId('detail-play-fill')).toBeNull();
     fireEvent.click(button('Play'));
-    expect(onPlay).toHaveBeenCalledWith({
-      contentId: 'm1',
-      title: 'First Title',
-      intent: { kind: 'beginning' },
-    });
-  });
-
-  it('offers Resume from the saved position and Start over, and each starts where it says', async () => {
-    serveDetail(server, {
-      item: () =>
-        itemDetail({ user_data: rollup({ position_seconds: 754, duration_seconds: 5400 }) }),
-    });
-    const { onPlay } = setup({ itemId: 'm1' });
-    await ready();
-    expect(screen.queryByRole('button', { name: 'Play' })).toBeNull();
-    fireEvent.click(button('Resume from 12:34'));
-    expect(onPlay).toHaveBeenLastCalledWith({
-      contentId: 'm1',
-      title: 'First Title',
-      intent: { kind: 'resume' },
-    });
-    await screen.findByTestId('player-stub');
-  });
-
-  it('starts over at 0 from Start over', async () => {
-    serveDetail(server, {
-      item: () =>
-        itemDetail({ user_data: rollup({ position_seconds: 754, duration_seconds: 5400 }) }),
-    });
-    const { onPlay } = setup({ itemId: 'm1' });
-    await ready();
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.right);
-    await focusKeyIs('detail-start-over');
-    await pressKey(KEY.enter);
+    expect(screen.queryByTestId('resume-dialog')).toBeNull();
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'm1',
       title: 'First Title',
@@ -264,7 +230,7 @@ describe('DetailScreen: a movie', () => {
     setup({ itemId: 'm1' });
     await ready();
     expect(button('Play')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Resume/ })).toBeNull();
+    expect(screen.queryByTestId('detail-play-fill')).toBeNull();
   });
 
   it('cuts a long synopsis and opens the full text from More; Back closes it onto More', async () => {
@@ -983,13 +949,15 @@ describe('DetailScreen: loading and errors', () => {
     });
     setup({ itemId: 'm1' }, { queryClient });
     await ready();
-    fireEvent.click(button('Resume from 12:34'));
+    await screen.findByTestId('detail-play-fill');
+    fireEvent.click(button('Play'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume at 12:34' }));
     await screen.findByTestId('player-stub');
     // The viewer watched it to the end meanwhile.
     position = 0;
     await pressKey(KEY.back);
-    expect(await screen.findByRole('button', { name: 'Play' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Resume/ })).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('detail-play-fill')).toBeNull());
+    expect(button('Play')).toBeInTheDocument();
     expect(calls.items).toHaveLength(2);
     // The button the viewer used has the focus again.
     await focusKeyIs('detail-play');
@@ -1273,11 +1241,11 @@ describe('DetailScreen: a series', () => {
     });
     const { onPlay } = setup({ itemId: 's1' });
     await ready();
-    expect(await screen.findByRole('button', { name: 'Play S2 · E2' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Start From Episode 1' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
     expect(calls.episodes).toEqual(['s1/2']);
     await focusKeyIs('detail-play');
-    fireEvent.click(button('Play S2 · E2'));
+    fireEvent.click(button('Start From Episode 1'));
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'e22',
       title: 'A Show',
@@ -1285,9 +1253,14 @@ describe('DetailScreen: a series', () => {
     });
   });
 
-  it('resumes the target episode from its position and offers Start over', async () => {
+  it('resumes the target episode from its position', async () => {
     serveDetail(server, {
-      item: () => series({ play_content_id: 'e12', play_season_number: 1 }),
+      item: () =>
+        series({
+          play_content_id: 'e12',
+          play_season_number: 1,
+          user_data: rollup({ in_progress_count: 1, watched_count: 1 }),
+        }),
       seasons,
       episodes: (season) => [
         episodeOf(season, 1),
@@ -1297,13 +1270,14 @@ describe('DetailScreen: a series', () => {
       ],
     });
     const { onPlay } = setup({ itemId: 's1' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Resume S1 · E2' }));
+    // The episode's watch state is known once its season has loaded.
+    await screen.findByTestId('episode-strip');
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'e12',
       title: 'A Show',
       intent: { kind: 'resume' },
     });
-    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
   });
 
   it('still plays the target when another season is shown', async () => {
@@ -1313,17 +1287,17 @@ describe('DetailScreen: a series', () => {
       episodes,
     });
     const { onPlay } = setup({ itemId: 's1' });
-    await screen.findByRole('button', { name: 'Play S2 · E2' });
+    await screen.findByTestId('episode-strip');
     fireEvent.click(screen.getByRole('tab', { name: 'Season 1' }));
     await waitFor(() => expect(titles()[0]).toBe('E1 · Episode 1.1'));
-    fireEvent.click(button('Play S2 · E2'));
+    fireEvent.click(button('Start From Episode 1'));
     expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ contentId: 'e22' }));
   });
 
   it('plays the first episode of the first season when the server names no target', async () => {
     serveDetail(server, { item: () => series(), seasons, episodes });
     const { onPlay } = setup({ itemId: 's1' });
-    fireEvent.click(await screen.findByRole('button', { name: 'Play S1 · E1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Start From Episode 1' }));
     expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ contentId: 'e11' }));
   });
 
@@ -1338,8 +1312,8 @@ describe('DetailScreen: a series', () => {
     expect(screen.getByRole('tab', { name: 'Season 2' })).toHaveAttribute('aria-selected', 'true');
     expect(titles()[0]).toBe('E1 · Episode 2.1');
     await focusKeyIs('episode:e23');
-    // Play names the episode the page was opened on, not the server's target.
-    fireEvent.click(await screen.findByRole('button', { name: 'Play S2 · E3' }));
+    // Play plays the episode the page was opened on, not the server's target.
+    fireEvent.click(await screen.findByRole('button', { name: 'Start From Episode 1' }));
     expect(onPlay).toHaveBeenCalledWith({
       contentId: 'e23',
       title: 'A Show',

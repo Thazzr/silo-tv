@@ -323,9 +323,21 @@
   border-radius: 38px;
 }
 
+/* The row is wider than the text column (the synopsis stays narrow). Its pills are a little
+   smaller than the page's others so the longest German labels (Next episode, Mark series
+   watched) still fit between the poster and the right edge of the safe area on one line. */
 .detail-actions {
-  gap: 18px;
+  gap: 14px;
   margin-top: 8px;
+}
+
+.detail-actions .detail-pill {
+  padding: 0 32px;
+  font-size: 26px;
+}
+
+.detail-actions .detail-round {
+  padding: 0;
 }
 
 .detail-pill {
@@ -341,8 +353,145 @@
   border-radius: 38px;
 }
 
+/* The primary button is a near-white pill like the web's, so focus cannot be a change of fill
+   alone: it also gets a ring and grows a little (transform only). The progress fill sits inside. */
 .detail-play {
+  position: relative;
+  gap: 16px;
   min-width: 340px;
+  overflow: hidden;
+  color: #141417;
+  background: #e8e8ec;
+  border-color: #e8e8ec;
+  transition: transform var(--transition);
+}
+
+.detail-play:hover {
+  background: #f2f2f5;
+}
+
+.detail-play:focus,
+.detail-play:hover:focus {
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 4px var(--focus-ring);
+  transform: scale(1.06);
+  /* It grows to the right: nothing of the column may reach under the poster. */
+  transform-origin: 0 50%;
+}
+
+.detail-play:disabled {
+  color: var(--text-secondary);
+  background: var(--chrome);
+  border-color: var(--chrome-border);
+}
+
+.detail-play > svg,
+.detail-play-label {
+  position: relative;
+}
+
+.detail-play > svg {
+  flex: none;
+  margin-right: 0;
+}
+
+/* The played share of the title: primary-foreground at 20 %, scaled from the left. */
+.detail-play-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(20, 20, 23, 0.2);
+  transform-origin: 0 50%;
+}
+
+.detail-pill > svg {
+  flex: none;
+  margin-right: 14px;
+}
+
+.detail-round {
+  width: 76px;
+  padding: 0;
+}
+
+.detail-round > svg {
+  margin-right: 0;
+}
+
+.detail-heart[data-filled='true'] {
+  color: #f87171;
+  fill: #f87171;
+}
+
+/* The five stars are one focus target. Yellow stars keep to a dark ground, so focus here is a
+   ring and a slight growth instead of the white fill of the other pills. */
+.detail-stars {
+  gap: 6px;
+  padding: 0 24px;
+  transition: transform var(--transition);
+}
+
+.detail-stars > svg {
+  margin-right: 0;
+}
+
+.detail-star {
+  color: rgba(237, 237, 237, 0.5);
+}
+
+.detail-star[data-filled='true'] {
+  color: #facc15;
+  fill: #facc15;
+}
+
+.detail-pill.detail-stars:focus,
+.detail-pill.detail-stars:hover:focus {
+  color: var(--text);
+  background: var(--chrome-selected);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 4px var(--focus-ring);
+  transform: scale(1.04);
+}
+
+.detail-pill.detail-stars[data-picking='true']:focus {
+  box-shadow: 0 0 0 4px #facc15;
+}
+
+/* A short list of choices (the More menu, the resume question). */
+.dialog-choices {
+  box-sizing: border-box;
+  min-width: 640px;
+  max-width: 900px;
+  padding: 32px 40px;
+}
+
+.dialog-choices h2 {
+  margin: 0 0 12px;
+}
+
+.dialog-description {
+  margin: 0 0 24px;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.dialog-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-choice {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 20px;
+  width: 100%;
+  min-height: var(--target);
+  margin: 0;
+  font-size: var(--fs-body);
+  text-align: left;
 }
 
 /* ---- Seasons and episodes ---- */

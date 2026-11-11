@@ -1169,8 +1169,14 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await expect(page.locator('.detail-chip')).toHaveText(['2021', '1 Std. 30 Min.']);
-  await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Von vorn' })).toBeVisible();
+  // Like the web app: one Play button with the played share inside it; OK asks what to do.
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await expect(page.getByTestId('detail-primary')).toHaveText('Abspielen');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('resume-dialog')).toContainText(
+    'Du bist bei 22:30, etwa 25 % geschafft.',
+  );
+  await expect(page.getByRole('button', { name: 'Bei 22:30 fortsetzen' })).toBeFocused();
   // Resume starts the playback without asking again, at that position minus the default rewind
   // of 7 s.
   await page.keyboard.press('Enter');
@@ -1180,10 +1186,10 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   const resumeStart = seen.find((e) => e.path === '/api/v2/playback/start');
   expect(JSON.parse(resumeStart?.body ?? '{}')).toMatchObject({ start_position: 1343 });
 
-  // Back leaves the player: the session is stopped and the page has its focus on Resume again.
+  // Back leaves the player: the session is stopped and the page has its focus on Play again.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
-  await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
   // Back again returns to Home, on the card that opened the page.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
@@ -1429,7 +1435,10 @@ test('Home to a series, season 2, play an episode and Back to the same episode, 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('A Show');
   // The server's play target (S1 E1) is on Play; the seasons come in order, season 1 selected.
-  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  // The label no longer waits for the episodes (it follows the series' counts), so wait for the
+  // pills and the strip before a key moves down to them.
+  await expect(page.getByTestId('episode-strip')).toBeVisible();
   await expect(page.getByRole('tab')).toHaveText(['Staffel 1', 'Staffel 2']);
   await expect(page.getByRole('tab', { name: 'Staffel 1' })).toHaveAttribute(
     'aria-selected',
@@ -2085,7 +2094,10 @@ test('player Info (blue key): two columns of readable rows, inside the safe area
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  // The label no longer waits for the episodes (it follows the series' counts), so wait for the
+  // pills and the strip before a key moves down to them.
+  await expect(page.getByTestId('episode-strip')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -2209,7 +2221,10 @@ async function openSeriesDetail(
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'S1 · E1 abspielen' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  // The label no longer waits for the episodes (it follows the series' counts), so wait for the
+  // pills and the strip before a key moves down to them.
+  await expect(page.getByTestId('episode-strip')).toBeVisible();
   return { seen };
 }
 
@@ -2225,7 +2240,7 @@ test('detail page: focused pills have black content on white, the selected seaso
   const white = { color: 'rgb(0, 0, 0)', background: 'rgb(255, 255, 255)' };
 
   // The focused action pill.
-  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   expect(await paint(play)).toEqual(white);
 
   // The focused season pill, which is also the selected one.
@@ -2502,7 +2517,7 @@ test('detail page: a tall hero holds its content, the page scrolls smoothly to m
   // (d) Up to the action pills: the hero text is back and the page is at its origin.
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
-  await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
   await expect.poll(() => opacity('.detail-text')).toBe('1');
   await expect.poll(pageOffset).toBe(0);
 });
@@ -2909,7 +2924,7 @@ test('detail page: going up animates the transform and never scrolls the clippin
   await page.keyboard.press('ArrowUp');
   await expect(seasonTab).toBeFocused();
   await page.keyboard.press('ArrowUp');
-  await expect(page.getByRole('button', { name: /fortsetzen|abspielen/ }).first()).toBeFocused();
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
   await expect
     .poll(() =>
       page
@@ -3386,12 +3401,11 @@ test('detail page: AI translation in button mode is started with the remote from
   await openSecondTitle(page, origin);
   const translate = page.getByRole('button', { name: 'Beschreibung übersetzen' });
   await expect(translate).toBeVisible();
-  const play = page.getByRole('button', { name: /Fortsetzen/ });
+  const play = page.getByTestId('detail-primary');
   await expect(play).toBeFocused();
   expect(seen.some((e) => e.path.endsWith('/translate-description'))).toBe(false);
-  // Play, Start over, Translate description.
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowRight');
+  // Play, watched, favourite, rating, More, Translate description.
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
   await expect(translate).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(translate).toHaveCount(0);
@@ -3536,8 +3550,10 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   await expect(play).toBeFocused();
+  // The episodes tell Play what the watch state is; before that the player asks for itself.
+  await expect(page.getByTestId('episode-strip')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -3701,8 +3717,10 @@ test('player: repeated stalls ask to lower the quality, Lower sends a quality_ch
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  const play = page.getByRole('button', { name: 'S1 · E1 abspielen' });
+  const play = page.getByRole('button', { name: 'Ab Folge 1 starten' });
   await expect(play).toBeFocused();
+  // The episodes tell Play what the watch state is; before that the player asks for itself.
+  await expect(page.getByTestId('episode-strip')).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
 
@@ -3751,4 +3769,87 @@ test('player: repeated stalls ask to lower the quality, Lower sends a quality_ch
   await expect(page.getByTestId('player-buffering-restore')).toHaveText(
     'Qualität wiederherstellen',
   );
+});
+
+test('detail page: Back from the More dialog returns the focus to More, from the resume dialog to Play', async ({
+  page,
+}) => {
+  await page.route('**/api/v2/catalog/items/m2*', async (route) => {
+    const response = await route.fetch();
+    const item = await response.json();
+    item.user_state = {
+      in_watchlist: false,
+      is_favorite: false,
+      not_interested: false,
+      played: false,
+    };
+    await route.fulfill({ response, json: item });
+  });
+  const { origin } = await startFakeSilo({});
+  await openSecondTitle(page, origin);
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  // Play, watched, favourite, rating, More.
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowRight');
+  const more = page.getByRole('button', { name: 'Weitere Aktionen' });
+  await expect(more).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('more-menu')).toBeVisible();
+  // The dialog has taken the focus; a viewer takes a moment before Back.
+  await expect(page.getByTestId('more-menu').getByRole('button').first()).toBeFocused();
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('more-menu')).toHaveCount(0);
+  await page.waitForTimeout(400);
+  await expect(more).toBeFocused();
+  // The resume dialog (the movie is half way through) gives the focus back to Play.
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('resume-dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('resume-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+});
+
+test('detail page: the action row shows a selection effect on the primary button and the stars, and its colours', async ({
+  page,
+}) => {
+  await page.route('**/api/v2/catalog/items/m2*', async (route) => {
+    const response = await route.fetch();
+    const item = await response.json();
+    item.user_state = {
+      in_watchlist: false,
+      is_favorite: true,
+      not_interested: false,
+      played: false,
+    };
+    item.user_rating = 3;
+    await route.fulfill({ response, json: item });
+  });
+  const { origin } = await startFakeSilo({});
+  await openSecondTitle(page, origin);
+  const primary = page.getByTestId('detail-primary');
+  await expect(primary).toBeFocused();
+  // LG's checklist wants a selection effect on every object: a ring and a slight growth.
+  await expect(primary).toHaveCSS('transform', 'matrix(1.06, 0, 0, 1.06, 0, 0)');
+  await expect(primary).toHaveCSS('box-shadow', /0px 0px 0px 4px/);
+  // The played share inside the button, the red heart and the yellow stars.
+  await expect(page.getByTestId('detail-play-fill')).toHaveCSS(
+    'background-color',
+    'rgba(20, 20, 23, 0.2)',
+  );
+  await expect(page.locator('.detail-heart[data-filled="true"]')).toHaveCSS(
+    'color',
+    'rgb(248, 113, 113)',
+  );
+  await expect(page.locator('.detail-star[data-filled="true"]').first()).toHaveCSS(
+    'color',
+    'rgb(250, 204, 21)',
+  );
+  // The stars take the same kind of effect when they have the focus.
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+  const stars = page.locator('.detail-stars');
+  await expect(stars).toBeFocused();
+  await expect(stars).toHaveCSS('transform', 'matrix(1.04, 0, 0, 1.04, 0, 0)');
+  await expect(stars).toHaveCSS('box-shadow', /0px 0px 0px 4px/);
 });
