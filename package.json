@@ -6,7 +6,7 @@
   "license": "MPL-2.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/third-party-notices.mjs --out dist/THIRD_PARTY_NOTICES.txt",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.service.json",
     "lint": "eslint . && prettier --check .",
