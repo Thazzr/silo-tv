@@ -167,7 +167,7 @@ Repository and project:
 - ✅ Repository in English (docs, comments, commit messages, changelog)
 - ⬜ No code copied from Silo's repositories, so the store build carries only code this project owns
 - ✅ CI on GitHub: the gate on every push and pull request, with test counts and coverage in each run's summary and the reports as artifacts
-- 🟨 Mutation testing: a weekly StrykerJS run over all app code in 24 parallel shards; the merged report and the score badge are published on GitHub Pages (waits for the first full run)
+- ✅ Mutation testing: a weekly StrykerJS run over all app code in 24 parallel shards; the merged report and the score badge are published on GitHub Pages. Baseline from the first full run (2026-11-11): 79.3 % over 15,215 mutants. A run below 77 % fails the workflow.
 - ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
 - ⬜ Contribution guidelines and issue templates; contributions under the same MPL-2.0 with a DCO sign-off (no CLA needed for store distribution)
 - ⬜ An "About" page in the app's settings: version, licence, link to the source code, and the licence notices of the bundled third-party packages (required for distributing the `.ipk`)

@@ -1,11 +1,18 @@
 // Turns Stryker's JSON report (reports/mutation/mutation.json) into the CI job summary and the
 // shields.io endpoint file for the badge. Plain Node, no dependencies.
 //
-//   node tools/mutation-summary.mjs [--report <file>] [--badge <file>]
+//   node tools/mutation-summary.mjs [--report <file>] [--badge <file>] [--break <percent>]
+//   node tools/mutation-summary.mjs --check <score> --break <percent>
 //
 // The summary is appended to $GITHUB_STEP_SUMMARY, or printed without it. Unlike ci-summary.mjs this
 // one exits non-zero when the report is missing or unreadable: the badge and the published site
 // must not be built from nothing.
+//
+// --break names the baseline. The summary run only reports against it (and writes score= and
+// below_break= to $GITHUB_OUTPUT); it still exits 0 on a valid report. --check is the separate
+// step that fails the workflow: exit 1 below the baseline, 2 for an invalid --break. Stryker's own
+// thresholds.break would apply to every shard separately, so the baseline is held on the merged
+// score instead.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,7 +82,7 @@ export function buildBadge(score) {
   };
 }
 
-export function buildSummary({ total, files }) {
+export function buildSummary({ total, files }, baseline = null) {
   // Files without a single valid mutant have no score to rank.
   const worst = files
     .filter((file) => file.score !== null)
@@ -86,6 +93,12 @@ export function buildSummary({ total, files }) {
     '',
     `Mutation score: **${formatScore(total.score)}**`,
     '',
+    ...(baseline
+      ? [
+          `Baseline: ${formatScore(baseline.value)}, ${baseline.below ? 'this run is below it' : 'held'}.`,
+          '',
+        ]
+      : []),
     '| Killed | Survived | Timeout | No coverage | Errors |',
     '|---:|---:|---:|---:|---:|',
     `| ${total.killed} | ${total.survived} | ${total.timeout} | ${total.noCoverage} | ${total.errors} |`,
@@ -111,10 +124,57 @@ function option(argv, name, fallback) {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : fallback;
 }
 
+const NUMBER = /^\d+(\.\d+)?$/;
+
+/**
+ * The baseline from --break: `null` without the option, `NaN` for an invalid value (not a number,
+ * outside 0 to 100, or missing).
+ */
+export function parseBreak(argv) {
+  const index = argv.indexOf('--break');
+  if (index < 0) return null;
+  const raw = argv[index + 1];
+  if (typeof raw !== 'string' || !NUMBER.test(raw)) return Number.NaN;
+  const value = Number(raw);
+  return value >= 0 && value <= 100 ? value : Number.NaN;
+}
+
+/** The score as the workflow passes it around: one decimal, so the check sees what the badge shows. */
+const rounded = (score) => (score === null ? null : Number(score.toFixed(1)));
+
+function usageError(message) {
+  console.error(`mutation-summary: ${message}`);
+  return 2;
+}
+
+/** --check <score> --break <percent>: reads no report, writes no summary or badge. */
+function check(argv, baseline) {
+  const raw = argv[argv.indexOf('--check') + 1] ?? '';
+  if (!NUMBER.test(raw)) {
+    console.log('::error::No mutation score to check.');
+    return 1;
+  }
+  const score = rounded(Number(raw));
+  if (score >= baseline) return 0;
+  console.log(
+    `::error::Mutation score ${formatScore(score)} is below the baseline of ${formatScore(baseline)}.`,
+  );
+  return 1;
+}
+
+/** @returns {number} the exit code: 0, 1 below the baseline in --check mode, 2 for a usage error. */
 export function main(argv = process.argv.slice(2), env = process.env) {
+  const baseline = parseBreak(argv);
+  if (Number.isNaN(baseline)) return usageError('--break needs a number from 0 to 100');
+  if (argv.includes('--check')) {
+    if (baseline === null) return usageError('--check needs --break');
+    return check(argv, baseline);
+  }
   const report = JSON.parse(readFileSync(option(argv, '--report', DEFAULT_REPORT), 'utf-8'));
   const result = analyze(report);
-  const markdown = buildSummary(result);
+  const score = rounded(result.total.score);
+  const below = baseline !== null && (score === null || score < baseline);
+  const markdown = buildSummary(result, baseline === null ? null : { value: baseline, below });
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
   else console.log(markdown);
   const badge = option(argv, '--badge', '');
@@ -122,11 +182,17 @@ export function main(argv = process.argv.slice(2), env = process.env) {
     mkdirSync(dirname(badge), { recursive: true });
     writeFileSync(badge, `${JSON.stringify(buildBadge(result.total.score))}\n`);
   }
+  if (env.GITHUB_OUTPUT) {
+    const lines = [`score=${score === null ? '' : score.toFixed(1)}`];
+    if (baseline !== null) lines.push(`below_break=${below}`);
+    appendFileSync(env.GITHUB_OUTPUT, `${lines.join('\n')}\n`);
+  }
+  return 0;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    main();
+    process.exitCode = main();
   } catch (error) {
     console.error(`mutation-summary: ${error?.message ?? error}`);
     process.exitCode = 1;

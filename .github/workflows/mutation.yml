@@ -29,6 +29,9 @@ permissions:
 env:
   # Keep in step with the matrix below.
   SHARDS: 24
+  # The baseline for the merged score, in percent: a few points under the first full run (79.3 %).
+  # The baseline job fails the workflow when a run scores below it; the badge still shows the score.
+  MUTATION_BREAK: '77'
 
 jobs:
   shard:
@@ -97,6 +100,8 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      score: ${{ steps.summary.outputs.score }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,9 +141,10 @@ jobs:
 
       # Fails unless every shard delivered a report: a partial run never gets a total score.
       - name: Merge the report and build the site
+        id: summary
         run: |
           node tools/mutation-merge.mjs --expect "$SHARDS" --out site/mutation shards
-          node tools/mutation-summary.mjs --report site/mutation/mutation.json --badge site/badge.json
+          node tools/mutation-summary.mjs --report site/mutation/mutation.json --badge site/badge.json --break "$MUTATION_BREAK"
           touch site/.nojekyll
 
       - name: Note the missing shards
@@ -177,3 +183,31 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # Fails the workflow when the merged score is below the baseline. It runs after the site is
+  # published (or skipped off the default branch), so the badge always shows the real score.
+  baseline:
+    name: Hold the baseline
+    needs: [report, pages]
+    if: always() && needs.report.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The tool has no dependencies, so there is no npm ci. The score goes through an env var, not
+      # into the script text.
+      - name: Check the score against the baseline
+        run: node tools/mutation-summary.mjs --check "$SCORE" --break "$MUTATION_BREAK"
+        env:
+          SCORE: ${{ needs.report.outputs.score }}

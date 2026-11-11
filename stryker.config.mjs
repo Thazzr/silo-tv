@@ -31,7 +31,9 @@ export default {
   // CI keeps this file in the Actions cache, so a weekly run only re-tests what changed.
   incremental: true,
   incrementalFile: 'reports/mutation/stryker-incremental.json',
-  // `break` stays null until the first full run has set the baseline.
+  // `break` stays null: Stryker would apply it to each of the CI shards separately, and their scores
+  // differ widely. The baseline is held on the merged score by the workflow's MUTATION_BREAK
+  // (.github/workflows/mutation.yml, checked by tools/mutation-summary.mjs --check).
   thresholds: { high: 80, low: 60, break: null },
   // GitHub's Linux runners have 4 cores. The tests render whole screens in jsdom and run on fake
   // timers, so the timeouts are generous: a mutant that makes a loop spin forever is still caught.
