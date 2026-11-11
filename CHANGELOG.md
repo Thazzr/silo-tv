@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 generated automatically from the commit messages with [git-cliff](https://git-cliff.org) –
 **do not edit it by hand**.
 
-## [Unreleased]
+## [0.3.0] - 2026-11-11
 
 ### Added
 
@@ -101,6 +101,11 @@ generated automatically from the commit messages with [git-cliff](https://git-cl
 - **playback**: Pin the device profile, image prefetch and service transport row by row
 - A shorter README with live test results, and a development guide for everything else
 - **readme**: Give the feature table a header row
+- **playback**: Pin playback recovery, the code sign-in and the navigation adapter
+- Contribution guide, security policy, issue forms and release instructions
+- **features**: Pin the requests of the library, search, home and detail queries
+- No dead code in the repository
+- **release**: 0.3.0
 
 ### Fixed
 
@@ -120,6 +125,7 @@ generated automatically from the commit messages with [git-cliff](https://git-cl
 
 - **sec-service**: Restrict the JS proxy service to this app and safe targets
 - **security**: Keep the access token in memory and out of HLS and subtitle URLs
+- **sec-ci**: Keep the release token away from third-party code
 
 ### Merge
 
