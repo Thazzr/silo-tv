@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPlatform } from '../../platform';
 import type { PlayerEngine } from '../engine/PlayerEngine';
 import { isPopover, type OsdMenu } from '../menus/usePanelState';
-import { buttonRow, type OsdAction, type OsdFocus } from './PlayerOsd';
+import { buttonRow, type EpisodeSlots, type OsdAction, type OsdFocus } from './PlayerOsd';
 import { clampTime, HOLD_GAP_MS, HOLD_MS, HOLD_STEP_MS } from './timing';
 import { useOsdVisibility } from './useOsdVisibility';
 import { useScrub, type ScrubState } from './useScrub';
@@ -26,6 +26,10 @@ interface Args {
   skipForwardSeconds: number;
   /** The menu buttons that are present, in the order of the row. */
   menus: readonly OsdMenu[];
+  /** Which episode buttons the row has (a spacer is not one); null for a movie. */
+  episodes: EpisodeSlots | null;
+  /** A press on an episode button: the screen stops this session and opens that episode. */
+  onEpisode(which: 'previous' | 'next'): void;
   /**
    * The open menu, which lives above the player so it survives a reload of the stream. While a
    * popover is open the keys are the menu's: only the media keys still act here.
@@ -193,7 +197,7 @@ export function usePlayerControls(args: Args): PlayerControls {
     const { args: a, osd: o } = latest.current;
     const open = a.panel.open;
     if (!open) return;
-    const row = buttonRow(a.menus);
+    const row = buttonRow(a.menus, a.episodes);
     // A popover always has both neighbours: the transport buttons on its left and Info, which is
     // always present and always last, on its right.
     const neighbour = row[row.indexOf(open) + (direction === 'right' ? 1 : -1)]!;
@@ -239,6 +243,12 @@ export function usePlayerControls(args: Args): PlayerControls {
           break;
         case 'playPause':
           togglePlay();
+          break;
+        case 'prevEpisode':
+          a.onEpisode('previous');
+          break;
+        case 'nextEpisode':
+          a.onEpisode('next');
           break;
         case 'close':
           a.leave();
@@ -417,17 +427,17 @@ export function usePlayerControls(args: Args): PlayerControls {
         return;
       }
 
-      // On the corner pill, which stands right of the last button.
+      // On the corner pill, which stands right of the last button (Info is always present and last).
       if (current === 'pill') {
         if ((key === 'left' || key === 'right') && a.pill.move?.(key)) return;
-        if (key === 'left') setFocusState(buttonRow(a.menus).at(-1)!);
+        if (key === 'left') setFocusState('info');
         else if (key === 'up') setFocusState('scrubber');
         else if (key === 'enter') a.pill.activate();
         return;
       }
 
       // On the button row: the transport buttons, then the menu buttons; the ends hold.
-      const row = buttonRow(a.menus);
+      const row = buttonRow(a.menus, a.episodes);
       const index = row.indexOf(current as OsdAction);
       if (index < 0) {
         // The button is gone (its menu left with a new stream): back to the scrubber.

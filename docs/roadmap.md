@@ -95,15 +95,15 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - scrub previews from the server's trickplay sheets, chapter marks on the scrubber, intro, recap, credits and previews coloured on the track as in the web player
 - ✅ Overlay in the layout of Silo's web player, adapted to the TV (user decision 2026-11-10; TV 2026-11-10):
   - Exit at the top left; a full-width scrubber with the buffer
-  - below it the title and the episode line; in the middle skip back, play/pause, skip forward (the next episode joins with Up Next)
-  - on the right, menu buttons that open their menu above them: Chapters, a gear for quality and auto-play next, and Info (Audio and Subtitles join with their menus)
+  - below it the title and the episode line; in the middle skip back, play/pause, skip forward (previous and next episode joined with the redesign below)
+  - on the right, menu buttons that open their menu above them: Audio, Chapters, Subtitles, a gear for quality and auto-play next, and Info
   - left out on the TV: volume, marker editing, pop-out, fullscreen
 - ✅ Quality menu: Auto plus the plan's qualities with bitrates; a change replans and holds for the current title only (TV 2026-11-10: 720p through hls.js)
 - 🟨 A quality change that does not play falls back to the quality before it, at the same position, with a short hint
 - ✅ Player polish (user decisions 2026-11-10; TV 2026-11-10 on webOS 26):
   - a menu closes after a successful pick, with the focus back on its button
   - one Info panel in two columns ("Now" and "Source file", with live buffer, bandwidth and dropped frames; limits, server warnings and errors under the source file), also on the blue key; the old diagnostics window is gone; the error page shows short details only (route, code, session)
-  - a slim scrub preview card like the web's, without the chapter title
+  - a slim scrub preview card like the web's, without the chapter title (replaced by the web's own card in the redesign below)
   - the time sits above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at; 12 h or 24 h follows the profile's `ui.time_format`
   - one centred loading view from the start; slightly translucent menus and Info panel
 - 🟨 The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
@@ -131,7 +131,11 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ❌ Aspect ratio (fit, fill, stretch): dropped (user decision 2026-11-11). Not needed on the TV, where the picture fills the screen as the TV's own settings say.
 - 🟨 Subtitle delay in the Subtitles menu (`player.subtitle_sync_ms`, ±100 ms per press up to ±10 s, saved 600 ms after the last press for the profile, as Silo's web client does); an audio delay is not possible with the webOS video element
 - 🟨 Start subtitles from the profile's subtitle settings (mode, language, show forced subtitles) exactly as Silo's web app resolves them; with Silo's default settings that is the forced track in the playing audio's language, which also follows an audio change until the viewer picks a subtitle (user decisions 2026-11-11). Bitmap subtitles count as burned in on the TV, which cannot draw them, so a text track wins where the web player would draw PGS itself
-- ⬜ Previous and next episode buttons in the player, as in the web app (part of the player redesign below)
+- 🟨 Player redesign after Silo's web player (user decisions 2026-11-11, after the TV test of v0.3.0 found the bar bulky; the time keeps its place above the scrubber):
+  - 🟨 a slimmer bar with Lucide icons, the web's order (previous episode, back, play, forward, next episode in the middle; icon-only Audio, Chapters, Subtitles with a dot while one plays, a quality pill and Info on the right), and the web player's seek bar and preview card: fine chapter ticks only when the file has chapters, intro, recap, credits and preview tinted on the track with the one under the preview time raised as a pill, and a card with the thumbnail, the time, the chapter and the segment with its range
+  - 🟨 previous and next episode as the web player finds them (the current and the next season, playable episodes only; Next crosses into the next season); a press stops the session and opens the episode in the player's place, so Back goes where it would have gone
+  - ⬜ the menus like the web player's: audio and subtitle rows with their details and badges, the subtitle delay row, chapters with thumbnails, the gear with quality only
+  - ⬜ the subtitle appearance as the web's dialog, saved for the profile on all devices as the web app does
 - ❌ Sleep timer: dropped (user decision 2026-11-10). LG TVs have a sleep timer of their own, and the progress reported every 10 s keeps the resume point when the TV turns off.
 
 ## Phase 4 – Personal and discovery (target v0.5.0)

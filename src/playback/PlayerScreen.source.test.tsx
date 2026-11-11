@@ -54,9 +54,12 @@ async function sourceFor(stream: Partial<ReturnType<typeof playbackPlan>['stream
     user: account,
     profileId: 'p1',
   });
-  renderWithSilo(<PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} />, {
-    session,
-  });
+  renderWithSilo(
+    <PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} onEpisode={vi.fn()} />,
+    {
+      session,
+    },
+  );
   await screen.findByTestId('player');
   expect(setSource).toHaveBeenCalledTimes(1);
   return { options: setSource.mock.calls[0]![1], session };

@@ -1,7 +1,14 @@
 /// <reference types="node" />
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { activeSegmentIndex, bandFractions, runsToEnd, segmentsOf, type Segment } from './segments';
+import {
+  activeSegmentIndex,
+  bandOf,
+  runsToEnd,
+  segmentsOf,
+  segmentUnder,
+  type Segment,
+} from './segments';
 
 const marker = (start_seconds: number, end_seconds: number) => ({ start_seconds, end_seconds });
 
@@ -93,28 +100,58 @@ describe('runsToEnd', () => {
   });
 });
 
-describe('bandFractions', () => {
-  it('maps every kind to fractions of the track and carries the kind', () => {
-    expect(
-      bandFractions(
-        [
-          { kind: 'recap', start: 0, end: 540 },
-          { kind: 'intro', start: 540, end: 1080 },
-          { kind: 'preview', start: 2000, end: 2100 },
-          { kind: 'credits', start: 4860, end: 5400 },
-        ],
-        5400,
-      ),
-    ).toEqual([
-      { kind: 'recap', start: 0, end: 0.1 },
-      { kind: 'intro', start: 0.1, end: 0.2 },
-      { kind: 'preview', start: 2000 / 5400, end: 2100 / 5400 },
-      { kind: 'credits', start: 0.9, end: 1 },
-    ]);
+describe('bandOf', () => {
+  it('maps a segment to fractions of the track and carries the kind', () => {
+    expect(bandOf({ kind: 'recap', start: 0, end: 540 }, 5400)).toEqual({
+      kind: 'recap',
+      start: 0,
+      end: 0.1,
+    });
+    expect(bandOf({ kind: 'preview', start: 2000, end: 2100 }, 5400)).toEqual({
+      kind: 'preview',
+      start: 2000 / 5400,
+      end: 2100 / 5400,
+    });
+    expect(bandOf({ kind: 'credits', start: 4860, end: 5400 }, 5400)).toEqual({
+      kind: 'credits',
+      start: 0.9,
+      end: 1,
+    });
+  });
+
+  it('clamps a segment that runs past the end, and drops one that lies beyond it', () => {
+    expect(bandOf({ kind: 'credits', start: 5000, end: 6000 }, 5400)?.end).toBe(1);
+    expect(bandOf({ kind: 'credits', start: 6000, end: 7000 }, 5400)).toBeNull();
   });
 
   it('draws nothing without a duration', () => {
-    expect(bandFractions([{ kind: 'intro', start: 0, end: 10 }], 0)).toEqual([]);
+    expect(bandOf({ kind: 'intro', start: 0, end: 10 }, 0)).toBeNull();
+    expect(bandOf({ kind: 'intro', start: 5, end: 10 }, 0)).toBeNull();
+  });
+});
+
+describe('segmentUnder', () => {
+  const intro: Segment = { kind: 'intro', start: 10, end: 60 };
+  const recap: Segment = { kind: 'recap', start: 40, end: 50 };
+
+  it('finds the segment that holds the time, the start included and the end not', () => {
+    expect(segmentUnder([intro], 10)).toBe(intro);
+    expect(segmentUnder([intro], 59.9)).toBe(intro);
+    expect(segmentUnder([intro], 60)).toBeNull();
+    expect(segmentUnder([intro], 9.9)).toBeNull();
+  });
+
+  it('takes the shortest of the segments that overlap at the time', () => {
+    expect(segmentUnder([intro, recap], 45)).toBe(recap);
+    expect(segmentUnder([recap, intro], 45)).toBe(recap);
+    expect(segmentUnder([intro, recap], 20)).toBe(intro);
+  });
+
+  it('keeps the first listed of two segments of the same length, as the web player does', () => {
+    const first: Segment = { kind: 'intro', start: 100, end: 200 };
+    const second: Segment = { kind: 'recap', start: 150, end: 250 };
+    expect(segmentUnder([first, second], 175)).toBe(first);
+    expect(segmentUnder([second, first], 175)).toBe(second);
   });
 });
 

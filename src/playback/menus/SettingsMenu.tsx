@@ -4,7 +4,7 @@ import {
   useProfileSettings,
   useSetProfileDeviceSetting,
 } from '../../features/settings/profileSettings';
-import { CheckIcon } from '../osd/icons';
+import { Check } from 'lucide-react';
 import type { ReplanResult } from '../session/types';
 import { MenuPopover, MenuRow } from './MenuPopover';
 import { AUTO, changesQuality, formatBitrate, type QualityMenu } from './qualityMenu';
@@ -100,7 +100,9 @@ export function SettingsMenu({
         <span className="player-menu-row-name">{name}</span>
         <span className="menu-value">
           {bitrate ? <span data-testid="menu-bitrate">{bitrate}</span> : null}
-          <span className="player-menu-check">{checked ? <CheckIcon /> : null}</span>
+          <span className="player-menu-check">
+            {checked ? <Check size={32} strokeWidth={3} /> : null}
+          </span>
         </span>
       </MenuRow>
     );

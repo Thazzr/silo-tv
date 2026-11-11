@@ -99,7 +99,13 @@ function render(
   serveSettings(server, settings);
   const onExit = vi.fn();
   const view = renderWithSilo(
-    <PlayerScreen contentId="m1" title="First Title" intent={intent} onExit={onExit} />,
+    <PlayerScreen
+      contentId="m1"
+      title="First Title"
+      intent={intent}
+      onExit={onExit}
+      onEpisode={vi.fn()}
+    />,
     { session: signedIn(token) },
   );
   const currentVideo = () => view.container.querySelector('video');
@@ -363,7 +369,13 @@ describe('PlayerScreen leaving', () => {
     const onExit = vi.fn();
     const onEnded = vi.fn();
     const view = renderWithSilo(
-      <PlayerScreen contentId="m1" title="First Title" onExit={onExit} onEnded={onEnded} />,
+      <PlayerScreen
+        contentId="m1"
+        title="First Title"
+        onExit={onExit}
+        onEpisode={vi.fn()}
+        onEnded={onEnded}
+      />,
       { session: signedIn() },
     );
     await screen.findByTestId('player');

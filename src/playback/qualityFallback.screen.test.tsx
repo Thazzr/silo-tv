@@ -95,7 +95,7 @@ async function openedMenu() {
     profileId: 'p1',
   });
   const view = renderWithSilo(
-    <PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} />,
+    <PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} onEpisode={vi.fn()} />,
     {
       session,
     },

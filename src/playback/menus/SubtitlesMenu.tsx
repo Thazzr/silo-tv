@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useLanguage, useT } from '../../i18n';
-import { CheckIcon } from '../osd/icons';
+import { Check } from 'lucide-react';
 import type { ReplanResult } from '../session/types';
 import { MenuPopover, MenuRow } from './MenuPopover';
 import { formatDelay, SUBTITLE_DELAY_STEP_MS } from './subtitleDelay';
@@ -102,7 +102,9 @@ export function SubtitlesMenu({
           >
             <span className="player-menu-row-name">{t('player.menu.subtitles.off')}</span>
             <span className="menu-value">
-              <span className="player-menu-check">{offChecked ? <CheckIcon /> : null}</span>
+              <span className="player-menu-check">
+                {offChecked ? <Check size={32} strokeWidth={3} /> : null}
+              </span>
             </span>
           </MenuRow>
           {rows.map((row) => (
@@ -118,7 +120,9 @@ export function SubtitlesMenu({
                 {flags(row).length > 0 ? (
                   <span data-testid="menu-flags">{flags(row).join(' · ')}</span>
                 ) : null}
-                <span className="player-menu-check">{row.checked ? <CheckIcon /> : null}</span>
+                <span className="player-menu-check">
+                  {row.checked ? <Check size={32} strokeWidth={3} /> : null}
+                </span>
               </span>
             </MenuRow>
           ))}

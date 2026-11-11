@@ -2,6 +2,7 @@
 // events like PlayerControls.test.tsx: real timers while the session and the trickplay read load
 // (MSW needs them), then a fake clock for the timing rules.
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../api/generated/schema';
@@ -92,22 +93,38 @@ interface Options {
   /** What the trickplay read answers: a manifest, or an error status. */
   answer?: S['WatchTrickplay'] | number;
   chapters?: S['WatchChapter'][];
+  /** The playing version's intro, recap, credits and preview. */
+  segments?: S['MarkerOccurrence'][];
   /** The file the plan plays. */
   effectiveFile?: string;
+  lang?: 'de' | 'en';
 }
 
 async function mount(options: Options = {}) {
-  const { version = true, chapters = [], effectiveFile = 'file-1' } = options;
+  const { version = true, chapters = [], segments = [], effectiveFile = 'file-1' } = options;
   const offered = options.server ?? true;
   const trickplay: TrickplayCall[] = serveTrickplay(server, options.answer ?? trickplayManifest());
   servePlayback(server, {
     capabilities: playbackCapabilities({
-      features: offered ? TRICKPLAY_FEATURES : ['playback_plan_v3', 'sequenced_progress_v1'],
+      features: [
+        ...(offered ? TRICKPLAY_FEATURES : ['playback_plan_v3', 'sequenced_progress_v1']),
+        'marker_segments_v1',
+      ],
     }),
     watch: watchDetail({
       versions: [
-        watchVersion({ file_id: 'file-1', trickplay_available: version, chapters }),
-        watchVersion({ file_id: 'file-2', trickplay_available: version, chapters }),
+        watchVersion({
+          file_id: 'file-1',
+          trickplay_available: version,
+          chapters,
+          marker_segments: segments,
+        }),
+        watchVersion({
+          file_id: 'file-2',
+          trickplay_available: version,
+          chapters,
+          marker_segments: segments,
+        }),
       ],
     }),
     start: [
@@ -126,8 +143,8 @@ async function mount(options: Options = {}) {
     profileId: 'p1',
   });
   const view = renderWithSilo(
-    <PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} />,
-    { session },
+    <PlayerScreen contentId="m1" title="First Title" onExit={vi.fn()} onEpisode={vi.fn()} />,
+    { session, lang: options.lang },
   );
   await screen.findByTestId('player');
   const video = view.container.querySelector('video')!;
@@ -153,6 +170,7 @@ const hoverAt = (fraction: number) =>
 
 const card = () => screen.queryByTestId('player-preview');
 const image = () => screen.queryByTestId('player-preview-image');
+const notch = () => screen.getByTestId('player-preview-notch');
 const SHEET = (n: number) =>
   `${BASE_URL}/api/v2/artwork/trickplay/file-1/rev1/${n}.rev1.jpg?exp=1893456000&sig=sig${n}`;
 
@@ -198,8 +216,8 @@ describe('the preview card', () => {
     expect(within(card()!).getByTestId('player-preview-time')).toHaveTextContent('2:10');
     expect(image()).toHaveStyle({
       backgroundImage: `url("${SHEET(0)}")`,
-      backgroundSize: '2560px 1075.2px',
-      backgroundPosition: '-768px -107.52px',
+      backgroundSize: '2800px 1176px',
+      backgroundPosition: '-840px -117.6px',
     });
     advance(200);
     expect(card()).not.toBeInTheDocument();
@@ -223,7 +241,7 @@ describe('the preview card', () => {
     expect(image()!.style.backgroundImage).toContain('1.rev1.jpg');
   });
 
-  it('draws the backward icon and "2×" for a negative scrub rate, the forward icon for a positive one', async () => {
+  it('draws the backward chevrons and "2×" for a negative scrub rate, the forward ones for a positive one', async () => {
     const { state } = await mount();
     state.currentTime = 2500;
     tap(K.up);
@@ -232,14 +250,13 @@ describe('the preview card', () => {
     expect(back).toHaveAttribute('data-rate', '-2');
     // The rate is shown without its sign.
     expect(screen.getByTestId('player-preview-rate')).toHaveTextContent(/^2×$/);
-    // The backward icon is the forward one mirrored.
-    expect(back.querySelector('svg g')).toHaveAttribute('transform');
+    expect(back.querySelector('svg')).toHaveClass('lucide-chevrons-left');
     tap(K.ok);
     tap(K.up);
     tap(K.fastForward);
     const forward = screen.getByTestId('player-scrub');
     expect(forward).toHaveAttribute('data-rate', '2');
-    expect(forward.querySelector('svg g')).not.toHaveAttribute('transform');
+    expect(forward.querySelector('svg')).toHaveClass('lucide-chevrons-right');
   });
 
   it('shows the time strip alone, without a crash, for a sheet the manifest does not list', async () => {
@@ -256,6 +273,7 @@ describe('the preview card', () => {
     expect(image()).not.toBeInTheDocument();
     expect(card()).toHaveTextContent(/^22:30$/);
     expect(card()!.style.width).toBe('220px');
+    expect(screen.queryByTestId('player-preview-chapter')).not.toBeInTheDocument();
   });
 
   it('shows on pointer hover without seeking, and goes when the pointer leaves', async () => {
@@ -263,12 +281,12 @@ describe('the preview card', () => {
     tap(K.up);
     placeTrack();
     hoverAt(0.25);
-    // 1350 s: thumbnail 135, sheet 1, column 5, row 3; 300 px thumbnails drawn at 256 px.
+    // 1350 s: thumbnail 135, sheet 1, column 5, row 3; 300 px thumbnails drawn at 280 px.
     expect(within(card()!).getByTestId('player-preview-time')).toHaveTextContent('22:30');
     expect(image()).toHaveStyle({
       backgroundImage: `url("${SHEET(1)}")`,
-      backgroundSize: '2560px 1075.2px',
-      backgroundPosition: '-1280px -322.56px',
+      backgroundSize: '2800px 1176px',
+      backgroundPosition: '-1400px -352.8px',
     });
     expect(state.seeks).toEqual([]);
     fireEvent.mouseLeave(screen.getByTestId('player-scrubber'));
@@ -294,12 +312,30 @@ describe('the preview card', () => {
     tap(K.up);
     placeTrack();
     hoverAt(0.5);
-    // 1000 px track, 256 px card: centred is 500 - 128.
-    expect(card()!.style.transform).toBe('translateX(372px)');
+    // 1000 px track, 280 px card: centred is 500 - 140.
+    expect(card()!.style.transform).toBe('translateX(360px)');
+    expect(notch().style.left).toBe('140px');
     hoverAt(0);
     expect(card()!.style.transform).toBe('translateX(0px)');
     hoverAt(1);
-    expect(card()!.style.transform).toBe('translateX(744px)');
+    expect(card()!.style.transform).toBe('translateX(720px)');
+  });
+
+  it('keeps the notch on the time while the card is held at an edge', async () => {
+    await mount();
+    tap(K.up);
+    placeTrack();
+    // The time is 50 px in: the card stops at 0, and the notch stays under the time.
+    hoverAt(0.05);
+    expect(card()!.style.transform).toBe('translateX(0px)');
+    expect(notch().style.left).toBe('50px');
+    // At the very start the notch keeps off the rounded corner.
+    hoverAt(0);
+    expect(notch().style.left).toBe('24px');
+    // At the right end: the card ends at 1000, the time is 950 in, so 230 in the card.
+    hoverAt(0.95);
+    expect(card()!.style.transform).toBe('translateX(720px)');
+    expect(notch().style.left).toBe('230px');
   });
 
   it('uses the sheet URL as given, with no token appended and none logged', async () => {
@@ -352,37 +388,90 @@ describe('the preview card', () => {
     expect(card()).toHaveTextContent(/^22:30$/);
   });
 
-  it('shows no chapter title, inside a titled chapter or anywhere else', async () => {
+  it('names the chapter under the time below it, and the last one past the last end', async () => {
     await mount({
       chapters: [
         chapterOf(0, 0, 1000, 'Opening'),
         chapterOf(1, 1000, 3000, 'The Heist'),
-        chapterOf(2, 3000, 5400, ''),
+        chapterOf(2, 3000, 4000, 'Finale'),
       ],
     });
     tap(K.up);
     placeTrack();
     hoverAt(0.25);
-    expect(screen.queryByTestId('player-preview-chapter')).not.toBeInTheDocument();
-    expect(card()).not.toHaveTextContent('The Heist');
+    expect(screen.getByTestId('player-preview-chapter')).toHaveTextContent('The Heist');
     hoverAt(0.05);
-    expect(card()).not.toHaveTextContent('Opening');
-    // The chapters still mark the scrubber.
+    expect(screen.getByTestId('player-preview-chapter')).toHaveTextContent('Opening');
+    // 4590 s lies after the last chapter's end: the last chapter is named.
+    hoverAt(0.85);
+    expect(screen.getByTestId('player-preview-chapter')).toHaveTextContent('Finale');
+    // The chapters also mark the scrubber.
     expect(screen.getAllByTestId('player-chapter-tick').length).toBeGreaterThan(0);
   });
 
-  it('is a thumbnail 256 px wide with the time strip under it, as wide as the thumbnail', async () => {
-    await mount();
+  it('shows no chapter line for a chapter without a title', async () => {
+    await mount({ chapters: [chapterOf(0, 0, 5400, '')] });
     tap(K.up);
     placeTrack();
     hoverAt(0.25);
-    expect(card()!.style.width).toBe('256px');
-    expect(image()!.style.width).toBe('256px');
-    // 300x126 tiles drawn at 256 px are 107.52 px high.
-    expect(image()!.style.height).toBe('107.52px');
-    // The image comes first, the strip under it.
-    expect(card()!.firstElementChild).toBe(image());
-    expect(card()!.lastElementChild).toBe(screen.getByTestId('player-preview-time'));
+    expect(screen.queryByTestId('player-preview-chapter')).not.toBeInTheDocument();
+  });
+
+  it('stacks the time over the chapter name under the thumbnail, in a card as wide as it', async () => {
+    await mount({ chapters: [chapterOf(0, 0, 5400, 'The Heist')] });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(card()!.style.width).toBe('280px');
+    expect(image()!.style.width).toBe('280px');
+    // 300x126 tiles drawn at 280 px are 117.6 px high.
+    expect(image()!.style.height).toBe('117.6px');
+    const text = screen.getByTestId('player-preview-time').parentElement!;
+    // The image comes first, the text block under it: the time, then the chapter.
+    expect(image()!.nextElementSibling).toBe(text);
+    expect([...text.children].map((c) => c.getAttribute('data-testid'))).toEqual([
+      'player-preview-time',
+      'player-preview-chapter',
+    ]);
+  });
+
+  it('is wide for a chapter name alone, wide for a segment line alone, plain with neither', async () => {
+    // No trickplay in any of these: the card is as wide as its lines need.
+    await mount({ version: false, chapters: [chapterOf(0, 0, 5400, 'The Heist')] });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(card()!.style.width).toBe('280px');
+    cleanup();
+    vi.useRealTimers();
+    await mount({
+      version: false,
+      segments: [{ kind: 'intro', start_seconds: 1000, end_seconds: 1400 }],
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.225);
+    expect(screen.getByTestId('player-preview-segment')).toBeInTheDocument();
+    expect(card()!.style.width).toBe('280px');
+    cleanup();
+    vi.useRealTimers();
+    await mount({ version: false });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.225);
+    expect(card()!.style.width).toBe('220px');
+  });
+
+  it('shows no segment line outside a segment', async () => {
+    await mount({
+      version: false,
+      segments: [{ kind: 'intro', start_seconds: 10, end_seconds: 60 }],
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.25);
+    expect(screen.queryByTestId('player-preview-segment')).not.toBeInTheDocument();
+    expect(card()).toHaveTextContent(/^22:30$/);
   });
 
   it('shows the rate on the right of the strip only while scrubbing', async () => {
@@ -410,8 +499,152 @@ describe('the preview card', () => {
     hoverAt(0.25);
     expect(image()).not.toBeInTheDocument();
     expect(card()!.style.width).toBe('220px');
-    expect(card()!.children).toHaveLength(1);
-    expect(card()!.firstElementChild).toBe(screen.getByTestId('player-preview-time'));
+    expect(screen.getByTestId('player-preview-time').parentElement!.children).toHaveLength(1);
+  });
+});
+
+const INTRO = { kind: 'intro', start_seconds: 1000, end_seconds: 1400 } as const;
+const CREDITS = { kind: 'credits', start_seconds: 3600, end_seconds: 3900 } as const;
+
+describe('the segment line of the card', () => {
+  it('names the segment with its dot and range, above the time and the chapter name', async () => {
+    await mount({
+      segments: [INTRO],
+      chapters: [chapterOf(0, 0, 5400, 'The Heist')],
+    });
+    tap(K.up);
+    placeTrack();
+    // 1215 s is inside the intro (1000 s to 1400 s).
+    hoverAt(0.225);
+    const line = screen.getByTestId('player-preview-segment');
+    expect(screen.getByTestId('player-preview-segment-name')).toHaveTextContent('Intro');
+    expect(screen.getByTestId('player-preview-range')).toHaveTextContent(/^16:40-23:20$/);
+    expect(screen.getByTestId('player-preview-dot')).toHaveAttribute('data-kind', 'intro');
+    // Above the time, which is above the chapter name.
+    const text = line.parentElement!;
+    expect([...text.children].map((c) => c.getAttribute('data-testid'))).toEqual([
+      'player-preview-segment',
+      'player-preview-time',
+      'player-preview-chapter',
+    ]);
+    expect(within(text).getByTestId('player-preview-time')).toHaveTextContent('20:15');
+  });
+
+  it('writes the range with an en dash in German, and the credits as Abspann / Outro', async () => {
+    await mount({ lang: 'de', segments: [CREDITS] });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.69);
+    expect(screen.getByTestId('player-preview-segment-name')).toHaveTextContent('Abspann / Outro');
+    expect(screen.getByTestId('player-preview-range')).toHaveTextContent(/^1:00:00\u20131:05:00$/);
+    expect(screen.getByTestId('player-preview-dot')).toHaveAttribute('data-kind', 'credits');
+  });
+
+  it('names each kind in English and German', async () => {
+    const names = {
+      en: { intro: 'Intro', recap: 'Recap', credits: 'Credits / Outro', preview: 'Preview' },
+      de: {
+        intro: 'Intro',
+        recap: 'R\u00fcckblick',
+        credits: 'Abspann / Outro',
+        preview: 'Vorschau',
+      },
+    };
+    for (const lang of ['en', 'de'] as const) {
+      for (const kind of ['intro', 'recap', 'credits', 'preview'] as const) {
+        cleanup();
+        vi.useRealTimers();
+        await mount({ lang, segments: [{ kind, start_seconds: 1000, end_seconds: 1400 }] });
+        tap(K.up);
+        placeTrack();
+        hoverAt(0.225);
+        expect(screen.getByTestId('player-preview-segment-name')).toHaveTextContent(
+          names[lang][kind],
+        );
+      }
+    }
+  });
+
+  it('takes the shortest segment where two overlap, and shows none past its end', async () => {
+    await mount({
+      segments: [
+        { kind: 'intro', start_seconds: 1000, end_seconds: 2000 },
+        { kind: 'recap', start_seconds: 1200, end_seconds: 1300 },
+      ],
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.23);
+    expect(screen.getByTestId('player-preview-segment-name')).toHaveTextContent('Recap');
+    // 2000 s is the intro's end: no segment holds it.
+    hoverAt(0.371);
+    expect(screen.queryByTestId('player-preview-segment')).not.toBeInTheDocument();
+  });
+
+  it('truncates the name before the range: the name may shrink, the range may not', async () => {
+    const css = readFileSync('src/styles.css', 'utf-8');
+    const rule = (selector: string) => {
+      const start = css.indexOf(`${selector} {`);
+      return css.slice(start, css.indexOf('}', start));
+    };
+    expect(rule('.player-preview-segment-name')).toContain('min-width: 0');
+    expect(rule('.player-preview-segment-name')).toContain('text-overflow: ellipsis');
+    expect(rule('.player-preview-range')).toContain('flex: none');
+    expect(rule('.player-preview-chapter')).toContain('text-overflow: ellipsis');
+  });
+});
+
+describe('the segments on the track', () => {
+  const kinds = () =>
+    screen.queryAllByTestId('player-scrubber-band').map((b) => b.getAttribute('data-kind'));
+  const pill = () => screen.queryAllByTestId('player-scrubber-pill');
+
+  it('draws every segment as a tinted stretch at rest, and no pill', async () => {
+    await mount({ segments: [INTRO, CREDITS] });
+    expect(kinds()).toEqual(['intro', 'credits']);
+    expect(pill()).toHaveLength(0);
+  });
+
+  it('raises only the segment under the preview time to a pill, and draws it once', async () => {
+    await mount({
+      segments: [INTRO, CREDITS, { kind: 'recap', start_seconds: 100, end_seconds: 200 }],
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.225);
+    expect(pill()).toHaveLength(1);
+    expect(pill()[0]).toHaveAttribute('data-kind', 'intro');
+    expect(Number.parseFloat(pill()[0]!.style.left)).toBeCloseTo((1000 / 5400) * 100, 2);
+    // The others stay stretches; the raised one is not drawn twice.
+    expect(kinds()).toEqual(['recap', 'credits']);
+    hoverAt(0.5);
+    expect(pill()).toHaveLength(0);
+    expect(kinds()).toEqual(['recap', 'intro', 'credits']);
+  });
+
+  it('raises the shortest region where two overlap, and only that one', async () => {
+    await mount({
+      segments: [
+        { kind: 'intro', start_seconds: 1000, end_seconds: 2000 },
+        { kind: 'recap', start_seconds: 1200, end_seconds: 1300 },
+      ],
+    });
+    tap(K.up);
+    placeTrack();
+    hoverAt(0.23);
+    expect(pill()).toHaveLength(1);
+    expect(pill()[0]).toHaveAttribute('data-kind', 'recap');
+  });
+
+  it('draws no ticks without chapters, and one per chapter start after 0 before the end', async () => {
+    await mount({ segments: [INTRO] });
+    expect(screen.queryAllByTestId('player-chapter-tick')).toHaveLength(0);
+    cleanup();
+    vi.useRealTimers();
+    await mount({
+      chapters: [chapterOf(0, 0, 2700, 'A'), chapterOf(1, 2700, 5400, 'B')],
+    });
+    expect(screen.getAllByTestId('player-chapter-tick')).toHaveLength(1);
   });
 });
 

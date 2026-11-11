@@ -12,11 +12,13 @@ export interface Chapter {
 }
 
 /** The thumbnail is drawn this wide; its height follows the manifest's aspect ratio. */
-export const THUMB_DISPLAY_WIDTH = 256;
-/** The card is exactly as wide as its thumbnail: the image sits flush, the time strip under it. */
-export const CARD_WIDTH_WITH_IMAGE = THUMB_DISPLAY_WIDTH;
-/** The card without an image is the time strip alone (the time, and the rate while scrubbing). */
+export const THUMB_DISPLAY_WIDTH = 280;
+/** A card with an image, a chapter or a segment line is as wide as its thumbnail. */
+export const CARD_WIDTH_WIDE = THUMB_DISPLAY_WIDTH;
+/** The card with the time alone (and the rate while scrubbing). */
 export const CARD_WIDTH_PLAIN = 220;
+/** The notch under the card stays this far from the card's rounded corners. */
+export const NOTCH_MARGIN = 24;
 
 /** Index of the thumbnail that covers `seconds`; clamped to the first and last thumbnail. */
 export function tileIndex(
@@ -98,10 +100,19 @@ export function chapterAt(chapters: readonly Chapter[], seconds: number): Chapte
   return null;
 }
 
-/** The title of the chapter at `seconds`, or null when there is none or it has no title. */
+/**
+ * The chapter name the card shows for `seconds`: the chapter that contains it, else the last one
+ * (a gap, or a time past the last end), as Silo's web player does. Null without chapters or when
+ * the chapter has no title.
+ */
 export function chapterTitleAt(chapters: readonly Chapter[], seconds: number): string | null {
-  const title = chapterAt(chapters, seconds)?.title.trim();
+  const title = (chapterAt(chapters, seconds) ?? chapters[chapters.length - 1])?.title.trim();
   return title ? title : null;
+}
+
+/** Where the notch stands in the card: under the time, but not past the card's corners. */
+export function notchLeft(centerX: number, cardLeftEdge: number, cardWidth: number): number {
+  return Math.max(NOTCH_MARGIN, Math.min(cardWidth - NOTCH_MARGIN, centerX - cardLeftEdge));
 }
 
 /** Where the ticks go on the track: every chapter start except the first second, as 0-1 fractions. */

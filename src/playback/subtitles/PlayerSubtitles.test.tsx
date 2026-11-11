@@ -105,6 +105,7 @@ async function playing(start: Plan, values: Record<string, unknown> = {}) {
       title="First Title"
       intent={{ kind: 'beginning' }}
       onExit={vi.fn()}
+      onEpisode={vi.fn()}
     />,
     { session: signedIn() },
   );
@@ -241,6 +242,7 @@ describe('Player subtitles', () => {
         title="First Title"
         intent={{ kind: 'beginning' }}
         onExit={vi.fn()}
+        onEpisode={vi.fn()}
       />,
       { session: signedIn() },
     );

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useT } from '../../i18n';
-import { CheckIcon } from '../osd/icons';
+import { Check } from 'lucide-react';
 import type { ReplanResult, S } from '../session/types';
 import { MenuPopover, MenuRow } from './MenuPopover';
 import type { AudioRow } from './trackMenus';
@@ -76,7 +76,9 @@ export function AudioMenu({
           >
             <span className="player-menu-row-name">{row.label}</span>
             <span className="menu-value">
-              <span className="player-menu-check">{row.checked ? <CheckIcon /> : null}</span>
+              <span className="player-menu-check">
+                {row.checked ? <Check size={32} strokeWidth={3} /> : null}
+              </span>
             </span>
           </MenuRow>
         ))}

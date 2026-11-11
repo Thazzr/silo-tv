@@ -3,46 +3,78 @@ import { useLanguage, useT, type MessageKey } from '../../i18n';
 import { timeParts, type TimeFormat, type TimeMode } from '../timeDisplay';
 import { isPopover, type OsdMenu } from '../menus/usePanelState';
 import {
-  AudioIcon,
-  ChaptersIcon,
-  CloseIcon,
-  GearIcon,
-  InfoIcon,
-  PauseIcon,
-  PlayIcon,
-  SkipIcon,
-  SubtitlesIcon,
-} from './icons';
+  AudioLines,
+  Captions,
+  CaptionsOff,
+  Info,
+  ListVideo,
+  Pause,
+  Play,
+  Settings,
+  SkipBack,
+  SkipForward,
+  X,
+} from 'lucide-react';
 import { PreviewCard } from './PreviewCard';
-import { chapterTickFractions, type Chapter } from './previewMath';
-import type { Band } from '../skip/segments';
+import { chapterTickFractions, chapterTitleAt, type Chapter } from './previewMath';
+import { segmentUnder, type Segment } from '../skip/segments';
 import { Scrubber } from './Scrubber';
+import { SkipGlyph } from './SkipGlyph';
 import type { TrickplayImages } from './useTrickplay';
 
-/** The round transport buttons in the middle of the row. */
-export const TRANSPORT_BUTTONS = ['skipBack', 'playPause', 'skipForward'] as const;
-export type OsdButton = (typeof TRANSPORT_BUTTONS)[number];
+/** The transport buttons that are always there: back, play or pause, forward. */
+export type OsdButton = 'skipBack' | 'playPause' | 'skipForward';
 /** Everything a press can act on: a transport button, Exit or a menu button. */
-export type OsdAction = OsdButton | 'close' | OsdMenu;
+export type OsdAction = OsdButton | 'prevEpisode' | 'nextEpisode' | 'close' | OsdMenu;
 export type OsdFocus = 'video' | 'scrubber' | 'pill' | OsdAction;
 
 /**
- * The button row as the 5-way keys walk it: the transport buttons, then the menu buttons that are
- * present (a menu the playing file has nothing for is not in `menus`).
+ * Which episode buttons an episode has: the slot of a missing neighbour is an empty spacer, so
+ * the row keeps its shape. A movie has no slots at all (`null`).
  */
-export const buttonRow = (menus: readonly OsdMenu[]): OsdAction[] => [
-  ...TRANSPORT_BUTTONS,
+export interface EpisodeSlots {
+  previous: boolean;
+  next: boolean;
+}
+
+/**
+ * The button row as the 5-way keys walk it: previous episode, back, play, forward, next episode
+ * (a spacer is not in it), then the menu buttons that are present (a menu the playing file has
+ * nothing for is not in `menus`).
+ */
+export const buttonRow = (
+  menus: readonly OsdMenu[],
+  episodes: EpisodeSlots | null,
+): OsdAction[] => [
+  ...(episodes?.previous ? (['prevEpisode'] as const) : []),
+  'skipBack',
+  'playPause',
+  'skipForward',
+  ...(episodes?.next ? (['nextEpisode'] as const) : []),
   ...menus,
 ];
 
-/** What the menu buttons look like. */
-const MENU_BUTTON: Partial<Record<OsdMenu, { label: MessageKey; icon: ReactNode }>> = {
-  audio: { label: 'player.menu.audio', icon: <AudioIcon /> },
-  subtitles: { label: 'player.menu.subtitles', icon: <SubtitlesIcon /> },
-  chapters: { label: 'player.menu.chapters', icon: <ChaptersIcon /> },
-  settings: { label: 'player.menu.settings', icon: <GearIcon /> },
-  info: { label: 'player.menu.info', icon: <InfoIcon /> },
-};
+/** The glyph of the menu buttons, at the size they draw. */
+const GLYPH = 32;
+
+/** What a menu button looks like; the Subtitles glyph is crossed out while no subtitle plays. */
+function menuLook(menu: OsdMenu, subtitlesOn: boolean): { label: MessageKey; icon: ReactNode } {
+  switch (menu) {
+    case 'audio':
+      return { label: 'player.menu.audio', icon: <AudioLines size={GLYPH} /> };
+    case 'subtitles':
+      return {
+        label: 'player.menu.subtitles',
+        icon: subtitlesOn ? <Captions size={GLYPH} /> : <CaptionsOff size={GLYPH} />,
+      };
+    case 'chapters':
+      return { label: 'player.menu.chapters', icon: <ListVideo size={GLYPH} /> };
+    case 'settings':
+      return { label: 'player.menu.settings', icon: <Settings size={GLYPH} /> };
+    case 'info':
+      return { label: 'player.menu.info', icon: <Info size={GLYPH} /> };
+  }
+}
 
 export interface PlayerOsdProps {
   visible: boolean;
@@ -61,14 +93,18 @@ export interface PlayerOsdProps {
   scrub: { rate: number; target: number } | null;
   /** A skip is pending: `position` is its target, not where the video is. */
   skipPending: boolean;
-  /** The playing file's chapters (the ticks on the track). */
+  /** The playing file's chapters (the ticks on the track, the name on the card). */
   chapters: readonly Chapter[];
-  /** Intro, recap and credits as bands on the track (fractions 0-1). */
-  bands?: readonly Band[];
+  /** Intro, recap, credits and preview of the playing file (the tints on the track). */
+  segments: readonly Segment[];
   /** The scrub previews, when the file has them and they have loaded. */
   previews: TrickplayImages | undefined;
   /** The menu buttons to show, in order. */
   menus: readonly OsdMenu[];
+  /** The episode buttons' slots; null for a movie. */
+  episodes: EpisodeSlots | null;
+  /** A subtitle track plays: the Subtitles button wears its dot. */
+  subtitlesOn: boolean;
   /** The open menu, if any. */
   openMenu: OsdMenu | null;
   /** The settings button's second line: the quality in use. */
@@ -87,8 +123,6 @@ export interface PlayerOsdProps {
   onSeekFraction(fraction: number): void;
   onAction(action: OsdAction): void;
 }
-
-const NO_BANDS: readonly Band[] = [];
 
 /** The wall clock, read where the clock line is drawn: the end time moves with the position. */
 const wallClock = () => Date.now();
@@ -157,6 +191,8 @@ export function PlayerOsd(props: PlayerOsdProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const [trackWidth, setTrackWidth] = useState(0);
   const cardShown = cardTime !== null && duration > 0;
+  const { segments } = props;
+  const segmentAtCard = cardShown ? segmentUnder(segments, cardTime) : null;
   useLayoutEffect(() => {
     if (cardShown && wrap.current) setTrackWidth(wrap.current.offsetWidth);
   }, [cardShown]);
@@ -198,33 +234,43 @@ export function PlayerOsd(props: PlayerOsdProps) {
     );
   };
 
+  /** The slot of an episode button that has no target: the same footprint, nothing to see or focus. */
+  const spacer = (name: 'prevEpisode' | 'nextEpisode') => (
+    <span
+      key={name}
+      className="player-btn-spacer"
+      aria-hidden="true"
+      data-testid={`player-spacer-${name}`}
+    />
+  );
+
   const menuButton = (menu: OsdMenu) => {
-    const look = MENU_BUTTON[menu];
-    if (!look) return null;
+    const look = menuLook(menu, props.subtitlesOn);
     const label = t(look.label);
     const popover = isPopover(menu);
     const open = openMenu === menu;
+    const pill = menu === 'settings' && props.qualityText;
     return (
       <div key={menu} className="player-menu-anchor">
         {open && props.popover ? <div className="player-popover">{props.popover}</div> : null}
         {button(
           menu,
           label,
-          menu === 'settings' && props.qualityText ? (
-            <>
-              {look.icon}
+          <>
+            {look.icon}
+            {pill ? (
               <span className="player-btn-label" data-testid="player-quality-label">
                 {props.qualityText}
               </span>
-            </>
-          ) : (
-            look.icon
-          ),
+            ) : null}
+            {menu === 'subtitles' && props.subtitlesOn ? (
+              <span className="player-btn-dot" data-testid="player-subtitles-dot" />
+            ) : null}
+          </>,
           {
-            className:
-              menu === 'settings' && props.qualityText
-                ? 'player-btn player-btn-wide'
-                : 'player-btn',
+            className: pill
+              ? 'player-btn player-btn-tool player-btn-wide'
+              : 'player-btn player-btn-tool',
             menu: { open, popover },
           },
         )}
@@ -273,7 +319,7 @@ export function PlayerOsd(props: PlayerOsdProps) {
           'close',
           t('player.osd.exit'),
           <>
-            <CloseIcon />
+            <X size={32} />
             <span>{t('player.osd.exit')}</span>
           </>,
           { className: 'player-exit', testId: 'player-btn-close' },
@@ -290,6 +336,8 @@ export function PlayerOsd(props: PlayerOsdProps) {
                 trackWidth={trackWidth}
                 images={props.previews}
                 scrub={scrub}
+                chapterTitle={chapterTitleAt(props.chapters, cardTime)}
+                segment={segmentAtCard}
               />
             ) : null}
             {clock}
@@ -301,7 +349,8 @@ export function PlayerOsd(props: PlayerOsdProps) {
               scrubbing={scrub !== null}
               label={t('player.osd.position')}
               chapterTicks={ticks}
-              bands={props.bands ?? NO_BANDS}
+              segments={segments}
+              activeSegment={segmentAtCard}
               onHover={() => props.onFocus('scrubber')}
               onHoverMove={setHover}
               onSeek={props.onSeekFraction}
@@ -312,23 +361,49 @@ export function PlayerOsd(props: PlayerOsdProps) {
               <h1 className="player-osd-title">{props.title}</h1>
               {meta}
             </div>
-            <div className="player-osd-group">
+            <div className="player-osd-group player-osd-transport">
+              {props.episodes
+                ? props.episodes.previous
+                  ? button(
+                      'prevEpisode',
+                      t('player.osd.prevEpisode'),
+                      <SkipBack size={30} fill="currentColor" />,
+                      { className: 'player-btn player-btn-small' },
+                    )
+                  : spacer('prevEpisode')
+                : null}
               {button(
                 'skipBack',
                 t('player.osd.skipBack', { seconds: props.skipBackSeconds }),
-                <SkipIcon seconds={props.skipBackSeconds} forward={false} />,
+                <SkipGlyph seconds={props.skipBackSeconds} forward={false} />,
+                { className: 'player-btn player-btn-small' },
               )}
               {button(
                 'playPause',
                 paused ? t('player.osd.play') : t('player.osd.pause'),
-                paused ? <PlayIcon /> : <PauseIcon />,
+                paused ? (
+                  <Play size={40} fill="currentColor" strokeWidth={0} />
+                ) : (
+                  <Pause size={40} fill="currentColor" strokeWidth={0} />
+                ),
+                { className: 'player-btn player-btn-play' },
               )}
               {button(
                 'skipForward',
                 t('player.osd.skipForward', { seconds: props.skipForwardSeconds }),
-                <SkipIcon seconds={props.skipForwardSeconds} forward />,
+                <SkipGlyph seconds={props.skipForwardSeconds} forward />,
+                { className: 'player-btn player-btn-small' },
               )}
-              {/* The next-episode button joins here in a later package. */}
+              {props.episodes
+                ? props.episodes.next
+                  ? button(
+                      'nextEpisode',
+                      t('player.osd.nextEpisode'),
+                      <SkipForward size={30} fill="currentColor" />,
+                      { className: 'player-btn player-btn-small' },
+                    )
+                  : spacer('nextEpisode')
+                : null}
             </div>
             <div className="player-osd-group player-osd-menus">{props.menus.map(menuButton)}</div>
           </div>

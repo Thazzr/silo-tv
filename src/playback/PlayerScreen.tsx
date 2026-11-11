@@ -28,12 +28,12 @@ import {
   tracksForSubtitlePick,
 } from './menus/trackMenus';
 import { isPopover, MENU_ORDER, usePanelState, type PanelState } from './menus/usePanelState';
+import { useEpisodeNeighbours } from './episodes/useEpisodeNeighbours';
 import { PlayerOsd } from './osd/PlayerOsd';
 import { bufferedUntil, SPINNER_DELAY_MS, SPINNER_MIN_MS, titleBlock } from './osd/timing';
 import { useDelayedFlag } from './osd/useDelayedFlag';
 import { usePlayerControls } from './osd/usePlayerControls';
 import { useTrickplay } from './osd/useTrickplay';
-import { bandFractions } from './skip/segments';
 import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
@@ -72,10 +72,19 @@ export interface PlayerScreenProps {
   onExit: () => void;
   /** The stream played to its end and the session is stopped. Defaults to leaving the player. */
   onEnded?: () => void;
+  /** Opens another episode (previous or next) in this player's place. */
+  onEpisode: (episode: { contentId: string; title: string }) => void;
 }
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
-export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: PlayerScreenProps) {
+export function PlayerScreen({
+  contentId,
+  title,
+  intent,
+  onExit,
+  onEnded,
+  onEpisode,
+}: PlayerScreenProps) {
   const t = useT();
   const { session: auth } = useSilo();
   const panel = usePanelState();
@@ -215,6 +224,7 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
         token={token}
         playback={playback}
         onExit={onExit}
+        onEpisode={onEpisode}
       />
       {notice ? (
         <p className="player-notice" role="status" data-testid="player-quality-notice">
@@ -275,6 +285,7 @@ function PlayingView({
   token,
   playback,
   onExit,
+  onEpisode,
 }: {
   plan: Plan;
   mediaUrl: string;
@@ -294,6 +305,7 @@ function PlayingView({
   token: string | undefined;
   playback: PlaybackSession;
   onExit: () => void;
+  onEpisode: PlayerScreenProps['onEpisode'];
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -383,6 +395,29 @@ function PlayingView({
     onExit();
   }, [stop, onExit]);
 
+  // The episode buttons, as the web player has them: with at least one neighbour both slots are
+  // reserved and the missing one is a spacer; with none (a movie, or the season lists not in yet
+  // or failed) there are no slots. Only an episode has neighbours: another title of a series
+  // (an extra) may carry the series id too.
+  const neighbours = useEpisodeNeighbours(
+    media.isEpisode ? media.seriesId : undefined,
+    heading?.seasonNumber ?? 0,
+    heading?.episodeNumber ?? 0,
+  );
+  const episodes =
+    neighbours.previous || neighbours.next
+      ? { previous: neighbours.previous !== null, next: neighbours.next !== null }
+      : null;
+  const openEpisode = (which: 'previous' | 'next') => {
+    const target = neighbours[which];
+    // Narrowing only: a slot without a neighbour is a spacer, which cannot be pressed.
+    if (!target) return;
+    // The session ends as Back ends it; the host swaps this entry for the neighbour, which starts
+    // by the resume rule with no tracks carried over.
+    void stop();
+    onEpisode({ contentId: target.contentId, title: target.title });
+  };
+
   const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
   const buffering = !showing && !paused;
   // The pill waits for the first frame and for the profile's values, so a mode that skips by
@@ -407,10 +442,6 @@ function PlayingView({
     answer: playback.bufferingAnswer,
     shown: playback.bufferingShown,
   });
-  const bands = useMemo(
-    () => bandFractions(previews.segments, duration),
-    [previews.segments, duration],
-  );
   const controls = usePlayerControls({
     engine,
     started,
@@ -424,6 +455,8 @@ function PlayingView({
     skipBackSeconds: skipBack,
     skipForwardSeconds: skipForward,
     menus,
+    episodes,
+    onEpisode: openEpisode,
     panel,
     pill:
       skip.pill !== null || !bufferingPill.visible
@@ -632,9 +665,11 @@ function PlayingView({
         scrub={controls.scrub}
         skipPending={controls.skipPending}
         chapters={previews.chapters}
-        bands={bands}
+        segments={previews.segments}
         previews={trickplay}
         menus={menus}
+        episodes={episodes}
+        subtitlesOn={plan.selected_tracks.subtitle !== undefined}
         openMenu={panel.open}
         qualityText={qualityText}
         timeMode={timeMode}

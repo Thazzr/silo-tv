@@ -9,22 +9,38 @@ const css = readFileSync('src/styles.css', 'utf-8');
 describe('player overlay focus styles', () => {
   it.each([
     ".player-btn[data-focused='true']",
-    ".player-scrubber[data-focused='true'] .player-scrubber-track",
+    ".player-scrubber[data-focused='true']",
     ".player-scrubber[data-focused='true'] .player-scrubber-thumb",
   ])('styles %s', (selector) => {
     expect(css).toContain(selector);
   });
 
-  it('shows the focused button as a white fill with a dark icon', () => {
-    const rule = /\.player-btn\[data-focused='true'\][^{]*\{([^}]*)\}/.exec(css)?.[1] ?? '';
-    expect(rule).toContain('background: var(--focus-fill)');
-    expect(rule).toContain('color: var(--focus-content)');
+  it('shows the focused button as a white fill with a dark glyph, a ring and a larger scale', () => {
+    const button =
+      /\.player-btn\[data-focused='true'\],\s*\.player-btn:hover \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(button).toContain('color: var(--focus-content)');
+    expect(button).toContain('transform: scale(1.1)');
+    // The fill and the ring are on the disc layer, so a button may draw smaller than its target.
+    const disc =
+      /\.player-btn\[data-focused='true'\]::before,\s*\.player-btn:hover::before \{([^}]*)\}/.exec(
+        css,
+      )?.[1] ?? '';
+    expect(disc).toContain('background: var(--focus-fill)');
+    expect(disc).toContain('box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring)');
+  });
+
+  it('keeps the white play button visible when focused: dark glyph, ring and scale like the rest', () => {
+    // Play is white at rest, so the focus is the ring and the scale; the dark glyph stays dark.
+    expect(css).toMatch(/\.player-btn-play \{[^}]*color: #0a0a0b/);
+    expect(css.indexOf('.player-btn-play {')).toBeLessThan(
+      css.indexOf(".player-btn[data-focused='true']"),
+    );
   });
 
   it('keeps the overlay on a compositor layer and its gradient dark under the text', () => {
     const rule = /\.player-osd \{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(rule).toContain('will-change: opacity');
-    expect(rule).toContain('min-height: 45vh');
+    expect(rule).toContain('min-height: 38vh');
     expect(rule).toMatch(/rgba\(0, 0, 0, 0\.8[5-9]|0\.9\d?\)/);
   });
 });
@@ -46,26 +62,52 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(card).not.toMatch(/transition|backdrop-filter/);
   });
 
-  it('rounds the card slightly, with the thumbnail flush at the top: no padding, a thin light line', () => {
-    const card = rule('.player-preview');
-    expect(card).toContain('border-radius: 10px');
+  it('rounds the card, with the thumbnail flush at the top: no padding, a thin light edge on top of it', () => {
+    const card = rule('.player-preview-card');
+    expect(card).toContain('border-radius: 12px');
     expect(card).toContain('overflow: hidden');
     expect(card).not.toMatch(/padding/);
-    const image = rule('.player-preview-image');
-    // An inset outline: it draws the border without changing the 256 px the sprite is scaled to.
-    expect(image).toContain('outline: 1px solid rgba(255, 255, 255, 0.35)');
-    expect(image).toContain('outline-offset: -1px');
-    expect(image).not.toMatch(/padding|margin/);
+    expect(rule('.player-preview-image')).not.toMatch(/padding|margin|outline/);
+    // The edge is an overlay (an inset ring), so the thumbnail cannot cover it.
+    const edge = rule('.player-preview-card::after');
+    expect(edge).toContain('inset 0 0 0 1px rgba(255, 255, 255, 0.08)');
+    expect(rule('.player-preview')).not.toMatch(/padding|overflow/);
   });
 
-  it('makes the time a slim strip: 22 px tabular time left, the rate right', () => {
-    const strip = rule('.player-preview-time');
-    expect(strip).toContain('font-size: 22px');
-    expect(strip).toContain('tabular-nums');
-    expect(strip).toContain('display: flex');
-    expect(strip).toContain('justify-content: space-between');
-    expect(strip).toContain('padding: 6px 12px');
-    expect(css).not.toContain('player-preview-chapter');
+  it('sets the card text as the web does, scaled: 22 px semibold time, 20 px lines, dot of 10 px', () => {
+    const time = rule('.player-preview-time');
+    expect(time).toContain('font-size: 22px');
+    expect(time).toContain('font-weight: 600');
+    expect(time).toContain('tabular-nums');
+    expect(time).toContain('justify-content: space-between');
+    const chapter = rule('.player-preview-chapter');
+    expect(chapter).toContain('font-size: 20px');
+    expect(chapter).toContain('rgba(255, 255, 255, 0.5)');
+    expect(chapter).toContain('white-space: nowrap');
+    const segment = rule('.player-preview-segment');
+    expect(segment).toContain('font-size: 20px');
+    expect(segment).toContain('font-weight: 600');
+    expect(rule('.player-preview-range')).toContain('rgba(255, 255, 255, 0.45)');
+    expect(rule('.player-preview-dot')).toContain('width: 10px');
+    expect(rule('.player-preview-text')).toContain('padding: 10px 16px');
+  });
+
+  it('colours the dot of each segment kind like its tint on the track', () => {
+    expect([
+      ...['intro', 'recap', 'credits', 'preview'].map(
+        (kind) =>
+          /background: (#[0-9a-f]{6})/.exec(rule(`.player-preview-dot[data-kind='${kind}']`))![1],
+      ),
+    ]).toEqual(['#7dd3fc', '#c4b5fd', '#fcd34d', '#6ee7b7']);
+  });
+
+  it('draws the notch as a 28 by 14 px triangle outside the clipped card', () => {
+    const notch = rule('.player-preview-notch');
+    expect(notch).toContain('width: 28px');
+    expect(notch).toContain('height: 14px');
+    expect(notch).toContain('overflow: hidden');
+    expect(rule('.player-preview-notch::before')).toContain('rotate(45deg)');
+    expect(rule('.player-preview-notch::before')).toContain('background: rgba(23, 23, 23, 0.95)');
   });
 
   it('keeps the card above the Info panel, which stands above the overlay gradient', () => {
@@ -83,20 +125,51 @@ describe('scrub preview and chapter ticks styles', () => {
     expect(rule('.player-osd')).not.toMatch(/z-index/);
   });
 
-  it('draws chapter ticks 2 px wide, taller than the 6 px track', () => {
+  it('draws chapter ticks very fine: 2 by 14 px, white at 55 %, taller than the track', () => {
     const tick = rule('.player-scrubber-tick');
     expect(tick).toContain('width: 2px');
-    expect(tick).toContain('rgba(255, 255, 255, 0.7)');
-    expect(parseInt(/height: (\d+)px/.exec(tick)?.[1] ?? '0', 10)).toBeGreaterThan(6);
+    expect(tick).toContain('height: 14px');
+    expect(tick).toContain('rgba(255, 255, 255, 0.55)');
   });
 
-  it('fills the strip dark and translucent, with no blur or shadow on the card', () => {
-    const alpha = Number(
-      /background: rgba\(21, 23, 28, (0\.\d+)\)/.exec(rule('.player-preview-time'))?.[1],
+  it('draws the track 4 px at rest and 8 px while focused, with a 20 px thumb shown on focus only', () => {
+    expect(rule('.player-scrubber')).toContain('--track-h: 4px');
+    const focused =
+      /\.player-scrubber\[data-focused='true'\],\s*\.player-scrubber\[data-scrubbing='true'\],\s*\.player-scrubber:hover \{([^}]*)\}/.exec(
+        css,
+      )?.[1] ?? '';
+    expect(focused).toContain('--track-h: 8px');
+    expect(rule('.player-scrubber-track')).toContain('height: var(--track-h)');
+    expect(rule('.player-scrubber-rail')).toContain('rgba(255, 255, 255, 0.15)');
+    expect(rule('.player-scrubber-buffered')).toContain('rgba(255, 255, 255, 0.3)');
+    const thumb = rule('.player-scrubber-thumb');
+    expect(thumb).toContain('width: 20px');
+    expect(thumb).toContain('opacity: 0');
+    expect(css).toMatch(
+      /\.player-scrubber\[data-focused='true'\] \.player-scrubber-thumb,[^{]*\{[^}]*opacity: 1/,
     );
-    expect(alpha).toBeGreaterThanOrEqual(0.7);
-    expect(alpha).toBeLessThanOrEqual(0.9);
-    for (const selector of ['.player-preview', '.player-preview-image', '.player-preview-time']) {
+  });
+
+  it('raises the highlighted segment to a 12 px pill with a 2 px white ring, above the rail', () => {
+    const pill = rule('.player-scrubber-pill');
+    expect(pill).toContain('height: 12px');
+    expect(pill).toContain('box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8)');
+    // It comes before the progress in the markup, so the progress covers its played part.
+    expect(
+      readFileSync('src/playback/osd/Scrubber.tsx', 'utf-8').indexOf('player-scrubber-pill'),
+    ).toBeLessThan(
+      readFileSync('src/playback/osd/Scrubber.tsx', 'utf-8').indexOf('player-scrubber-played'),
+    );
+  });
+
+  it('fills the card #171717 at 95 %, with no blur or shadow on it', () => {
+    expect(rule('.player-preview-card')).toContain('background: rgba(23, 23, 23, 0.95)');
+    for (const selector of [
+      '.player-preview',
+      '.player-preview-card',
+      '.player-preview-image',
+      '.player-preview-text',
+    ]) {
       expect(rule(selector), selector).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
     }
   });
@@ -134,29 +207,34 @@ describe('overlay layout styles', () => {
   it('gives each segment kind its own colour on the scrubber, without a filter', () => {
     const colours = ['intro', 'recap', 'credits', 'preview'].map((kind) => {
       const body = rule(`.player-scrubber-band[data-kind='${kind}']`);
-      expect(body, kind).toMatch(/background: rgba\(\d+, \d+, \d+, 0\.45\)/);
+      expect(body, kind).toMatch(/background: rgba\(\d+, \d+, \d+, 0\.4(5)?\)/);
       expect(body, kind).not.toMatch(/backdrop-filter|filter:|blur\(/);
       return /background: (rgba\([^)]*\))/.exec(body)![1];
     });
     expect(new Set(colours).size).toBe(4);
     expect(colours).toEqual([
-      'rgba(125, 211, 252, 0.45)',
-      'rgba(196, 181, 253, 0.45)',
+      'rgba(125, 211, 252, 0.4)',
+      'rgba(196, 181, 253, 0.4)',
       'rgba(252, 211, 77, 0.45)',
-      'rgba(110, 231, 183, 0.45)',
+      'rgba(110, 231, 183, 0.4)',
     ]);
-    // The buffer is plain grey-white, apart from the bands.
-    expect(rule('.player-scrubber-buffered')).toContain('rgba(255, 255, 255, 0.5)');
+    // The pill under the preview time carries the same tint as its stretch.
+    const pillColours = ['intro', 'recap', 'credits', 'preview'].map(
+      (kind) =>
+        /background: (rgba\([^)]*\))/.exec(rule(`.player-scrubber-pill[data-kind='${kind}']`))![1],
+    );
+    expect(pillColours).toEqual(colours);
+    expect(rule('.player-scrubber-buffered')).toContain('rgba(255, 255, 255, 0.3)');
     expect(rule('.player-scrubber-band')).not.toMatch(/backdrop-filter|filter:|blur\(/);
   });
 
   it('marks a button whose menu is open with a ring and a wash, not the white fill', () => {
-    const open = rule(".player-btn[data-open='true']");
+    const open = rule(".player-btn[data-open='true']::before");
     expect(open).toContain('border-color: var(--focus-ring)');
     expect(open).toContain('background: var(--chrome-selected)');
     expect(open).not.toContain('--focus-fill');
     // Before the focus rule, so a focused open button (Info) still shows the focus.
-    expect(css.indexOf(".player-btn[data-open='true']")).toBeLessThan(
+    expect(css.indexOf(".player-btn[data-open='true']::before")).toBeLessThan(
       css.indexOf(".player-btn[data-focused='true']"),
     );
   });
@@ -185,7 +263,7 @@ describe('overlay layout styles', () => {
     expect(clock).toContain('white-space: pre');
     expect(parseInt(/font-size: (\d+)px/.exec(clock)?.[1] ?? '0', 10)).toBeGreaterThanOrEqual(22);
     // The overlay's own padding keeps its content, the clock included, off the screen edge.
-    expect(rule('.player-osd')).toContain('padding: 120px var(--safe-x) var(--safe-y)');
+    expect(rule('.player-osd')).toContain('padding: 72px var(--safe-x) var(--safe-y)');
     // The title block's second line no longer carries it.
     expect(rule('.player-osd-meta')).not.toContain('tabular');
   });
@@ -194,6 +272,44 @@ describe('overlay layout styles', () => {
     for (const selector of ['.player-osd', '.player-osd-top', '.player-btn', '.player-exit']) {
       expect(rule(selector), selector).not.toMatch(/backdrop-filter|filter:|blur\(|box-shadow/);
     }
+  });
+
+  it('makes every button a target of at least 75 px, and draws the small ones inside it', () => {
+    const size = (body: string, property: 'width' | 'height') =>
+      /var\(--target\)/.test(new RegExp(`${property}: ([^;]*);`).exec(body)?.[1] ?? '')
+        ? 75
+        : Number.parseInt(new RegExp(`${property}: (\\d+)px`).exec(body)?.[1] ?? '0', 10);
+    for (const selector of ['.player-btn', '.player-btn-play']) {
+      expect(size(rule(selector), 'width'), selector).toBeGreaterThanOrEqual(75);
+      expect(size(rule(selector), 'height'), selector).toBeGreaterThanOrEqual(75);
+    }
+    // The spacer of a missing episode neighbour has the footprint of a button, so Play stays centred.
+    expect(rule('.player-btn-spacer')).toContain('width: var(--target)');
+    expect(rule('.player-btn-spacer')).toContain('height: var(--target)');
+    // The small buttons draw 67 px (75 less 4 px each side) in their 75 px target; play draws 88.
+    expect(rule('.player-btn-small::before')).toContain('inset: 4px');
+    expect(rule('.player-btn-small::before')).toContain('rgba(255, 255, 255, 0.08)');
+    expect(rule('.player-btn-small::before')).toContain('rgba(255, 255, 255, 0.12)');
+    expect(rule('.player-btn-play')).toContain('width: 88px');
+    expect(rule('.player-btn-play::before')).toContain('background: var(--focus-fill)');
+    // The menu buttons are glyph only at rest: no fill, no border.
+    expect(rule('.player-btn')).toContain('background: none');
+    expect(rule('.player-btn::before')).not.toContain('background');
+    expect(rule('.player-btn-wide')).toContain('min-width: var(--target)');
+  });
+
+  it('keeps the skip number and the quality label at 20 px or more, and the dot amber', () => {
+    expect(rule('.player-skip-glyph-number')).toContain('font-size: 20px');
+    expect(rule('.player-btn-wide')).toContain('font-size: var(--fs-small)');
+    expect(rule('.player-btn-dot')).toContain('background: #e8b86e');
+  });
+
+  it('sets the title 28 px semibold and the episode line 20 px, single line', () => {
+    const title = rule('.player-osd-title');
+    expect(title).toContain('font-size: 28px');
+    expect(title).toContain('font-weight: 600');
+    expect(rule('.player-osd-meta')).toContain('font-size: 20px');
+    expect(rule('.player-osd-meta')).toContain('white-space: nowrap');
   });
 
   it('has no row of the old times and no heading cover', () => {

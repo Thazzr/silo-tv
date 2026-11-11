@@ -56,20 +56,34 @@ export function runsToEnd(segment: Segment, duration: number): boolean {
   return duration > 0 && duration - segment.end <= CREDITS_TO_END_SECONDS;
 }
 
+/** The segment under a preview time: of those that hold it, the shortest wins. */
+export function segmentUnder(segments: readonly Segment[], seconds: number): Segment | null {
+  let found: Segment | null = null;
+  for (const s of segments) {
+    if (
+      seconds >= s.start &&
+      seconds < s.end &&
+      (!found || s.end - s.start < found.end - found.start)
+    ) {
+      found = s;
+    }
+  }
+  return found;
+}
+
 export interface Band {
   kind: SegmentKind;
   start: number;
   end: number;
 }
 
-/** The ranges drawn on the scrubber track, as fractions (0-1): intro, recap, credits and preview. */
-export function bandFractions(segments: readonly Segment[], duration: number): Band[] {
-  if (!(duration > 0)) return [];
-  return segments
-    .map((s) => ({
-      kind: s.kind,
-      start: Math.max(0, Math.min(1, s.start / duration)),
-      end: Math.max(0, Math.min(1, s.end / duration)),
-    }))
-    .filter((b) => b.end > b.start);
+/**
+ * A segment as a range of the scrubber track, in fractions (0-1); null when it has no width left:
+ * past the end, or without a duration (the fractions are then NaN or infinite and the comparison
+ * fails). A segment is already usable (`0 <= start < end`), so only the end can run past the track.
+ */
+export function bandOf(segment: Segment, duration: number): Band | null {
+  const start = segment.start / duration;
+  const end = Math.min(1, segment.end / duration);
+  return end > start ? { kind: segment.kind, start, end } : null;
 }

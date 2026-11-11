@@ -3,10 +3,11 @@ import type { components } from '../../api/generated/schema';
 import {
   cardLeft,
   CARD_WIDTH_PLAIN,
-  CARD_WIDTH_WITH_IMAGE,
+  CARD_WIDTH_WIDE,
   chapterAt,
   chapterTickFractions,
   chapterTitleAt,
+  notchLeft,
   resolveSheetUrl,
   THUMB_DISPLAY_WIDTH,
   thumbnailBox,
@@ -75,24 +76,24 @@ describe('tilePosition', () => {
 });
 
 describe('thumbnailBox', () => {
-  it('draws a 300 px thumbnail at 256 px: the sheet scales by 256/300 and shifts to the tile', () => {
+  it('draws a 300 px thumbnail at 280 px: the sheet scales by 280/300 and shifts to the tile', () => {
     // 1350 s is thumbnail 135: sheet 1, column 5, row 3.
     const box = thumbnailBox(1350, manifest);
     expect(box.sheet).toBe(1);
-    expect(THUMB_DISPLAY_WIDTH).toBe(256);
-    expect(box.width).toBe(256);
-    expect(box.height).toBeCloseTo(107.52, 6);
+    expect(THUMB_DISPLAY_WIDTH).toBe(280);
+    expect(box.width).toBe(280);
+    expect(box.height).toBeCloseTo(117.6, 6);
     const [sizeX, sizeY] = box.backgroundSize.split(' ').map(parseFloat);
-    expect(sizeX).toBeCloseTo(2560, 6);
-    expect(sizeY).toBeCloseTo(1075.2, 6);
+    expect(sizeX).toBeCloseTo(2800, 6);
+    expect(sizeY).toBeCloseTo(1176, 6);
     const [x, y] = box.backgroundPosition.split(' ').map(parseFloat);
-    expect(x).toBeCloseTo(-1280, 6);
-    expect(y).toBeCloseTo(-322.56, 6);
+    expect(x).toBeCloseTo(-1400, 6);
+    expect(y).toBeCloseTo(-352.8, 6);
   });
 
   it('makes the card as wide as the thumbnail, and the card without one slim', () => {
-    expect(CARD_WIDTH_WITH_IMAGE).toBe(THUMB_DISPLAY_WIDTH);
-    expect(CARD_WIDTH_PLAIN).toBeLessThan(CARD_WIDTH_WITH_IMAGE);
+    expect(CARD_WIDTH_WIDE).toBe(THUMB_DISPLAY_WIDTH);
+    expect(CARD_WIDTH_PLAIN).toBeLessThan(CARD_WIDTH_WIDE);
   });
 
   it('starts at the sheet origin for the first thumbnail', () => {
@@ -104,14 +105,14 @@ describe('thumbnailBox', () => {
 
   it('uses the manifest aspect for the height', () => {
     const wide = thumbnailBox(0, { ...manifest, thumbnail_width: 320, thumbnail_height: 180 });
-    // 16:9 at 256 px wide is 144 px tall.
-    expect(wide.height).toBe(144);
-    expect(wide.backgroundSize).toBe('2560px 1440px');
+    // 16:9 at 280 px wide is 157.5 px tall.
+    expect(wide.height).toBe(157.5);
+    expect(wide.backgroundSize).toBe('2800px 1575px');
   });
 });
 
 describe('cardLeft', () => {
-  const card = CARD_WIDTH_WITH_IMAGE;
+  const card = CARD_WIDTH_WIDE;
 
   it('centres the card on the target', () => {
     expect(cardLeft(1000, card, 2000)).toBe(1000 - card / 2);
@@ -129,6 +130,24 @@ describe('cardLeft', () => {
 
   it('centres a card that is wider than the track', () => {
     expect(cardLeft(10, 400, 300)).toBe(-50);
+  });
+});
+
+describe('notchLeft', () => {
+  it('stands under the time while the card is centred on it', () => {
+    // A 280 px card whose left edge is at 100, centred on 240.
+    expect(notchLeft(240, 100, 280)).toBe(140);
+  });
+
+  it('follows a clamped card: the card stops at the edge, the notch keeps the time', () => {
+    // The card is held at 0 while the time is at 40: the notch is at 40, not at the centre.
+    expect(notchLeft(40, 0, 280)).toBe(40);
+  });
+
+  it('never leaves the card, and keeps off its rounded corners', () => {
+    expect(notchLeft(0, 0, 280)).toBe(24);
+    expect(notchLeft(1000, 0, 280)).toBe(256);
+    expect(notchLeft(-50, 0, 280)).toBe(24);
   });
 });
 
@@ -157,6 +176,16 @@ describe('chapters', () => {
     expect(chapterTitleAt([{ title: '  ', start: 0, end: 10 }], 5)).toBeNull();
     expect(chapterTitleAt(chapters, 100)).toBe('Opening');
     expect(chapterTitleAt([{ title: ' A ', start: 0, end: 10 }], 5)).toBe('A');
+  });
+
+  it('names the last chapter for a time no chapter holds, and nothing without chapters', () => {
+    expect(chapterTitleAt(chapters, 5401)).toBe('Finale');
+    const gap: Chapter[] = [
+      { title: 'A', start: 0, end: 100 },
+      { title: 'B', start: 200, end: 300 },
+    ];
+    expect(chapterTitleAt(gap, 150)).toBe('B');
+    expect(chapterTitleAt([], 10)).toBeNull();
   });
 
   it('puts a tick at every chapter start except 0', () => {

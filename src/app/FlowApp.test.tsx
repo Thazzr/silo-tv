@@ -24,7 +24,14 @@ import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launch
 import { clearInstallationCache } from '../playback/session/startSession';
 import { episodeOf, itemDetail, seasonOf, serveDetail } from '../test/detailFixtures';
 import { homeCapabilities, homeSection, resumeEpisode } from '../test/homeFixtures';
-import { servePlayback } from '../test/playbackFixtures';
+import { installFakeMedia } from '../test/fakeVideo';
+import {
+  playableDecision,
+  servePlayback,
+  terminalDecision,
+  watchDetail,
+  watchUserData,
+} from '../test/playbackFixtures';
 import { serveSettings } from '../test/settingsFixtures';
 import { KEY, pressKey } from '../test/keys';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
@@ -421,6 +428,100 @@ describe('FlowApp', () => {
     await waitFor(() =>
       expect(document.querySelector('[data-focus-key="episode:e23"]')).toHaveFocus(),
     );
+  });
+
+  it('replaces the player with the next episode: the old session stops, the new one starts by the resume rule with no tracks, and Back goes where it would have', async () => {
+    serveData();
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/sections`, () =>
+        HttpResponse.json({
+          sections: [
+            homeSection('cw', 0, {
+              section_type: 'continue_watching',
+              items: [resumeEpisode('e1')],
+              total_count: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    // The second start fails, so the new entry's own title shows on the error screen.
+    const calls = servePlayback(server, {
+      start: [playableDecision(), terminalDecision()],
+    });
+    // Every watch read answers an episode with a saved position: the resume rule applies.
+    const watched: string[] = [];
+    server.use(
+      http.get(`${BASE_URL}/api/v2/watch/:id`, ({ params }) => {
+        watched.push(String(params.id));
+        return HttpResponse.json(
+          watchDetail({
+            content_id: String(params.id),
+            type: 'episode',
+            series_id: 's1',
+            series_title: 'A Show',
+            season_number: 1,
+            episode_number: 2,
+            title: 'Episode 1.2',
+            user_data: watchUserData({ position_seconds: 600, duration_seconds: 5400 }),
+          }),
+        );
+      }),
+    );
+    const files = [{ file_id: 'f', hdr: false, file_size: 1 }];
+    serveDetail(server, {
+      seasons: [seasonOf(1)],
+      episodes: () => [1, 2, 3].map((n) => episodeOf(1, n, { files })),
+    });
+    const restoreMedia = installFakeMedia();
+    try {
+      signedIn(BASE_URL, 'p1');
+      flow();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
+      await screen.findByTestId('row-cw');
+      await pressKey(KEY.down);
+      fireEvent.keyDown(window, { keyCode: KEY.enter });
+      fireEvent.keyUp(window, { keyCode: KEY.enter });
+      await screen.findByTestId('player');
+      fireEvent.playing(document.querySelector('video')!);
+      await waitFor(() => expect(watched).toEqual(['e1']));
+      await waitFor(() =>
+        expect(document.querySelector('[data-focus-key="nextEpisode"]')).not.toBeNull(),
+      );
+      // Up opens the overlay on the scrubber, Down moves to Play, Right twice to Next.
+      fireEvent.keyDown(window, { keyCode: KEY.up });
+      fireEvent.keyDown(window, { keyCode: KEY.down });
+      fireEvent.keyDown(window, { keyCode: KEY.right });
+      fireEvent.keyDown(window, { keyCode: KEY.right });
+      fireEvent.keyDown(window, { keyCode: KEY.enter });
+      // The neighbour is opened in this entry's place, by its id, with no prompt.
+      await waitFor(() => expect(watched).toEqual(['e1', 'e13']));
+      await waitFor(() => expect(calls.start).toHaveLength(2));
+      expect(screen.queryByTestId('resume-prompt')).not.toBeInTheDocument();
+      expect(calls.start[1]?.body.start_position).toBeGreaterThan(0);
+      // No track is carried over: the server and the settings choose them.
+      for (const field of [
+        'audio_track_id',
+        'audio_track_index',
+        'subtitle_track_id',
+        'subtitle_track_index',
+      ]) {
+        expect(calls.start[1]?.body).not.toHaveProperty(field);
+      }
+      // The first session was stopped, and only it so far.
+      await waitFor(() => expect(calls.stop).toHaveLength(1));
+      // The new entry carries the neighbour's title (the failed start names it).
+      expect(await screen.findByRole('heading', { name: 'Episode 1.3' })).toBeInTheDocument();
+      // The entry was replaced, not pushed: one Back from the new episode goes where Back from
+      // the old one would have, to Home, not to the old episode.
+      fireEvent.keyDown(window, { keyCode: 461 });
+      expect(await screen.findByTestId('home')).toBeInTheDocument();
+      expect(screen.queryByTestId('player')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('player-error')).not.toBeInTheDocument();
+      expect(calls.start).toHaveLength(2);
+    } finally {
+      restoreMedia();
+    }
   });
 
   it('drops the detail queries of the old profile when the profile is switched', async () => {

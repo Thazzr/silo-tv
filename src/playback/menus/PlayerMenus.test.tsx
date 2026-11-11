@@ -118,10 +118,13 @@ async function mount(options: MountOptions = {}) {
     profileId: 'p1',
   });
   const onExit = vi.fn();
-  const view = renderWithSilo(<PlayerScreen contentId="m1" title="First Title" onExit={onExit} />, {
-    session,
-    lang,
-  });
+  const view = renderWithSilo(
+    <PlayerScreen contentId="m1" title="First Title" onExit={onExit} onEpisode={vi.fn()} />,
+    {
+      session,
+      lang,
+    },
+  );
   await screen.findByTestId('player');
   const video = () => view.container.querySelector('video')!;
   const state = fakeVideo(video());

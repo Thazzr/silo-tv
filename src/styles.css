@@ -463,10 +463,10 @@ h3 {
   box-sizing: border-box;
   display: flex;
   align-items: flex-end;
-  /* The bottom 45 % is dark enough (at least 0.86 black under every line of text) that the text
+  /* The bottom 38 % is dark enough (at least 0.86 black under every line of text) that the text
      keeps 4.5:1 even over a white frame; the gradient fades out above it. */
-  min-height: 45vh;
-  padding: 120px var(--safe-x) var(--safe-y);
+  min-height: 38vh;
+  padding: 72px var(--safe-x) var(--safe-y);
   background: linear-gradient(
     to top,
     rgba(0, 0, 0, 0.92) 0%,
@@ -507,7 +507,7 @@ h3 {
   grid-template-columns: 1fr auto 1fr;
   column-gap: 32px;
   align-items: center;
-  margin-top: 24px;
+  margin-top: 8px;
 }
 
 .player-osd-titles {
@@ -517,8 +517,8 @@ h3 {
 .player-osd-title {
   margin: 0;
   overflow: hidden;
-  font-size: var(--fs-row-title);
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
   line-height: 1.2;
   color: var(--text);
   text-overflow: ellipsis;
@@ -528,10 +528,10 @@ h3 {
 .player-osd-meta {
   display: flex;
   margin: 4px 0 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  color: rgba(237, 237, 237, 0.85);
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -562,35 +562,98 @@ h3 {
   /* Above the Info panel, which stands above the overlay's gradient. */
   z-index: 2;
   box-sizing: border-box;
-  margin-bottom: 12px;
-  overflow: hidden;
-  border-radius: 10px;
+  /* The notch hangs 14 px under the card; this leaves a few pixels above the clock line. */
+  margin-bottom: 18px;
   pointer-events: none;
   will-change: transform;
 }
 
-/* The thumbnail sits flush at the top of the card; a thin light line inside it keeps its edge
-   visible over a dark frame. */
+/* The card clips the thumbnail to its rounded corners; the notch sits outside it. The thin light
+   edge is an overlay, so the thumbnail does not cover it. */
+.player-preview-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(23, 23, 23, 0.95);
+  border-radius: 12px;
+}
+
+.player-preview-card::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
 .player-preview-image {
   background-color: #000;
   background-repeat: no-repeat;
-  outline: 1px solid rgba(255, 255, 255, 0.35);
-  outline-offset: -1px;
 }
 
-/* A slim strip: the time on the left, the scrub rate on the right while scrubbing. */
+.player-preview-text {
+  padding: 10px 16px 12px;
+}
+
+/* Inside a segment: its dot, its name (which gives way first) and its range. */
+.player-preview-segment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.player-preview-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.player-preview-dot[data-kind='intro'] {
+  background: #7dd3fc;
+}
+
+.player-preview-dot[data-kind='recap'] {
+  background: #c4b5fd;
+}
+
+.player-preview-dot[data-kind='credits'] {
+  background: #fcd34d;
+}
+
+.player-preview-dot[data-kind='preview'] {
+  background: #6ee7b7;
+}
+
+.player-preview-segment-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-preview-range {
+  flex: none;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* The time on the left, the scrub rate on the right while scrubbing. */
 .player-preview-time {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  box-sizing: border-box;
   margin: 0;
-  padding: 6px 12px;
   font-size: 22px;
   font-weight: 600;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  background: rgba(21, 23, 28, 0.8);
 }
 
 .player-preview-rate {
@@ -600,35 +663,78 @@ h3 {
   color: var(--text-secondary);
 }
 
-.player-preview-rate svg {
-  width: 24px;
-  height: 24px;
+.player-preview-chapter {
+  margin: 3px 0 0;
+  overflow: hidden;
+  font-size: 20px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* The hit area is tall enough for the pointer; the visible bar inside it is thin. */
+/* The notch under the card: a triangle 28 px wide and 14 px tall that stands under the time (it
+   moves with `left` when the card is held at an edge). */
+.player-preview-notch {
+  position: absolute;
+  top: 100%;
+  width: 28px;
+  height: 14px;
+  margin: -1px 0 0 -14px;
+  overflow: hidden;
+}
+
+.player-preview-notch::before {
+  position: absolute;
+  top: -10px;
+  left: 4px;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  content: '';
+  background: rgba(23, 23, 23, 0.95);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transform: rotate(45deg);
+}
+
+/* The hit area is tall enough for the pointer; the bar inside it is 4 px, 8 px while focused. The
+   height changes at once (no transition), and only the layers below are laid out by it. */
 .player-scrubber {
+  --track-h: 4px;
+
   position: relative;
   box-sizing: border-box;
   height: 40px;
-  padding: 17px 0;
   cursor: pointer;
   outline: none;
 }
 
-.player-scrubber-track {
-  position: relative;
-  box-sizing: border-box;
-  height: 6px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-  transition: transform var(--transition);
+.player-scrubber[data-focused='true'],
+.player-scrubber[data-scrubbing='true'],
+.player-scrubber:hover {
+  --track-h: 8px;
 }
 
-/* Focus: the track grows from 6 to 10 px (transform only) and the knob to about 28 px. */
-.player-scrubber[data-focused='true'] .player-scrubber-track,
-.player-scrubber:hover .player-scrubber-track {
-  transform: scaleY(1.67);
+.player-scrubber-track {
+  position: absolute;
+  top: calc(50% - var(--track-h) / 2);
+  right: 0;
+  left: 0;
+  height: var(--track-h);
+}
+
+/* The rail clips the buffer and the tints to the rounded track. */
+.player-scrubber-rail,
+.player-scrubber-played {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.player-scrubber-rail {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .player-scrubber-buffered,
@@ -639,50 +745,59 @@ h3 {
 }
 
 .player-scrubber-buffered {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .player-scrubber-fill {
   background: var(--progress);
 }
 
+/* Chapter starts: very fine lines a little taller than the bar. */
 .player-scrubber-tick {
   position: absolute;
-  top: 12px;
+  top: 50%;
   width: 2px;
-  height: 16px;
-  margin-left: -1px;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 1px;
+  height: 14px;
+  margin: -7px 0 0 -1px;
+  background: rgba(255, 255, 255, 0.55);
   pointer-events: none;
 }
 
+/* Hidden at rest, a white disc while the scrubber has the focus. */
 .player-scrubber-thumb {
   position: absolute;
-  top: 12px;
-  width: 16px;
-  height: 16px;
-  margin-left: -8px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
   background: var(--focus-fill);
   border-radius: 50%;
-  transition: transform var(--transition);
+  opacity: 0;
+  transition: opacity var(--transition);
 }
 
 .player-scrubber[data-focused='true'] .player-scrubber-thumb,
 .player-scrubber[data-scrubbing='true'] .player-scrubber-thumb,
 .player-scrubber:hover .player-scrubber-thumb {
   box-shadow: 0 0 0 4px var(--focus-ring);
-  transform: scale(1.75);
+  opacity: 1;
 }
 
 .player-osd-group {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+}
+
+/* The transport row is centred on the play button: a missing episode neighbour is a spacer of the
+   same width, never a dimmed button. */
+.player-osd-transport {
+  gap: 18px;
 }
 
 .player-osd-menus {
   justify-content: flex-end;
+  gap: 4px;
 }
 
 /* Exit, top left, with its own soft gradient behind it (no blur). It shows and hides with the
@@ -736,36 +851,6 @@ h3 {
   height: 32px;
 }
 
-.player-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 88px;
-  height: 88px;
-  padding: 0;
-  font: inherit;
-  color: var(--text);
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.14);
-  border: 2px solid var(--chrome-border);
-  border-radius: 50%;
-  outline: none;
-  transition: transform var(--transition);
-}
-
-/* A button whose menu is open: a ring and a lighter wash, never the white fill, which only the
-   focused element carries (the focus is in the menu then). It comes before the focus rule, so
-   Info (open and focused at once) still shows the focus. */
-.player-btn[data-open='true'] {
-  background: var(--chrome-selected);
-  border-color: var(--focus-ring);
-}
-
-/* Focus (the pointer moves it too): the light fill with a dark icon, as on every button of the
-   app, and a little larger. The DOM focus and data-focused always agree (PlayerOsd). */
-.player-btn[data-focused='true'],
-.player-btn:hover,
 .player-exit[data-focused='true'],
 .player-exit:hover {
   color: var(--focus-content);
@@ -774,13 +859,125 @@ h3 {
   transform: scale(1.1);
 }
 
+/* The player's buttons are 75 px targets whose look is the ::before layer (the disc, or the pill),
+   so a button may draw smaller than its target. The glyph is a child above it. */
+.player-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: none;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-btn::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  border: 1px solid transparent;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.player-btn > * {
+  position: relative;
+}
+
+/* The slot of an episode button that has no target: the same footprint, nothing drawn. */
+.player-btn-spacer {
+  flex: none;
+  width: var(--target);
+  height: var(--target);
+}
+
+/* Previous, back, forward and next: a translucent disc of 67 px in the 75 px target. */
+.player-btn-small::before {
+  inset: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Play and pause: the one white disc, 88 px. */
+.player-btn-play {
+  width: 88px;
+  height: 88px;
+  color: #0a0a0b;
+}
+
+.player-btn-play::before {
+  background: var(--focus-fill);
+}
+
+/* The menu buttons: just the glyph at rest. Quality is a pill with its label beside the gear. */
 .player-btn-wide {
   width: auto;
-  gap: 12px;
-  padding: 0 32px 0 24px;
-  font-size: var(--fs-tab);
+  min-width: var(--target);
+  gap: 10px;
+  padding: 0 24px 0 20px;
+  font-size: var(--fs-small);
   font-weight: 600;
-  border-radius: 44px;
+}
+
+/* The amber dot under the Subtitles glyph while a subtitle plays. */
+.player-skip-glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The skip length over the arrow, 20 px at least; the ring of the arrow leaves room for it. */
+.player-skip-glyph-number {
+  position: absolute;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-btn-dot {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  background: #e8b86e;
+  border-radius: 50%;
+}
+
+/* A button whose menu is open: a ring and a lighter wash, never the white fill, which only the
+   focused element carries (the focus is in the menu then). It comes before the focus rule, so
+   Info (open and focused at once) still shows the focus. */
+.player-btn[data-open='true']::before {
+  background: var(--chrome-selected);
+  border-color: var(--focus-ring);
+}
+
+/* Focus (the pointer moves it too): the light fill with a dark glyph, a ring and a little larger.
+   Play is white already, so it shows the ring and the scale. The DOM focus and data-focused always
+   agree (PlayerOsd). */
+.player-btn[data-focused='true'],
+.player-btn:hover {
+  color: var(--focus-content);
+  transform: scale(1.1);
+}
+
+.player-btn[data-focused='true']::before,
+.player-btn:hover::before {
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
 }
 
 /* Intro, recap, credits and preview: a coloured stretch of the track (as in Silo's web player),
@@ -793,11 +990,11 @@ h3 {
 }
 
 .player-scrubber-band[data-kind='intro'] {
-  background: rgba(125, 211, 252, 0.45);
+  background: rgba(125, 211, 252, 0.4);
 }
 
 .player-scrubber-band[data-kind='recap'] {
-  background: rgba(196, 181, 253, 0.45);
+  background: rgba(196, 181, 253, 0.4);
 }
 
 .player-scrubber-band[data-kind='credits'] {
@@ -805,7 +1002,35 @@ h3 {
 }
 
 .player-scrubber-band[data-kind='preview'] {
-  background: rgba(110, 231, 183, 0.45);
+  background: rgba(110, 231, 183, 0.4);
+}
+
+/* The region under the preview time: a 12 px pill with a ring, raised above the track (the
+   progress is drawn over it). The same tint as at rest. */
+.player-scrubber-pill {
+  position: absolute;
+  top: 50%;
+  height: 12px;
+  margin-top: -6px;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+.player-scrubber-pill[data-kind='intro'] {
+  background: rgba(125, 211, 252, 0.4);
+}
+
+.player-scrubber-pill[data-kind='recap'] {
+  background: rgba(196, 181, 253, 0.4);
+}
+
+.player-scrubber-pill[data-kind='credits'] {
+  background: rgba(252, 211, 77, 0.45);
+}
+
+.player-scrubber-pill[data-kind='preview'] {
+  background: rgba(110, 231, 183, 0.4);
 }
 
 /* The error page's one small line: route, error code and a short session id. */

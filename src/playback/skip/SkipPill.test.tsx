@@ -90,9 +90,12 @@ function renderPlayer(options: Options = {}) {
     profileId: 'p1',
   });
   const onExit = vi.fn();
-  const view = renderWithSilo(<PlayerScreen contentId="m1" title="First Title" onExit={onExit} />, {
-    session,
-  });
+  const view = renderWithSilo(
+    <PlayerScreen contentId="m1" title="First Title" onExit={onExit} onEpisode={vi.fn()} />,
+    {
+      session,
+    },
+  );
   return { calls, view, onExit };
 }
 

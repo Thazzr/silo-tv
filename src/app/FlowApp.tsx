@@ -429,6 +429,15 @@ export function FlowApp({
             title={screen.title}
             intent={screen.intent}
             onExit={nav.pop}
+            // Back from the new episode goes where Back from this one would have gone.
+            onEpisode={(episode) =>
+              nav.replace({
+                name: 'player',
+                contentId: episode.contentId,
+                title: episode.title,
+                intent: { kind: 'resume' },
+              })
+            }
           />,
         );
     }

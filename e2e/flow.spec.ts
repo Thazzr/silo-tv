@@ -501,12 +501,31 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       }
       const watch = /^\/api\/v2\/watch\/(.+)$/.exec(url.pathname);
       if (req.method === 'GET' && watch) {
+        if (watch[1] === 'e12') {
+          // The second episode of the series: the one Next opens from the rewatch below.
+          return send(200, {
+            content_id: 'e12',
+            title: 'Episode 1.2',
+            type: 'episode',
+            series_id: 's1',
+            series_title: 'A Show',
+            season_number: 1,
+            episode_number: 2,
+            subtitles: [],
+            versions: [{ file_id: 'file-e12' }],
+          });
+        }
         if (watch[1] === 'e9') {
-          // The server counts a rewatch as played but keeps its position (the TV finding).
+          // The server counts a rewatch as played but keeps its position (the TV finding). It is
+          // the first episode of the series, so the player has a next one.
           return send(200, {
             content_id: 'e9',
-            title: 'Episode 1.9',
+            title: 'Episode 1.1',
             type: 'episode',
+            series_id: 's1',
+            series_title: 'A Show',
+            season_number: 1,
+            episode_number: 1,
             subtitles: [],
             versions: [
               {
@@ -3345,7 +3364,7 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await page.keyboard.press('Enter');
   const menu = page.getByTestId('player-menu-settings');
   await expect(menu).toBeVisible();
-  const auto = page.getByRole('menuitemradio', { name: 'Auto', exact: true });
+  const auto = page.getByRole('menuitemradio', { name: 'Automatisch', exact: true });
   await expect(auto).toBeFocused();
   await expect(auto).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.press('ArrowDown');
@@ -3388,6 +3407,67 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('player')).toHaveCount(0);
+});
+
+test('player: Next episode stops the session, opens the next episode in its place, and Back leaves to where the first one was started, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  // The rewatch card of Continue Watching plays at once.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");
+  await expect(page.getByRole('button', { name: 'Pause', includeHidden: true })).toHaveCount(1);
+  // The first episode has no Previous (a spacer) and a Next once the season reads are in.
+  await expect(
+    page.getByRole('button', { name: 'Nächste Folge', includeHidden: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: 'Vorherige Folge', includeHidden: true }),
+  ).toHaveCount(0);
+
+  // Up opens the overlay on the scrubber, Down moves to Pause, Right twice to Next episode.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('slider', { name: 'Position' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Nächste Folge' })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The old session was ended, a new one started, and the player names the next episode.
+  await expect
+    .poll(
+      () => seen.filter((e) => e.method === 'POST' && e.path === '/api/v2/playback/start').length,
+    )
+    .toBe(2);
+  await expect
+    .poll(
+      () => seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  expect(seen.some((e) => e.path === '/api/v2/watch/e12')).toBe(true);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');
+  // Back (before the first frame) leaves the player for Continue Watching, where it started.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('player')).toHaveCount(0);
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
 });
 
 test('player: repeated stalls ask to lower the quality, Lower sends a quality_change replan and the undo pill follows, keyboard only', async ({
