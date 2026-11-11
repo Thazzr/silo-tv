@@ -1,14 +1,16 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLanguageSetting, setLanguageSetting } from '../../i18n/languageSetting';
 import { getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
 import { getTimeMode, setTimeMode } from '../../playback/timeDisplay';
 import { Session } from '../../api/session';
-import { account } from '../../test/apiFixtures';
+import { BASE_URL, account } from '../../test/apiFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
+import { useProfileSettings, useServerKnowsSetting } from './profileSettings';
 import { SettingsScreen } from './SettingsScreen';
 
 beforeEach(() => {
@@ -371,5 +373,191 @@ describe('SettingsScreen subtitle appearance row', () => {
   it('is hidden without a profile (nothing is asked)', () => {
     setup();
     expect(screen.queryByTestId('settings-subtitles')).toBeNull();
+  });
+});
+
+describe('SettingsScreen playback section (auto-play next)', () => {
+  const server = setupServer();
+  beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
+
+  const puts: { key: string; scope: string | null; value: unknown }[] = [];
+  const deletes: { key: string; scope: string | null }[] = [];
+  let putStatus = 200;
+  beforeEach(() => {
+    puts.length = 0;
+    deletes.length = 0;
+    putStatus = 200;
+    server.use(
+      http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
+        const body = (await request.json()) as { value: unknown };
+        puts.push({
+          key: String(params.key),
+          scope: new URL(request.url).searchParams.get('scope'),
+          value: body.value,
+        });
+        if (putStatus !== 200) return new HttpResponse(null, { status: putStatus });
+        return HttpResponse.json({
+          key: params.key,
+          scope: 'profile',
+          value: body.value,
+          revision: 1,
+        });
+      }),
+      http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ request, params }) => {
+        deletes.push({
+          key: String(params.key),
+          scope: new URL(request.url).searchParams.get('scope'),
+        });
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+  });
+
+  const signedIn = () => {
+    const session = new Session(memoryStorage());
+    session.set({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: Date.now() + 3600_000,
+      user: account,
+      profileId: 'p1',
+    });
+    return session;
+  };
+
+  function open() {
+    renderWithSilo(
+      <SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={() => undefined} />,
+      { lang: undefined, session: signedIn() },
+    );
+  }
+
+  it('is a "Playback" section above "This TV", with a note that it is for the profile', async () => {
+    serveSettings(server);
+    open();
+    const section = await screen.findByTestId('settings-playback');
+    expect(
+      within(section).getByRole('heading', { level: 2, name: 'Playback' }),
+    ).toBeInTheDocument();
+    expect(within(section).getByText('Applies to your profile on all devices')).toBeInTheDocument();
+    expect(
+      section.compareDocumentPosition(screen.getByTestId('settings-device')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(section).getByText('Auto-play next episode')).toBeInTheDocument();
+  });
+
+  it('reads the effective value: On by default', async () => {
+    serveSettings(server);
+    open();
+    const row = await screen.findByTestId('settings-autoplay');
+    expect(within(row).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(row).getByRole('radio', { name: 'Off' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('shows Off when the effective value is false', async () => {
+    serveSettings(server, { values: { 'playback.auto_play_next': false } });
+    open();
+    const row = await screen.findByTestId('settings-autoplay');
+    await waitFor(() =>
+      expect(within(row).getByRole('radio', { name: 'Off' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      ),
+    );
+  });
+
+  it("writes the key at the profile scope on a click, then drops this TV's own value", async () => {
+    serveSettings(server);
+    open();
+    const row = await screen.findByTestId('settings-autoplay');
+    fireEvent.click(within(row).getByRole('radio', { name: 'Off' }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0]).toEqual({ key: 'playback.auto_play_next', scope: 'profile', value: false });
+    // The device row would outrank the profile's: it goes, as in the web app.
+    await waitFor(() => expect(deletes).toHaveLength(1));
+    expect(deletes[0]).toEqual({ key: 'playback.auto_play_next', scope: 'profile_device' });
+    await waitFor(() =>
+      expect(within(row).getByRole('radio', { name: 'Off' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      ),
+    );
+  });
+
+  it("opens on the row's selected pill when the server's capability is already known", async () => {
+    serveSettings(server, { values: { 'playback.auto_play_next': false } });
+    // The screen mounts once the profile's settings are read, as when it opens from Home.
+    function AfterSettings() {
+      const knows = useServerKnowsSetting('playback.auto_play_next');
+      const { known } = useProfileSettings();
+      return knows && known ? (
+        <SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={() => undefined} />
+      ) : null;
+    }
+    renderWithSilo(<AfterSettings />, { lang: undefined, session: signedIn() });
+    const row = within(await screen.findByTestId('settings-autoplay'));
+    await waitFor(() => expect(row.getByRole('radio', { name: 'Off' })).toHaveFocus());
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(row.getByRole('radio', { name: 'Off' })).toHaveFocus();
+    expect(pill('Automatic (like the TV)')).not.toHaveFocus();
+  });
+
+  it('keeps the focus on the language row when the capability arrives after the screen opened', async () => {
+    serveSettings(server);
+    open();
+    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    await screen.findByTestId('settings-autoplay');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 150)));
+    expect(pill('Automatic (like the TV)')).toHaveFocus();
+    expect(
+      within(screen.getByTestId('settings-autoplay')).getByRole('radio', { name: 'On' }),
+    ).not.toHaveFocus();
+  });
+
+  it('is operated by keyboard: OK on a focused pill saves it', async () => {
+    serveSettings(server);
+    open();
+    await screen.findByTestId('settings-autoplay');
+    // The language row has the focus (the section was not there when the screen opened): Up
+    // enters the playback row on its selected pill, Right moves to Off, OK saves.
+    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    await pressKey(KEY.up);
+    await waitFor(() => expect(pill('On')).toHaveFocus());
+    await pressKey(KEY.right);
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0]?.value).toBe(false);
+  });
+
+  it('keeps the shown value when the write fails', async () => {
+    serveSettings(server);
+    putStatus = 500;
+    open();
+    const row = await screen.findByTestId('settings-autoplay');
+    fireEvent.click(within(row).getByRole('radio', { name: 'Off' }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(within(row).getByRole('radio', { name: 'On' })).toHaveAttribute('aria-checked', 'true');
+    expect(deletes).toHaveLength(0);
+  });
+
+  it('is hidden when the server is older than the key, or has no contract', async () => {
+    serveSettings(server, { manifestRevision: 0 });
+    open();
+    await waitFor(() => expect(screen.getByTestId('settings-device')).toBeInTheDocument());
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+    expect(screen.queryByTestId('settings-playback')).toBeNull();
+    expect(screen.queryByTestId('settings-autoplay')).toBeNull();
+  });
+
+  it('is hidden without a profile (nothing is asked)', () => {
+    setup();
+    expect(screen.queryByTestId('settings-playback')).toBeNull();
   });
 });

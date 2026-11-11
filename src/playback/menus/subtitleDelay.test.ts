@@ -8,16 +8,19 @@ import {
 
 describe('formatDelay', () => {
   it.each([
-    [300, '.', '+0.3 s'],
-    [300, ',', '+0.3 s'.replace('.', ',')],
-    [-1500, ',', '-1,5 s'],
-    [0, '.', '0.0 s'],
-    [10_000, '.', '+10.0 s'],
-    [-10_000, '.', '-10.0 s'],
-    [100, '.', '+0.1 s'],
-    [-100, '.', '-0.1 s'],
-  ])('writes %i ms with %j as %s', (ms, decimal, text) => {
-    expect(formatDelay(ms, decimal)).toBe(text);
+    [0, '0 ms'],
+    [300, '+300 ms'],
+    [100, '+100 ms'],
+    [10_000, '+10000 ms'],
+    [-100, '−100 ms'],
+    [-10_000, '−10000 ms'],
+  ])('writes %i ms as %s', (ms, text) => {
+    expect(formatDelay(ms)).toBe(text);
+  });
+
+  it('uses the real minus sign U+2212, never a hyphen', () => {
+    expect(formatDelay(-300).charCodeAt(0)).toBe(0x2212);
+    expect(formatDelay(-300)).not.toContain('-');
   });
 });
 

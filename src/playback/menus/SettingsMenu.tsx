@@ -1,48 +1,29 @@
 import { useRef, useState } from 'react';
 import { useLanguage, useT } from '../../i18n';
-import {
-  useProfileSettings,
-  useSetProfileDeviceSetting,
-} from '../../features/settings/profileSettings';
 import { Check } from 'lucide-react';
 import type { ReplanResult } from '../session/types';
 import { MenuPopover, MenuRow } from './MenuPopover';
 import { AUTO, changesQuality, formatBitrate, type QualityMenu } from './qualityMenu';
 
 export const QUALITY_KEY_PREFIX = 'player-menu-quality-';
-export const AUTO_PLAY_KEY = 'player-menu-autoplay';
-
-/** The focus keys of the menu's rows, top to bottom. */
-export function settingsRowKeys(menu: QualityMenu | null, episode: boolean): string[] {
-  return [
-    ...(menu
-      ? [AUTO, ...menu.rows.map((row) => row.label)].map((label) => QUALITY_KEY_PREFIX + label)
-      : []),
-    ...(episode ? [AUTO_PLAY_KEY] : []),
-  ];
-}
 
 /**
- * The gear's menu: Quality (when the plan offers a choice) and, for an episode, "Auto-play next".
- * A quality pick is a replan. One that is applied closes the menu (the stream reloads under it and
- * the focus goes back to the gear); a refused one leaves the old stream playing, the menu open,
- * and says so.
+ * The gear's menu: the quality, as Silo's web player lists it. A pick is a replan. One that is
+ * applied closes the menu (the stream reloads under it and the focus goes back to the gear); a
+ * refused one leaves the old stream playing, the menu open, and says so.
  */
 export function SettingsMenu({
   menu,
   preference,
-  episode,
   qualityChange,
   onApplied,
   remember,
   recall,
   onSide,
 }: {
-  /** Null when the plan offers no choice besides Auto. */
-  menu: QualityMenu | null;
+  menu: QualityMenu;
   /** The session's quality preference. */
   preference: string;
-  episode: boolean;
   qualityChange(label: string): Promise<ReplanResult>;
   /** The pick was applied: the menu closes. */
   onApplied(): void;
@@ -52,16 +33,12 @@ export function SettingsMenu({
 }) {
   const t = useT();
   const language = useLanguage();
-  const settings = useProfileSettings();
-  const setSetting = useSetProfileDeviceSetting();
   const busy = useRef(false);
   const [refused, setRefused] = useState(false);
-  // The value the viewer just chose, until the write is answered; a failed write drops it.
-  const [shown, setShown] = useState<boolean | null>(null);
   const decimal = language === 'de' ? ',' : '.';
 
   const pick = async (target: string) => {
-    if (!menu || busy.current || !changesQuality(menu, preference, target)) return;
+    if (busy.current || !changesQuality(menu, preference, target)) return;
     busy.current = true;
     setRefused(false);
     try {
@@ -73,21 +50,8 @@ export function SettingsMenu({
     }
   };
 
-  const autoPlay = shown ?? settings.values['playback.auto_play_next'];
-  const toggleAutoPlay = async () => {
-    if (shown !== null) return;
-    setShown(!autoPlay);
-    try {
-      await setSetting('playback.auto_play_next', !autoPlay);
-    } catch {
-      // The row shows the stored value again below.
-    } finally {
-      setShown(null);
-    }
-  };
-
   const qualityRow = (label: string, name: string, bitrateKbps?: number) => {
-    const checked = menu?.checked === label;
+    const checked = menu.checked === label;
     const bitrate = formatBitrate(bitrateKbps, decimal);
     return (
       <MenuRow
@@ -100,16 +64,22 @@ export function SettingsMenu({
         <span className="player-menu-row-name">{name}</span>
         <span className="menu-value">
           {bitrate ? <span data-testid="menu-bitrate">{bitrate}</span> : null}
-          <span className="player-menu-check">
-            {checked ? <Check size={32} strokeWidth={3} /> : null}
+          <span className="player-menu-disc">
+            {checked ? (
+              <span className="player-menu-disc-on" aria-hidden="true" data-testid="menu-selected">
+                <Check size={20} strokeWidth={3} />
+              </span>
+            ) : null}
           </span>
         </span>
       </MenuRow>
     );
   };
 
-  const rows = settingsRowKeys(menu, episode);
-  const fallback = menu?.checked ? QUALITY_KEY_PREFIX + menu.checked : rows[0]!;
+  const rows = [AUTO, ...menu.rows.map((row) => row.label)].map(
+    (label) => QUALITY_KEY_PREFIX + label,
+  );
+  const fallback = menu.checked ? QUALITY_KEY_PREFIX + menu.checked : rows[0]!;
 
   return (
     <MenuPopover
@@ -121,40 +91,22 @@ export function SettingsMenu({
       recall={recall}
       onSide={onSide}
     >
-      {menu ? (
-        <section className="player-menu-section" data-testid="menu-quality">
-          <p className="player-menu-heading">
-            {menu.unmatched !== null
-              ? `${t('player.menu.quality')} · ${menu.unmatched}`
-              : t('player.menu.quality')}
+      <section className="player-menu-section" data-testid="menu-quality">
+        <p className="player-menu-heading">
+          {menu.unmatched !== null
+            ? `${t('player.menu.quality')} · ${menu.unmatched}`
+            : t('player.menu.quality')}
+        </p>
+        <div role="menu" aria-label={t('player.menu.quality')}>
+          {qualityRow(AUTO, t('player.menu.quality.auto'))}
+          {menu.rows.map((row) => qualityRow(row.label, row.name, row.bitrateKbps))}
+        </div>
+        {refused ? (
+          <p className="player-menu-note" role="status" data-testid="menu-quality-note">
+            {t('player.menu.quality.unavailable')}
           </p>
-          <div role="menu" aria-label={t('player.menu.quality')}>
-            {qualityRow(AUTO, t('player.menu.quality.auto'))}
-            {menu.rows.map((row) => qualityRow(row.label, row.name, row.bitrateKbps))}
-          </div>
-          {refused ? (
-            <p className="player-menu-note" role="status" data-testid="menu-quality-note">
-              {t('player.menu.quality.unavailable')}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
-      {episode ? (
-        <section className="player-menu-section">
-          <p className="player-menu-heading">{t('player.menu.playback')}</p>
-          <MenuRow
-            focusKey={AUTO_PLAY_KEY}
-            role="switch"
-            aria-checked={autoPlay}
-            onClick={() => void toggleAutoPlay()}
-          >
-            <span className="player-menu-row-name">{t('player.menu.autoPlayNext')}</span>
-            <span className="menu-value" data-testid="menu-autoplay-value">
-              {autoPlay ? t('player.menu.on') : t('player.menu.off')}
-            </span>
-          </MenuRow>
-        </section>
-      ) : null}
+        ) : null}
+      </section>
     </MenuPopover>
   );
 }

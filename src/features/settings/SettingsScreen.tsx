@@ -11,7 +11,12 @@ import {
 } from '../../i18n/languageSetting';
 import { REWIND_CHOICES, getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
 import { TIME_MODES, getTimeMode, setTimeMode, type TimeMode } from '../../playback/timeDisplay';
-import { useProfileSettings, useServerKnowsSetting } from './profileSettings';
+import {
+  useProfileSettings,
+  useResetProfileDeviceSetting,
+  useServerKnowsSetting,
+  useSetProfileSettingAt,
+} from './profileSettings';
 import { summarizeAppearance } from './subtitleOptions';
 
 interface Choice<V> {
@@ -39,7 +44,10 @@ function PillRow<V extends string | number>({
   choices: readonly Choice<V>[];
   selected: V;
   onPick(value: V): void;
-  /** The first row of the screen takes the focus when it opens. */
+  /**
+   * The screen focuses the first of its rows that asks for it, and a row that appears later
+   * (the server's answer came after the screen opened) does not take the focus from it.
+   */
   autoFocus?: boolean;
 }) {
   const pillKey = (value: V) => `${id}-${value}`;
@@ -118,10 +126,13 @@ const LANGUAGE_TEXT: Record<LanguageSetting, MessageKey> = {
   en: 'settings.language.en',
 };
 
+const AUTO_PLAY_KEY = 'playback.auto_play_next';
+
 /**
- * The settings screen. Today only the device section: the app language, what the player's clock
- * shows and how far playback jumps back when it resumes. All are kept on this device only (see `resumeRewind`, `timeDisplay`,
- * `languageSetting`).
+ * The settings screen: the profile's playback section (auto-play next, stored on the server for the
+ * profile, as Silo's web app does) and the device section: the app language, what the player's
+ * clock shows and how far playback jumps back when it resumes. The device rows are kept on this
+ * device only (see `resumeRewind`, `timeDisplay`, `languageSetting`).
  */
 export function SettingsScreen({
   onBack,
@@ -133,14 +144,47 @@ export function SettingsScreen({
   const t = useT();
   // The row only exists where the server knows the setting it edits.
   const knowsSubtitles = useServerKnowsSetting('playback.subtitle_appearance');
+  const knowsAutoPlay = useServerKnowsSetting(AUTO_PLAY_KEY);
   const { values } = useProfileSettings();
+  const setProfile = useSetProfileSettingAt('profile');
+  const resetDevice = useResetProfileDeviceSetting();
   const [rewind, setRewind] = useState(getResumeRewind);
   const [timeMode, setMode] = useState(getTimeMode);
   const language = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
 
+  // Saved at the profile, and this TV's own value dropped: it would outrank the profile's and the
+  // row would snap back (what the web app does). A failed write leaves the shown value as it was.
+  const pickAutoPlay = async (value: 'on' | 'off') => {
+    try {
+      await setProfile(AUTO_PLAY_KEY, value === 'on');
+      await resetDevice(AUTO_PLAY_KEY);
+    } catch {
+      // The row shows the stored value still.
+    }
+  };
+
   return (
     <Screen title={t('settings.title')} onBack={onBack} testId="settings-screen">
-      {/* Sections for the profile (playback, language and subtitles) go above this one. */}
+      {knowsAutoPlay ? (
+        <SettingsSection
+          id="settings-playback"
+          title={t('settings.playback.title')}
+          note={t('settings.playback.note')}
+        >
+          <PillRow
+            id="settings-autoplay"
+            title={t('settings.autoPlay.title')}
+            hint={t('settings.autoPlay.hint')}
+            choices={[
+              { value: 'on', label: t('settings.autoPlay.on') },
+              { value: 'off', label: t('settings.autoPlay.off') },
+            ]}
+            selected={values[AUTO_PLAY_KEY] ? 'on' : 'off'}
+            autoFocus
+            onPick={(value) => void pickAutoPlay(value)}
+          />
+        </SettingsSection>
+      ) : null}
       <SettingsSection
         id="settings-device"
         title={t('settings.device.title')}

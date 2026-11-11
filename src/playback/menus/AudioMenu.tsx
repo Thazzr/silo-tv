@@ -65,20 +65,47 @@ export function AudioMenu({
       recall={recall}
       onSide={onSide}
     >
+      <p className="player-menu-heading">{t('player.menu.audio.heading')}</p>
       <div role="menu" aria-label={t('player.menu.audio')} data-testid="menu-audio">
         {rows.map((row) => (
           <MenuRow
             key={row.index}
             focusKey={audioKey(row.index)}
+            className="player-menu-track"
             role="menuitemradio"
             aria-checked={row.checked}
+            data-checked={row.checked}
             onClick={() => void choose(row)}
           >
-            <span className="player-menu-row-name">{row.label}</span>
-            <span className="menu-value">
-              <span className="player-menu-check">
-                {row.checked ? <Check size={32} strokeWidth={3} /> : null}
+            <span className="player-menu-gutter" aria-hidden="true">
+              {row.checked ? <Check size={28} strokeWidth={3} /> : null}
+            </span>
+            <span className="player-menu-track-text">
+              <span className="player-menu-line">
+                <span className="player-menu-row-name" data-testid="audio-title">
+                  {row.title}
+                </span>
+                {row.codec ? (
+                  <span className="player-badge" data-testid="audio-codec">
+                    {row.codec}
+                  </span>
+                ) : null}
+                {row.channels ? (
+                  <span className="player-badge" data-testid="audio-channels">
+                    {row.channels}
+                  </span>
+                ) : null}
+                {row.isDefault ? (
+                  <span className="player-badge player-badge-outline" data-testid="audio-default">
+                    {t('player.menu.audio.default')}
+                  </span>
+                ) : null}
               </span>
+              {row.meta ? (
+                <span className="player-menu-meta" data-testid="audio-meta">
+                  {row.meta}
+                </span>
+              ) : null}
             </span>
           </MenuRow>
         ))}

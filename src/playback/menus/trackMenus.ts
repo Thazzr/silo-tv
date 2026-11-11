@@ -3,18 +3,37 @@
 import type { Language } from '../../i18n';
 import { languageName } from '../../i18n/languages';
 import type { MediaFacts, Plan, S, SelectedTracks } from '../session/types';
-import { audioCodecName, channelLayout } from './infoFormat';
-import { informativeTitle, trackIndex } from './info';
+import { trackIndex } from './info';
 
 type TrackIdentity = NonNullable<SelectedTracks['audio']>;
 export type InventoryItem = S['SubtitleInventoryItemV3'];
+
+/** The words the track rows need from the app's translation. */
+export interface TrackText {
+  /** A subtitle with no language of its own: "Track n". */
+  unknown(n: number): string;
+  /** What an audio track that says nothing about itself is called. */
+  audio: string;
+  /** The word for two channels. */
+  stereo: string;
+  /** "24-bit" / "24 Bit". */
+  bitDepth(depth: number): string;
+}
 
 export interface AudioRow {
   /** The track's position in the version's audio list (the server's audio ordinal). */
   index: number;
   track: S['WatchAudioTrack'];
-  label: string;
   checked: boolean;
+  title: string;
+  /** "EAC3", "DD+ Atmos", ...; null when the track names no codec. */
+  codec: string | null;
+  /** "7.1", "5.1", "Stereo", "4 ch"; null when the channel count is unknown. */
+  channels: string | null;
+  /** The file marks it as the default track. */
+  isDefault: boolean;
+  /** Language, layout, bitrate, sample rate and bit depth joined with " · "; may be empty. */
+  meta: string;
 }
 
 /** The server's address for an audio track: the plan's file and the track's ordinal (protocol §8). */
@@ -30,75 +49,187 @@ export const currentAudioIndex = (plan: Plan): number | undefined =>
 const joined = (parts: (string | null | undefined)[]): string =>
   parts.filter((part): part is string => Boolean(part)).join(' · ');
 
-/** "Deutsch · AC-3 · 5.1", with the track's own title when it says more ("Commentary"). */
-export function audioLabel(
+/**
+ * 48000 as "48.000" (German) or "48,000" (English). Grouped by hand: a TV's Chromium may ship
+ * without the locale data `toLocaleString` needs.
+ */
+export function groupThousands(value: number, lang: Language): string {
+  return String(Math.round(value)).replace(/\B(?=(\d{3})+$)/g, lang === 'de' ? '.' : ',');
+}
+
+// Codec families that cannot carry Atmos: a compatibility track of one of them is often titled
+// after its source ("AC3 5.1 (from TrueHD Atmos)"), so its titles prove nothing.
+const NON_ATMOS_CODECS = [
+  'aac',
+  'ac3',
+  'ac-3',
+  'dts',
+  'flac',
+  'mp3',
+  'opus',
+  'vorbis',
+  'pcm',
+  'alac',
+];
+const ATMOS_WORD = /\batmos\b/i;
+
+/**
+ * The codec badge, as Silo's web player words it. The stored codec of an Atmos track is plain
+ * "eac3" or "truehd", so the profile and the titles count as evidence for Atmos, but only for a
+ * codec that can carry it. Null when the track names no codec.
+ */
+export function audioCodecBadge(track: S['WatchAudioTrack']): string | null {
+  const codec = track.codec?.trim();
+  if (!codec) return null;
+  const lower = codec.toLowerCase();
+  const eac3 = lower.includes('eac3') || lower.includes('e-ac-3');
+  const truehd = lower.includes('truehd');
+  const evidence = [track.profile, track.title, track.embedded_title].filter(Boolean).join(' ');
+  const carries = eac3 || !NON_ATMOS_CODECS.some((family) => lower.includes(family));
+  if (lower.includes('atmos') || (ATMOS_WORD.test(evidence) && carries)) {
+    return truehd ? 'TrueHD Atmos' : eac3 ? 'DD+ Atmos' : 'Atmos';
+  }
+  if (truehd) return 'TrueHD';
+  if (lower.includes('dts-hd') || lower.includes('dts:x')) return 'DTS-HD';
+  if (lower.includes('dts')) return 'DTS';
+  if (eac3) return 'EAC3';
+  if (lower.includes('aac')) return 'AAC';
+  if (lower.includes('flac')) return 'FLAC';
+  return codec.toUpperCase();
+}
+
+/** "7.1", "5.1", "Stereo" (in the app's language), else "{n} ch"; null for no channel count. */
+export function audioChannelsBadge(channels: number | undefined, stereo: string): string | null {
+  if (channels === undefined || channels <= 0) return null;
+  if (channels === 8) return '7.1';
+  if (channels === 6) return '5.1';
+  if (channels === 2) return stereo;
+  return `${channels} ch`;
+}
+
+/** The track's own title, else its embedded title, else "language codec channels", else "Audio". */
+function audioTitle(
   track: S['WatchAudioTrack'],
-  index: number,
-  lang: Language,
-  unknown: (n: number) => string,
+  channels: string | null,
+  fallback: string,
 ): string {
-  const name = languageName(track.language, lang, track.title) ?? unknown(index + 1);
-  const extra = informativeTitle(track.title);
-  return joined([
-    name,
-    audioCodecName(track.codec),
-    channelLayout(track.channels, track.layout),
-    extra !== name ? extra : null,
-  ]);
+  return (
+    track.title ||
+    track.embedded_title ||
+    [track.language, track.codec, channels].filter(Boolean).join(' ') ||
+    fallback
+  );
 }
 
 export function audioRows(
   plan: Plan,
   media: MediaFacts,
   lang: Language,
-  unknown: (n: number) => string,
+  text: TrackText,
 ): AudioRow[] {
   const current = currentAudioIndex(plan);
-  return media.audioTracks.map((track, index) => ({
-    index,
-    track,
-    label: audioLabel(track, index, lang, unknown),
-    checked: index === current,
-  }));
+  return media.audioTracks.map((track, index) => {
+    const channels = audioChannelsBadge(track.channels, text.stereo);
+    const title = audioTitle(track, channels, text.audio);
+    const language = languageName(track.language, lang);
+    return {
+      index,
+      track,
+      checked: index === current,
+      title,
+      codec: audioCodecBadge(track),
+      channels,
+      isDefault: track.default,
+      meta: joined([
+        language && language.toLowerCase() !== title.toLowerCase() ? language : null,
+        track.layout,
+        track.bitrate && track.bitrate > 0 ? `${groupThousands(track.bitrate, lang)} kbps` : null,
+        track.sample_rate && track.sample_rate > 0
+          ? `${groupThousands(track.sample_rate, lang)} Hz`
+          : null,
+        track.bit_depth ? text.bitDepth(track.bit_depth) : null,
+      ]),
+    };
+  });
 }
+
+export type SubtitleSource = 'embedded' | 'external' | 'downloaded';
 
 export interface SubtitleRow {
   item: InventoryItem;
-  label: string;
-  forced: boolean;
-  hearingImpaired: boolean;
+  /** The language's name in the app's language, else "Track n". */
+  language: string;
+  /** "ASS", "SRT", "VTT", "PGS", "DVD" or "DVB"; null for any other codec. */
+  format: string | null;
+  source: SubtitleSource;
+  /** The track's own label ("German (Forced)") when it says more than the language and format. */
+  detail: string | null;
   checked: boolean;
 }
 
-/** A label that is a subtitle file's name says nothing to a viewer. */
-const FILE_NAME = /\.(srt|ass|ssa|vtt|sub|sup|idx)$/i;
+/** The menu's order: a group keeps the server's order inside. */
+const SOURCE_ORDER: readonly SubtitleSource[] = ['embedded', 'external', 'downloaded'];
 
-/** The language's name, with the track's own title when it says more; else "Track n". */
-export function subtitleLabel(
+const sourceOf = (item: InventoryItem): SubtitleSource =>
+  SOURCE_ORDER.find((source) => source === item.source) ?? 'embedded';
+
+const FORMATS: Record<string, string> = {
+  ass: 'ASS',
+  ssa: 'ASS',
+  srt: 'SRT',
+  subrip: 'SRT',
+  vtt: 'VTT',
+  webvtt: 'VTT',
+  pgs: 'PGS',
+  hdmv_pgs_subtitle: 'PGS',
+  dvd_subtitle: 'DVD',
+  dvb_subtitle: 'DVB',
+};
+
+/** The short name of a subtitle format; null for a codec the menu does not name. */
+export const subtitleFormat = (codec: string | undefined): string | null =>
+  codec ? (FORMATS[codec.toLowerCase()] ?? null) : null;
+
+const plainName = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+/**
+ * The label line, by the web player's rule: shown when the label is not empty, not the raw
+ * language code, not the language's name and not merely the codec's or the format's name.
+ */
+function subtitleDetail(
   item: InventoryItem,
-  lang: Language,
-  unknown: (n: number) => string,
-): string {
-  const label = item.label && !FILE_NAME.test(item.label.trim()) ? item.label : undefined;
-  const extra = informativeTitle(label);
-  const name = languageName(item.language, lang) ?? extra;
-  return joined([name ?? unknown(item.combined_index + 1), extra !== name ? extra : null]);
+  name: string | null,
+  format: string | null,
+): string | null {
+  const label = item.label;
+  if (!label || label === item.language || label === name) return null;
+  const plain = plainName(label);
+  const repeatsFormat =
+    plain !== '' && (plain === plainName(item.codec ?? '') || plain === plainName(format ?? ''));
+  return repeatsFormat ? null : label;
 }
 
-/** The plan's subtitle inventory in the server's order; the selected row is checked. */
-export function subtitleRows(
-  plan: Plan,
-  lang: Language,
-  unknown: (n: number) => string,
-): SubtitleRow[] {
+/** The plan's subtitle inventory, embedded first, then external, then downloaded. */
+export function subtitleRows(plan: Plan, lang: Language, text: TrackText): SubtitleRow[] {
   const selected = plan.selected_tracks.subtitle?.id;
-  return plan.subtitle.inventory.map((item) => ({
-    item,
-    label: subtitleLabel(item, lang, unknown),
-    forced: item.forced,
-    hearingImpaired: item.hearing_impaired,
-    checked: item.track_id === selected,
-  }));
+  const rows = plan.subtitle.inventory.map((item) => {
+    const name = languageName(item.language, lang);
+    const format = subtitleFormat(item.codec);
+    return {
+      item,
+      language: name ?? text.unknown(item.combined_index + 1),
+      format,
+      source: sourceOf(item),
+      detail: subtitleDetail(item, name, format),
+      checked: item.track_id === selected,
+    };
+  });
+  // Array.prototype.sort is stable (Chromium 70 and later), so a group keeps the server's order.
+  return rows.sort((a, b) => SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source));
 }
 
 /**

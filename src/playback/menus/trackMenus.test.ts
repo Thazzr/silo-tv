@@ -2,17 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { playbackPlan } from '../../test/playbackFixtures';
 import type { MediaFacts, S } from '../session/types';
 import {
+  audioChannelsBadge,
+  audioCodecBadge,
   audioIdentity,
-  audioLabel,
   audioRows,
-  subtitleLabel,
+  groupThousands,
+  subtitleFormat,
   subtitleRows,
   tracksForAudioPick,
   tracksForSubtitlePick,
   type InventoryItem,
+  type TrackText,
 } from './trackMenus';
 
-const unknown = (n: number) => `Track ${n}`;
+const text = (overrides: Partial<TrackText> = {}): TrackText => ({
+  unknown: (n) => `Track ${n}`,
+  audio: 'Audio',
+  stereo: 'Stereo',
+  bitDepth: (depth) => `${depth}-bit`,
+  ...overrides,
+});
 
 const audio = (overrides: Partial<S['WatchAudioTrack']> = {}): S['WatchAudioTrack'] => ({
   default: false,
@@ -39,6 +48,9 @@ const item = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
+const rowsOf = (tracks: S['WatchAudioTrack'][], lang: 'de' | 'en' = 'en', t = text()) =>
+  audioRows(playbackPlan({ selected_tracks: {} }), media(tracks), lang, t);
+
 describe('audioIdentity', () => {
   it("names the track by the server's address: the plan's file and the audio ordinal", () => {
     const plan = playbackPlan({ effective_media_file_id: 'file-9' });
@@ -46,40 +58,104 @@ describe('audioIdentity', () => {
   });
 });
 
-describe('audioLabel', () => {
-  it('joins the language, the codec and the channel layout', () => {
-    expect(audioLabel(audio({ language: 'de', codec: 'ac3', channels: 6 }), 0, 'en', unknown)).toBe(
-      'German · AC-3 · 5.1',
-    );
-    expect(
-      audioLabel(audio({ language: 'de', codec: 'eac3', layout: 'stereo' }), 0, 'de', unknown),
-    ).toBe('Deutsch · E-AC-3 · Stereo');
+describe('the audio codec badge', () => {
+  it.each([
+    [{ codec: 'eac3' }, 'EAC3'],
+    [{ codec: 'E-AC-3' }, 'EAC3'],
+    [{ codec: 'eac3', profile: 'Dolby Digital Plus + Dolby Atmos' }, 'DD+ Atmos'],
+    [{ codec: 'eac3', embedded_title: 'DD+ 7.1 Atmos' }, 'DD+ Atmos'],
+    [{ codec: 'truehd' }, 'TrueHD'],
+    [{ codec: 'truehd', title: 'Atmos' }, 'TrueHD Atmos'],
+    [{ codec: 'dts-hd' }, 'DTS-HD'],
+    [{ codec: 'dts:x' }, 'DTS-HD'],
+    [{ codec: 'dts' }, 'DTS'],
+    [{ codec: 'aac' }, 'AAC'],
+    [{ codec: 'flac' }, 'FLAC'],
+    [{ codec: 'ac3' }, 'AC3'],
+    [{ codec: 'opus' }, 'OPUS'],
+  ])('writes %j as %s', (fields, badge) => {
+    expect(audioCodecBadge(audio(fields))).toBe(badge);
   });
 
-  it('adds a title that says more than the language and the format', () => {
-    const track = audio({
-      language: 'en',
-      codec: 'aac',
-      channels: 2,
-      title: "Director's Commentary",
-    });
-    expect(audioLabel(track, 0, 'en', unknown)).toBe(
-      "English · AAC · Stereo · Director's Commentary",
-    );
-    // "GER - AC3" says nothing new.
-    expect(
-      audioLabel(audio({ language: 'de', codec: 'ac3', title: 'GER - AC3' }), 0, 'en', unknown),
-    ).toBe('German · AC-3');
+  it('names Atmos from the codec itself, and as the bare word for another carrier', () => {
+    expect(audioCodecBadge(audio({ codec: 'truehd_atmos' }))).toBe('TrueHD Atmos');
+    expect(audioCodecBadge(audio({ codec: 'atmos' }))).toBe('Atmos');
+    expect(audioCodecBadge(audio({ codec: 'mystery', profile: 'Atmos' }))).toBe('Atmos');
   });
 
-  it('names a track by its title alone once, when it has no language', () => {
-    expect(audioLabel(audio({ title: 'Commentary', codec: 'aac' }), 0, 'en', unknown)).toBe(
-      'Commentary · AAC',
+  it('does not take a title for Atmos on a codec that cannot carry it', () => {
+    expect(audioCodecBadge(audio({ codec: 'aac', title: 'AAC 2.0 (from TrueHD Atmos)' }))).toBe(
+      'AAC',
     );
+    expect(audioCodecBadge(audio({ codec: 'ac3', profile: 'Atmos' }))).toBe('AC3');
+    expect(audioCodecBadge(audio({ codec: 'dts', title: 'Atmos' }))).toBe('DTS');
   });
 
-  it('numbers a track that names no language and no title', () => {
-    expect(audioLabel(audio({ codec: 'aac' }), 1, 'en', unknown)).toBe('Track 2 · AAC');
+  // Each of these cannot carry Atmos: a title or profile that says so is a compatibility track.
+  it.each([
+    ['ac-3', 'AC-3'],
+    ['ac3', 'AC3'],
+    ['aac', 'AAC'],
+    ['dts', 'DTS'],
+    ['flac', 'FLAC'],
+    ['mp3', 'MP3'],
+    ['opus', 'OPUS'],
+    ['vorbis', 'VORBIS'],
+    ['pcm_s16le', 'PCM_S16LE'],
+    ['alac', 'ALAC'],
+  ])('gives %s no Atmos badge for "Atmos" in its title or its profile', (codec, badge) => {
+    expect(audioCodecBadge(audio({ codec, title: 'Atmos 7.1' }))).toBe(badge);
+    expect(audioCodecBadge(audio({ codec, profile: 'Dolby Atmos' }))).toBe(badge);
+  });
+
+  it.each([
+    ['dts-es', 'DTS'],
+    ['dts_hd_ma', 'DTS'],
+    ['dts-hd.ma', 'DTS-HD'],
+    ['dts:x', 'DTS-HD'],
+    ['aac_latm', 'AAC'],
+    ['flac_ogg', 'FLAC'],
+    ['e-ac-3', 'EAC3'],
+    ['truehd_x', 'TrueHD'],
+  ])('keeps the web mapping for the codec variant %s: %s', (codec, badge) => {
+    expect(audioCodecBadge(audio({ codec }))).toBe(badge);
+  });
+
+  it('needs Atmos as a word: "Atmospheric" is no evidence', () => {
+    expect(audioCodecBadge(audio({ codec: 'eac3', title: 'Atmospheric mix' }))).toBe('EAC3');
+  });
+
+  it('has no badge without a codec', () => {
+    expect(audioCodecBadge(audio())).toBeNull();
+    expect(audioCodecBadge(audio({ codec: '  ' }))).toBeNull();
+  });
+});
+
+describe('the audio channels badge', () => {
+  it.each([
+    [8, '7.1'],
+    [6, '5.1'],
+    [2, 'Stereo'],
+    [1, '1 ch'],
+    [4, '4 ch'],
+    [10, '10 ch'],
+  ])('writes %i channels as %s', (channels, badge) => {
+    expect(audioChannelsBadge(channels, 'Stereo')).toBe(badge);
+  });
+
+  it('has none for 0, a negative count or no count', () => {
+    expect(audioChannelsBadge(0, 'Stereo')).toBeNull();
+    expect(audioChannelsBadge(-1, 'Stereo')).toBeNull();
+    expect(audioChannelsBadge(undefined, 'Stereo')).toBeNull();
+  });
+
+  it("says two channels in the app's language", () => {
+    const [en, de] = [
+      rowsOf([audio({ channels: 2 })], 'en', text({ stereo: 'Stereo' })),
+      rowsOf([audio({ channels: 2 })], 'de', text({ stereo: 'Stereo (de)' })),
+    ];
+    expect(en[0]?.channels).toBe('Stereo');
+    expect(de[0]?.channels).toBe('Stereo (de)');
   });
 });
 
@@ -90,99 +166,243 @@ describe('audioRows', () => {
     });
     const rows = audioRows(
       plan,
-      media([audio({ language: 'en' }), audio({ language: 'de' })]),
+      media([audio({ title: 'One' }), audio({ title: 'Two' })]),
       'en',
-      unknown,
+      text(),
     );
-    expect(rows.map((row) => [row.index, row.label, row.checked])).toEqual([
-      [0, 'English', false],
-      [1, 'German', true],
+    expect(rows.map((row) => [row.index, row.title, row.checked])).toEqual([
+      [0, 'One', false],
+      [1, 'Two', true],
     ]);
   });
 
   it('reads the ordinal from the id when the identity has no index', () => {
     const plan = playbackPlan({ selected_tracks: { audio: { id: 'file:file-1:audio:1' } } });
-    const rows = audioRows(plan, media([audio(), audio()]), 'en', unknown);
+    const rows = audioRows(plan, media([audio(), audio()]), 'en', text());
     expect(rows.map((row) => row.checked)).toEqual([false, true]);
   });
 
   it('checks nothing when the plan names no audio', () => {
-    const plan = playbackPlan({ selected_tracks: {} });
-    expect(audioRows(plan, media([audio(), audio()]), 'en', unknown).some((r) => r.checked)).toBe(
-      false,
-    );
+    expect(rowsOf([audio(), audio()]).some((row) => row.checked)).toBe(false);
+  });
+
+  describe('the title', () => {
+    it('is the track title first', () => {
+      const track = audio({ title: 'Commentary', embedded_title: 'Embedded', language: 'en' });
+      expect(rowsOf([track])[0]?.title).toBe('Commentary');
+    });
+
+    it('is the embedded title when there is no title', () => {
+      expect(rowsOf([audio({ embedded_title: 'Embedded', language: 'en' })])[0]?.title).toBe(
+        'Embedded',
+      );
+    });
+
+    it('is the raw language, codec and channels joined by spaces when both titles are empty', () => {
+      const track = audio({
+        title: '',
+        embedded_title: '',
+        language: 'de',
+        codec: 'ac3',
+        channels: 6,
+      });
+      expect(rowsOf([track])[0]?.title).toBe('de ac3 5.1');
+      expect(rowsOf([audio({ codec: 'aac' })])[0]?.title).toBe('aac');
+    });
+
+    it('is "Audio" for a track that says nothing about itself', () => {
+      expect(rowsOf([audio()])[0]?.title).toBe('Audio');
+      expect(rowsOf([audio()], 'en', text({ audio: 'Ton' }))[0]?.title).toBe('Ton');
+    });
+  });
+
+  it('marks only the file default track as the default', () => {
+    const rows = rowsOf([audio({ default: true }), audio({ default: false })]);
+    expect(rows.map((row) => row.isDefault)).toEqual([true, false]);
+  });
+
+  describe('the meta line', () => {
+    const full = audio({
+      title: 'Surround',
+      language: 'de',
+      layout: '5.1(side)',
+      bitrate: 640,
+      sample_rate: 48000,
+      bit_depth: 24,
+    });
+
+    it('joins language name, layout, bitrate, sample rate and bit depth with a middle dot', () => {
+      expect(rowsOf([full], 'en')[0]?.meta).toBe(
+        'German · 5.1(side) · 640 kbps · 48,000 Hz · 24-bit',
+      );
+    });
+
+    it('groups thousands the German way under a German UI', () => {
+      expect(rowsOf([full], 'de')[0]?.meta).toBe(
+        'Deutsch · 5.1(side) · 640 kbps · 48.000 Hz · 24-bit',
+      );
+      expect(rowsOf([audio({ bitrate: 1536 })], 'de')[0]?.meta).toBe('1.536 kbps');
+      expect(rowsOf([audio({ bitrate: 1536 })], 'en')[0]?.meta).toBe('1,536 kbps');
+    });
+
+    it('leaves out the language when it is the title, ignoring case', () => {
+      expect(
+        rowsOf([audio({ title: 'deutsch', language: 'de', layout: 'stereo' })], 'de')[0]?.meta,
+      ).toBe('stereo');
+    });
+
+    it('adds nothing for a bitrate or a sample rate of 0 or below', () => {
+      expect(rowsOf([audio({ title: 'X', bitrate: -5, sample_rate: -48000 })])[0]?.meta).toBe('');
+      expect(
+        rowsOf([audio({ title: 'X', bitrate: 0, sample_rate: 0, layout: '7.1' })])[0]?.meta,
+      ).toBe('7.1');
+    });
+
+    it('leaves out what the track does not say, and is empty when it says nothing', () => {
+      expect(rowsOf([audio({ title: 'X', bitrate: 0, sample_rate: 0 })])[0]?.meta).toBe('');
+      expect(rowsOf([audio({ title: 'X', layout: '7.1' })])[0]?.meta).toBe('7.1');
+    });
   });
 });
 
-describe('subtitleLabel', () => {
-  it('names the language and drops a label that is only a file name', () => {
-    expect(subtitleLabel(item({ language: 'fr', label: 'Movie.fr.srt' }), 'en', unknown)).toBe(
-      'French',
-    );
-    expect(subtitleLabel(item({ language: 'fr', label: 'French' }), 'de', unknown)).toBe(
-      'Französisch',
-    );
+describe('groupThousands', () => {
+  it.each([
+    [0, 'de', '0'],
+    [999, 'de', '999'],
+    [1000, 'de', '1.000'],
+    [48000, 'de', '48.000'],
+    [1234567, 'de', '1.234.567'],
+    [48000, 'en', '48,000'],
+    [44100.4, 'en', '44,100'],
+  ] as const)('writes %i as %s in %s', (value, lang, expected) => {
+    expect(groupThousands(value, lang)).toBe(expected);
+  });
+});
+
+describe('subtitleFormat', () => {
+  it.each([
+    ['ass', 'ASS'],
+    ['SSA', 'ASS'],
+    ['srt', 'SRT'],
+    ['subrip', 'SRT'],
+    ['vtt', 'VTT'],
+    ['webvtt', 'VTT'],
+    ['pgs', 'PGS'],
+    ['hdmv_pgs_subtitle', 'PGS'],
+    ['dvd_subtitle', 'DVD'],
+    ['dvb_subtitle', 'DVB'],
+  ])('names %s as %s', (codec, name) => {
+    expect(subtitleFormat(codec)).toBe(name);
   });
 
-  it('names a track by its label alone once, when it has no language', () => {
-    expect(subtitleLabel(item({ language: '', label: 'Signs only' }), 'en', unknown)).toBe(
-      'Signs only',
-    );
-  });
-
-  it('drops a file-name label that has trailing blanks, and copes with no label at all', () => {
-    expect(subtitleLabel(item({ language: 'fr', label: 'Movie.fr.srt ' }), 'en', unknown)).toBe(
-      'French',
-    );
-    expect(subtitleLabel(item({ language: 'fr', label: undefined }), 'en', unknown)).toBe('French');
-  });
-
-  it('adds a label that says more, and numbers a track without a language', () => {
-    expect(subtitleLabel(item({ language: 'en', label: 'English (Signs)' }), 'en', unknown)).toBe(
-      'English · English (Signs)',
-    );
-    expect(subtitleLabel(item({ language: '', label: '', combined_index: 3 }), 'en', unknown)).toBe(
-      'Track 4',
-    );
+  it('names no other codec, and no missing one', () => {
+    expect(subtitleFormat('mov_text')).toBeNull();
+    expect(subtitleFormat(undefined)).toBeNull();
+    expect(subtitleFormat('')).toBeNull();
   });
 });
 
 describe('subtitleRows', () => {
-  const plan = (subtitle?: { id: string; index?: number }) =>
+  const planWith = (inventory: InventoryItem[], subtitle?: { id: string; index?: number }) =>
     playbackPlan({
       selected_tracks: {
         audio: { id: 'file:file-1:audio:0', index: 0 },
         ...(subtitle ? { subtitle } : {}),
       },
-      subtitle: {
-        mode: 'sidecar',
-        inventory: [
-          item({ track_id: 'sub:0', combined_index: 0, language: 'en' }),
-          item({ track_id: 'sub:1', combined_index: 1, language: 'de', forced: true }),
-          item({ track_id: 'sub:2', combined_index: 2, language: 'de', hearing_impaired: true }),
-        ],
-      },
+      subtitle: { mode: 'sidecar', inventory },
     });
+  const three = [
+    item({ track_id: 'sub:0', combined_index: 0, language: 'en' }),
+    item({ track_id: 'sub:1', combined_index: 1, language: 'de' }),
+    item({ track_id: 'sub:2', combined_index: 2, language: 'fr' }),
+  ];
 
-  it('keeps the inventory order, carries the flags and checks the selected track', () => {
-    const rows = subtitleRows(plan({ id: 'sub:1', index: 1 }), 'en', unknown);
+  it('checks the selected track and none when the plan plays no subtitle', () => {
     expect(
-      rows.map((row) => [
+      subtitleRows(planWith(three, { id: 'sub:1', index: 1 }), 'en', text()).map((row) => [
         row.item.track_id,
-        row.label,
-        row.forced,
-        row.hearingImpaired,
         row.checked,
       ]),
     ).toEqual([
-      ['sub:0', 'English', false, false, false],
-      ['sub:1', 'German', true, false, true],
-      ['sub:2', 'German', false, true, false],
+      ['sub:0', false],
+      ['sub:1', true],
+      ['sub:2', false],
     ]);
+    expect(subtitleRows(planWith(three), 'en', text()).some((row) => row.checked)).toBe(false);
   });
 
-  it('checks no row when the plan plays no subtitle', () => {
-    expect(subtitleRows(plan(), 'en', unknown).some((row) => row.checked)).toBe(false);
+  it('orders embedded, then external, then downloaded, and keeps the server order inside a group', () => {
+    const inventory = [
+      item({ track_id: 'd1', source: 'downloaded' }),
+      item({ track_id: 'x1', source: 'external' }),
+      item({ track_id: 'e1', source: 'embedded' }),
+      item({ track_id: 'd2', source: 'downloaded' }),
+      item({ track_id: 'e2', source: 'embedded' }),
+      item({ track_id: 'x2', source: 'external' }),
+    ];
+    expect(subtitleRows(planWith(inventory), 'en', text()).map((row) => row.item.track_id)).toEqual(
+      ['e1', 'e2', 'x1', 'x2', 'd1', 'd2'],
+    );
+  });
+
+  it('takes a source it does not know for embedded', () => {
+    const rows = subtitleRows(planWith([item({ source: 'cloud' })]), 'en', text());
+    expect(rows[0]?.source).toBe('embedded');
+  });
+
+  it('names the language in the app\'s language, else "Track n"', () => {
+    const rows = subtitleRows(
+      planWith([
+        item({ language: 'de' }),
+        item({ track_id: 'sub:9', language: '', combined_index: 3 }),
+      ]),
+      'de',
+      text(),
+    );
+    expect(rows.map((row) => row.language)).toEqual(['Deutsch', 'Track 4']);
+  });
+
+  it('carries the format badge of the codec', () => {
+    const rows = subtitleRows(
+      planWith([item({ codec: 'subrip' }), item({ track_id: 'b', codec: 'mov_text' })]),
+      'en',
+      text(),
+    );
+    expect(rows.map((row) => row.format)).toEqual(['SRT', null]);
+  });
+
+  describe('the label line', () => {
+    const detail = (overrides: Partial<InventoryItem>) =>
+      subtitleRows(planWith([item(overrides)]), 'en', text())[0]?.detail;
+
+    it('shows a label that says more than the language', () => {
+      expect(detail({ language: 'de', label: 'German (Forced)' })).toBe('German (Forced)');
+    });
+
+    it('hides an empty label, the raw code and the language name', () => {
+      expect(detail({ language: 'de', label: undefined })).toBeNull();
+      expect(detail({ language: 'de', label: '' })).toBeNull();
+      expect(detail({ language: 'de', label: 'de' })).toBeNull();
+      expect(detail({ language: 'de', label: 'German' })).toBeNull();
+    });
+
+    it('hides a label that is only the codec or the format name', () => {
+      expect(detail({ language: 'de', codec: 'hdmv_pgs_subtitle', label: 'PGS' })).toBeNull();
+      expect(detail({ language: 'de', codec: 'subrip', label: 'SRT' })).toBeNull();
+      expect(detail({ language: 'de', codec: 'subrip', label: 'SubRip' })).toBeNull();
+      expect(detail({ language: 'de', codec: 'ass', label: 'A.S.S.' })).toBeNull();
+    });
+
+    it('shows a label of punctuation only, even with an empty codec', () => {
+      expect(detail({ language: 'de', codec: '', label: '—' })).toBe('—');
+      expect(detail({ language: 'de', label: '—' })).toBe('—');
+    });
+
+    it('shows a label that merely contains the format name', () => {
+      expect(detail({ language: 'de', codec: 'subrip', label: 'SRT (Forced)' })).toBe(
+        'SRT (Forced)',
+      );
+    });
   });
 });
 

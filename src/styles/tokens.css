@@ -40,6 +40,8 @@
   --safe-x: 96px;
   --safe-y: 54px;
   --target: 75px;
+  /* The player's play disc: the tallest button of the bar's button row, which sets the row's height. */
+  --player-play: 88px;
   --card-gap: 40px;
 
   /* Motion: transform and opacity only. */

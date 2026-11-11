@@ -18,7 +18,7 @@ import { ChaptersMenu } from './menus/ChaptersMenu';
 import { currentChapter, routeOf, type Route } from './menus/info';
 import { InfoColumn } from './menus/InfoColumn';
 import { qualityLabel, qualityMenu } from './menus/qualityMenu';
-import { SettingsMenu, settingsRowKeys } from './menus/SettingsMenu';
+import { SettingsMenu } from './menus/SettingsMenu';
 import { useSubtitleDelay } from './menus/subtitleDelay';
 import { SubtitlesMenu } from './menus/SubtitlesMenu';
 import {
@@ -26,6 +26,7 @@ import {
   subtitleRows,
   tracksForAudioPick,
   tracksForSubtitlePick,
+  type TrackText,
 } from './menus/trackMenus';
 import { isPopover, MENU_ORDER, usePanelState, type PanelState } from './menus/usePanelState';
 import { useEpisodeNeighbours } from './episodes/useEpisodeNeighbours';
@@ -347,7 +348,7 @@ function PlayingView({
     () => qualityMenu(plan, quality, activeQualityFeature),
     [plan, quality, activeQualityFeature],
   );
-  const hasSettings = settingsRowKeys(qualities, media.isEpisode).length > 0;
+  const hasSettings = qualities !== null;
   const hasChapters = previews.chapters.length > 0;
   const hasAudio = media.audioTracks.length > 1;
   // A plan that leaves `subtitle` out (the schema requires it; a partial server may not) has none.
@@ -570,14 +571,19 @@ function PlayingView({
     : null;
 
   /** The popover of the open menu, drawn above its button by the overlay. */
-  const unknownTrack = (n: number) => t('player.menu.track.unknown', { n });
+  const trackText: TrackText = {
+    unknown: (n) => t('player.menu.track.unknown', { n }),
+    audio: t('player.menu.audio.generic'),
+    stereo: t('player.menu.audio.stereo'),
+    bitDepth: (depth) => t('player.menu.audio.bitDepth', { depth }),
+  };
   // Where a pick is remembered: the episode's series, else the movie.
   const prefKey = trackPrefKey(media, contentId);
   let popover = null;
   if (panel.open === 'audio') {
     popover = (
       <AudioMenu
-        rows={audioRows(plan, media, lang, unknownTrack)}
+        rows={audioRows(plan, media, lang, trackText)}
         pick={(index) => playback.trackChange(tracksForAudioPick(plan, index), 'audio')}
         save={(index, track) => {
           if (prefKey) void trackPrefs.audio(prefKey, index, track);
@@ -591,7 +597,7 @@ function PlayingView({
   } else if (panel.open === 'subtitles') {
     popover = (
       <SubtitlesMenu
-        rows={subtitleRows(plan, lang, unknownTrack)}
+        rows={subtitleRows(plan, lang, trackText)}
         offChecked={plan.selected_tracks.subtitle === undefined}
         delayMs={subtitleDelay.delayMs}
         pick={(item) => playback.trackChange(tracksForSubtitlePick(plan, item), 'subtitle')}
@@ -599,18 +605,18 @@ function PlayingView({
           if (prefKey) void trackPrefs.subtitle(prefKey, item);
         }}
         onDelay={subtitleDelay.nudge}
+        onDelayReset={subtitleDelay.reset}
         onApplied={() => panel.finish('subtitles')}
         remember={panel.remember}
         recall={panel.recall}
         onSide={controls.menuSide}
       />
     );
-  } else if (panel.open === 'settings') {
+  } else if (panel.open === 'settings' && qualities) {
     popover = (
       <SettingsMenu
         menu={qualities}
         preference={quality}
-        episode={media.isEpisode}
         qualityChange={playback.qualityChange}
         onApplied={() => panel.finish('settings')}
         remember={panel.remember}

@@ -278,7 +278,9 @@ describe('overlay layout styles', () => {
     const size = (body: string, property: 'width' | 'height') =>
       /var\(--target\)/.test(new RegExp(`${property}: ([^;]*);`).exec(body)?.[1] ?? '')
         ? 75
-        : Number.parseInt(new RegExp(`${property}: (\\d+)px`).exec(body)?.[1] ?? '0', 10);
+        : /var\(--player-play\)/.test(new RegExp(`${property}: ([^;]*);`).exec(body)?.[1] ?? '')
+          ? 88
+          : Number.parseInt(new RegExp(`${property}: (\\d+)px`).exec(body)?.[1] ?? '0', 10);
     for (const selector of ['.player-btn', '.player-btn-play']) {
       expect(size(rule(selector), 'width'), selector).toBeGreaterThanOrEqual(75);
       expect(size(rule(selector), 'height'), selector).toBeGreaterThanOrEqual(75);
@@ -290,7 +292,7 @@ describe('overlay layout styles', () => {
     expect(rule('.player-btn-small::before')).toContain('inset: 4px');
     expect(rule('.player-btn-small::before')).toContain('rgba(255, 255, 255, 0.08)');
     expect(rule('.player-btn-small::before')).toContain('rgba(255, 255, 255, 0.12)');
-    expect(rule('.player-btn-play')).toContain('width: 88px');
+    expect(rule('.player-btn-play')).toContain('width: var(--player-play)');
     expect(rule('.player-btn-play::before')).toContain('background: var(--focus-fill)');
     // The menu buttons are glyph only at rest: no fill, no border.
     expect(rule('.player-btn')).toContain('background: none');
@@ -339,18 +341,17 @@ describe('player menu styles', () => {
   it('stands the popover above its button, right-aligned, with a solid rounded surface', () => {
     const popover = block('.player-popover');
     expect(popover).toContain('right: 0');
-    expect(popover).toMatch(/bottom: calc\(100% \+ \d+px\)/);
+    expect(popover).toMatch(/bottom: calc\(100% \+ var\(--player-menu-gap\)\)/);
     const box = block('.player-menu');
-    expect(box).toContain('background: var(--surface-raised)');
-    expect(box).toContain('border-radius: 20px');
-    expect(tokens).toMatch(/--surface-raised: #[0-9a-f]{6};/);
+    expect(box).toContain('background: rgba(0, 0, 0, 0.9)');
+    expect(box).toContain('border-radius: 12px');
   });
 
   it('keeps the popover inside the safe area: no wider than the screen less both margins, no taller than the room above the buttons', () => {
     const box = block('.player-menu');
     expect(box).toContain('max-width: calc(100vw - 2 * var(--safe-x))');
-    // Top safe margin, bottom safe margin, the 88 px button row and the gap to it.
-    expect(box).toContain('max-height: calc(100vh - 2 * var(--safe-y) - 88px - 16px)');
+    // The top safe margin and what is under the popover (see menuStyles.test.ts).
+    expect(box).toContain('max-height: calc(100vh - var(--safe-y) - var(--player-menu-below))');
     // A longer list scrolls inside it.
     expect(block('.player-menu-scroll')).toContain('overflow-y: auto');
   });
@@ -373,10 +374,11 @@ describe('player menu styles', () => {
 
   it('fills the focused row of the playing chapter with the focus fill, like any focused row', () => {
     const rule =
-      /\.player-menu-row\[data-current='true'\]:focus,\s*\.player-menu-row\[data-current='true'\]:hover \{([^}]*)\}/.exec(
+      /\.player-menu-chapter\[data-current='true'\]:focus,\s*\.player-menu-chapter\[data-current='true'\]:hover \{([^}]*)\}/.exec(
         menus,
       )?.[1] ?? '';
     expect(rule).toContain('background: var(--focus-fill)');
+    expect(rule).toContain('color: var(--focus-content)');
   });
 
   it('sets the headings in small letter-spaced capitals', () => {

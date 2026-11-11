@@ -1,8 +1,10 @@
 // The player's menus on the real PlayerScreen: opening and closing them with a remote's keys, the
-// settings menu (quality, auto-play), chapters and the info column. Real timers throughout: the
+// gear (quality), chapters and the info column. Real timers throughout: the
 // spatial navigation decides asynchronously (pressKey waits for it), and nothing here lasts the 5 s
 // the overlay needs to hide (the one test that does switches to a fake clock itself).
+/// <reference types="node" />
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -941,14 +943,13 @@ describe('the gear: settings', () => {
       expect(screen.getByRole('button', { name: 'Info' })).toBeInTheDocument();
     });
 
-    it('stays for an episode without a quality choice: it holds "Auto-play next"', async () => {
+    it('is hidden for an episode without a quality choice, too: Auto-play next is not in the gear', async () => {
       await mount({
         watch: watchDetail({ type: 'episode' }),
         start: [playableDecision(planOnStream(1, { available_qualities: [] }))],
       });
       key(KEY.up);
-      expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
-      expect(screen.queryByTestId('player-quality-label')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Settings' })).toBeNull();
     });
 
     it('closes for good when a new stream leaves it nothing to show: arrows, auto-hide and Back work', async () => {
@@ -979,7 +980,9 @@ describe('the gear: settings', () => {
     });
   });
 
-  describe('Auto-play next', () => {
+  describe('without "Auto-play next"', () => {
+    // The row is a profile setting on the settings screen, not part of the gear (as in Silo's web
+    // player, which has no such toggle in the player).
     const EPISODE = watchDetail({
       type: 'episode',
       series_title: 'Some Show',
@@ -987,113 +990,76 @@ describe('the gear: settings', () => {
       episode_number: 1,
     });
 
-    it('shows the row for an episode, not for a movie', async () => {
+    it('lists the quality section only, for an episode too', async () => {
       await mount({ watch: EPISODE });
       await openMenu('settings');
-      expect(screen.getByTestId('menu-autoplay-value')).toHaveTextContent('On');
-      expect(screen.getByText('Playback')).toBeInTheDocument();
-      cleanup();
-
-      await mount({ watch: watchDetail({ type: 'movie' }) });
-      await openMenu('settings');
-      expect(screen.queryByTestId('menu-autoplay-value')).toBeNull();
+      const box = screen.getByTestId('player-menu-settings');
+      expect(box.querySelectorAll('.player-menu-heading')).toHaveLength(1);
+      expect(screen.getAllByRole('menuitemradio')).toHaveLength(4);
+      expect(screen.queryByRole('switch')).toBeNull();
+      expect(screen.queryByText('Playback')).toBeNull();
+      expect(screen.queryByText(/Auto-play/)).toBeNull();
+      // Down from the last quality holds: there is no row below it.
+      for (let i = 0; i < 6; i += 1) await pressKey(KEY.down);
+      await focusOn('player-menu-quality-480p');
     });
 
-    const serveWrite = (log: unknown[], delay = 0, status = 200) =>
+    it('writes nothing to the settings when a row is pressed', async () => {
+      const puts: string[] = [];
+      await mount({ watch: EPISODE });
       server.use(
-        http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
-          const body = (await request.json()) as { value: unknown };
-          log.push({
-            key: String(params.key),
-            scope: new URL(request.url).searchParams.get('scope'),
-            body,
-          });
-          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-          if (status !== 200) return new HttpResponse(null, { status });
-          return HttpResponse.json({
-            key: params.key,
-            scope: 'profile_device',
-            value: body.value,
-            revision: 1,
-          });
+        http.put(`${BASE_URL}/api/v2/settings/values/:key`, ({ params }) => {
+          puts.push(String(params.key));
+          return new HttpResponse(null, { status: 500 });
         }),
       );
-
-    const toAutoPlay = async () => {
       await openMenu('settings');
-      for (let i = 0; i < 4; i += 1) await pressKey(KEY.down);
-      await focusOn('player-menu-autoplay');
-    };
-
-    it('opens on the checked row again after Back, not on the row it was left on', async () => {
-      await mount({ watch: EPISODE });
-      await toAutoPlay();
-      key(KEY.back);
-      expect(menu('settings')).toBeNull();
-      expect(osdFocused('settings')).toBe(true);
-      key(KEY.enter);
-      await screen.findByTestId('player-menu-settings');
-      await focusOn('player-menu-quality-auto');
+      await pressKey(KEY.enter);
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
       });
-      expect(focusKey()).toBe('player-menu-quality-auto');
+      expect(puts).toEqual([]);
+    });
+  });
+
+  describe('the rows in detail', () => {
+    it('marks the quality in use with a white disc and a black check', async () => {
+      await mount();
+      await openMenu('settings');
+      const rows = screen.getAllByRole('menuitemradio');
+      const marks = rows.map((row) => within(row).queryByTestId('menu-selected'));
+      expect(marks.map((mark) => mark !== null)).toEqual([true, false, false, false]);
+      expect(marks[0]).toHaveClass('player-menu-disc-on');
+      expect(marks[0]?.querySelector('svg')).not.toBeNull();
+      const css = readFileSync('src/styles/player-menus.css', 'utf-8');
+      const disc = /\.player-menu-disc-on \{([^}]*)\}/.exec(css)?.[1] ?? '';
+      expect(disc).toContain('color: #000');
+      expect(disc).toContain('background: #fff');
+      expect(disc).toContain('border-radius: 50%');
     });
 
-    it('writes the toggled value at the profile_device scope on OK', async () => {
-      const puts: unknown[] = [];
-      await mount({ watch: EPISODE });
-      serveWrite(puts);
-      await toAutoPlay();
-      await pressKey(KEY.enter);
-      await until(() => puts.length === 1);
-      expect(puts[0]).toEqual({
-        key: 'playback.auto_play_next',
-        scope: 'profile_device',
-        body: { value: false },
+    it('writes the bitrate as 8 Mbps, 8.5 Mbps (8,5 in German) and 640 kbps', async () => {
+      const rungs = [rung('a', 'A', 8000), rung('b', 'B', 8500), rung('c', 'C', 640)];
+      await mount({
+        start: [playableDecision(planOnStream(1, { available_qualities: rungs }))],
       });
-      await waitFor(() =>
-        expect(screen.getByTestId('menu-autoplay-value')).toHaveTextContent('Off'),
-      );
-    });
-
-    it('keeps the menu open after the toggle, with the focus on its row', async () => {
-      const puts: unknown[] = [];
-      await mount({ watch: EPISODE });
-      serveWrite(puts);
-      await toAutoPlay();
-      await pressKey(KEY.enter);
-      await until(() => puts.length === 1);
-      await waitFor(() =>
-        expect(screen.getByTestId('menu-autoplay-value')).toHaveTextContent('Off'),
-      );
-      expect(menu('settings')).not.toBeNull();
-      expect(focusKey()).toBe('player-menu-autoplay');
-    });
-
-    it('writes once when OK is pressed twice before the first write is answered', async () => {
-      const puts: unknown[] = [];
-      await mount({ watch: EPISODE });
-      serveWrite(puts, 200);
-      await toAutoPlay();
-      await pressKey(KEY.enter);
-      await pressKey(KEY.enter);
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+      await openMenu('settings');
+      expect(screen.getAllByTestId('menu-bitrate').map((el) => el.textContent)).toEqual([
+        '8 Mbps',
+        '8.5 Mbps',
+        '640 kbps',
+      ]);
+      cleanup();
+      await mount({
+        lang: 'de',
+        start: [playableDecision(planOnStream(1, { available_qualities: rungs }))],
       });
-      expect(puts).toHaveLength(1);
-    });
-
-    it('shows the old value again when the write fails', async () => {
-      const puts: unknown[] = [];
-      await mount({ watch: EPISODE });
-      serveWrite(puts, 0, 500);
-      await toAutoPlay();
-      await pressKey(KEY.enter);
-      await until(() => puts.length === 1);
-      await waitFor(() =>
-        expect(screen.getByTestId('menu-autoplay-value')).toHaveTextContent('On'),
-      );
+      await openMenu('settings');
+      expect(screen.getAllByTestId('menu-bitrate').map((el) => el.textContent)).toEqual([
+        '8 Mbps',
+        '8,5 Mbps',
+        '640 kbps',
+      ]);
     });
   });
 });
@@ -1151,6 +1117,86 @@ describe('chapters', () => {
   });
 });
 
+describe('the chapter thumbnails', () => {
+  const PICTURED: S['WatchChapter'][] = [
+    {
+      index: 0,
+      title: 'Opening',
+      start_seconds: 0,
+      end_seconds: 100,
+      source: 'embedded',
+      thumbnail_url: '/api/v2/artwork/chapter/0.jpg?sig=a',
+    },
+    { index: 1, title: 'Middle', start_seconds: 100, end_seconds: 200, source: 'embedded' },
+    {
+      index: 2,
+      title: 'Finale',
+      start_seconds: 200,
+      end_seconds: 300,
+      source: 'embedded',
+      thumbnail_url: 'https://cdn.example.test/c/2.jpg?sig=b',
+    },
+  ];
+  const open = async () => {
+    await mount({ watch: watchDetail({ versions: [watchVersion({ chapters: PICTURED })] }) });
+    await openMenu('chapters');
+  };
+  const thumb = (n: number) =>
+    within(screen.getAllByRole('menuitem')[n]!).getByTestId('chapter-thumb');
+
+  it("loads the picture from the chapter's thumbnail_url, as the server named it", async () => {
+    await open();
+    // A relative URL is made absolute against the server; an absolute one stays as it is. Nothing
+    // is appended to either (no token, no size).
+    expect(thumb(0).querySelector('img')).toHaveAttribute(
+      'src',
+      `${BASE_URL}/api/v2/artwork/chapter/0.jpg?sig=a`,
+    );
+    expect(thumb(2).querySelector('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/c/2.jpg?sig=b',
+    );
+  });
+
+  it('shows a placeholder with a film glyph for a chapter without a picture', async () => {
+    await open();
+    expect(thumb(1)).toHaveClass('player-chapter-placeholder');
+    expect(thumb(1).querySelector('img')).toBeNull();
+    expect(thumb(1).querySelector('svg')).not.toBeNull();
+    expect(thumb(0)).not.toHaveClass('player-chapter-placeholder');
+  });
+
+  it('falls back to the placeholder when the picture fails to load, for that chapter only', async () => {
+    await open();
+    fireEvent.error(thumb(0).querySelector('img')!);
+    expect(thumb(0)).toHaveClass('player-chapter-placeholder');
+    expect(thumb(0).querySelector('img')).toBeNull();
+    expect(thumb(2).querySelector('img')).not.toBeNull();
+  });
+
+  it('draws the picture 128 by 77 px with a small radius', () => {
+    const css = readFileSync('src/styles/player-menus.css', 'utf-8');
+    const rule = /\.player-chapter-thumb \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('width: 128px');
+    expect(rule).toContain('height: 77px');
+    expect(rule).toMatch(/border-radius: \d+px/);
+  });
+
+  it('has the heading "Chapters" and the lighter row on the chapter that plays, with no check', async () => {
+    await open();
+    expect(
+      screen.getByTestId('player-menu-chapters').querySelector('.player-menu-heading'),
+    ).toHaveTextContent('Chapters');
+    const rows = screen.getAllByRole('menuitem');
+    expect(rows.map((row) => row.getAttribute('data-current'))).toEqual(['true', 'false', 'false']);
+    expect(screen.queryByRole('menuitemradio')).toBeNull();
+    const css = readFileSync('src/styles/player-menus.css', 'utf-8');
+    expect(css).toMatch(
+      /\.player-menu-chapter\[data-current='true'\] \{\s*color: #fff;\s*background: rgba\(255, 255, 255, 0\.14\)/,
+    );
+  });
+});
+
 describe('a chapter pick after the pointer hovered another button', () => {
   it('still returns the focus to the Chapters button', async () => {
     const { state } = await mount({ watch: withChapters() });
@@ -1163,6 +1209,33 @@ describe('a chapter pick after the pointer hovered another button', () => {
     expect(osdFocused('chapters')).toBe(true);
     expect(osdFocused('info')).toBe(false);
     expect(screen.getByRole('button', { name: 'Chapters' })).toHaveFocus();
+  });
+});
+
+describe('the clock under a popover', () => {
+  const clock = () => screen.getByTestId('player-clock');
+
+  it('is not drawn while a popover menu is open, and returns when it closes', async () => {
+    await mount({ watch: withChapters() });
+    expect(clock()).toHaveAttribute('data-hidden', 'false');
+    await openMenu('chapters');
+    expect(clock()).toHaveAttribute('data-hidden', 'true');
+    key(KEY.back);
+    await waitFor(() => expect(menu('chapters')).toBeNull());
+    expect(clock()).toHaveAttribute('data-hidden', 'false');
+  });
+
+  it('stays drawn for the Info panel, which does not reach it', async () => {
+    await mount();
+    await openMenu('info');
+    expect(clock()).toHaveAttribute('data-hidden', 'false');
+  });
+
+  it('hides by opacity, so the clock keeps its place', () => {
+    const css = readFileSync('src/styles.css', 'utf-8');
+    const rule = /\.player-osd-clock\[data-hidden='true'\] \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('opacity: 0');
+    expect(rule).not.toMatch(/display|visibility|position/);
   });
 });
 

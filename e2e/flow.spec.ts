@@ -1289,7 +1289,13 @@ test('Settings: subtitle appearance from the avatar menu, change the size, Back 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
 
-  // Language, time and rewind rows, then the subtitle row with its one-line summary.
+  // The profile's playback row (auto-play next) comes first and has the focus; then the language,
+  // time and rewind rows, then the subtitle row with its one-line summary.
+  // (The fake answers false for a setting it does not know, so the saved pill is Off.)
+  await expect(
+    page.getByTestId('settings-autoplay').getByRole('radio', { name: 'Aus' }),
+  ).toBeFocused();
+  await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');

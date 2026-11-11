@@ -544,6 +544,12 @@ h3 {
 
 /* The clock sits right-aligned directly above the scrubber, inside the overlay's safe-area padding;
    the preview card stands above it. It never shrinks. */
+/* A popover menu opens over the clock and, at 90 % black, would let it ghost through: it is not
+   drawn then (it keeps its place, so nothing moves). The Info panel ends above the clock. */
+.player-osd-clock[data-hidden='true'] {
+  opacity: 0;
+}
+
 .player-osd-clock {
   flex-shrink: 0;
   margin: 0 0 2px;
@@ -907,10 +913,10 @@ h3 {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-/* Play and pause: the one white disc, 88 px. */
+/* Play and pause: the one white disc (--player-play, 88 px). */
 .player-btn-play {
-  width: 88px;
-  height: 88px;
+  width: var(--player-play);
+  height: var(--player-play);
   color: #0a0a0b;
 }
 

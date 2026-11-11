@@ -9,6 +9,8 @@ export interface Chapter {
   title: string;
   start: number;
   end: number;
+  /** The server's picture of the chapter, as it names it (opaque; resolve it before loading). */
+  thumbnailUrl?: string;
 }
 
 /** The thumbnail is drawn this wide; its height follows the manifest's aspect ratio. */
@@ -128,7 +130,12 @@ export function toChapters(
   chapters: readonly components['schemas']['WatchChapter'][] | undefined,
 ): Chapter[] {
   return (chapters ?? [])
-    .map((c) => ({ title: c.title, start: c.start_seconds, end: c.end_seconds }))
+    .map((c) => ({
+      title: c.title,
+      start: c.start_seconds,
+      end: c.end_seconds,
+      ...(c.thumbnail_url ? { thumbnailUrl: c.thumbnail_url } : {}),
+    }))
     .filter((c) => Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start)
     .sort((a, b) => a.start - b.start);
 }

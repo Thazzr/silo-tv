@@ -65,13 +65,20 @@ interface RowApi {
 }
 const RowContext = createContext<RowApi | null>(null);
 
-/** One row of a menu: a button that takes part in the navigation. */
-export function MenuRow({ focusKey, onFocused, onClick, className, ...rest }: FocusableProps) {
+/** A button of a menu that takes part in the navigation; `base` is the look it starts from. */
+function MenuButton({
+  base,
+  focusKey,
+  onFocused,
+  onClick,
+  className,
+  ...rest
+}: FocusableProps & { base: string }) {
   const api = useContext(RowContext);
   return (
     <Focusable
       focusKey={focusKey}
-      className={`menu-item menu-item-split player-menu-row${className ? ` ${className}` : ''}`}
+      className={`${base}${className ? ` ${className}` : ''}`}
       onFocused={() => {
         api?.focused(focusKey);
         onFocused?.();
@@ -85,11 +92,24 @@ export function MenuRow({ focusKey, onFocused, onClick, className, ...rest }: Fo
   );
 }
 
+/** One row of a menu: a full-width button. */
+export function MenuRow(props: FocusableProps) {
+  return <MenuButton base="menu-item menu-item-split player-menu-row" {...props} />;
+}
+
+/** One of several buttons that share a row (the subtitle delay's minus, plus and reset). */
+export function MenuControl(props: FocusableProps) {
+  return <MenuButton base="player-menu-control" {...props} />;
+}
+
 export interface MenuPopoverProps {
   label: string;
   testId: string;
-  /** The focus keys of the rows, top to bottom. */
-  rows: readonly string[];
+  /**
+   * The focus keys of the rows, top to bottom. A row of several buttons is a non-empty list of
+   * their keys, left to right: Left and Right walk it, Up and Down enter it on its first key.
+   */
+  rows: readonly (string | readonly [string, ...string[]])[];
   /** The row that takes the focus when the menu opens fresh (the checked or current one). */
   fallback: string;
   /** The remembered focus: noted on every row focus, recalled after a reload of the stream. */
@@ -137,14 +157,23 @@ export function MenuPopover({
 
   // Index navigation: the rows know where each one is, so no spatial search runs.
   const onArrow: ArrowHandler = (direction, fromKey) => {
+    const at = rows.findIndex((row) =>
+      typeof row === 'string' ? row === fromKey : row.includes(fromKey),
+    );
+    const row = rows[at];
     if (direction === 'left' || direction === 'right') {
+      // Inside a row of buttons the press moves to the neighbour; past its end it leaves the menu.
+      const next =
+        row === undefined || typeof row === 'string'
+          ? undefined
+          : row[row.indexOf(fromKey) + (direction === 'right' ? 1 : -1)];
+      if (next !== undefined) return moveFocusTo(next);
       onSide(direction);
       return true;
     }
-    const at = rows.indexOf(fromKey);
-    if (at < 0) return true;
     const target = rows[at + (direction === 'down' ? 1 : -1)];
-    return target === undefined ? true : moveFocusTo(target);
+    if (at < 0 || target === undefined) return true;
+    return moveFocusTo(typeof target === 'string' ? target : target[0]);
   };
 
   return (

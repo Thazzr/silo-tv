@@ -1,7 +1,9 @@
 // The Audio and Subtitles menus on the real PlayerScreen: the buttons, the rows, the keys, a pick as
 // a track_change replan, the save of an applied pick for the series or movie, the refusal, and the
 // subtitle delay row. Real timers throughout (the spatial navigation decides asynchronously).
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+/// <reference types="node" />
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,8 +56,8 @@ afterEach(async () => {
 });
 
 const AUDIO: S['WatchAudioTrack'][] = [
-  { default: true, language: 'en', codec: 'ac3', channels: 6 },
-  { default: false, language: 'de', codec: 'aac', channels: 2 },
+  { default: true, title: 'English', language: 'en', codec: 'ac3', channels: 6 },
+  { default: false, title: 'German', language: 'de', codec: 'aac', channels: 2 },
 ];
 
 const subtitle = (n: number, over: Partial<S['SubtitleInventoryItemV3']> = {}) => ({
@@ -167,6 +169,15 @@ interface MountOptions extends PlaybackServerOptions {
   lang?: 'de' | 'en';
 }
 
+/**
+ * A player that plays the German forced subtitle: the delay's buttons are dimmed while no subtitle
+ * plays, so the tests of the delay start from here.
+ */
+const withSubtitle = (): MountOptions => ({
+  watch: withTracks(KEEPS_SUB_1),
+  start: [playableDecision(plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } }))],
+});
+
 async function mount(options: MountOptions = {}) {
   const { settings, lang, ...playback } = options;
   const calls = servePlayback(server, {
@@ -220,6 +231,19 @@ async function openMenu(name: 'audio' | 'subtitles') {
   await waitFor(() => expect(focusKey()).toMatch(/^player-menu-/));
 }
 
+const delayText = () => screen.getByTestId('menu-delay-value').textContent;
+const later = () => screen.getByTestId('delay-plus');
+const earlier = () => screen.getByTestId('delay-minus');
+const reset = () => screen.getByTestId('delay-reset');
+const mountDelay = (options: MountOptions = {}) => mount({ ...withSubtitle(), ...options });
+
+/** Opens the menu with a subtitle playing and moves down onto the delay row (its minus button). */
+async function toDelayRow() {
+  await openMenu('subtitles');
+  for (let i = 0; i < 2; i += 1) await pressKey(KEY.down);
+  await focusOn('player-menu-delay-minus');
+}
+
 const menuButtons = () =>
   Array.from(document.querySelectorAll('.player-osd-menus button')).map((el) =>
     el.getAttribute('data-focus-key'),
@@ -267,17 +291,101 @@ describe('the buttons', () => {
 });
 
 describe('the audio menu', () => {
-  it("lists the version's tracks as language, codec and channels, with the playing one checked", async () => {
+  it("lists the version's tracks as title, codec and channels, with the playing one checked", async () => {
     await mount();
     await openMenu('audio');
     const rows = screen.getAllByRole('menuitemradio');
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'English · AC-3 · 5.1',
-      'German · AAC · Stereo',
-    ]);
     expect(rows.map((row) => row.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(screen.getAllByTestId('audio-title').map((el) => el.textContent)).toEqual([
+      'English',
+      'German',
+    ]);
+    expect(screen.getAllByTestId('audio-codec').map((el) => el.textContent)).toEqual([
+      'AC3',
+      'AAC',
+    ]);
+    expect(screen.getAllByTestId('audio-channels').map((el) => el.textContent)).toEqual([
+      '5.1',
+      'Stereo',
+    ]);
     // Opens on the checked row.
     await focusOn('player-menu-audio-0');
+  });
+
+  describe('the rows', () => {
+    const TRACKS: S['WatchAudioTrack'][] = [
+      {
+        default: true,
+        title: 'Main mix',
+        language: 'en',
+        codec: 'eac3',
+        profile: 'Dolby Digital Plus + Dolby Atmos',
+        channels: 8,
+        layout: '7.1',
+        bitrate: 768,
+        sample_rate: 48000,
+        bit_depth: 24,
+      },
+      { default: false, language: 'de', codec: 'aac', channels: 2 },
+      { default: false, embedded_title: 'Kommentar', language: 'de', codec: 'ac3', channels: 6 },
+    ];
+    const open = async (lang?: 'de' | 'en') => {
+      await mount({
+        ...(lang ? { lang } : {}),
+        watch: watchDetail({ versions: [watchVersion({ audio_tracks: TRACKS })] }),
+      });
+      await openMenu('audio');
+    };
+    const row = (n: number) => screen.getAllByRole('menuitemradio')[n]!;
+
+    it('has the heading "Audio" above the rows', async () => {
+      await open();
+      expect(
+        screen.getByTestId('player-menu-audio').querySelector('.player-menu-heading'),
+      ).toHaveTextContent('Audio');
+    });
+
+    it('shows title, codec, channels and the Default badge, and the meta line', async () => {
+      await open();
+      const first = within(row(0));
+      expect(first.getByTestId('audio-title')).toHaveTextContent('Main mix');
+      expect(first.getByTestId('audio-codec')).toHaveTextContent('DD+ Atmos');
+      expect(first.getByTestId('audio-channels')).toHaveTextContent('7.1');
+      expect(first.getByTestId('audio-default')).toHaveTextContent('Default');
+      expect(first.getByTestId('audio-meta')).toHaveTextContent(
+        'English · 7.1 · 768 kbps · 48,000 Hz · 24-bit',
+      );
+    });
+
+    it('names a track by its embedded title, or by language, codec and channels', async () => {
+      await open();
+      expect(within(row(1)).getByTestId('audio-title')).toHaveTextContent('de aac Stereo');
+      expect(within(row(2)).getByTestId('audio-title')).toHaveTextContent('Kommentar');
+    });
+
+    it('shows the Default badge on the default track only', async () => {
+      await open();
+      expect(screen.getAllByTestId('audio-default')).toHaveLength(1);
+      expect(within(row(1)).queryByTestId('audio-default')).toBeNull();
+    });
+
+    it('writes the labels in German, with the thousands grouped the German way', async () => {
+      await open('de');
+      const first = within(row(0));
+      expect(first.getByTestId('audio-default')).toHaveTextContent('Standard');
+      expect(first.getByTestId('audio-meta')).toHaveTextContent(
+        'Englisch · 7.1 · 768 kbps · 48.000 Hz · 24 Bit',
+      );
+      expect(within(row(1)).getByTestId('audio-channels')).toHaveTextContent('Stereo');
+    });
+
+    it('colours only the row that plays', async () => {
+      await open();
+      expect(row(0)).toHaveAttribute('data-checked', 'true');
+      expect(row(1)).toHaveAttribute('data-checked', 'false');
+      const css = readFileSync('src/styles/player-menus.css', 'utf-8');
+      expect(css).toMatch(/\.player-menu-track\[data-checked='true'\] \{\s*color: #60a5fa;/);
+    });
   });
 
   it('walks with Up and Down, and Back closes it with the focus on its button', async () => {
@@ -367,7 +475,7 @@ describe('the audio menu', () => {
       body: {
         audio_track_index: 1,
         audio_language: 'de',
-        track_signature: { language: 'de', codec: 'aac', channels: 2 },
+        track_signature: { language: 'de', codec: 'aac', channels: 2, title: 'German' },
       },
     });
     expect(puts.subtitle).toHaveLength(0);
@@ -444,19 +552,16 @@ describe('the audio menu', () => {
 });
 
 describe('the subtitles menu', () => {
-  it('lists Off and the inventory in order with the flags, and checks the playing one', async () => {
-    await mount({
-      watch: withTracks(KEEPS_SUB_1),
-      start: [playableDecision(plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } }))],
-    });
+  it('lists Off and the inventory in order, and checks the playing one', async () => {
+    await mount(withSubtitle());
     await openMenu('subtitles');
     const rows = screen.getAllByRole('menuitemradio');
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'Off',
+    expect(screen.getAllByTestId('subtitle-language').map((el) => el.textContent)).toEqual([
       'English',
-      'GermanForced',
-      'GermanSDH',
+      'German',
+      'German',
     ]);
+    expect(rows[0]).toHaveTextContent('Off');
     expect(rows.map((row) => row.getAttribute('aria-checked'))).toEqual([
       'false',
       'false',
@@ -496,24 +601,118 @@ describe('the subtitles menu', () => {
     await focusOn('player-menu-subtitle-off');
   });
 
-  it('walks through the tracks into the delay rows, and holds at the ends', async () => {
-    await mount();
+  it('walks through the tracks into the delay row, and holds at the ends', async () => {
+    await mount(withSubtitle());
     await openMenu('subtitles');
-    for (const next of [
-      'player-menu-subtitle-sub:0',
-      'player-menu-subtitle-sub:1',
-      'player-menu-subtitle-sub:2',
-      'player-menu-delay-earlier',
-      'player-menu-delay-later',
-    ]) {
+    await focusOn('player-menu-subtitle-sub:1');
+    for (const next of ['player-menu-subtitle-sub:2', 'player-menu-delay-minus']) {
       await pressKey(KEY.down);
       await focusOn(next);
     }
     await pressKey(KEY.down);
-    expect(focusKey()).toBe('player-menu-delay-later');
+    expect(focusKey()).toBe('player-menu-delay-minus');
+    // Up leaves the delay row for the last track, and Up on the first row holds.
+    await pressKey(KEY.up);
+    await focusOn('player-menu-subtitle-sub:2');
+    for (const prev of ['sub:1', 'sub:0', 'off']) {
+      await pressKey(KEY.up);
+      await focusOn(`player-menu-subtitle-${prev}`);
+    }
+    await pressKey(KEY.up);
+    expect(focusKey()).toBe('player-menu-subtitle-off');
     key(KEY.back);
     expect(menu('subtitles')).toBeNull();
     expect(screen.getByRole('button', { name: 'Subtitles' })).toHaveFocus();
+  });
+
+  describe('the rows', () => {
+    const MIXED = [
+      subtitle(0, { track_id: 'd1', language: 'fr', source: 'downloaded', codec: 'srt' }),
+      subtitle(1, { track_id: 'x1', language: 'de', source: 'external', codec: 'subrip' }),
+      subtitle(2, {
+        track_id: 'e1',
+        language: 'de',
+        source: 'embedded',
+        codec: 'hdmv_pgs_subtitle',
+        label: 'German (Forced)',
+      }),
+      subtitle(3, { track_id: 'e2', language: 'en', source: 'embedded', label: 'English' }),
+    ];
+    const open = async (lang?: 'de' | 'en') => {
+      await mount({
+        ...(lang ? { lang } : {}),
+        start: [playableDecision({ ...plan(1), subtitle: { mode: 'sidecar', inventory: MIXED } })],
+      });
+      await openMenu('subtitles');
+    };
+    const row = (n: number) => screen.getAllByRole('menuitemradio')[n + 1]!;
+
+    it('orders embedded, external, then downloaded tracks', async () => {
+      await open();
+      expect(screen.getAllByTestId('subtitle-source').map((el) => el.textContent)).toEqual([
+        'Embedded',
+        'Embedded',
+        'External',
+        'Downloaded',
+      ]);
+      expect(screen.getAllByTestId('subtitle-language').map((el) => el.textContent)).toEqual([
+        'German',
+        'English',
+        'German',
+        'French',
+      ]);
+    });
+
+    it('shows the format badge, none for an unknown codec, before the source badge', async () => {
+      await open();
+      expect(screen.getAllByTestId('subtitle-format').map((el) => el.textContent)).toEqual([
+        'PGS',
+        'SRT',
+        'SRT',
+      ]);
+      expect(within(row(1)).queryByTestId('subtitle-format')).toBeNull();
+      const badges = row(0).querySelectorAll('.player-badge');
+      expect(Array.from(badges).map((el) => el.getAttribute('data-testid'))).toEqual([
+        'subtitle-format',
+        'subtitle-source',
+      ]);
+    });
+
+    it('writes the source in German', async () => {
+      await open('de');
+      expect(screen.getAllByTestId('subtitle-source').map((el) => el.textContent)).toEqual([
+        'Eingebettet',
+        'Eingebettet',
+        'Extern',
+        'Heruntergeladen',
+      ]);
+    });
+
+    it("shows the track's label only when it says more than the language", async () => {
+      await open();
+      expect(within(row(0)).getByTestId('subtitle-detail')).toHaveTextContent('German (Forced)');
+      // The label "English" is the language's own name.
+      expect(within(row(1)).queryByTestId('subtitle-detail')).toBeNull();
+      expect(screen.getAllByTestId('subtitle-detail')).toHaveLength(1);
+    });
+
+    it('has no forced or SDH badge of its own', async () => {
+      await mount({
+        start: [
+          playableDecision({
+            ...plan(1),
+            subtitle: {
+              mode: 'sidecar',
+              inventory: [subtitle(0, { language: 'fr', forced: true, hearing_impaired: true })],
+            },
+          }),
+        ],
+      });
+      await openMenu('subtitles');
+      expect(
+        within(screen.getByTestId('player-menu-subtitles')).queryByText(/forced|SDH/i),
+      ).toBeNull();
+    });
   });
 
   it('sends a track_change with the track and the audio the plan plays', async () => {
@@ -639,63 +838,153 @@ describe('the subtitle delay', () => {
   const useClock = () =>
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
-  const delayText = () => screen.getByTestId('menu-delay-value').textContent;
-  const later = () => screen.getByRole('menuitem', { name: /Later/ });
-
-  async function toDelayRows() {
+  it.each([
+    [300, '+300 ms'],
+    [-100, '−100 ms'],
+    [0, '0 ms'],
+  ])('shows the stored value %i as %s (signed, with U+2212 for minus)', async (stored, shown) => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': stored } } });
     await openMenu('subtitles');
-    for (let i = 0; i < 4; i += 1) await pressKey(KEY.down);
-    await focusOn('player-menu-delay-earlier');
-  }
-
-  it("shows the stored value as signed seconds with the language's decimal separator", async () => {
-    await mount({ settings: { values: { 'player.subtitle_sync_ms': 300 } } });
-    await openMenu('subtitles');
-    await waitFor(() => expect(delayText()).toBe('+0.3 s'));
+    await waitFor(() => expect(delayText()).toBe(shown));
   });
 
-  it('writes a decimal comma in German', async () => {
-    await mount({ lang: 'de', settings: { values: { 'player.subtitle_sync_ms': -1500 } } });
+  it('is one line: the label, then minus, the value, plus and reset', async () => {
+    await mountDelay({ lang: 'de' });
     await openMenu('subtitles');
-    await waitFor(() => expect(delayText()).toBe('-1,5 s'));
+    const row = screen.getByRole('group', { name: 'Verzögerung' });
+    expect(row.textContent).toBe('Verzögerung0 msZurücksetzen');
+    expect(
+      Array.from(row.querySelectorAll('button')).map((el) => el.getAttribute('data-testid')),
+    ).toEqual(['delay-minus', 'delay-plus', 'delay-reset']);
+    expect(earlier()).toHaveAccessibleName('Untertitelverzögerung 100 ms früher');
+    expect(later()).toHaveAccessibleName('Untertitelverzögerung 100 ms später');
   });
 
-  it('moves 100 ms per press: Later adds, Earlier takes away, and the menu stays open', async () => {
-    await mount();
-    await toDelayRows();
-    expect(delayText()).toBe('0.0 s');
-    await pressKey(KEY.down);
-    await focusOn('player-menu-delay-later');
+  it('moves 100 ms per press: plus adds, minus takes away, and the menu stays open', async () => {
+    await mountDelay();
+    await toDelayRow();
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-plus');
     await pressKey(KEY.enter);
     await pressKey(KEY.enter);
     await pressKey(KEY.enter);
-    expect(delayText()).toBe('+0.3 s');
-    await pressKey(KEY.up);
-    await focusOn('player-menu-delay-earlier');
+    expect(delayText()).toBe('+300 ms');
+    await pressKey(KEY.left);
+    await focusOn('player-menu-delay-minus');
     await pressKey(KEY.enter);
-    expect(delayText()).toBe('+0.2 s');
+    expect(delayText()).toBe('+200 ms');
     expect(menu('subtitles')).not.toBeNull();
   });
 
-  it('stops at plus and minus 10 s', async () => {
-    await mount({ settings: { values: { 'player.subtitle_sync_ms': 9900 } } });
-    await toDelayRows();
-    await waitFor(() => expect(delayText()).toBe('+9.9 s'));
-    await pressKey(KEY.down);
-    await focusOn('player-menu-delay-later');
+  it('resets to 0 with OK on Reset, and the focus moves on to plus', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': 300 } } });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+300 ms'));
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-reset');
     await pressKey(KEY.enter);
-    expect(delayText()).toBe('+10.0 s');
-    await pressKey(KEY.enter);
-    expect(delayText()).toBe('+10.0 s');
+    expect(delayText()).toBe('0 ms');
+    // Reset is dimmed at 0 and cannot hold the focus: the nearest enabled button takes it.
+    expect(reset()).toBeDisabled();
+    await focusOn('player-menu-delay-plus');
   });
 
-  it('stops at minus 10 s', async () => {
-    await mount({ settings: { values: { 'player.subtitle_sync_ms': -9900 } } });
-    await toDelayRows();
-    await waitFor(() => expect(delayText()).toBe('-9.9 s'));
+  it('dims minus at −10 000 ms, and plus at +10 000 ms, and moves the focus to the neighbour', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': 9900 } } });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+9900 ms'));
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-plus');
     await pressKey(KEY.enter);
+    expect(delayText()).toBe('+10000 ms');
+    expect(later()).toBeDisabled();
+    expect(earlier()).toBeEnabled();
+    expect(reset()).toBeEnabled();
+    // Plus ran into its limit: the focus goes to the nearest enabled button, the left one on a tie.
+    await focusOn('player-menu-delay-minus');
+  });
+
+  it('dims minus at −10 000 ms and keeps plus and reset', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': -9900 } } });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('−9900 ms'));
     await pressKey(KEY.enter);
-    expect(delayText()).toBe('-10.0 s');
+    expect(delayText()).toBe('−10000 ms');
+    expect(earlier()).toBeDisabled();
+    expect(later()).toBeEnabled();
+    expect(reset()).toBeEnabled();
+    await focusOn('player-menu-delay-plus');
+  });
+
+  it('enables minus and plus and dims reset at 0 ms', async () => {
+    await mountDelay();
+    await openMenu('subtitles');
+    expect([earlier(), later(), reset()].map((el) => (el as HTMLButtonElement).disabled)).toEqual([
+      false,
+      false,
+      true,
+    ]);
+  });
+
+  it('dims all three buttons while no subtitle plays, and Down from the tracks holds', async () => {
+    await mount({ settings: { values: { 'player.subtitle_sync_ms': 300 } } });
+    await openMenu('subtitles');
+    expect([earlier(), later(), reset()].map((el) => (el as HTMLButtonElement).disabled)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    // They are visible, only dimmed.
+    expect(screen.getByTestId('menu-delay-value')).toBeInTheDocument();
+    for (let i = 0; i < 6; i += 1) await pressKey(KEY.down);
+    await focusOn('player-menu-subtitle-sub:2');
+  });
+
+  it('skips a dimmed button with Left and Right: plus to reset, with minus dimmed', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': -10_000 } } });
+    await openMenu('subtitles');
+    await waitFor(() => expect(delayText()).toBe('−10000 ms'));
+    for (let i = 0; i < 2; i += 1) await pressKey(KEY.down);
+    // Minus is dimmed, so the row is entered on plus.
+    await focusOn('player-menu-delay-plus');
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-reset');
+    await pressKey(KEY.left);
+    await focusOn('player-menu-delay-plus');
+    await pressKey(KEY.left);
+    // Nothing further left to move to: the press leaves the menu for the button beside it.
+    await waitFor(() => expect(menu('subtitles')).toBeNull());
+  });
+
+  it('skips a dimmed middle button: reset is next to minus when plus is dimmed', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': 10_000 } } });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+10000 ms'));
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-reset');
+  });
+
+  it('acts on OK on each of the three buttons', async () => {
+    await mountDelay({ settings: { values: { 'player.subtitle_sync_ms': 200 } } });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+200 ms'));
+    await pressKey(KEY.enter);
+    expect(delayText()).toBe('+100 ms');
+    await pressKey(KEY.right);
+    await pressKey(KEY.enter);
+    expect(delayText()).toBe('+200 ms');
+    await pressKey(KEY.right);
+    await focusOn('player-menu-delay-reset');
+    await pressKey(KEY.enter);
+    expect(delayText()).toBe('0 ms');
+  });
+
+  it('makes each of the three buttons a target of at least 75 px', () => {
+    const css = readFileSync('src/styles/player-menus.css', 'utf-8');
+    const control = /\.player-menu-control \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(control).toContain('min-width: var(--target)');
+    expect(control).toContain('height: var(--target)');
   });
 
   it('shifts the cues the overlay draws, at once: later hides a cue that has just begun', async () => {
@@ -710,8 +999,8 @@ describe('the subtitle delay', () => {
           }),
       ),
     );
-    const base = plan(1);
-    const { video } = await mount({
+    const base = plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } });
+    const { video } = await mountDelay({
       start: [
         playableDecision({
           ...base,
@@ -732,20 +1021,19 @@ describe('the subtitle delay', () => {
     state.currentTime = 10.1;
     fireEvent.timeUpdate(video());
     expect(await screen.findByText('A cue')).toBeInTheDocument();
-    await toDelayRows();
+    await toDelayRow();
     for (let i = 0; i < 3; i += 1) fireEvent.click(later());
     await waitFor(() => expect(screen.queryByText('A cue')).not.toBeInTheDocument());
-    // Earlier again, by six presses: the cue is back, 0.3 s before it would have begun.
-    for (let i = 0; i < 6; i += 1)
-      fireEvent.click(screen.getByRole('menuitem', { name: /Earlier/ }));
+    // Earlier again, by six presses: the cue is back, 300 ms before it would have begun.
+    for (let i = 0; i < 6; i += 1) fireEvent.click(earlier());
     state.currentTime = 9.8;
     fireEvent.timeUpdate(video());
     expect(await screen.findByText('A cue')).toBeInTheDocument();
   });
 
   it('writes once, 600 ms after the last press, at the profile scope from revision 19 on', async () => {
-    const { puts } = await mount({ settings: { manifestRevision: 19 } });
-    await toDelayRows();
+    const { puts } = await mountDelay({ settings: { manifestRevision: 19 } });
+    await toDelayRow();
     // A fake clock that also runs with real time, so the requests still go through; installed once
     // the menu is open, so the debounce timer is the fake one.
     useClock();
@@ -766,8 +1054,8 @@ describe('the subtitle delay', () => {
   });
 
   it('keeps pressing from waiting for an earlier write: each press moves the 600 ms on', async () => {
-    const { puts } = await mount({ settings: { manifestRevision: 40 } });
-    await toDelayRows();
+    const { puts } = await mountDelay({ settings: { manifestRevision: 40 } });
+    await toDelayRow();
     useClock();
     fireEvent.click(later());
     await advance(300);
@@ -785,8 +1073,8 @@ describe('the subtitle delay', () => {
   });
 
   it('writes at the device scope before revision 19, and drops nothing', async () => {
-    const { puts } = await mount({ settings: { manifestRevision: 18 } });
-    await toDelayRows();
+    const { puts } = await mountDelay({ settings: { manifestRevision: 18 } });
+    await toDelayRow();
     await pressKey(KEY.enter);
     await until(() => puts.settings.length === 1, 2000);
     expect(puts.settings).toEqual([
@@ -797,18 +1085,18 @@ describe('the subtitle delay', () => {
   });
 
   it('keeps the change for this viewing when the server has no settings contract', async () => {
-    const { puts } = await mount({ settings: { capabilities: 'fail' } });
-    await toDelayRows();
+    const { puts } = await mountDelay({ settings: { capabilities: 'fail' } });
+    await toDelayRow();
     fireEvent.click(later());
-    expect(delayText()).toBe('+0.1 s');
+    expect(delayText()).toBe('+100 ms');
     await new Promise((resolve) => setTimeout(resolve, 900));
     expect(puts.settings).toHaveLength(0);
-    expect(delayText()).toBe('+0.1 s');
+    expect(delayText()).toBe('+100 ms');
   });
 
   it('writes a pending value when the player is left', async () => {
-    const { puts, view } = await mount();
-    await toDelayRows();
+    const { puts, view } = await mountDelay();
+    await toDelayRow();
     fireEvent.click(later());
     view.unmount();
     await until(() => puts.settings.length === 1, 2000);
@@ -905,35 +1193,8 @@ describe('the subtitles menu in detail', () => {
     await openMenu('subtitles');
     expect(screen.getByRole('dialog', { name: 'Subtitles' })).toBeInTheDocument();
     expect(screen.getByRole('menu', { name: 'Subtitles' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Subtitle delay' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Delay' })).toBeInTheDocument();
     expect(screen.queryByTestId('menu-subtitles-note')).not.toBeInTheDocument();
-  });
-
-  it('shows the flags only on the rows that have them, joined by a dot', async () => {
-    const both = { ...INVENTORY[2]!, forced: true };
-    await mount({
-      start: [
-        playableDecision({
-          ...plan(1),
-          subtitle: { mode: 'sidecar', inventory: [INVENTORY[0]!, both] },
-        }),
-      ],
-    });
-    await openMenu('subtitles');
-    const flags = screen.getAllByTestId('menu-flags');
-    expect(flags.map((el) => el.textContent)).toEqual(['Forced · SDH']);
-  });
-
-  it('names the delay in the heading, and the step on each row', async () => {
-    await mount({ settings: { values: { 'player.subtitle_sync_ms': 300 } } });
-    await openMenu('subtitles');
-    await waitFor(() =>
-      expect(
-        screen.getByTestId('menu-delay').querySelector('.player-menu-heading'),
-      ).toHaveTextContent('Subtitle delay · +0.3 s'),
-    );
-    expect(screen.getByRole('menuitem', { name: /Earlier/ })).toHaveTextContent('-0.1 s');
-    expect(screen.getByRole('menuitem', { name: /Later/ })).toHaveTextContent('+0.1 s');
   });
 
   it('clears the note when the next pick starts, and takes another pick after a refusal', async () => {
@@ -969,14 +1230,6 @@ describe('the delay write in detail', () => {
   const useClock = () =>
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
   const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
-  const later = () => screen.getByRole('menuitem', { name: /Later/ });
-  const delayText = () => screen.getByTestId('menu-delay-value').textContent;
-
-  async function toDelayRows() {
-    await openMenu('subtitles');
-    for (let i = 0; i < 4; i += 1) await pressKey(KEY.down);
-    await focusOn('player-menu-delay-earlier');
-  }
 
   it('writes nothing when the player closes without a press', async () => {
     const { puts, view } = await mount();
@@ -986,44 +1239,60 @@ describe('the delay write in detail', () => {
   });
 
   it('writes nothing for a press the limit swallows', async () => {
-    const { puts } = await mount({ settings: { values: { 'player.subtitle_sync_ms': 10_000 } } });
-    await toDelayRows();
-    await waitFor(() => expect(delayText()).toBe('+10.0 s'));
+    const { puts } = await mountDelay({
+      settings: { values: { 'player.subtitle_sync_ms': 10_000 } },
+    });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+10000 ms'));
     useClock();
+    // Plus is dimmed at the limit: a click on it does nothing.
     fireEvent.click(later());
     await advance(700);
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(puts.settings).toHaveLength(0);
   });
 
+  it('writes 0 for a press on Reset, like any other change', async () => {
+    const { puts } = await mountDelay({
+      settings: { values: { 'player.subtitle_sync_ms': 300 }, manifestRevision: 19 },
+    });
+    await toDelayRow();
+    await waitFor(() => expect(delayText()).toBe('+300 ms'));
+    useClock();
+    fireEvent.click(reset());
+    await advance(600);
+    await until(() => puts.settings.length === 1, 2000);
+    expect(puts.settings).toEqual([{ key: 'player.subtitle_sync_ms', scope: 'profile', value: 0 }]);
+  });
+
   it('shows what the server stored once the write is answered, not what was sent', async () => {
     settingsAnswer = () => 200;
     // Before revision 19 the write is the device's own and no re-read follows, so the answer shows.
-    const { puts } = await mount({ settings: { manifestRevision: 18 } });
-    await toDelayRows();
+    const { puts } = await mountDelay({ settings: { manifestRevision: 18 } });
+    await toDelayRow();
     useClock();
     for (let i = 0; i < 3; i += 1) fireEvent.click(later());
-    expect(delayText()).toBe('+0.3 s');
+    expect(delayText()).toBe('+300 ms');
     await advance(600);
     await until(() => puts.settings.length === 1, 2000);
-    await waitFor(() => expect(delayText()).toBe('+0.2 s'));
+    await waitFor(() => expect(delayText()).toBe('+200 ms'));
   });
 
   it('keeps a newer press while the write for an older one is still out', async () => {
     let release!: () => void;
     settingsGate = new Promise<void>((resolve) => (release = resolve));
-    const { puts } = await mount();
-    await toDelayRows();
+    const { puts } = await mountDelay();
+    await toDelayRow();
     useClock();
     fireEvent.click(later());
     await advance(600);
     await until(() => puts.settings.length === 1, 2000);
     fireEvent.click(later());
-    expect(delayText()).toBe('+0.2 s');
+    expect(delayText()).toBe('+200 ms');
     release();
     await new Promise((resolve) => setTimeout(resolve, 100));
     // The answer of the first write must not wipe the second press.
-    expect(delayText()).toBe('+0.2 s');
+    expect(delayText()).toBe('+200 ms');
     await advance(600);
     await until(() => puts.settings.length === 2, 2000);
     expect(puts.settings.map((put) => put.value)).toEqual([100, 200]);

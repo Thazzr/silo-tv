@@ -147,12 +147,14 @@ describe('Home in the shell', () => {
       await pressKey(KEY.down);
       await pressKey(KEY.enter);
       const opener = await screen.findByTestId('settings-subtitles');
-      for (let i = 0; i < 3; i += 1) await pressKey(KEY.down);
+      // Auto-play next (the first row, as the server knows the setting), language, time, rewind.
+      for (let i = 0; i < 4; i += 1) await pressKey(KEY.down);
       expect(opener).toHaveFocus();
       await pressKey(KEY.enter);
       await screen.findByTestId('subtitle-row-size');
       await pressKey(KEY.right);
-      // The language pill takes the focus on a fresh Settings screen; coming back must not touch it.
+      // The auto-play pill takes the focus on a fresh Settings screen; coming back must not touch
+      // it, nor the language row.
       const focused: (string | null)[] = [];
       const onFocusIn = (e: FocusEvent) => {
         focused.push((e.target as HTMLElement).getAttribute('data-focus-key'));
@@ -164,7 +166,11 @@ describe('Home in the shell', () => {
       // And it stays there once the screen has settled.
       await new Promise((resolve) => setTimeout(resolve, 100));
       document.removeEventListener('focusin', onFocusIn);
-      expect(focused.filter((k) => k?.startsWith('settings-language'))).toEqual([]);
+      expect(
+        focused.filter(
+          (k) => k?.startsWith('settings-language') || k?.startsWith('settings-autoplay'),
+        ),
+      ).toEqual([]);
       expect(screen.getByTestId('settings-subtitles')).toHaveFocus();
     },
   );

@@ -292,7 +292,12 @@ export function PlayerOsd(props: PlayerOsdProps) {
   const parts = timeParts(props.timeMode, position, duration, wallClock(), props.timeFormat, lang);
   const ends = parts.endsAt !== null ? t('player.osd.endsAt', { time: parts.endsAt }) : null;
   const clock = (
-    <p className="player-osd-clock" data-testid="player-clock" data-mode={props.timeMode}>
+    <p
+      className="player-osd-clock"
+      data-testid="player-clock"
+      data-mode={props.timeMode}
+      data-hidden={popoverOpen}
+    >
       {parts.position !== null ? (
         <>
           <span data-testid="player-time">{parts.position}</span>

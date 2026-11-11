@@ -206,6 +206,23 @@ describe('chapters', () => {
     ]);
     expect(toChapters(undefined)).toEqual([]);
   });
+
+  it("keeps a chapter's thumbnail URL as the server named it, and none for a chapter without one", () => {
+    const api: components['schemas']['WatchChapter'][] = [
+      {
+        index: 0,
+        title: 'A',
+        source: 'file',
+        start_seconds: 0,
+        end_seconds: 60,
+        thumbnail_url: '/api/v2/artwork/c/0.jpg?sig=a',
+      },
+      { index: 1, title: 'B', source: 'file', start_seconds: 60, end_seconds: 120 },
+    ];
+    const [first, second] = toChapters(api);
+    expect(first?.thumbnailUrl).toBe('/api/v2/artwork/c/0.jpg?sig=a');
+    expect(second).not.toHaveProperty('thumbnailUrl');
+  });
 });
 
 describe('resolveSheetUrl', () => {

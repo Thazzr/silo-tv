@@ -20,20 +20,25 @@ const KEY = 'player.subtitle_sync_ms';
 export const clampDelay = (ms: number): number =>
   Math.max(-SUBTITLE_SYNC_MAX_MS, Math.min(SUBTITLE_SYNC_MAX_MS, Math.round(ms)));
 
-/** "+0,3 s", "-1,5 s", "0,0 s": seconds with one decimal and the language's separator. */
-export function formatDelay(ms: number, decimal: string): string {
-  const seconds = (Math.round(ms / 100) / 10).toFixed(1).replace('.', decimal);
-  return ms > 0 ? `+${seconds} s` : `${seconds} s`;
+/** "0 ms", "+300 ms", "−100 ms": signed, with a real minus sign (U+2212). */
+export function formatDelay(ms: number): string {
+  if (ms > 0) return `+${ms} ms`;
+  return ms < 0 ? `−${-ms} ms` : '0 ms';
 }
 
 /**
- * The delay the player draws with, and the press that changes it. The value is the profile's own
+ * The delay the player draws with, and the presses that change it (a step either way, or back to
+ * 0). The value is the profile's own
  * (a device may keep another). It is written 600 ms after the last press, at the profile scope from
  * manifest revision 19 on (the device's own row is dropped then, as it would outrank the profile's),
  * before that at this device's scope. A pending write goes out when the player closes. A server
  * without a settings contract keeps the change for this viewing only.
  */
-export function useSubtitleDelay(): { delayMs: number; nudge(direction: -1 | 1): void } {
+export function useSubtitleDelay(): {
+  delayMs: number;
+  nudge(direction: -1 | 1): void;
+  reset(): void;
+} {
   const stored = useProfileSetting(KEY).value;
   const revision = useSettingsRevision();
   const setProfile = useSetProfileSettingAt('profile');
@@ -75,9 +80,8 @@ export function useSubtitleDelay(): { delayMs: number; nudge(direction: -1 | 1):
   }, []);
   useEffect(() => flush, [flush]);
 
-  const nudge = useCallback(
-    (direction: -1 | 1) => {
-      const next = clampDelay(current.current + direction * SUBTITLE_DELAY_STEP_MS);
+  const change = useCallback(
+    (next: number) => {
       if (next === current.current) return;
       current.current = next;
       dirty.current = next;
@@ -87,6 +91,11 @@ export function useSubtitleDelay(): { delayMs: number; nudge(direction: -1 | 1):
     },
     [flush],
   );
+  const nudge = useCallback(
+    (direction: -1 | 1) => change(clampDelay(current.current + direction * SUBTITLE_DELAY_STEP_MS)),
+    [change],
+  );
+  const reset = useCallback(() => change(0), [change]);
 
-  return { delayMs, nudge };
+  return { delayMs, nudge, reset };
 }
