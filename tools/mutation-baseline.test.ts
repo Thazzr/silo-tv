@@ -1,7 +1,7 @@
 // The baseline of the weekly mutation run: --break in the summary, --check as the failing step, and
 // the workflow that wires both.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -188,10 +188,18 @@ describe('an invalid --break', () => {
 });
 
 describe('the command line', () => {
+  // CI sets GITHUB_STEP_SUMMARY and GITHUB_OUTPUT; a child must not write into the job's real files.
+  const cleanEnv = () => {
+    const env = { ...process.env };
+    delete env.GITHUB_STEP_SUMMARY;
+    delete env.GITHUB_OUTPUT;
+    return env;
+  };
   const run = (args: string[]) =>
     spawnSync(process.execPath, [join(ROOT, 'tools', 'mutation-summary.mjs'), ...args], {
       cwd: ROOT,
       encoding: 'utf-8',
+      env: cleanEnv(),
     });
 
   it('exits 1 and prints the error line to stdout below the baseline', () => {
@@ -211,6 +219,28 @@ describe('the command line', () => {
     const result = run(['--report', reportWith(1, 2), '--break', '77']);
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('this run is below it');
+  });
+
+  it('ignores a GITHUB_STEP_SUMMARY and GITHUB_OUTPUT set in the surrounding environment', () => {
+    const summary = join(dir, 'ci-summary.md');
+    const output = join(dir, 'ci-output.txt');
+    const saved = {
+      summary: process.env.GITHUB_STEP_SUMMARY,
+      output: process.env.GITHUB_OUTPUT,
+    };
+    process.env.GITHUB_STEP_SUMMARY = summary;
+    process.env.GITHUB_OUTPUT = output;
+    try {
+      const result = run(['--report', reportWith(1, 2), '--break', '77']);
+      expect(result.stdout).toContain('this run is below it');
+      expect(existsSync(summary) ? readFileSync(summary, 'utf-8') : '').toBe('');
+      expect(existsSync(output) ? readFileSync(output, 'utf-8') : '').toBe('');
+    } finally {
+      if (saved.summary === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = saved.summary;
+      if (saved.output === undefined) delete process.env.GITHUB_OUTPUT;
+      else process.env.GITHUB_OUTPUT = saved.output;
+    }
   });
 });
 
