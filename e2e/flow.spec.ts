@@ -300,7 +300,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         ratings: [],
         subtitles: [],
       };
-      if (req.method === 'GET' && /^\/img\/(logo|still-\w+)\.png$/.test(url.pathname)) {
+      if (req.method === 'GET' && /^\/img\/(logo|still-\w+|poster-\w+)\.png$/.test(url.pathname)) {
         // A 1x1 transparent PNG; the logo box gives it its size.
         res.writeHead(200, { ...cors, 'Content-Type': 'image/png' });
         return res.end(
@@ -312,6 +312,45 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       }
       const tallMovie = tall
         ? {
+            poster_url: '/img/poster-m2.png',
+            tagline: 'Half way through is still on the way.',
+            studios: ['Studio Ponoc', 'Second Studio'],
+            genres: ['Drama', 'Crime'],
+            content_rating: 'PG',
+            overview:
+              'The second title, half way through. It tells of a long evening, a house full of guests and one quiet person who notices what nobody else does: the clock that is five minutes slow, the open window, the second cup that nobody ordered. By the time the guests leave, everything in the house has changed, and so has the person who saw it all happen from the hallway. Years later the same guests meet again in the same house, and the clock is still five minutes slow, which is exactly why nobody ever misses the last train home that night.',
+            ratings: [
+              { source: 'imdb', name: 'IMDb', display: '8.1' },
+              { source: 'tmdb', name: 'TMDB', display: '7.9' },
+              { source: 'rt', name: 'RT', display: '93%' },
+              { source: 'mc', name: 'Metacritic', display: '71' },
+            ],
+            crew: [
+              { person_id: 'c1', name: 'Dana Director', job: 'Director' },
+              { person_id: 'c2', name: 'Wen Writer', job: 'Writer' },
+            ],
+            versions: [
+              {
+                file_id: 'f-uhd',
+                added_at: '2026-01-01T00:00:00.000Z',
+                bitrate: 20000,
+                codec_audio: 'dts',
+                codec_video: 'hevc',
+                container: 'mkv',
+                duration: 6180,
+                file_size: 1000,
+                hdr: true,
+                resolution: '2160p',
+                video_tracks: [
+                  {
+                    video_range_type: 'HDR10',
+                    dv_config_present: false,
+                    dv_bl_compat_id_present: false,
+                    interlaced: false,
+                  },
+                ],
+              },
+            ],
             cast: ['Ann Actor', 'Bo Actor', 'Cy Actor', 'Di Actor'].map((name, order) => ({
               person_id: `p${order}`,
               name,
@@ -323,6 +362,14 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       const tallSeries = tall
         ? {
             logo_url: '/img/logo.png',
+            poster_url: '/img/poster-s1.png',
+            networks: ['AMC', 'Netflix'],
+            first_air_date: '2008-01-20',
+            last_air_date: '2013-09-29',
+            content_rating: '18',
+            tagline: 'A show about a school.',
+            genres: ['Drama', 'Crime', 'Thriller'],
+            crew: [{ person_id: 'c3', name: 'Vince Creator', job: 'Creator' }],
             overview:
               'A long synopsis that runs over four lines on the hero of the detail page: it tells of a school, its playground, a great many children and the one teacher who has to keep them all busy until the bell rings and the next lesson begins, which is exactly why it needs the full text under the button.',
             ratings: [
@@ -1121,7 +1168,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
-  await expect(page.getByTestId('detail-meta')).toHaveText('2021 · 1 Std. 30 Min.');
+  await expect(page.locator('.detail-chip')).toHaveText(['2021', '1 Std. 30 Min.']);
   await expect(page.getByRole('button', { name: 'Fortsetzen ab 22:30' })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Von vorn' })).toBeVisible();
   // Resume starts the playback without asking again, at that position minus the default rewind
@@ -2205,11 +2252,11 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   const before = await layer.boundingBox();
   expect(before).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
 
-  // The hero's text column ends at 1000 px at the latest.
+  // The hero's text column, beside the poster, ends where the full-strength shade ends (1267 px).
   const column = await page.locator('.detail-text').boundingBox();
-  expect(column!.x + column!.width).toBeLessThanOrEqual(1000);
+  expect(column!.x + column!.width).toBeLessThanOrEqual(1267);
   const synopsis = await page.getByTestId('detail-synopsis').boundingBox();
-  expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1000);
+  expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1267);
 
   // Down to the season pills and into the episodes: the actions are out of view, and no pill
   // reaches into the top safe-area band (54 px).
@@ -2233,6 +2280,149 @@ test('detail page: the backdrop stays, the page snaps to the season pills, the t
   expect(Math.abs(seasons!.y - 54)).toBeLessThanOrEqual(2);
   expect(await layer.boundingBox()).toEqual(before);
   await expect(page.getByTestId('detail-dim')).toHaveAttribute('data-scrolled', 'true');
+});
+
+async function openMovieDetail(page: Page, size: { width: number; height: number }) {
+  await page.setViewportSize(size);
+  const { origin } = await startFakeSilo({ tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+}
+
+/** The poster sits left of the text column, bottom-aligned with it, and the column keeps the safe area. */
+async function expectHeroLayout(page: Page, size: { width: number; height: number }) {
+  const poster = (await page.getByTestId('detail-poster').boundingBox())!;
+  const column = (await page.locator('.detail-text').boundingBox())!;
+  expect(Math.round(poster.x)).toBe(100);
+  expect(Math.round(poster.width)).toBe(300);
+  expect(Math.round(poster.height)).toBe(450);
+  // 40 px between the poster and the column, no overlap, and the column ends inside the safe area.
+  expect(Math.round(column.x - (poster.x + poster.width))).toBe(40);
+  expect(column.x + column.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
+  // The column is 800 px wide, and in a 1280 px window it ends at the right safe margin (95 %).
+  if (size.width === 1920) expect(Math.round(column.width)).toBe(800);
+  else expect(Math.round(column.x + column.width)).toBe(Math.round(size.width * 0.95));
+  // The shade stays at full strength (0.92) up to 66 % of the width, past the column's end.
+  const shade = await page
+    .locator('.detail-shade')
+    .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundImage);
+  expect(shade).toContain('rgba(0, 0, 0, 0.92) 66%');
+  // Bottom-aligned with the column (title block, facts, synopsis, credits and the action row).
+  expect(Math.abs(poster.y + poster.height - (column.y + column.height))).toBeLessThanOrEqual(1);
+  const image = page.getByTestId('detail-poster').locator('img');
+  await expect(image).toBeVisible();
+  // Everything in the column stays left of the right safe margin, the synopsis included.
+  const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+  expect(synopsis.x + synopsis.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
+  // Nothing in the column reaches under the poster.
+  const left = await page.locator('.detail-text *').evaluateAll((els) =>
+    Math.min(
+      ...els
+        .map((el) => el.getBoundingClientRect())
+        // A `display: contents` list has no box of its own.
+        .filter((rect) => rect.width > 0)
+        .map((rect) => rect.left),
+    ),
+  );
+  expect(left).toBeGreaterThanOrEqual(poster.x + poster.width + 40 - 1);
+}
+
+for (const size of [
+  { width: 1920, height: 1080 },
+  { width: 1280, height: 720 },
+]) {
+  test(`detail page: a movie hero has the web's parts and the poster beside the column at ${size.width} px`, async ({
+    page,
+  }) => {
+    await openMovieDetail(page, size);
+    await expectHeroLayout(page, size);
+
+    await expect(page.getByTestId('detail-kicker')).toHaveText('FilmStudio Ponoc');
+    await expect(page.getByTestId('detail-tagline')).toHaveText(
+      'Half way through is still on the way.',
+    );
+    await expect(page.locator('.detail-chip')).toHaveText(['2021', 'PG', '1 Std. 43 Min.']);
+    await expect(page.locator('.detail-badge')).toHaveText(['2160P', 'HDR10', 'DTS']);
+    await expect(page.locator('.detail-ratings li')).toHaveText([
+      'IMDb 8.1',
+      'TMDB 7.9',
+      'RT 93%',
+      'Metacritic 71',
+    ]);
+    await expect(page.getByTestId('detail-credits')).toHaveText(
+      'Regie: Dana Director · Drehbuch: Wen Writer · Drama · Crime',
+    );
+    // The long synopsis is cut at six lines (36 px each), and Mehr appears.
+    const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+    expect(Math.round(synopsis.height)).toBe(216);
+    await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
+  });
+
+  test(`detail page: a series hero cuts the synopsis at three lines and counts its seasons at ${size.width} px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await openSeriesDetail(page, true);
+    await expectHeroLayout(page, size);
+
+    await expect(page.getByTestId('detail-kicker')).toHaveText('SerieAMC');
+    await expect(page.getByTestId('detail-tagline')).toHaveText('A show about a school.');
+    await expect(page.locator('.detail-chip')).toHaveText([
+      '2008–2013',
+      '18',
+      '2 Staffeln',
+      '4 Folgen',
+    ]);
+    await expect(page.locator('.detail-badge')).toHaveCount(0);
+    await expect(page.getByTestId('detail-credits')).toHaveText(
+      'Erstellt von Vince Creator · Drama · Crime · Thriller',
+    );
+    const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+    expect(Math.round(synopsis.height)).toBe(108);
+    await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
+  });
+}
+
+test('detail page: the poster fades with the text column once the focus has left the hero', async ({
+  page,
+}) => {
+  await openMovieDetail(page, { width: 1920, height: 1080 });
+  const opacity = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
+  expect(await opacity('.detail-poster')).toBe('1');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await expect.poll(() => opacity('.detail-poster')).toBe('0');
+  await expect.poll(() => opacity('.detail-text')).toBe('0');
+});
+
+test('detail page: many chips and badges wrap inside the text column', async ({ page }) => {
+  await page.route('**/api/v2/catalog/items/m2*', async (route) => {
+    const response = await route.fetch();
+    const item = await response.json();
+    item.content_rating = 'UNRATED EXTENDED DIRECTORS CUT EDITION';
+    await route.fulfill({ response, json: item });
+  });
+  await openMovieDetail(page, { width: 1920, height: 1080 });
+  await expect(page.locator('.detail-chip')).toHaveCount(3);
+  const column = (await page.locator('.detail-text').boundingBox())!;
+  const boxes = await page
+    .locator('.detail-chip, .detail-badge')
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.top, r.right]));
+  expect(boxes).toHaveLength(6);
+  // More than one line of chips, and none reaches out of the column.
+  expect(new Set(boxes.map(([top]) => Math.round(top!))).size).toBeGreaterThan(1);
+  for (const [, right] of boxes) expect(right!).toBeLessThanOrEqual(column.x + column.width + 1);
 });
 
 test('detail page: a tall hero holds its content, the page scrolls smoothly to measured tops and the hero fades', async ({

@@ -8,11 +8,14 @@ export function DetailSkeleton() {
   return (
     <div role="status" aria-label={t('detail.loading')} data-testid="detail-skeleton">
       <div className="detail-hero" style={{ height: HERO_HEIGHT }} aria-hidden="true">
-        <div className="detail-text">
-          <div className="skeleton-bar detail-skeleton-title" />
-          <div className="skeleton-bar detail-skeleton-meta" />
-          <div className="skeleton-bar detail-skeleton-synopsis" />
-          <div className="skeleton-bar detail-skeleton-play" />
+        <div className="detail-hero-row">
+          <div className="detail-poster" />
+          <div className="detail-text">
+            <div className="skeleton-bar detail-skeleton-title" />
+            <div className="skeleton-bar detail-skeleton-meta" />
+            <div className="skeleton-bar detail-skeleton-synopsis" />
+            <div className="skeleton-bar detail-skeleton-play" />
+          </div>
         </div>
       </div>
       <RowSkeleton shape="poster" />

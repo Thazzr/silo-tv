@@ -1,24 +1,37 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
-import { useMediaUrl } from '../../ui/media';
+import { Artwork, useMediaUrl } from '../../ui/media';
 import { useProfileSetting } from '../settings/profileSettings';
-import { creditLine, metaLine, qualityBadges, ratingEntries, type ItemDetail } from './info';
+import {
+  detailChips,
+  heroCredits,
+  isSeries,
+  kicker,
+  qualityBadges,
+  ratingEntries,
+  type ItemDetail,
+  type Season,
+} from './info';
 
 /**
- * A synopsis longer than this many characters is taken to be cut at four lines when the layout
- * cannot say (it is measured wherever there is a layout): 26 px text in a 900 px column.
+ * How many characters of 26 px text one line holds (an 800 to 900 px column). A synopsis longer
+ * than `lines` of them is taken to be cut when the layout cannot say (it is measured wherever
+ * there is a layout).
  */
-const FOUR_LINES_CHARS = 275;
+const CHARS_PER_LINE = 60;
 
-/** The synopsis, at most four lines, with "More" under it when the text goes on. */
+/** The synopsis, at most `lines` lines, with "More" under it when the text goes on. */
 export function Synopsis({
   text,
   onMore,
+  lines = 4,
   dimmed = false,
 }: {
   text: string;
   onMore: () => void;
+  /** How many lines are shown before the text is cut. */
+  lines?: number;
   /** The text is being translated: it is drawn dimmer (by its colour, not by opacity). */
   dimmed?: boolean;
 }) {
@@ -30,11 +43,17 @@ export function Synopsis({
     // Without a layout (the unit tests) every box is 0 px high: the length estimate stands.
     if (el && el.clientHeight > 0) setMeasured(el.scrollHeight > el.clientHeight + 1);
     else setMeasured(null);
-  }, [text]);
-  const clamped = measured ?? text.length > FOUR_LINES_CHARS;
+  }, [text, lines]);
+  const clamped = measured ?? text.length > lines * CHARS_PER_LINE;
   return (
     <>
-      <p ref={ref} className="detail-synopsis" data-testid="detail-synopsis" data-dimmed={dimmed}>
+      <p
+        ref={ref}
+        className="detail-synopsis"
+        data-testid="detail-synopsis"
+        data-dimmed={dimmed}
+        style={{ WebkitLineClamp: lines }}
+      >
         {text}
       </p>
       {clamped ? (
@@ -81,8 +100,9 @@ export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrol
 }
 
 /**
- * The top of a detail page: the title art or the title, the metadata line, quality badges and
- * external ratings, the synopsis, the credit line and the action row (`actions`).
+ * The top of a detail page, like the web's hero: the poster beside a column with the kicker, the
+ * title art or the title, the tagline, the chips and quality badges, the external ratings, the
+ * synopsis, the credit line and the action row (`actions`).
  */
 export function DetailHero({
   detail,
@@ -90,6 +110,7 @@ export function DetailHero({
   onMore,
   faded = false,
   translation = null,
+  seasons,
 }: {
   detail: ItemDetail;
   actions: ReactNode;
@@ -98,6 +119,8 @@ export function DetailHero({
   faded?: boolean;
   /** The line under the synopsis: the description is being translated, or was translated by AI. */
   translation?: 'translating' | 'ai' | null;
+  /** A series' season list, which its season and episode chips count; empty while it loads. */
+  seasons: readonly Season[];
 }) {
   const t = useT();
   const url = useMediaUrl();
@@ -109,72 +132,126 @@ export function DetailHero({
   // reserved (same size) so the page does not jump once the answer arrives.
   const showLogo = hasLogo && titleArt.known && titleArt.value;
   const reserveLogo = hasLogo && !titleArt.known;
-  const meta = metaLine(detail, t);
+  const { type, name: studio } = kicker(detail, t);
+  const chips = detailChips(detail, seasons, t);
   const badges = qualityBadges(detail);
   const ratings = ratingEntries(detail);
-  const credits = creditLine(detail, t);
+  const { credits, genres } = heroCredits(detail, t);
+  // The credit line's pieces, joined by dots: the credits, then all genres as one piece.
+  const creditPieces: ReactNode[] = credits.map((credit) => (
+    <Fragment key={credit.label}>
+      <span className="detail-credit-label">{credit.label}</span>{' '}
+      <span className="detail-credit-names">{credit.names}</span>
+    </Fragment>
+  ));
+  if (genres.length > 0) {
+    creditPieces.push(
+      <span key="genres" className="detail-credit-names">
+        {genres.join(' · ')}
+      </span>,
+    );
+  }
+  const series = isSeries(detail);
 
   return (
     <div className="detail-hero" data-testid="detail-hero">
-      <div className="detail-text" data-faded={faded}>
-        {reserveLogo ? (
-          <div className="detail-logo" data-testid="detail-logo-reserve" />
-        ) : showLogo ? (
-          <img
-            className="detail-logo"
-            data-testid="detail-logo"
-            src={logo}
-            alt={detail.title}
-            onError={() => setFailed(logo)}
+      <div className="detail-hero-row">
+        <div className="detail-poster" data-testid="detail-poster" data-faded={faded}>
+          <Artwork
+            src={url(detail.poster_url)}
+            thumbhash={detail.poster_thumbhash}
+            title={detail.title}
           />
-        ) : (
-          <h1 className="detail-title" data-testid="detail-title">
-            {detail.title}
-          </h1>
-        )}
-        {meta ? (
-          <p className="detail-meta" data-testid="detail-meta">
-            {meta}
+        </div>
+        <div className="detail-text" data-faded={faded}>
+          <p className="detail-kicker" data-testid="detail-kicker">
+            {type}
+            {studio ? (
+              <>
+                <span className="detail-kicker-dot" aria-hidden="true" />
+                <span className="detail-kicker-name">{studio}</span>
+              </>
+            ) : null}
           </p>
-        ) : null}
-        {badges.length > 0 || ratings.length > 0 ? (
-          <div className="detail-facts">
-            {badges.length > 0 ? (
-              <ul
-                className="detail-badges"
-                data-testid="detail-badges"
-                aria-label={t('detail.quality')}
-              >
-                {badges.map((badge) => (
-                  <li key={badge} className="detail-badge">
-                    {badge}
+          {reserveLogo ? (
+            <div className="detail-logo" data-testid="detail-logo-reserve" />
+          ) : showLogo ? (
+            <img
+              className="detail-logo"
+              data-testid="detail-logo"
+              src={logo}
+              alt={detail.title}
+              onError={() => setFailed(logo)}
+            />
+          ) : (
+            <h1 className="detail-title" data-testid="detail-title">
+              {detail.title}
+            </h1>
+          )}
+          {detail.tagline ? (
+            <p className="detail-tagline" data-testid="detail-tagline">
+              {detail.tagline}
+            </p>
+          ) : null}
+          {chips.length > 0 || badges.length > 0 ? (
+            <div className="detail-chiprow">
+              <ul className="detail-chips" data-testid="detail-chips">
+                {chips.map((chip) => (
+                  <li key={chip} className="detail-chip">
+                    {chip}
                   </li>
                 ))}
               </ul>
-            ) : null}
-            {ratings.length > 0 ? (
-              <ul className="detail-ratings" data-testid="detail-ratings">
-                {ratings.map((rating) => (
-                  <li key={rating.key}>{rating.text}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-        {detail.overview ? (
-          <Synopsis text={detail.overview} onMore={onMore} dimmed={translation === 'translating'} />
-        ) : null}
-        {translation ? (
-          <p className="detail-translation" data-testid="detail-translation">
-            {t(translation === 'translating' ? 'detail.translating' : 'detail.translatedByAi')}
-          </p>
-        ) : null}
-        {credits ? (
-          <p className="detail-credits" data-testid="detail-credits">
-            {credits}
-          </p>
-        ) : null}
-        {actions}
+              {badges.length > 0 ? (
+                <ul
+                  className="detail-badges"
+                  data-testid="detail-badges"
+                  aria-label={t('detail.quality')}
+                >
+                  {badges.map((badge) => (
+                    <li key={badge} className="detail-badge">
+                      {badge}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+          {ratings.length > 0 ? (
+            <ul className="detail-ratings" data-testid="detail-ratings">
+              {ratings.map((rating) => (
+                <li key={rating.key}>
+                  <span className="detail-rating-name">{rating.name}</span>{' '}
+                  <span className="detail-rating-value">{rating.value}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {detail.overview ? (
+            <Synopsis
+              text={detail.overview}
+              onMore={onMore}
+              lines={series ? 3 : 6}
+              dimmed={translation === 'translating'}
+            />
+          ) : null}
+          {translation ? (
+            <p className="detail-translation" data-testid="detail-translation">
+              {t(translation === 'translating' ? 'detail.translating' : 'detail.translatedByAi')}
+            </p>
+          ) : null}
+          {creditPieces.length > 0 ? (
+            <p className="detail-credits" data-testid="detail-credits">
+              {creditPieces.map((piece, index) => (
+                <Fragment key={index}>
+                  {index > 0 ? <span className="detail-credit-sep">{' · '}</span> : null}
+                  {piece}
+                </Fragment>
+              ))}
+            </p>
+          ) : null}
+          {actions}
+        </div>
       </div>
     </div>
   );

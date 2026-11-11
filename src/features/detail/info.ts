@@ -2,6 +2,7 @@
 // credit lines, the quality badges and an episode's progress.
 import type { components } from '../../api/generated/schema';
 import type { MessageKey } from '../../i18n';
+import { audioCodecBadge, type AudioTrackFormat } from '../../playback/audioLabel';
 import { resumePoint } from '../../playback/resume';
 
 type S = components['schemas'];
@@ -22,127 +23,231 @@ export function runtimeLabel(minutes: number | undefined, t: Translate): string 
   return minutes && minutes > 0 ? runtimeText(minutes, t) : null;
 }
 
-const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
+export const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 
-/** Year, runtime (or the number of seasons), content rating and the first genres. */
-export function metaLine(detail: ItemDetail, t: Translate): string {
-  const parts: string[] = [];
-  if (detail.year) parts.push(String(detail.year));
+type FileVersion = S['FileVersion'];
+
+const RESOLUTION_RANK: Record<string, number> = {
+  '4k': 4,
+  '2160p': 4,
+  '1440p': 3,
+  '1080p': 2,
+  '720p': 1,
+  '480p': 0,
+};
+
+const resolutionScore = (resolution: string): number =>
+  RESOLUTION_RANK[resolution.toLowerCase()] ?? -1;
+
+/**
+ * The version the page describes (its runtime and quality badges): the one the profile played
+ * last, else the one the server resolved for the profile (`effective_version_*`), else the sharpest
+ * one; an edition the profile chose narrows the choice first.
+ */
+export function selectedVersion(detail: ItemDetail): FileVersion | undefined {
+  const edition = detail.effective_version_edition_key ?? detail.user_data?.last_edition_key;
+  const inEdition = detail.versions.filter((version) => version.edition_key === edition);
+  const candidates = inEdition.length > 0 ? inEdition : detail.versions;
+  const last = detail.user_data?.last_file_id;
+  const played = candidates.find((version) => version.file_id === last);
+  if (played) return played;
+  const resolved = candidates.find(
+    (version) =>
+      version.resolution === detail.effective_version_resolution &&
+      version.hdr === detail.effective_version_hdr,
+  );
+  if (resolved) return resolved;
+  return [...candidates].sort(
+    (a, b) => resolutionScore(b.resolution) - resolutionScore(a.resolution),
+  )[0];
+}
+
+const yearOf = (date: string | undefined): number | undefined => {
+  const year = Number.parseInt(date ?? '', 10);
+  return Number.isNaN(year) ? undefined : year;
+};
+
+/** "2008–2013" for a series that ran over several years, else its first year; a movie's year. */
+function yearChip(detail: ItemDetail): string | null {
+  if (!isSeries(detail)) return detail.year ? String(detail.year) : null;
+  const first = yearOf(detail.first_air_date) ?? detail.year;
+  if (!first) return null;
+  const last = yearOf(detail.last_air_date);
+  return last !== undefined && last !== first ? `${first}–${last}` : String(first);
+}
+
+/** "1 Std. 43 Min." / "43 Min." (en "1h 43m" / "43m"): the web's runtime chip, hours with minutes. */
+function runtimeChip(minutes: number, t: Translate): string | null {
+  if (minutes <= 0) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? t('detail.runtimeHoursMinutes', { h, m }) : t('detail.runtimeMinutes', { m });
+}
+
+/**
+ * The chips under the title, in the web's order. A movie: year, content rating, runtime of the
+ * selected version. A series: years, content rating, the numbers of seasons and episodes (from the
+ * season list, so they are missing until that has loaded: it is empty before).
+ */
+export function detailChips(
+  detail: ItemDetail,
+  seasons: readonly Season[],
+  t: Translate,
+): string[] {
+  const chips: (string | null)[] = [yearChip(detail), detail.content_rating ?? null];
   if (isSeries(detail)) {
-    if (detail.season_count && detail.season_count > 0) {
-      parts.push(
-        detail.season_count === 1
-          ? t('detail.seasonOne')
-          : t('detail.seasonCount', { count: detail.season_count }),
+    const episodes = seasons.reduce((sum, season) => sum + (season.episode_count ?? 0), 0);
+    const count = seasons.length;
+    if (count > 0) {
+      chips.push(count === 1 ? t('detail.seasonOne') : t('detail.seasonCount', { count }));
+    }
+    if (episodes > 0) {
+      chips.push(
+        episodes === 1 ? t('detail.episodeOne') : t('detail.episodeCount', { count: episodes }),
       );
     }
   } else {
-    const runtime = runtimeLabel(detail.runtime, t);
-    if (runtime) parts.push(runtime);
+    const seconds = selectedVersion(detail)?.duration ?? 0;
+    chips.push(runtimeChip(seconds > 0 ? Math.round(seconds / 60) : (detail.runtime ?? 0), t));
   }
-  if (detail.content_rating) parts.push(detail.content_rating);
-  parts.push(...detail.genres.slice(0, 3));
-  return parts.join(' · ');
+  return chips.filter((chip): chip is string => Boolean(chip));
 }
 
-/** The server's chosen external ratings as "IMDb 8.5", at most three, in the server's order. */
-export function ratingEntries(detail: ItemDetail): { key: string; text: string }[] {
+/** The type and, when the item has one, its first studio (movie) or network (series). */
+export function kicker(detail: ItemDetail, t: Translate): { type: string; name: string | null } {
+  const series = isSeries(detail);
+  return {
+    type: t(series ? 'detail.kicker.series' : 'detail.kicker.movie'),
+    name: (series ? detail.networks : detail.studios)?.[0] || null,
+  };
+}
+
+/** The server's chosen external ratings as source name and score, every one, in its order. */
+export function ratingEntries(detail: ItemDetail): { key: string; name: string; value: string }[] {
   return detail.ratings
     .filter((rating) => rating.display)
-    .slice(0, 3)
-    .map((rating) => ({ key: rating.source, text: `${rating.name} ${rating.display}`.trim() }));
+    .map((rating) => ({ key: rating.source, name: rating.name, value: rating.display }));
 }
 
 function unique(names: string[]): string[] {
   return names.filter((name, index) => name && names.indexOf(name) === index);
 }
 
-/**
- * "Directed by A, B" for a movie (up to two directors), "Starring A, B, C" for a series (the first
- * three of the cast); a movie without a director credit falls back to its cast. Empty when the
- * item names nobody.
- */
-export function creditLine(detail: ItemDetail, t: Translate): string {
-  const cast = [...detail.cast]
-    .sort((a, b) => a.order - b.order)
-    .map((person) => person.name.trim());
-  if (!isSeries(detail)) {
-    const directors = unique(
-      detail.crew
-        .filter((person) => person.job.trim().toLowerCase() === 'director')
-        .map((person) => person.name.trim()),
-    ).slice(0, 2);
-    if (directors.length > 0) return t('detail.directedBy', { names: directors.join(', ') });
-  }
-  const starring = unique(cast).slice(0, 3);
-  return starring.length > 0 ? t('detail.starring', { names: starring.join(', ') }) : '';
+export interface HeroCredits {
+  /** The leading credit, then the writers; each with its label and its names joined by ", ". */
+  credits: { label: string; names: string }[];
+  genres: string[];
 }
 
-export type QualityBadge =
-  '4K' | 'HDR10' | 'HDR10+' | 'HDR' | 'Dolby Vision' | 'Dolby Atmos' | '5.1' | '7.1';
+/**
+ * The credit line under the synopsis, as the web draws it: the lead credit (a movie's directors; a
+ * series' creators, else its directors; two names at most), the writers (job Writer or Screenplay,
+ * two at most) and all genres.
+ */
+export function heroCredits(detail: ItemDetail, t: Translate): HeroCredits {
+  const named = (jobs: readonly string[]) =>
+    unique(
+      detail.crew
+        .filter((person) => jobs.includes(person.job.trim().toLowerCase()))
+        .map((person) => person.name.trim()),
+    ).slice(0, 2);
+  const series = isSeries(detail);
+  const creators = series ? named(['creator']) : [];
+  const lead = creators.length > 0 ? creators : named(['director']);
+  const credits = [
+    { label: t(series ? 'detail.credit.createdBy' : 'detail.credit.directedBy'), names: lead },
+    { label: t('detail.credit.writtenBy'), names: named(['writer', 'screenplay']) },
+  ];
+  return {
+    credits: credits
+      .filter((credit) => credit.names.length > 0)
+      .map((credit) => ({ label: credit.label, names: credit.names.join(', ') })),
+    genres: detail.genres,
+  };
+}
 
-/** Badges in the order they are drawn. */
-const BADGE_ORDER: QualityBadge[] = [
-  '4K',
-  'Dolby Vision',
-  'HDR10+',
-  'HDR10',
-  'HDR',
-  'Dolby Atmos',
-  '7.1',
-  '5.1',
+// The order of a version's audio codecs when the best one is picked for the badge. A codec the web
+// does not rank (AC3, ...) never gets a badge there, and none does here.
+const AUDIO_RANK: [string, number][] = [
+  ['atmos', 6],
+  ['truehd', 5],
+  ['dts-hd', 4],
+  ['dts:x', 4],
+  ['dts', 3],
+  ['flac', 2],
+  ['eac3', 1],
+  ['e-ac-3', 1],
+  ['aac', 0],
 ];
 
-const UHD = /2160|4k|uhd/i;
+const audioScore = (codec: string): number => {
+  const lower = codec.toLowerCase();
+  return AUDIO_RANK.find(([key]) => lower.includes(key))?.[1] ?? -1;
+};
 
 /**
- * The quality badges of an item: only what one of its files really has. Resolution and range come
- * from the versions' video tracks (the version's own flags where a track says nothing), the audio
- * badges from their audio tracks. A series has no versions of its own; its best-file summary
- * (`overlay_summary`) stands in.
+ * The audio badge of a version: its best-ranked audio codec, worded by the player's rule
+ * (`audioCodecBadge`); of two equally ranked tracks the Atmos one (equal ranks differ in their
+ * wording only by Atmos evidence). The file's own codec counts as a track too, for a version that
+ * lists none.
  */
-export function qualityBadges(detail: ItemDetail): QualityBadge[] {
-  const found = new Set<QualityBadge>();
-  for (const version of detail.versions) {
-    if (UHD.test(version.resolution)) found.add('4K');
-    const tracks = version.video_tracks ?? [];
-    let range = false;
-    for (const track of tracks) {
-      if ((track.height ?? 0) >= 2000 || (track.width ?? 0) >= 3600) found.add('4K');
-      const text = `${track.video_range_type ?? ''} ${track.video_range ?? ''}`.toLowerCase();
-      if (track.dolby_vision || track.dv_config_present || (track.dv_profile ?? 0) > 0) {
-        found.add('Dolby Vision');
-        range = true;
-      }
-      if (track.hdr10_plus || text.includes('hdr10+') || text.includes('hdr10plus')) {
-        found.add('HDR10+');
-        range = true;
-      } else if (text.includes('hdr10') || track.color_transfer === 'smpte2084') {
-        found.add('HDR10');
-        range = true;
-      }
-    }
-    if (version.hdr && !range) found.add('HDR');
-    for (const audio of version.audio_tracks ?? []) {
-      const text = `${audio.profile ?? ''} ${audio.title ?? ''} ${audio.embedded_title ?? ''} ${audio.layout ?? ''}`;
-      if (/atmos|\bjoc\b/i.test(text)) found.add('Dolby Atmos');
-      if (audio.channels === 6 || /5\.1/.test(audio.layout ?? '')) found.add('5.1');
-      if (audio.channels === 8 || /7\.1/.test(audio.layout ?? '')) found.add('7.1');
+function audioBadge(version: FileVersion): string | null {
+  const own: AudioTrackFormat[] = version.codec_audio ? [{ codec: version.codec_audio }] : [];
+  let best: { badge: string; score: number } | null = null;
+  for (const track of [...own, ...(version.audio_tracks ?? [])]) {
+    const score = audioScore(track.codec ?? '');
+    const badge = audioCodecBadge(track);
+    const atmosOverBest = best !== null && score === best.score && !best.badge.includes('Atmos');
+    if (badge !== null && score >= 0 && (best === null || score > best.score || atmosOverBest)) {
+      best = { badge, score };
     }
   }
-  const summary = detail.versions.length === 0 ? detail.overlay_summary : undefined;
-  if (summary) {
-    if (UHD.test(summary.resolution ?? '')) found.add('4K');
-    const hdr = (summary.hdr ?? '').toLowerCase();
-    if (/dolby|dovi|\bdv\b/.test(hdr)) found.add('Dolby Vision');
-    else if (hdr.includes('hdr10+')) found.add('HDR10+');
-    else if (hdr.includes('hdr10')) found.add('HDR10');
-    else if (hdr.includes('hdr')) found.add('HDR');
-    if (/atmos/i.test(summary.audio ?? '')) found.add('Dolby Atmos');
-    if (/5\.1/.test(summary.audio_channels ?? '')) found.add('5.1');
-    if (/7\.1/.test(summary.audio_channels ?? '')) found.add('7.1');
-  }
-  return BADGE_ORDER.filter((badge) => found.has(badge));
+  return best?.badge ?? null;
+}
+
+function trackHasDolbyVision(track: S['VideoTrack']): boolean {
+  if (track.dolby_vision?.trim()) return true;
+  if ((track.dv_profile ?? 0) > 0) return true;
+  return (track.video_range_type?.trim() ?? '').startsWith('DOVI');
+}
+
+// The HDR variant a track names: from the scanner's range type, else from the colour transfer.
+function trackHdrType(track: S['VideoTrack']): string {
+  const type = track.video_range_type?.trim() ?? '';
+  if (track.hdr10_plus || type.includes('HDR10Plus')) return 'HDR10+';
+  if (type === 'HDR10' || type.endsWith('WithHDR10')) return 'HDR10';
+  if (type === 'HLG' || type.endsWith('WithHLG')) return 'HLG';
+  const transfer = track.color_transfer?.toLowerCase() ?? '';
+  if (transfer.includes('smpte2084')) return 'HDR10';
+  if (transfer.includes('arib-std-b67')) return 'HLG';
+  return '';
+}
+
+/**
+ * The dynamic range of a version as the web labels it: "DV", "DV HDR10", "DV HDR10+", "DV HLG",
+ * "HDR10+", "HDR10", "HLG" or the bare "HDR" (only the file's flag says so); "" for SDR.
+ */
+export function videoRangeLabel(version: FileVersion): string {
+  const tracks = version.video_tracks ?? [];
+  const dolby = tracks.some(trackHasDolbyVision);
+  const hdr = tracks.map(trackHdrType).find(Boolean) ?? '';
+  if (dolby) return hdr ? `DV ${hdr}` : 'DV';
+  if (hdr) return hdr;
+  return version.hdr ? 'HDR' : '';
+}
+
+/**
+ * The quality badges of a movie, from the selected version: resolution ("2160P"), dynamic range
+ * and the best audio codec. A series has none.
+ */
+export function qualityBadges(detail: ItemDetail): string[] {
+  const version = isSeries(detail) ? undefined : selectedVersion(detail);
+  if (!version) return [];
+  return [
+    version.resolution.toUpperCase(),
+    videoRangeLabel(version),
+    audioBadge(version) ?? '',
+  ].filter(Boolean);
 }
 
 /**

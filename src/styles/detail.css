@@ -30,6 +30,7 @@
 
 /* Blocks above the one that holds the focus fade out, so nothing is half cut at the top edge. */
 .detail-text,
+.detail-poster,
 [data-zone] {
   transition: opacity var(--scroll-transition);
 }
@@ -38,6 +39,7 @@
    transition start or end promotes or demotes a layer and re-rasters the full-screen 4K backdrop
    on the TV (a stall of about 80 ms in the scroll). */
 .detail-text,
+.detail-poster,
 .detail-page [data-zone],
 .detail-dim,
 .detail-backdrop-layer {
@@ -45,8 +47,35 @@
 }
 
 .detail-text[data-faded='true'],
+.detail-poster[data-faded='true'],
 [data-zone][data-faded='true'] {
   opacity: 0;
+}
+
+/* The web's hero: the poster (220 x 330 there) left of the text column, bottom-aligned with it
+   (300 px, 40 px, 800 px; e2e/flow.spec.ts measures them). */
+.detail-hero-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+}
+
+.detail-poster {
+  position: relative;
+  box-sizing: border-box;
+  width: 300px;
+  height: 450px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  /* The web's inset highlight; no drop shadow, which a TV cannot afford over the backdrop. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* The 800 px column, but never past the right safe margin (5 %) of a narrower, 1280 px window. */
+.detail-hero-row > .detail-text {
+  width: min(800px, calc(95vw - 440px));
 }
 
 /* The picture and its darkening sit behind the page and do not scroll with it. */
@@ -66,10 +95,11 @@
   object-position: right top;
 }
 
-/* Darkens the picture so the text keeps 4.5:1 even over a white backdrop. The text column
-   (100 to 1000 px) lies under at least 92 % black (DETAIL_SHADE_MIN_ALPHA): the lightest
-   picture is then darker than #141414, which gives the secondary text above 6:1. The foot only darkens a little, so the
-   lower half of the screen still shows the picture behind the episodes. */
+/* Darkens the picture so the text keeps 4.5:1 even over a white backdrop. The poster and the text
+   column (100 to 1240 px) lie under at least 92 % black (DETAIL_SHADE_MIN_ALPHA, up to 66 % of
+   the width = 1267 px: the lightest picture is then darker than #141414,
+   which gives the secondary text above 6:1. The foot only darkens a little, so the lower half of
+   the screen still shows the picture behind the episodes. */
 .detail-shade {
   position: absolute;
   inset: 0;
@@ -84,8 +114,8 @@
     linear-gradient(
       90deg,
       rgba(0, 0, 0, 0.96) 0,
-      rgba(0, 0, 0, 0.92) 56%,
-      rgba(0, 0, 0, 0.3) 88%,
+      rgba(0, 0, 0, 0.92) 66%,
+      rgba(0, 0, 0, 0.3) 92%,
       rgba(0, 0, 0, 0.1) 100%
     );
 }
@@ -140,35 +170,98 @@
   color: rgba(237, 237, 237, 0.88);
 }
 
-.detail-facts {
+/* The context line above the title: "MOVIE · STUDIO". */
+.detail-kicker {
   display: flex;
   align-items: center;
-  gap: 28px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30px;
+  color: var(--text-secondary);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
-.detail-badges,
-.detail-ratings {
+.detail-kicker-dot {
+  width: 6px;
+  height: 6px;
+  margin: 0 14px;
+  background: currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.detail-kicker-name {
+  color: rgba(237, 237, 237, 0.85);
+}
+
+.detail-tagline {
+  margin: 0;
+  font-size: 24px;
+  font-style: italic;
+  line-height: 34px;
+  color: rgba(237, 237, 237, 0.72);
+}
+
+/* The chips and the quality badges wrap as one row; the two lists only group them. */
+.detail-chiprow {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.detail-chips,
+.detail-badges {
+  display: contents;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.detail-chip,
 .detail-badge {
-  padding: 4px 12px;
-  font-size: var(--fs-small);
+  padding: 4px 16px;
+  font-size: 22px;
   font-weight: 600;
-  line-height: 26px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  line-height: 30px;
+  background: rgba(237, 237, 237, 0.08);
+  border: 1px solid rgba(237, 237, 237, 0.22);
+  border-radius: 999px;
+}
+
+.detail-chip {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The badges are cornered where the chips are round, as on the web. */
+.detail-badge {
+  letter-spacing: 0.06em;
+  background: rgba(237, 237, 237, 0.1);
   border-radius: 8px;
 }
 
 .detail-ratings {
-  gap: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 32px;
+}
+
+.detail-rating-name {
   font-size: 22px;
   font-weight: 600;
-  line-height: 30px;
+  color: rgba(237, 237, 237, 0.75);
+}
+
+.detail-rating-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-synopsis {
@@ -200,6 +293,18 @@
   font-size: 23px;
   line-height: 31px;
   color: var(--text-secondary);
+}
+
+.detail-credit-label {
+  color: rgba(237, 237, 237, 0.6);
+}
+
+.detail-credit-names {
+  color: rgba(237, 237, 237, 0.85);
+}
+
+.detail-credit-sep {
+  color: rgba(237, 237, 237, 0.45);
 }
 
 /* Rows of buttons inside the detail page sit side by side with no margin of their own. */
@@ -374,6 +479,7 @@
 
 .detail-skeleton-synopsis {
   width: 900px;
+  max-width: 100%;
   height: 144px;
 }
 

@@ -438,6 +438,7 @@ function DetailBody({
             detail={detail}
             faded={fade('hero') === 'true'}
             translation={translationLine}
+            seasons={seasons}
             onMore={() => setSynopsisOpen(true)}
             actions={
               playId ? (

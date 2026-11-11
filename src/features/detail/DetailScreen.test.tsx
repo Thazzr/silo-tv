@@ -133,12 +133,12 @@ describe('DetailScreen: a movie', () => {
     setup({ itemId: 'm1' });
     await ready();
     expect(screen.getByTestId('detail-title')).toHaveTextContent('First Title');
-    expect(screen.getByTestId('detail-meta')).toHaveTextContent(
-      '2019 · 1 h 32 min · PG-13 · Drama · Mystery · Thriller',
-    );
+    expect(screen.getByTestId('detail-chips')).toHaveTextContent('2019PG-131h 30m');
     expect(screen.getByTestId('detail-ratings')).toHaveTextContent('IMDb 8.5');
     expect(screen.getByTestId('detail-ratings')).toHaveTextContent('TMDB 7.9');
-    expect(screen.getByTestId('detail-credits')).toHaveTextContent('Directed by Dana Director');
+    expect(screen.getByTestId('detail-credits')).toHaveTextContent(
+      'Directed by Dana Director · Drama · Mystery · Thriller · Comedy',
+    );
     expect(screen.getByTestId('detail-synopsis')).toHaveTextContent('A short synopsis.');
     expect(screen.getByTestId('detail-backdrop')).toHaveAttribute(
       'src',
@@ -188,12 +188,18 @@ describe('DetailScreen: a movie', () => {
     const badges = within(screen.getByTestId('detail-badges'))
       .getAllByRole('listitem')
       .map((el) => el.textContent);
-    // Dolby Vision, 4K and 5.1 are there; HDR10 and Dolby Atmos are not.
-    expect(badges).toEqual(['4K', 'Dolby Vision', '5.1']);
+    // The resolution, the range the file's flag says and the audio of the file, in that order.
+    expect(badges).toEqual(['2160P', 'HDR', 'AAC']);
   });
 
-  it('has no badge row for a plain file', async () => {
-    serveDetail(server);
+  it('has no badge list for a file without quality, and no ratings or credit line for a bare item', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          versions: [fileVersion({ resolution: '', codec_audio: '' })],
+          genres: [],
+        }),
+    });
     setup({ itemId: 'm1' });
     await ready();
     expect(screen.queryByTestId('detail-badges')).toBeNull();
@@ -366,7 +372,7 @@ describe('DetailScreen: a movie', () => {
     });
     setup({ itemId: 'm1' });
     await ready();
-    expect(screen.getByTestId('art-tile')).toHaveTextContent('AB');
+    expect(screen.getByText('AB')).toHaveAttribute('data-testid', 'art-tile');
   });
 
   it('moves between the buttons, the cast and the similar titles with the arrow keys', async () => {
@@ -386,6 +392,240 @@ describe('DetailScreen: a movie', () => {
     await focusKeyIs('card:cast:0-First Actor');
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
+  });
+});
+
+describe('DetailScreen: the hero like the web', () => {
+  const listItems = (testId: string) =>
+    within(screen.getByTestId(testId))
+      .getAllByRole('listitem')
+      .map((el) => el.textContent);
+
+  it('draws the kicker with the first studio of a movie, and with no second part without one', async () => {
+    serveDetail(server, { item: () => itemDetail({ studios: ['Studio Ponoc', 'Other'] }) });
+    const first = setup({ itemId: 'm1' });
+    await ready();
+    const kicker = screen.getByTestId('detail-kicker');
+    expect(kicker).toHaveTextContent('Movie');
+    expect(within(kicker).getByText('Studio Ponoc')).toBeInTheDocument();
+    expect(kicker).not.toHaveTextContent('Other');
+    expect(kicker.querySelector('.detail-kicker-dot')).not.toBeNull();
+    first.unmount();
+
+    serveDetail(server);
+    setup({ itemId: 'm1' });
+    await ready();
+    const bare = screen.getByTestId('detail-kicker');
+    expect(bare.textContent).toBe('Movie');
+    expect(bare.querySelector('.detail-kicker-dot')).toBeNull();
+    expect(bare.querySelector('.detail-kicker-name')).toBeNull();
+  });
+
+  it('draws the kicker of a series with its first network', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          content_id: 's1',
+          type: 'series',
+          networks: ['AMC', 'Netflix'],
+          versions: [],
+        }),
+      seasons: [seasonOf(1)],
+      episodes: () => [episodeOf(1, 1)],
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    const kicker = screen.getByTestId('detail-kicker');
+    expect(kicker).toHaveTextContent('Series');
+    expect(within(kicker).getByText('AMC')).toBeInTheDocument();
+    expect(kicker).not.toHaveTextContent('Netflix');
+  });
+
+  it('shows the tagline under the title when the item has one', async () => {
+    serveDetail(server, { item: () => itemDetail({ tagline: 'Every story has a home.' }) });
+    const first = setup({ itemId: 'm1' });
+    await ready();
+    expect(screen.getByTestId('detail-tagline')).toHaveTextContent('Every story has a home.');
+    first.unmount();
+
+    serveDetail(server);
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(screen.queryByTestId('detail-tagline')).toBeNull();
+  });
+
+  it('puts the chips of a movie before its quality badges in one row, genres in neither', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          versions: [
+            fileVersion({
+              duration: 6180,
+              resolution: '2160p',
+              hdr: true,
+              video_tracks: [
+                {
+                  video_range_type: 'HDR10',
+                  dv_config_present: false,
+                  dv_bl_compat_id_present: false,
+                  interlaced: false,
+                },
+              ],
+              codec_audio: 'dts',
+            }),
+          ],
+        }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(listItems('detail-chips')).toEqual(['2019', 'PG-13', '1h 43m']);
+    expect(listItems('detail-badges')).toEqual(['2160P', 'HDR10', 'DTS']);
+    const row = screen.getByTestId('detail-chips').parentElement!;
+    expect(row).toBe(screen.getByTestId('detail-badges').parentElement);
+    expect(row).not.toHaveTextContent('Drama');
+  });
+
+  it('still draws the badge row for a movie with no year, rating or runtime', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          year: undefined,
+          content_rating: undefined,
+          runtime: undefined,
+          versions: [fileVersion({ duration: 0, resolution: '2160p', codec_audio: 'dts' })],
+        }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(listItems('detail-badges')).toEqual(['2160P', 'DTS']);
+    expect(screen.getByTestId('detail-chips').children).toHaveLength(0);
+  });
+
+  it('counts the seasons and episodes of a series once the season list is there, with no badges', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          content_id: 's1',
+          type: 'series',
+          year: 2008,
+          first_air_date: '2008-01-20',
+          last_air_date: '2013-09-29',
+          content_rating: '18',
+        }),
+      seasons: [seasonOf(1, { episode_count: 7 }), seasonOf(2, { episode_count: 13 })],
+      episodes: () => [episodeOf(1, 1)],
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    await waitFor(() =>
+      expect(listItems('detail-chips')).toEqual(['2008–2013', '18', '2 seasons', '20 episodes']),
+    );
+    expect(screen.queryByTestId('detail-badges')).toBeNull();
+  });
+
+  it('shows every rating of the server as text, in its order', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          ratings: [
+            { source: 'imdb', name: 'IMDb', score: 85, display: '8.5' },
+            { source: 'tmdb', name: 'TMDB', score: 79, display: '7.9' },
+            { source: 'rt', name: 'RT', score: 93, display: '93%' },
+            { source: 'x', name: 'Extra', score: 10, display: '1.0' },
+          ],
+        }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    expect(listItems('detail-ratings')).toEqual(['IMDb 8.5', 'TMDB 7.9', 'RT 93%', 'Extra 1.0']);
+    expect(screen.getByTestId('detail-ratings').querySelector('img, svg')).toBeNull();
+  });
+
+  it('draws the credit line with muted labels, brighter names and a dot between the pieces', async () => {
+    serveDetail(server, {
+      item: () =>
+        itemDetail({
+          genres: ['Drama', 'Crime'],
+          crew: [
+            { name: 'Dana Director', job: 'Director' },
+            { name: 'Wen Writer', job: 'Writer' },
+          ],
+        }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    const line = screen.getByTestId('detail-credits');
+    expect(line.textContent).toBe(
+      'Directed by Dana Director · Written by Wen Writer · Drama · Crime',
+    );
+    expect(line.querySelectorAll('.detail-credit-label')).toHaveLength(2);
+    expect(line.querySelectorAll('.detail-credit-sep')).toHaveLength(2);
+  });
+
+  it('cuts a movie synopsis at six lines and a series synopsis at three', async () => {
+    // Between three and six lines of text: only the series is cut.
+    const text = 'Some words of the synopsis. '.repeat(9).trim();
+    serveDetail(server, { item: () => itemDetail({ overview: text }) });
+    const movie = setup({ itemId: 'm1' });
+    await ready();
+    expect(screen.getByTestId('detail-synopsis').getAttribute('style')).toContain('line-clamp: 6');
+    expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
+    movie.unmount();
+
+    serveDetail(server, {
+      item: () => itemDetail({ content_id: 's1', type: 'series', versions: [], overview: text }),
+      seasons: [seasonOf(1)],
+      episodes: () => [episodeOf(1, 1)],
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    expect(screen.getByTestId('detail-synopsis').getAttribute('style')).toContain('line-clamp: 3');
+    expect(button('More')).toBeInTheDocument();
+  });
+
+  it('shows the poster, asked for at the size of the page', async () => {
+    let query = new URLSearchParams();
+    server.use(
+      http.get(`${BASE_URL}/api/v2/catalog/items/:id`, ({ request }) => {
+        query = new URL(request.url).searchParams;
+        return HttpResponse.json(itemDetail({ poster_url: '/img/m1-poster.webp' }));
+      }),
+      http.get(`${BASE_URL}/api/v2/recommendations/similar/:id`, () =>
+        HttpResponse.json({ items: [] }),
+      ),
+    );
+    setup({ itemId: 'm1' });
+    await ready();
+    const poster = screen.getByTestId('detail-poster');
+    expect(poster.querySelector('img')).toHaveAttribute('src', `${BASE_URL}/img/m1-poster.webp`);
+    expect(query.get('poster_width')).toBe('352');
+  });
+
+  it('shows the title on a tile in place of a missing poster', async () => {
+    serveDetail(server);
+    setup({ itemId: 'm1' });
+    await ready();
+    const poster = screen.getByTestId('detail-poster');
+    expect(poster.querySelector('img')).toBeNull();
+    expect(within(poster).getByTestId('art-tile')).toHaveTextContent('First Title');
+  });
+
+  it('fades the poster with the text column once the focus has left the hero', async () => {
+    serveDetail(server, {
+      item: () => itemDetail({ cast: [{ name: 'First Actor', character: 'Fay', order: 0 }] }),
+    });
+    setup({ itemId: 'm1' });
+    await ready();
+    const column = screen.getByTestId('detail-hero').querySelector('.detail-text');
+    expect(column).toHaveAttribute('data-faded', 'false');
+    expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'false');
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:cast:0-First Actor');
+    await waitFor(() =>
+      expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'true'),
+    );
+    expect(column).toHaveAttribute('data-faded', 'true');
   });
 });
 
@@ -687,6 +927,11 @@ describe('DetailScreen: loading and errors', () => {
     setup({ itemId: 'm1' });
     expect(screen.getByTestId('detail-skeleton')).toBeInTheDocument();
     expect(screen.getByTestId('row-skeleton')).toBeInTheDocument();
+    // The poster stands where the poster goes, beside the text column.
+    const row = screen.getByTestId('detail-skeleton').querySelector('.detail-hero-row');
+    expect(row).not.toBeNull();
+    expect(row!.querySelector(':scope > .detail-poster')).not.toBeNull();
+    expect(row!.querySelector(':scope > .detail-text')).not.toBeNull();
     await ready();
     expect(screen.queryByTestId('detail-skeleton')).toBeNull();
   });
@@ -782,8 +1027,8 @@ describe('DetailScreen: a series', () => {
     await screen.findByTestId('episode-strip');
     expect(titles()).toEqual(['E1 · Episode 1.1', 'E2 · Episode 1.2', 'E3 · Episode 1.3']);
     expect(calls.seasons).toEqual(['s1']);
-    // The facts say seasons instead of a runtime.
-    expect(screen.getByTestId('detail-meta')).toHaveTextContent('2019 · 2 seasons');
+    // The chips count the seasons and the episodes of the season list instead of a runtime.
+    expect(screen.getByTestId('detail-chips')).toHaveTextContent('2019PG-133 seasons9 episodes');
   });
 
   it('shows number, title, runtime, synopsis, progress and the watched mark of each episode', async () => {
@@ -1159,7 +1404,11 @@ describe('DetailScreen: a series', () => {
     setup({ itemId: 's1' });
     await screen.findByRole('button', { name: /Similar One/ });
     expect(screen.queryByRole('heading', { name: 'Cast' })).toBeNull();
-    expect(screen.getByTestId('detail-credits')).toHaveTextContent('Starring An Actor');
+    // The credit line names no cast; a series without crew shows its genres only.
+    expect(screen.getByTestId('detail-credits')).toHaveTextContent(
+      'Drama · Mystery · Thriller · Comedy',
+    );
+    expect(screen.getByTestId('detail-credits')).not.toHaveTextContent('An Actor');
   });
 });
 

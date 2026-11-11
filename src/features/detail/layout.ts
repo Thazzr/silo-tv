@@ -11,7 +11,8 @@ export const HERO_HEIGHT = 760;
 export const DETAIL_TEXT_WIDTH = 900;
 /**
  * The least opacity of black over the backdrop under the text column; src/styles/detail.css draws
- * at least this (0.92 up to 1075 px). A white backdrop then shows as #141414 or darker.
+ * at least this (0.92 up to 66 % of the width, past the end of a movie's or series' text column).
+ * A white backdrop then shows as #141414 or darker.
  */
 export const DETAIL_SHADE_MIN_ALPHA = 0.92;
 /**
