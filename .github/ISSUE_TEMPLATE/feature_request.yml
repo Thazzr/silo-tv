@@ -1,0 +1,28 @@
+name: Feature request
+description: Something the app should do, or do differently.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The plan is in the [roadmap](https://github.com/Thazzr/silo-tv/blob/main/docs/roadmap.md); please check it first.
+        The app aims to offer what Silo's web client offers a viewer, made for the remote.
+  - type: textarea
+    id: what
+    attributes:
+      label: What you would like
+      description: What should the app do, and in which screen?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What are you trying to do that does not work today?
+    validations:
+      required: true
+  - type: textarea
+    id: silo
+    attributes:
+      label: In Silo's other clients
+      description: Does Silo's web client or another Silo app already do this? How?

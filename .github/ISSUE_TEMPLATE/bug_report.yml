@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in the app does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please leave out your server address, account names and tokens.
+        A problem in the Silo server itself belongs to [Silo's issue tracker](https://github.com/Silo-Server/silo-server/issues);
+        a security problem goes to [a private report](https://github.com/Thazzr/silo-tv/security/advisories/new), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The keys or clicks from a known screen, e.g. "Home → Down → OK on the first card → Play".
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: tv
+    attributes:
+      label: TV model
+      placeholder: e.g. LG OLED65C2
+    validations:
+      required: true
+  - type: input
+    id: webos
+    attributes:
+      label: webOS version
+      description: In the TV's settings under "About this TV" or "TV information".
+      placeholder: e.g. webOS 23 (8.x)
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: App version
+      description: The release you installed, or the commit you built.
+      placeholder: e.g. 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: silo
+    attributes:
+      label: Silo server version
+      placeholder: e.g. 2.4.1
+  - type: dropdown
+    id: playback
+    attributes:
+      label: Playback
+      description: For playback problems, how the title played (the player's Info panel shows the route).
+      options:
+        - Not about playback
+        - Direct play
+        - HLS (remux)
+        - HLS (transcode)
+        - Don't know
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: The Info panel's details (route, code, session), screenshots or anything else that helps. No server addresses or tokens.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This report contains no server address, account name, e-mail address or token.
+          required: true

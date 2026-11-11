@@ -7,6 +7,7 @@ made for the remote control and the couch
 
 [![CI](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml)
 [![Mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fthazzr.github.io%2Fsilo-tv%2Fbadge.json)](https://thazzr.github.io/silo-tv/mutation/)
+[![Release](https://img.shields.io/github/v/release/Thazzr/silo-tv?include_prereleases&label=release)](https://github.com/Thazzr/silo-tv/releases)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 ![Platform: LG webOS 6+](https://img.shields.io/badge/platform-LG%20webOS%206%2B-a50034.svg)
 ![Status: in development](https://img.shields.io/badge/status-in%20development-orange.svg)
@@ -82,7 +83,7 @@ Every feature and its state: [roadmap](docs/roadmap.md).
 
 ## Try it on your TV
 
-It is not in the LG Content Store yet. You can install it on an LG TV from 2021 or later (webOS 6 and newer) in Developer Mode, from source or from a package that CI built. You need a Silo server.
+It is not in the LG Content Store yet. You can install it on an LG TV from 2021 or later (webOS 6 and newer) in Developer Mode, from a [release](https://github.com/Thazzr/silo-tv/releases) or from source. You need a Silo server.
 
 → **[Install it on a TV](docs/development.md#install-it-on-a-tv)**
 
@@ -115,7 +116,7 @@ It is not in the LG Content Store yet. You can install it on an LG TV from 2021 
 
 ## Contributing
 
-Issues, ideas and pull requests are welcome. Reports from webOS versions other than the test TV's are especially useful. Contributions are made under the MPL-2.0. Please sign off your commits (`git commit -s`, the [Developer Certificate of Origin](https://developercertificate.org/)).
+Issues, ideas and pull requests are welcome. Reports from webOS versions other than the test TV's are especially useful. How to report and how to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security problems go to a [private report](SECURITY.md), never into a public issue. Everyone follows the [code of conduct](CODE_OF_CONDUCT.md); what the app does for accessibility is in [`ACCESSIBILITY.md`](ACCESSIBILITY.md).
 
 ## License
 

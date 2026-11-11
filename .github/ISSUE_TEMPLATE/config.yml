@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A problem in the Silo server
+    url: https://github.com/Silo-Server/silo-server/issues
+    about: Server problems (libraries, transcoding, accounts) belong to the Silo project.
+  - name: A security problem
+    url: https://github.com/Thazzr/silo-tv/security/advisories/new
+    about: Report it privately, never in a public issue.
