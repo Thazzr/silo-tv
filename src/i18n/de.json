@@ -162,7 +162,7 @@
   "library.pills": "Bibliotheken",
   "library.views": "Bereiche der Bibliothek",
   "library.view.recommended": "Empfohlen",
-  "library.view.browse": "Stöbern",
+  "library.view.browse": "Mediathek",
   "library.view.collections": "Sammlungen",
   "library.recommended.empty": "In dieser Bibliothek gibt es noch keine Empfehlungen.",
   "library.sort.pill": "Sortierung · {name}",

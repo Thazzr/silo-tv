@@ -279,11 +279,11 @@ describe('library pills', () => {
 });
 
 describe('sub-view pills', () => {
-  it('list Recommended, Browse and Collections with Recommended selected', async () => {
+  it('list Recommended, Library and Collections with Recommended selected', async () => {
     serveLibrary(server, LIBRARIES);
     setup();
     await screen.findByTestId('view-pills');
-    expect(pillNames('view-pills')).toEqual(['Recommended', 'Browse', 'Collections']);
+    expect(pillNames('view-pills')).toEqual(['Recommended', 'Library', 'Collections']);
     expect(screen.getByRole('tab', { name: 'Recommended' })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -315,7 +315,7 @@ describe('sub-view pills', () => {
     await focus('lib-view:browse');
     await pressKey(KEY.enter);
     await screen.findByTestId('browse');
-    expect(screen.getByRole('tab', { name: 'Browse' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Library' })).toHaveAttribute('aria-selected', 'true');
     expect(memory.viewOf('movie')).toBe('browse');
   });
 

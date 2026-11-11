@@ -162,7 +162,7 @@
   "library.pills": "Libraries",
   "library.views": "Library sections",
   "library.view.recommended": "Recommended",
-  "library.view.browse": "Browse",
+  "library.view.browse": "Library",
   "library.view.collections": "Collections",
   "library.recommended.empty": "There is nothing recommended in this library yet.",
   "library.sort.pill": "Sort · {name}",

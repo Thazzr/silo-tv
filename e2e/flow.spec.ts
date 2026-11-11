@@ -1482,7 +1482,7 @@ test('Movies: Browse filtered by two content ratings with the remote, then Back 
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Mediathek' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('browse')).toBeVisible();
   const posters = page.getByTestId('card-title');
@@ -1552,7 +1552,7 @@ test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail 
   await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
   // Right onto Browse and OK: the library's titles, A to Z.
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Mediathek' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('browse')).toBeVisible();
   const posters = page.getByTestId('card-title');
@@ -1663,7 +1663,7 @@ test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail 
 
   // Back from the poster: the sub-view pills, then the tab bar.
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('tab', { name: 'Stöbern' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Mediathek' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
 
