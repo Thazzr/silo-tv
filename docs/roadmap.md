@@ -96,7 +96,10 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - a slim scrub preview card like the web's, without the chapter title
   - the time sits above the scrubber on the right, in a mode chosen in the app's settings: elapsed / total · ends at (default), elapsed / total, remaining, ends at; 12 h or 24 h follows the profile's `ui.time_format`
   - one centred loading view from the start; slightly translucent menus and Info panel
-- ⬜ The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
+- 🟨 The profile's maximum bitrate and "lower quality when buffering" are honoured by the player
+  - ✅ the maximum bitrate goes with every start and replan, and Info shows it
+  - ✅ a seek during a quality or track change waits for it and lands where the viewer asked
+  - ⬜ lower quality when buffering (never / ask / always, the undo pill)
 - ⬜ Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
@@ -163,7 +166,8 @@ Repository and project:
 - ✅ No server addresses, account names or e-mail addresses in the repository or its history
 - ✅ Repository in English (docs, comments, commit messages, changelog)
 - ⬜ No code copied from Silo's repositories, so the store build carries only code this project owns
-- ⬜ CI on GitHub: the gate on every push and pull request
+- ✅ CI on GitHub: the gate on every push and pull request, with test counts and coverage in each run's summary and the reports as artifacts
+- 🟨 Mutation testing: a weekly StrykerJS run over all app code in 24 parallel shards; the merged report and the score badge are published on GitHub Pages (waits for the first full run)
 - ⬜ Releases: tags, the `.ipk` as a release asset, changelog from git-cliff
 - ⬜ Contribution guidelines and issue templates; contributions under the same MPL-2.0 with a DCO sign-off (no CLA needed for store distribution)
 - ⬜ An "About" page in the app's settings: version, licence, link to the source code, and the licence notices of the bundled third-party packages (required for distributing the `.ipk`)

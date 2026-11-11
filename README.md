@@ -5,6 +5,8 @@
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 ![Platform: LG webOS 6+](https://img.shields.io/badge/platform-LG%20webOS%206%2B-a50034.svg)
 ![Status: in development](https://img.shields.io/badge/status-in%20development-orange.svg)
+[![CI](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml)
+[![Mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fthazzr.github.io%2Fsilo-tv%2Fbadge.json)](https://thazzr.github.io/silo-tv/mutation/)
 
 ![The Home screen: a hero with the title's logo and the Trending row below it](docs/screenshots/home.webp)
 
@@ -101,6 +103,8 @@ npx playwright install chromium --only-shell
 | `npm run check:bundle` | checks `dist/` for webOS compatibility |
 | `npm run package` | builds the `.ipk` in `out/` |
 | `npm run verify` | the full gate (see [`tools/README.md`](tools/README.md)) |
+| `npm run test:coverage` | the unit tests with a coverage report in `reports/coverage/` |
+| `npm run test:mutation` | the mutation run with [StrykerJS](https://stryker-mutator.io) (hours for all files; `STRYKER_SHARD=3/24` runs one of the 24 shards the CI uses) |
 | `npm run tv:deploy` | build, package, install and launch on the TV named `tv` (`WEBOS_DEVICE` overrides it) |
 | `npm run tv:eval` | read the TV probe report (or any expression) from the running app through the webOS Web Inspector |
 | `npm run tv:profile` | record a sampling CPU profile of the running app on the TV (`--seconds`, `--interval`, `--out`) into `perf-results/*.cpuprofile` and print the most expensive functions; deploy with `PERF_BUILD=1 npm run tv:deploy` first for readable function names |
@@ -117,6 +121,13 @@ npx playwright install chromium --only-shell
 In the browser the same parameters work as query strings, e.g. `?probe` or `?server=…`.
 
 **In the browser against a real server:** Silo sends no CORS headers, so start `npm run dev` with `SILO_SERVER` set. The dev server then forwards `/api` to that server. In the app, enter the dev server itself (`http://localhost:5173`) as the server address, not the real one.
+
+### Quality checks
+
+Every result below can be checked without trusting a local run:
+
+- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the full gate (`tools/verify.ps1`) on every push and pull request, on GitHub's Ubuntu runners. Each run's summary shows the gate's table, the unit and E2E test counts and the code coverage. The JUnit files, the coverage report and the Playwright report are kept as artifacts for 30 days.
+- **Mutation testing** ([`.github/workflows/mutation.yml`](.github/workflows/mutation.yml)) runs StrykerJS over all app code once a week and on demand. Stryker changes the code in small ways (a `<` becomes `<=`, a condition becomes `true`, …) and counts how many of these mutants the tests catch. The files are split into 24 shards that run in parallel and are merged into one report. The report and the score behind the badge are published on [GitHub Pages](https://thazzr.github.io/silo-tv/mutation/). Results are cached, so a weekly run only re-tests code or tests that changed.
 
 ### Tech stack
 

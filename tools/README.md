@@ -1,9 +1,13 @@
 # Tools
 
-Developer tools for local verification and maintenance (PowerShell 7, `pwsh`).
+Developer tools for local verification, CI and maintenance: PowerShell 7 (`pwsh`) and plain Node scripts without dependencies.
 
 | Script | Purpose |
 |---|---|
 | `verify.ps1` | The full gate, one strand in order: script tests, `typecheck`, `lint`, `unit tests`, `build`, `bundle check`, `e2e`, `package`. A failing step stops nothing; only a failed `build` skips `bundle check`, `e2e` and `package`. It ends with a table of each step's time and result. `-Only "<step>",…` runs single steps (an unknown name exits with code 2). Also available as `npm run verify`. |
 | `verify.Tests.ps1` | Tests the pass/fail logic of `verify.ps1` (without Pester, with a fake npm) and runs as the gate's first step. The environment marker `VERIFY_SCRIPT_TESTS_RUNNING` keeps the step from starting itself again. |
+| `ci-summary.mjs` | Writes the CI job summary from the files the gate leaves in `reports/` when `CI` is set (`verify.ps1 -ReportDir`, default `reports`): the gate's table, the unit and E2E JUnit files and the coverage summary. A missing file becomes a note, never a failed job. |
+| `mutation-shards.mjs` | Holds the list of files the mutation run covers and splits it into shards (greedy by file size, deterministic). `stryker.config.mjs` reads it; `STRYKER_SHARD=k/N` runs shard k of N, and a malformed value or an empty shard stops the run instead of mutating everything. |
+| `mutation-merge.mjs` | Merges shard reports into one Stryker report (`mutation.json`, also usable as Stryker's incremental file) and an HTML page. `--expect N` fails unless all N shard reports are there, so a partial run never publishes a score; `--shard k/N` keeps one shard's files. |
+| `mutation-summary.mjs` | Turns the merged report into the CI job summary (score, counts, the ten weakest files) and the shields.io badge file. It fails when the report is missing. |
 | `update-changelog.ps1` | Regenerates `CHANGELOG.md` with [git-cliff](https://git-cliff.org) from the Conventional Commits history. `-WithCommit` includes a commit subject that is not committed yet; `-Tag` and `-TagMessage` set a version tag first. `CHANGELOG.md` is never edited by hand. |
