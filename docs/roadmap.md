@@ -118,7 +118,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ⬜ On Deck at the end of a movie and of a series' last episode: Continue Watching and Next Up items, nothing starts on its own
 - ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people.
 - ❌ Playback speed: dropped (user decision 2026-11-11). On the TV, direct play through the native video element accepts a new speed but then stutters at about half speed with no sound (TV probe 2026-11-11, webOS 26: 1.5× measured 0.49×, 0.5× measured 0.27×). A difference from the web app's speed slider that the TV forces.
-- ⬜ Aspect ratio (fit, fill, stretch), for the current title only, as in the web app; to be probed on the TV first (`object-fit` on the hardware video plane)
+- ❌ Aspect ratio (fit, fill, stretch): dropped (user decision 2026-11-11). Not needed on the TV, where the picture fills the screen as the TV's own settings say.
 - 🟨 Subtitle delay in the Subtitles menu (`player.subtitle_sync_ms`, ±100 ms per press up to ±10 s, saved 600 ms after the last press for the profile, as Silo's web client does); an audio delay is not possible with the webOS video element
 - ⬜ Start subtitles from the profile's subtitle settings (mode, language, show forced subtitles) exactly as Silo's web app resolves them; with Silo's default settings that is the forced track in the playing audio's language, which also follows an audio change until the viewer picks a subtitle (user decisions 2026-11-11)
 - ❌ Sleep timer: dropped (user decision 2026-11-10). LG TVs have a sleep timer of their own, and the progress reported every 10 s keeps the resume point when the TV turns off.
