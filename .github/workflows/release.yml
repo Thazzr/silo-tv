@@ -4,6 +4,9 @@
 # marked as a pre-release. The tag, package.json, appinfo.json, the service and the lock file must
 # agree (scripts/release-check.mjs), and the full gate must be green: a release never ships without it.
 # No secrets beyond the workflow's own token; the tag push itself is the approval.
+# Two jobs, so that the token that can write to the repository never meets third-party code: "build"
+# runs npm ci (install scripts), the tests, the build and Playwright with read-only permissions and no
+# token at all; "publish" only downloads the finished files and calls gh, with no checkout and no npm.
 name: Release
 
 on:
@@ -18,16 +21,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Publish the release
+  build:
+    name: Build and verify
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
-      contents: write
+      contents: read
     env:
       CI: 'true'
       TAG: ${{ github.ref_name }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       # git-cliff reads the tags and the history, so the checkout must not be shallow.
       - name: Check out
@@ -84,15 +86,17 @@ jobs:
             npx --no-install git-cliff -c cliff.toml --latest --strip header
           } > notes.md
 
-      - name: Create the release
-        run: |
-          prerelease=()
-          version="${TAG#v}"
-          if [ "${version%%.*}" = "0" ]; then
-            prerelease=(--prerelease)
-          fi
-          gh release create "$TAG" --verify-tag --title "silo-tv $version" --notes-file notes.md "${prerelease[@]}" \
-            out/*.ipk out/*.ipk.sha256 dist/THIRD_PARTY_NOTICES.txt
+      - name: Upload the release assets
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: |
+            out/*.ipk
+            out/*.ipk.sha256
+            dist/THIRD_PARTY_NOTICES.txt
+            notes.md
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Upload the reports
         if: always()
@@ -111,3 +115,38 @@ jobs:
           path: playwright-report/
           retention-days: 30
           if-no-files-found: warn
+
+  publish:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      # The artifact keeps the paths relative to the workspace root: out/, dist/ and notes.md.
+      - name: Download the release assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: release
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          count=$(ls out/*.ipk | wc -l)
+          if [ "$count" -ne 1 ]; then
+            echo "Expected exactly one .ipk, found $count" >&2
+            exit 1
+          fi
+          prerelease=()
+          version="${TAG#v}"
+          if [ "${version%%.*}" = "0" ]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$TAG" --verify-tag --title "silo-tv $version" --notes-file notes.md "${prerelease[@]}" \
+            out/*.ipk out/*.ipk.sha256 dist/THIRD_PARTY_NOTICES.txt

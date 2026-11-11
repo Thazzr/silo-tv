@@ -8,6 +8,15 @@ const ROOT = resolve(import.meta.dirname, '..');
 const read = () =>
   readFileSync(resolve(ROOT, '.github/workflows/release.yml'), 'utf-8').replace(/\r\n/g, '\n');
 
+// The text of one job: from its "  name:" line to the next job or the end of the file.
+const section = (yaml: string, job: string) => {
+  const start = yaml.indexOf(`\n  ${job}:\n`);
+  if (start < 0) return '';
+  const rest = yaml.slice(start + 1);
+  const next = rest.slice(1).search(/\n {2}[a-z][\w-]*:\n/);
+  return next < 0 ? rest : rest.slice(0, next + 1);
+};
+
 describe('release workflow', () => {
   it('runs on pushed v* tags only', () => {
     const yaml = read();
@@ -16,12 +25,70 @@ describe('release workflow', () => {
     expect(yaml).not.toContain('branches:');
   });
 
-  it('is read-only at the top and writes only on the release job', () => {
+  it('is read-only at the top and writes only on the publish job', () => {
     const yaml = read();
     expect(yaml).toMatch(/^permissions:\n {2}contents: read\n/m);
     const writes = yaml.match(/contents: write/g) ?? [];
     expect(writes).toHaveLength(1);
-    expect(yaml.indexOf('contents: write')).toBeGreaterThan(yaml.indexOf('\njobs:'));
+    expect(section(yaml, 'publish')).toContain('contents: write');
+    expect(section(yaml, 'build')).toMatch(/permissions:\n {6}contents: read\n/);
+    expect(section(yaml, 'build')).not.toContain('contents: write');
+  });
+
+  it('keeps the token out of the build job, which runs third-party code', () => {
+    const build = section(read(), 'build');
+    expect(build).toContain('npm ci');
+    expect(build).not.toContain('GH_TOKEN');
+    expect(build).not.toContain('github.token');
+  });
+
+  it('publishes from the artifact only: no checkout, no npm', () => {
+    const publish = section(read(), 'publish');
+    expect(publish).toMatch(/needs: build\n/);
+    expect(publish).not.toContain('actions/checkout');
+    expect(publish).not.toContain('actions/setup-node');
+    expect(publish).not.toContain('npm ci');
+    expect(publish).not.toMatch(/\bnpm /);
+    expect(publish).not.toMatch(/\bnpx /);
+  });
+
+  it('hands the token to exactly one place: the env of the gh release create step', () => {
+    const yaml = read();
+    expect(yaml.match(/GH_TOKEN/g)).toHaveLength(1);
+    expect(yaml.match(/github\.token/g)).toHaveLength(1);
+    const step = yaml.slice(yaml.indexOf('      - name: Create the release'));
+    const env = step.indexOf('GH_TOKEN: ${{ github.token }}');
+    expect(env).toBeGreaterThan(0);
+    expect(step.indexOf('GH_REPO: ${{ github.repository }}')).toBeGreaterThan(0);
+    expect(step.indexOf('TAG: ${{ github.ref_name }}')).toBeGreaterThan(0);
+    expect(step.indexOf('env:')).toBeLessThan(env);
+    expect(env).toBeLessThan(step.indexOf('run: |'));
+    expect(step.indexOf('run: |')).toBeLessThan(step.indexOf('gh release create'));
+  });
+
+  it('uploads and downloads the same artifact', () => {
+    const yaml = read();
+    const up = /upload-artifact@[^\n]*\n\s+with:\n\s+name: (release-assets)\n/.exec(
+      section(yaml, 'build'),
+    );
+    const down = /download-artifact@[^\n]*\n\s+with:\n\s+name: (\S+)\n/.exec(
+      section(yaml, 'publish'),
+    );
+    expect(up).not.toBeNull();
+    expect(down).not.toBeNull();
+    expect(down?.[1]).toBe(up?.[1]);
+    expect(section(yaml, 'build')).toContain('retention-days: 7');
+  });
+
+  it('uploads exactly the .ipk, its checksum, the notices and the notes', () => {
+    const build = section(read(), 'build');
+    const block = /name: release-assets\n\s+path: \|\n((?:\s{12}\S.*\n)+)/.exec(build);
+    expect(
+      (block?.[1] ?? '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ).toEqual(['out/*.ipk', 'out/*.ipk.sha256', 'dist/THIRD_PARTY_NOTICES.txt', 'notes.md']);
   });
 
   it('serializes per tag without cancelling', () => {
@@ -36,16 +103,20 @@ describe('release workflow', () => {
     expect(yaml).toContain('persist-credentials: false');
   });
 
-  it('checks the tag, then runs the gate, then creates the release', () => {
+  it('checks the tag, runs the gate, checksums, writes the notes and uploads, then publishes', () => {
     const yaml = read();
-    const check = yaml.indexOf('node scripts/release-check.mjs "$TAG"');
-    const gate = yaml.indexOf('pwsh -NoProfile -File tools/verify.ps1');
-    const checksum = yaml.indexOf('sha256sum');
-    const create = yaml.indexOf('gh release create');
+    const build = section(yaml, 'build');
+    const check = build.indexOf('node scripts/release-check.mjs "$TAG"');
+    const gate = build.indexOf('pwsh -NoProfile -File tools/verify.ps1');
+    const checksum = build.indexOf('sha256sum');
+    const notes = build.indexOf('git-cliff -c');
+    const upload = build.indexOf('name: release-assets');
     expect(check).toBeGreaterThan(0);
     expect(gate).toBeGreaterThan(check);
     expect(checksum).toBeGreaterThan(gate);
-    expect(create).toBeGreaterThan(checksum);
+    expect(notes).toBeGreaterThan(checksum);
+    expect(upload).toBeGreaterThan(notes);
+    expect(yaml.indexOf('gh release create')).toBeGreaterThan(yaml.indexOf('\n  publish:\n'));
   });
 
   it('verifies the tag and marks 0.x releases as pre-releases', () => {
@@ -56,9 +127,10 @@ describe('release workflow', () => {
     expect(yaml).toContain('--prerelease');
   });
 
-  it('attaches the .ipk, its checksum and the third-party notices', () => {
+  it('attaches exactly one .ipk, its checksum and the third-party notices', () => {
     const yaml = read();
     expect(yaml).toContain('out/*.ipk out/*.ipk.sha256 dist/THIRD_PARTY_NOTICES.txt');
+    expect(section(yaml, 'publish')).toContain('Expected exactly one .ipk, found $count');
   });
 
   it('builds the notes from the tag annotation and the latest changelog section without the header', () => {
@@ -67,10 +139,9 @@ describe('release workflow', () => {
     expect(yaml).toContain('git-cliff -c cliff.toml --latest --strip header');
   });
 
-  it('passes the tag and the token through env, never through ${{ }} inside a script', () => {
+  it('passes the tag through env, never through ${{ }} inside a script', () => {
     const yaml = read();
     expect(yaml).toContain('TAG: ${{ github.ref_name }}');
-    expect(yaml).toContain('GH_TOKEN: ${{ github.token }}');
     const lines = yaml.split('\n');
     let inScript = false;
     let indent = 0;
@@ -92,22 +163,23 @@ describe('release workflow', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('uploads the gate reports even when the gate fails', () => {
+  it('uploads the gate reports even when the gate fails, in the build job', () => {
     const yaml = read();
     expect(yaml.match(/if: always\(\)/g)).toHaveLength(2);
+    expect(section(yaml, 'build').match(/if: always\(\)/g)).toHaveLength(2);
   });
 
-  it('pins every action to the same SHA as ci.yml', () => {
+  it('pins every action to a SHA that ci.yml or mutation.yml already uses', () => {
     const uses = (file: string) =>
       [
         ...readFileSync(resolve(ROOT, '.github/workflows', file), 'utf-8').matchAll(
           /uses: (\S+@[0-9a-f]{40})/g,
         ),
       ].map((match) => match[1]);
-    const ci = new Set(uses('ci.yml'));
+    const known = new Set([...uses('ci.yml'), ...uses('mutation.yml')]);
     const release = uses('release.yml');
     expect(release.length).toBeGreaterThan(0);
-    for (const action of release) expect(ci.has(action)).toBe(true);
+    for (const action of release) expect(known.has(action)).toBe(true);
     expect(read().match(/uses: /g)).toHaveLength(release.length);
   });
 });
