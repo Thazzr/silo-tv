@@ -187,5 +187,5 @@ npm run generate:api
 - **Releases:** pushing the tag starts [`.github/workflows/release.yml`](../.github/workflows/release.yml).
   - It checks that the tag and the versions agree, and runs the full gate.
   - It then publishes a GitHub release with the `.ipk`, its SHA-256, `THIRD_PARTY_NOTICES.txt`, and notes built from the tag message and the changelog.
-  - Releases before 1.0 are marked as pre-releases.
+  - A tag with a SemVer pre-release suffix (`v0.4.0-rc.1`) becomes a pre-release; every other tag becomes a normal release, marked as the latest.
 - The build writes `THIRD_PARTY_NOTICES.txt` into the bundle (`scripts/third-party-notices.mjs`). It fails when a bundled package has a license that is not compatible with the MPL-2.0.

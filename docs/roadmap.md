@@ -181,7 +181,7 @@ Repository and project:
 - ✅ Test results on the README: a card with the gate's steps, test counts, coverage and the mutation score, drawn after every CI run on `main` and every mutation run and published on GitHub Pages, so it updates without a commit
 - ✅ Development and deployment guide: [`docs/development.md`](development.md)
 - ✅ Mutation testing: a weekly StrykerJS run over all app code in 24 parallel shards; the merged report and the score badge are published on GitHub Pages. Baseline from the first full run (2026-11-11): 79.3 % over 15,215 mutants. A run below 77 % fails the workflow.
-- ✅ Releases: a version tag publishes a GitHub pre-release with the `.ipk`, its SHA-256, the third-party license notices and notes from git-cliff (first release v0.3.0, 2026-11-11)
+- ✅ Releases: a version tag publishes a GitHub release with the `.ipk`, its SHA-256, the third-party license notices and notes from git-cliff; only a tag with a pre-release suffix (`-rc.1`) becomes a pre-release (first release v0.3.0, 2026-11-11)
 - ✅ Contribution guidelines, issue forms, a pull request template, a security policy with private reporting, a code of conduct and an accessibility statement; contributions under the same MPL-2.0 with a DCO sign-off (no CLA needed for store distribution)
 - ⬜ An "About" page in the app's settings: version, licence, link to the source code, and the licence notices of the bundled third-party packages. The notices already ship in the `.ipk` as `THIRD_PARTY_NOTICES.txt` and with each release; the page still has to show them.
 

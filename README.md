@@ -7,7 +7,7 @@ made for the remote control and the couch
 
 [![CI](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Thazzr/silo-tv/actions/workflows/ci.yml)
 [![Mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fthazzr.github.io%2Fsilo-tv%2Fbadge.json)](https://thazzr.github.io/silo-tv/mutation/)
-[![Release](https://img.shields.io/github/v/release/Thazzr/silo-tv?include_prereleases&label=release)](https://github.com/Thazzr/silo-tv/releases)
+[![Release](https://img.shields.io/github/v/release/Thazzr/silo-tv?label=release)](https://github.com/Thazzr/silo-tv/releases/latest)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 ![Platform: LG webOS 6+](https://img.shields.io/badge/platform-LG%20webOS%206%2B-a50034.svg)
 ![Status: in development](https://img.shields.io/badge/status-in%20development-orange.svg)

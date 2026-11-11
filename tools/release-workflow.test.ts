@@ -1,4 +1,5 @@
 // The release workflow, read as text (like the workflow checks in status-card.test.ts).
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -119,12 +120,37 @@ describe('release workflow', () => {
     expect(yaml.indexOf('gh release create')).toBeGreaterThan(yaml.indexOf('\n  publish:\n'));
   });
 
-  it('verifies the tag and marks 0.x releases as pre-releases', () => {
+  it('verifies the tag and attaches the notes', () => {
     const yaml = read();
     expect(yaml).toContain('--verify-tag');
     expect(yaml).toContain('--notes-file notes.md');
-    expect(yaml).toContain('if [ "${version%%.*}" = "0" ]');
-    expect(yaml).toContain('--prerelease');
+  });
+
+  // The "Create the release" script, with gh replaced by an echo, run for one tag.
+  const channelFor = (tag: string) => {
+    const yaml = read();
+    const script = yaml
+      .slice(yaml.indexOf('version="${TAG#v}"'), yaml.indexOf('gh release create'))
+      .replace(/^ {10}/gm, '');
+    return execFileSync('bash', ['-c', `${script}echo "\${channel[@]}"`], {
+      env: { ...process.env, TAG: tag },
+    })
+      .toString()
+      .trim();
+  };
+
+  it('marks a tag with a SemVer pre-release suffix as a pre-release and never as latest', () => {
+    expect(channelFor('v0.4.0-rc.1')).toBe('--prerelease --latest=false');
+    expect(channelFor('v1.0.0-beta.2')).toBe('--prerelease --latest=false');
+  });
+
+  it('makes every other tag a normal release and the latest one, 0.x included', () => {
+    expect(channelFor('v0.3.0')).toBe('--latest');
+    expect(channelFor('v1.2.3')).toBe('--latest');
+  });
+
+  it('passes the chosen release channel to gh release create', () => {
+    expect(read()).toMatch(/gh release create "\$TAG" [^\n]*"\$\{channel\[@\]\}"/);
   });
 
   it('attaches exactly one .ipk, its checksum and the third-party notices', () => {

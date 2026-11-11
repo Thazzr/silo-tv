@@ -1,7 +1,8 @@
 # Publishes a GitHub release when a version tag (vX.Y.Z) is pushed. The release carries the .ipk built
 # from the tag, its SHA-256 and the third-party license notices; the notes are the tag's annotation
-# followed by git-cliff's section for this version. While the major version is 0 the release is
-# marked as a pre-release. The tag, package.json, appinfo.json, the service and the lock file must
+# followed by git-cliff's section for this version. A tag with a SemVer pre-release suffix
+# (v0.4.0-rc.1) makes it a pre-release; every other tag is a normal release and the "Latest" one.
+# The tag, package.json, appinfo.json, the service and the lock file must
 # agree (scripts/release-check.mjs), and the full gate must be green: a release never ships without it.
 # No secrets beyond the workflow's own token; the tag push itself is the approval.
 # Two jobs, so that the token that can write to the repository never meets third-party code: "build"
@@ -143,10 +144,11 @@ jobs:
             echo "Expected exactly one .ipk, found $count" >&2
             exit 1
           fi
-          prerelease=()
           version="${TAG#v}"
-          if [ "${version%%.*}" = "0" ]; then
-            prerelease=(--prerelease)
-          fi
-          gh release create "$TAG" --verify-tag --title "silo-tv $version" --notes-file notes.md "${prerelease[@]}" \
+          # The version core (X.Y.Z) has no "-", so a "-" marks a SemVer pre-release suffix.
+          case "$version" in
+            *-*) channel=(--prerelease --latest=false) ;;
+            *) channel=(--latest) ;;
+          esac
+          gh release create "$TAG" --verify-tag --title "silo-tv $version" --notes-file notes.md "${channel[@]}" \
             out/*.ipk out/*.ipk.sha256 dist/THIRD_PARTY_NOTICES.txt
