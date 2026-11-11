@@ -278,7 +278,9 @@ describe('replan', () => {
   it('treats a plan already tried as a loop after a failure, but not after a track or quality change', async () => {
     // The default answer is plan:2 with key-2 every time.
     const { controller } = await playing();
-    expect(await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } })).toEqual({
+    expect(
+      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } }, 'audio'),
+    ).toEqual({
       kind: 'applied',
     });
     expect(await controller.qualityChange('720p')).toEqual({ kind: 'applied' });
@@ -289,7 +291,7 @@ describe('replan', () => {
 
   it('trackChange sends exactly the picked tracks; qualityChange keeps its label for later replans', async () => {
     const { controller, calls } = await playing();
-    await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+    await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } }, 'audio');
     expect(calls.replan[0]?.body.selected_tracks).toEqual({
       audio: { id: 'file:1:audio:1', index: 1 },
     });
@@ -299,7 +301,7 @@ describe('replan', () => {
       operation: 'quality_change',
       quality_preference: '720p',
     });
-    await controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } });
+    await controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } }, 'audio');
     expect(calls.replan[2]?.body.quality_preference).toBe('720p');
   });
 
@@ -321,7 +323,7 @@ describe('replan', () => {
     );
     const { controller, ready, states } = await playing({ serve: { replan: [same, other] } });
     const first = ready().loadId;
-    await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+    await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } }, 'audio');
     expect(ready().plan.plan_id).toBe('plan:2');
     expect(ready().loadId).toBe(first);
     const count = states.length;
@@ -356,7 +358,7 @@ describe('replan', () => {
       });
       const first = ready().loadId;
       session.update({ accessToken: 'refreshed-fake', expiresAt: Date.now() + 3600_000 });
-      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } }, 'audio');
       expect(ready().plan.plan_id).toBe('plan:2');
       expect(ready().loadId).toBe(first);
       expect(ready().mediaUrl).not.toContain('token=');
@@ -369,7 +371,7 @@ describe('replan', () => {
       expect(ready().mediaUrl).toContain(`token=${ACCESS_TOKEN}`);
       const first = ready().loadId;
       session.update({ accessToken: 'refreshed-fake' });
-      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } });
+      await controller.trackChange({ audio: { id: 'file:1:audio:1', index: 1 } }, 'audio');
       expect(ready().mediaUrl).toContain('token=refreshed-fake');
       expect(ready().loadId).toBe(first + 1);
     });
@@ -399,7 +401,7 @@ describe('replan', () => {
         ],
       },
     });
-    await controller.trackChange({ audio: { id: 'x', index: 9 } });
+    await controller.trackChange({ audio: { id: 'x', index: 9 } }, 'audio');
     expect(states.at(-1)).toMatchObject({
       kind: 'error',
       reason: 'terminal',

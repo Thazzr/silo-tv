@@ -112,7 +112,7 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
     expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(40)).toHaveLength(19);
+    expect(keysKnownAt(40)).toHaveLength(22);
   });
 
   it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
@@ -155,7 +155,21 @@ describe('keysKnownAt', () => {
       'player.video_skip_forward_seconds': 30,
       'player.subtitle_sync_ms': 0,
       'playback.subtitle_appearance': DEFAULT_SUBTITLE_APPEARANCE,
+      'playback.subtitle_mode': 'auto',
+      'playback.subtitle_language': null,
+      'playback.show_forced_subtitles': true,
     });
+  });
+
+  it('knows the subtitle start settings from revision 1 on', () => {
+    for (const key of [
+      'playback.subtitle_mode',
+      'playback.subtitle_language',
+      'playback.show_forced_subtitles',
+    ]) {
+      expect(keysKnownAt(1)).toContain(key);
+      expect(keysKnownAt(0)).not.toContain(key);
+    }
   });
 
   it.each([
@@ -206,6 +220,20 @@ describe('keysKnownAt', () => {
     ['playback.auto_skip_credits', 'true', false],
     ['playback.auto_skip_credits', 0, false],
     ['playback.auto_skip_credits', null, false],
+    ['playback.subtitle_mode', 'always', 'always'],
+    ['playback.subtitle_mode', 'off', 'off'],
+    ['playback.subtitle_mode', 'auto', 'auto'],
+    ['playback.subtitle_mode', 'Always', 'auto'],
+    ['playback.subtitle_mode', '', 'auto'],
+    ['playback.subtitle_mode', null, 'auto'],
+    ['playback.subtitle_language', 'de', 'de'],
+    ['playback.subtitle_language', 'pt-BR', 'pt-BR'],
+    ['playback.subtitle_language', null, null],
+    ['playback.subtitle_language', 7, null],
+    ['playback.show_forced_subtitles', false, false],
+    ['playback.show_forced_subtitles', true, true],
+    ['playback.show_forced_subtitles', 'false', true],
+    ['playback.show_forced_subtitles', null, true],
   ])('parses %s = %j to %j', (key, raw, expected) => {
     expect(settingValuesFrom([{ key, value: raw }])).toMatchObject({ [key]: expected });
   });
@@ -319,10 +347,10 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
     expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
-    expect(url.searchParams.getAll('keys')).toHaveLength(19);
+    expect(url.searchParams.getAll('keys')).toHaveLength(22);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(19);
+    expect(url.search.match(/keys=/g)).toHaveLength(22);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {

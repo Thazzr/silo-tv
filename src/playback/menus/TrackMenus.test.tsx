@@ -96,6 +96,21 @@ const plan = (n: number, tracks: S['SelectedTracksV3'] = { audio: AUDIO_0 }) =>
 const withTracks = (over: Partial<S['WatchDetail']> = {}) =>
   watchDetail({ versions: [watchVersion({ audio_tracks: AUDIO })], ...over });
 
+// The profile's subtitle settings decide what a playback starts with and what an audio pick keeps.
+/** An explicit "None": the settings pick no subtitle for any audio. */
+const NO_SUBTITLE = { effective_subtitle_language: '' };
+/** The remembered track is the German forced one: a start whose plan plays it needs no change. */
+const KEEPS_SUB_1 = {
+  effective_subtitle_mode: 'always',
+  effective_subtitle_language: 'de',
+  effective_subtitle_track_signature: {
+    source: 'embedded',
+    language: 'de',
+    forced: true,
+    hearing_impaired: false,
+  },
+};
+
 interface Puts {
   audio: { id: string; body: Record<string, unknown>; profile: string | null }[];
   subtitle: { id: string; body: Record<string, unknown> }[];
@@ -283,6 +298,7 @@ describe('the audio menu', () => {
 
   it('sends a track_change with the track and the subtitle the plan plays', async () => {
     const { calls } = await mount({
+      watch: withTracks(KEEPS_SUB_1),
       start: [playableDecision(plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } }))],
       replan: [
         playableDecision(
@@ -308,7 +324,10 @@ describe('the audio menu', () => {
   });
 
   it('sends no subtitle when the plan plays none: that stays off', async () => {
-    const { calls } = await mount({ replan: [playableDecision(plan(2))] });
+    const { calls } = await mount({
+      watch: withTracks(NO_SUBTITLE),
+      replan: [playableDecision(plan(2))],
+    });
     await openMenu('audio');
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
@@ -427,6 +446,7 @@ describe('the audio menu', () => {
 describe('the subtitles menu', () => {
   it('lists Off and the inventory in order with the flags, and checks the playing one', async () => {
     await mount({
+      watch: withTracks(KEEPS_SUB_1),
       start: [playableDecision(plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } }))],
     });
     await openMenu('subtitles');
@@ -444,6 +464,29 @@ describe('the subtitles menu', () => {
       'false',
     ]);
     await focusOn('player-menu-subtitle-sub:1');
+  });
+
+  it('starts on the subtitle the profile settings pick, and the menu checks it', async () => {
+    const { calls } = await mount({
+      settings: {
+        values: { 'playback.subtitle_mode': 'always', 'playback.subtitle_language': 'de' },
+      },
+      replan: [playableDecision(plan(2, { audio: AUDIO_0, subtitle: { id: 'sub:2', index: 2 } }))],
+    });
+    // The title stores no subtitle settings, so the profile's apply: the best German track.
+    expect(calls.replan).toHaveLength(1);
+    expect(calls.replan[0]?.body).toMatchObject({
+      operation: 'track_change',
+      selected_tracks: { audio: AUDIO_0, subtitle: { id: 'sub:2', index: 2 } },
+    });
+    await openMenu('subtitles');
+    const rows = screen.getAllByRole('menuitemradio');
+    expect(rows.map((row) => row.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'false',
+      'false',
+      'true',
+    ]);
   });
 
   it('checks Off, and opens on it, when the plan plays no subtitle', async () => {
@@ -506,8 +549,25 @@ describe('the subtitles menu', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Subtitles' })).toHaveFocus());
   });
 
+  it("saves a pick's language and mode as series settings, like the web app", async () => {
+    const { calls, puts } = await mount({
+      replan: [playableDecision(plan(2, { audio: AUDIO_0, subtitle: { id: 'sub:2', index: 2 } }))],
+    });
+    await openMenu('subtitles');
+    for (let i = 0; i < 3; i += 1) await pressKey(KEY.down);
+    await focusOn('player-menu-subtitle-sub:2');
+    await pressKey(KEY.enter);
+    await until(() => calls.replan.length === 1);
+    await until(() => puts.settings.length === 2 && puts.subtitle.length === 1);
+    expect(puts.settings).toEqual([
+      { key: 'playback.subtitle_language', scope: 'profile_series', value: 'de' },
+      { key: 'playback.subtitle_mode', scope: 'profile_series', value: 'always' },
+    ]);
+  });
+
   it('Off sends the audio and no subtitle, and saves mode off with index -1', async () => {
     const { calls, puts } = await mount({
+      watch: withTracks(KEEPS_SUB_1),
       start: [playableDecision(plan(1, { audio: AUDIO_0, subtitle: { id: 'sub:1', index: 1 } }))],
       replan: [playableDecision(plan(2, { audio: AUDIO_0 }))],
     });
@@ -528,6 +588,11 @@ describe('the subtitles menu', () => {
       subtitle_mode: 'off',
       subtitle_language: '',
     });
+    await until(() => puts.settings.length === 2);
+    expect(puts.settings).toEqual([
+      { key: 'playback.subtitle_language', scope: 'profile_series', value: null },
+      { key: 'playback.subtitle_mode', scope: 'profile_series', value: 'off' },
+    ]);
   });
 
   it('treats a subtitle_* terminal as a refused pick: notice, menu open, nothing saved, playing on', async () => {
@@ -557,6 +622,7 @@ describe('the subtitles menu', () => {
     expect(menu('subtitles')).not.toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(puts.subtitle).toHaveLength(0);
+    expect(puts.settings).toHaveLength(0);
   });
 
   it('still ends playback for another terminal answer to the pick', async () => {
@@ -789,6 +855,7 @@ describe('the audio menu in detail', () => {
 
   it('opens on the track that plays, and on the first when the plan names none', async () => {
     await mount({
+      watch: withTracks(NO_SUBTITLE),
       start: [playableDecision(plan(1, { audio: { id: 'file:file-1:audio:1', index: 1 } }))],
     });
     await openMenu('audio');

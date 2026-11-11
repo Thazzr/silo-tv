@@ -180,7 +180,8 @@ function originalContainers(probe: ProfileProbe): string[] {
   return list;
 }
 
-const SUBTITLES: Delivery['subtitles'] = {
+/** What the player draws itself, as the device profile declares it (also read by subtitleAuto). */
+export const SUBTITLES: Delivery['subtitles'] = {
   // The player draws WebVTT sidecars itself (src/playback/subtitles). Nothing else is claimed:
   // no ASS styling, no bitmap subtitles, no fonts, no native embedded tracks; bitmap tracks fall
   // back to burn-in on the server. The HLS subtitle-rendition features are not opted into.

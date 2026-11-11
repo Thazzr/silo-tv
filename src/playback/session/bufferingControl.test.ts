@@ -529,13 +529,13 @@ describe('never', () => {
     expect(ctx.log.replan).toHaveLength(0);
     expect(ctx.log.start[0]).toMatchObject({ learned_limit: 'ignore' });
     ctx.controller.onPlaying();
-    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } });
+    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } }, 'audio');
     expect(ctx.log.replan[0]).toMatchObject({ learned_limit: 'ignore' });
   });
 
   it('sends no learned-limit control without the feature', async () => {
     const ctx = await setup({ mode: 'never', feature: false });
-    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } });
+    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } }, 'audio');
     expect(ctx.log.start[0]).not.toHaveProperty('learned_limit');
     expect(ctx.log.replan[0]).not.toHaveProperty('learned_limit');
   });
@@ -659,7 +659,7 @@ describe('the kept estimate', () => {
   it('is repeated by later Auto replans without a source', async () => {
     const ctx = await setup({ feature: true });
     await ctx.twoStalls();
-    await ctx.controller.trackChange(track);
+    await ctx.controller.trackChange(track, 'audio');
     expect(ctx.log.replan[1]).toMatchObject({
       operation: 'track_change',
       bandwidth_estimate_kbps: 7000,
@@ -675,7 +675,7 @@ describe('the kept estimate', () => {
     await ctx.twoStalls();
     ctx.controller.bufferingAnswer('restore');
     await ctx.wait(1);
-    await ctx.controller.trackChange(track);
+    await ctx.controller.trackChange(track, 'audio');
     expect(ctx.log.replan.at(-1)).toMatchObject({ operation: 'track_change' });
     expect(ctx.log.replan.at(-1)).not.toHaveProperty('bandwidth_estimate_kbps');
   });
@@ -694,7 +694,7 @@ describe('the kept estimate', () => {
     await ctx.twoStalls();
     // A track change while the preference is no longer Auto carries no estimate.
     await ctx.controller.qualityChange('720p');
-    await ctx.controller.trackChange(track);
+    await ctx.controller.trackChange(track, 'audio');
     expect(ctx.log.replan.at(-1)).not.toHaveProperty('bandwidth_estimate_kbps');
   });
 
@@ -703,7 +703,7 @@ describe('the kept estimate', () => {
     await ctx.twoStalls();
     await ctx.controller.start(0);
     expect(ctx.log.start[1]).not.toHaveProperty('bandwidth_estimate_kbps');
-    await ctx.controller.trackChange(track);
+    await ctx.controller.trackChange(track, 'audio');
     expect(ctx.log.replan.at(-1)).not.toHaveProperty('bandwidth_estimate_kbps');
   });
 
@@ -715,7 +715,7 @@ describe('the kept estimate', () => {
     const back = ctx.log.replan[1]!;
     expect(back).toMatchObject({ operation: 'quality_change', quality_preference: 'auto' });
     expect(back).not.toHaveProperty('bandwidth_estimate_kbps');
-    await ctx.controller.trackChange(track);
+    await ctx.controller.trackChange(track, 'audio');
     expect(ctx.log.replan.at(-1)).not.toHaveProperty('bandwidth_estimate_kbps');
   });
 });
@@ -897,7 +897,7 @@ describe('a growing buffered end is media data', () => {
 
   it('does not take the jump of the buffered end under a new plan for data', async () => {
     const ctx = await sampledThenJumped();
-    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } });
+    await ctx.controller.trackChange({ audio: { id: 'file:1:audio:0', index: 0 } }, 'audio');
     ctx.controller.onPlaying();
     ctx.engine.currentTime = 500;
     ctx.controller.onWaiting();
@@ -928,7 +928,7 @@ describe('a Restore that meets a replan in flight', () => {
     expect(ctx.view().offer?.kind).toBe('undo');
     let release = () => {};
     ctx.hold.next = new Promise<void>((resolve) => (release = resolve));
-    const change = ctx.controller.trackChange(track);
+    const change = ctx.controller.trackChange(track, 'audio');
     await ctx.wait(1);
     ctx.controller.bufferingAnswer('restore');
     await ctx.wait(1);
@@ -1005,7 +1005,7 @@ describe('a pending Restore when the replan in flight ends without a session', (
     await ctx.twoStalls();
     let release = () => {};
     ctx.hold.next = new Promise<void>((resolve) => (release = resolve));
-    const change = ctx.controller.trackChange(track);
+    const change = ctx.controller.trackChange(track, 'audio');
     await ctx.wait(1);
     ctx.controller.bufferingAnswer('restore');
     await ctx.wait(1);
@@ -1129,7 +1129,7 @@ describe('a pending Restore, by how the replan in flight ends', () => {
     await ctx.twoStalls();
     let release = () => {};
     ctx.hold.next = new Promise<void>((resolve) => (release = resolve));
-    const change = ctx.controller.trackChange(track);
+    const change = ctx.controller.trackChange(track, 'audio');
     await ctx.wait(1);
     ctx.controller.bufferingAnswer('restore');
     await ctx.wait(1);
@@ -1184,7 +1184,7 @@ describe('a pending Restore, by how the replan in flight ends', () => {
     const ctx = await setup();
     let release = () => {};
     ctx.hold.next = new Promise<void>((resolve) => (release = resolve));
-    const change = ctx.controller.trackChange(track);
+    const change = ctx.controller.trackChange(track, 'audio');
     await ctx.wait(1);
     const replanner = (
       ctx.controller as unknown as {
@@ -1241,7 +1241,7 @@ describe('the controller, with its real manager, in the hard cases', () => {
     const ctx = await setup();
     let release = () => {};
     ctx.hold.next = new Promise<void>((resolve) => (release = resolve));
-    const change = ctx.controller.trackChange(track);
+    const change = ctx.controller.trackChange(track, 'audio');
     await ctx.wait(1);
     await ctx.twoStalls();
     expect(ops(ctx)).toEqual(['track_change']);

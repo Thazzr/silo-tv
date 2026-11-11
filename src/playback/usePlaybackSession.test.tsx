@@ -176,6 +176,49 @@ describe('start', () => {
     expect(calls.start[0]?.body.quality_preference).toBe('720p');
   });
 
+  it("starts on the subtitle the profile's settings pick, read once they are settled", async () => {
+    const inventory = [
+      {
+        track_id: 'sub:0',
+        combined_index: 0,
+        source: 'embedded',
+        forced: false,
+        default: false,
+        hearing_impaired: false,
+        delivery: 'sidecar',
+        language: 'fr',
+      },
+    ];
+    const answer = playableDecision(
+      playbackPlan({
+        plan_id: 'plan:2',
+        plan_attempt_key: 'v3:key-2',
+        selected_tracks: { audio: { id: 'file:1:audio:0', index: 0 }, subtitle: { id: 'sub:0' } },
+        subtitle: { mode: 'sidecar', inventory },
+      }),
+    );
+    const calls = servePlayback(server, {
+      start: [playableDecision(playbackPlan({ subtitle: { mode: 'none', inventory } }))],
+      replan: [answer],
+    });
+    const hook = setup(undefined, { known: false, quality: 'auto' });
+    await until(() => calls.watch === 1);
+    expect(calls.start).toHaveLength(0);
+    hook.rerender({
+      profile: {
+        known: true,
+        quality: 'auto',
+        subtitle: { mode: 'always', language: 'fr', showForced: true },
+      },
+    });
+    await ready(hook);
+    expect(calls.replan).toHaveLength(1);
+    expect(calls.replan[0]?.body.selected_tracks).toMatchObject({ subtitle: { id: 'sub:0' } });
+    expect(hook.result.current.state).toMatchObject({
+      plan: { plan_id: 'plan:2' },
+    });
+  });
+
   it('sends the profile bitrate cap on the start and on a replan', async () => {
     const calls = servePlayback(server);
     const hook = setup(undefined, { known: true, quality: 'auto', bandwidthCapKbps: 6000 });
@@ -919,7 +962,7 @@ describe('failure-driven replan', () => {
   it('keeps the terminal reason of an answer to a quality change and to a track change', async () => {
     for (const change of [
       (h: ReturnType<typeof setup>) => h.result.current.qualityChange('480p'),
-      (h: ReturnType<typeof setup>) => h.result.current.trackChange({}),
+      (h: ReturnType<typeof setup>) => h.result.current.trackChange({}, 'audio'),
     ]) {
       servePlayback(server, { replan: [terminalDecision('Nothing else works.')] });
       const hook = setup();

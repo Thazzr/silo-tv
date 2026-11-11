@@ -11,6 +11,7 @@ import {
   type BufferingView,
 } from './session/BufferingManager';
 import { PlaybackController } from './session/PlaybackController';
+import { SUBTITLE_DEFAULTS, type SubtitleDefaults } from './subtitleAuto';
 import type {
   MediaFailure,
   PlayerReading,
@@ -28,6 +29,8 @@ export interface ProfileQuality {
   bufferingMode?: BufferingMode;
   /** The server's settings know that key: the buffering request fields may be sent. */
   bufferingKnown?: boolean;
+  /** `playback.subtitle_*` and `show_forced_subtitles`; absent = the contract defaults. */
+  subtitle?: SubtitleDefaults;
 }
 
 const AUTO_PROFILE: ProfileQuality = { known: true, quality: 'auto' };
@@ -51,7 +54,8 @@ export interface PlaybackSession {
   onEnded(): void;
   onMediaError(failure: MediaFailure): void;
   seekTo(sourceSeconds: number): Promise<void>;
-  trackChange(selected: SelectedTracks): Promise<ReplanResult>;
+  /** `kind` is what the viewer picked; see `PlaybackController.trackChange`. */
+  trackChange(selected: SelectedTracks, kind: 'audio' | 'subtitle'): Promise<ReplanResult>;
   qualityChange(label: string): Promise<ReplanResult>;
   stop(): Promise<void>;
   /** What the buffering controller offers: the prompt, the undo pill and the notices. */
@@ -81,12 +85,19 @@ export function usePlaybackSession(
     ended.current = onEnded;
   }, [onEnded]);
   // A start waits here until the profile's settings are settled; a settled answer never waits.
-  const profileRef = useRef({ profile, waiters: [] as ((quality: string) => void)[] });
+  const profileRef = useRef({ profile, waiters: [] as ((settled: ProfileQuality) => void)[] });
   useEffect(() => {
     const entry = profileRef.current;
     entry.profile = profile;
-    if (profile.known) entry.waiters.splice(0).forEach((resolve) => resolve(profile.quality));
+    if (profile.known) entry.waiters.splice(0).forEach((resolve) => resolve(profile));
   }, [profile]);
+  const settled = useCallback(
+    () =>
+      profileRef.current.profile.known
+        ? Promise.resolve(profileRef.current.profile)
+        : new Promise<ProfileQuality>((resolve) => profileRef.current.waiters.push(resolve)),
+    [],
+  );
   const bandwidthCap = useCallback(() => profileRef.current.profile.bandwidthCapKbps ?? null, []);
   const bufferingSettings = useCallback(
     () => ({
@@ -95,12 +106,10 @@ export function usePlaybackSession(
     }),
     [],
   );
-  const profileQuality = useCallback(
-    () =>
-      profileRef.current.profile.known
-        ? Promise.resolve(profileRef.current.profile.quality)
-        : new Promise<string>((resolve) => profileRef.current.waiters.push(resolve)),
-    [],
+  const profileQuality = useCallback(async () => (await settled()).quality, [settled]);
+  const subtitleDefaults = useCallback(
+    async () => (await settled()).subtitle ?? SUBTITLE_DEFAULTS,
+    [settled],
   );
 
   useEffect(() => {
@@ -111,6 +120,7 @@ export function usePlaybackSession(
       contentId,
       intent,
       profileQuality,
+      subtitleDefaults,
       bandwidthCap,
       buffering: bufferingSettings,
       onBuffering: setBuffering,
@@ -133,6 +143,7 @@ export function usePlaybackSession(
     contentId,
     intent?.kind,
     profileQuality,
+    subtitleDefaults,
     bandwidthCap,
     bufferingSettings,
   ]);
@@ -168,8 +179,9 @@ export function usePlaybackSession(
     [],
   );
   const trackChange = useCallback(
-    (selected: SelectedTracks) =>
-      controller.current?.trackChange(selected) ?? Promise.resolve<ReplanResult>({ kind: 'busy' }),
+    (selected: SelectedTracks, kind: 'audio' | 'subtitle') =>
+      controller.current?.trackChange(selected, kind) ??
+      Promise.resolve<ReplanResult>({ kind: 'busy' }),
     [],
   );
   const qualityChange = useCallback(

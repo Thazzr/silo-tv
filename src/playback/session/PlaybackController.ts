@@ -12,6 +12,15 @@ import { isHlsStream, type PlayerEngine } from '../engine/PlayerEngine';
 import { mediaUrlWithToken } from '../mediaUrl';
 import { rewound, type StartIntent } from '../resume';
 import { getResumeRewind } from '../resumeRewind';
+import {
+  playingAudioLanguage,
+  resolveSubtitle,
+  subtitleSettings,
+  type InventoryItem,
+  type SubtitleDefaults,
+  type SubtitleSettings,
+  type SubtitleWatchFields,
+} from '../subtitleAuto';
 import { uuidV4 } from '../uuid';
 import type { BufferingMode } from './bufferingQuality';
 import { BufferingManager, type BufferingAnswer, type BufferingView } from './BufferingManager';
@@ -58,6 +67,11 @@ export interface ControllerDeps {
    * profile's settings are settled (`auto` when they could not be read); without it, `auto`.
    */
   profileQuality?(): Promise<string>;
+  /**
+   * The profile's subtitle settings, for a title whose watch data stores none; resolves once the
+   * profile's settings are settled. Without it, the contract defaults.
+   */
+  subtitleDefaults?(): Promise<SubtitleDefaults>;
   /** The profile's bitrate cap in kbit/s, read at every start and replan; null or absent = none. */
   bandwidthCap?(): number | null;
   /**
@@ -113,6 +127,17 @@ export class PlaybackController {
   private hasPlayed = false;
   /** What the viewer wants: a reload after a lost connection or session follows it. */
   private viewerPaused = false;
+  /** The title's stored subtitle settings, and what they resolve to once the first start asks. */
+  private subtitleWatch: SubtitleWatchFields = {};
+  private subtitle: SubtitleSettings = subtitleSettings({});
+  /**
+   * Who decides the subtitle: `pending` until the first plan resolves it from the settings,
+   * `following` while it is that resolved one (an audio pick resolves it again), `manual` once the
+   * viewer or the server changed it, or a start named it. A session that starts anew keeps it.
+   */
+  private subtitleAuto: 'pending' | 'following' | 'manual';
+  /** The subtitle (none = `undefined`) an automatic `track_change` in flight asks the plan for. */
+  private requestedSubtitle: { id: string | undefined } | null = null;
 
   private readonly progress: ProgressReporter;
   private readonly stopSequence: StopSequence;
@@ -125,6 +150,8 @@ export class PlaybackController {
     this.quality = deps.intent?.quality ?? null;
     this.pinnedFile = deps.intent?.fileId !== undefined;
     this.tracks = { audio: deps.intent?.audio, subtitle: deps.intent?.subtitle };
+    // A start that names a subtitle is the viewer's pick: the settings do not overrule it.
+    this.subtitleAuto = deps.intent?.subtitle !== undefined ? 'manual' : 'pending';
     this.progress = new ProgressReporter({
       client: deps.client,
       header: () => this.header(),
@@ -288,6 +315,7 @@ export class PlaybackController {
       this.fileId = watch.fileId;
       this.resumeAt = watch.resume;
       this.heading = watch.heading;
+      this.subtitleWatch = watch.subtitles;
       const kind = this.deps.intent?.kind ?? 'ask';
       if (kind === 'beginning') {
         await this.start(0);
@@ -324,6 +352,11 @@ export class PlaybackController {
       // server does not apply that setting itself). Later starts keep what the viewer picked.
       this.quality ??= (await this.deps.profileQuality?.()) ?? 'auto';
       if (this.disposed) return;
+      // Read before the start, not after it: a start that is left in flight must not wait on this.
+      if (this.subtitleAuto === 'pending') {
+        this.subtitle = subtitleSettings(this.subtitleWatch, await this.deps.subtitleDefaults?.());
+        if (this.disposed) return;
+      }
       const profile = await readDeviceProfile();
       this.capabilities = profile.capabilities;
       this.context = profile.context;
@@ -357,7 +390,7 @@ export class PlaybackController {
       } else if (outcome.kind === 'failed') {
         this.fail(outcome.reason);
       } else if (outcome.kind === 'playable') {
-        this.adopt(outcome.plan, outcome.sessionId);
+        await this.adoptFirst(outcome.plan, outcome.sessionId);
       } else {
         this.fail('terminal', outcome.message, outcome.reason);
       }
@@ -373,9 +406,17 @@ export class PlaybackController {
   private adopt(
     plan: Plan,
     sessionId: string,
-    options: { forceReload?: boolean; autoplay?: boolean } = {},
+    options: { forceReload?: boolean; autoplay?: boolean; hold?: boolean } = {},
   ): void {
     const previous = this.plan;
+    // A replan that moved the subtitle by itself (not to the one just asked for) made the server's
+    // choice: it stays, and the settings no longer decide.
+    if (this.subtitleAuto === 'following' && previous) {
+      const expected = this.requestedSubtitle
+        ? this.requestedSubtitle.id
+        : previous.selected_tracks.subtitle?.id;
+      if (plan.selected_tracks.subtitle?.id !== expected) this.subtitleAuto = 'manual';
+    }
     // HLS plays through hls.js, which authenticates with headers: its URL carries no token, so a
     // token refresh never changes it and never reloads the stream. (The screen builds the token
     // URL itself on the native fallback.) Direct play needs the token in the URL.
@@ -410,13 +451,18 @@ export class PlaybackController {
       // The old element is replaced; the new one arms the watchdog when it is attached.
       this.watchdog.disarm();
     }
+    // `hold`: the plan is the current one, but the screen waits for the replan that follows.
+    if (!options.hold) this.publishReady(plan, options.autoplay);
+  }
+
+  private publishReady(plan: Plan, autoplay?: boolean): void {
     this.set({
       kind: 'ready',
       plan,
-      sessionId,
-      mediaUrl: url,
+      sessionId: this.sessionId,
+      mediaUrl: this.mediaUrl,
       loadId: this.loadId,
-      autoplay: options.autoplay ?? !this.viewerPaused,
+      autoplay: autoplay ?? !this.viewerPaused,
       heading: this.heading,
       previews: previewFacts(plan, this.versions, this.server),
       media: mediaFacts(plan, this.versions, this.item),
@@ -426,8 +472,71 @@ export class PlaybackController {
     });
   }
 
+  /**
+   * The first plan of a viewing. Silo's server names no subtitle by itself, so the profile's
+   * subtitle settings are resolved here; when the result is not what the plan plays, one
+   * `track_change` goes out before the video shows, so the stream loads once. A refused or failed
+   * change leaves the plan as it is, without a word.
+   */
+  private async adoptFirst(plan: Plan, sessionId: string): Promise<void> {
+    if (this.subtitleAuto !== 'pending') {
+      this.adopt(plan, sessionId);
+      return;
+    }
+    this.subtitleAuto = 'following';
+    const wanted = this.resolveSubtitle(plan, plan.selected_tracks.audio?.index);
+    if (wanted?.track_id === plan.selected_tracks.subtitle?.id) {
+      this.adopt(plan, sessionId);
+      return;
+    }
+    this.adopt(plan, sessionId, { hold: true });
+    const result = await this.automaticTrackChange(
+      { ...(plan.selected_tracks.audio ? { audio: plan.selected_tracks.audio } : {}) },
+      wanted,
+    );
+    // An applied change was shown by its own plan; a failure that ended the session shows the error.
+    if (['refused', 'transient', 'busy'].includes(result.kind) && !this.stopped) {
+      this.publishReady(plan);
+    }
+  }
+
+  /** What the settings pick for the audio at `audioIndex`, from the plan's subtitle inventory. */
+  private resolveSubtitle(plan: Plan, audioIndex: number | undefined): InventoryItem | null {
+    const version = this.versions.find((v) => v.fileId === plan.effective_media_file_id);
+    return resolveSubtitle(
+      this.subtitle,
+      plan.subtitle?.inventory ?? [],
+      playingAudioLanguage(version, audioIndex),
+    );
+  }
+
+  /**
+   * A `track_change` the settings ask for: `selected` plus `wanted` (none = no subtitle member).
+   * One that did not take effect is pinned like a viewer's pick, so the settings do not ask again
+   * (the web player does the same after a refused automatic change).
+   */
+  private async automaticTrackChange(
+    selected: SelectedTracks,
+    wanted: InventoryItem | null,
+  ): Promise<ReplanResult> {
+    this.requestedSubtitle = { id: wanted?.track_id };
+    const tracks: SelectedTracks = {
+      ...selected,
+      ...(wanted ? { subtitle: { id: wanted.track_id, index: wanted.combined_index } } : {}),
+    };
+    try {
+      const result = await this.replanner.trackChange(tracks);
+      if (result.kind !== 'applied') this.subtitleAuto = 'manual';
+      return result;
+    } finally {
+      this.requestedSubtitle = null;
+    }
+  }
+
   /** The session is gone on the server: forget it, but keep the tracks playing now. */
   private prepareRestart(): void {
+    // A session that starts anew is the same viewing: it carries the tracks that play now.
+    this.subtitleAuto = 'manual';
     if (this.plan) {
       this.tracks = {
         audio: this.plan.selected_tracks.audio,
@@ -576,9 +685,21 @@ export class PlaybackController {
     return this.replanner.seekTo(sourceSeconds);
   }
 
-  /** Switches the audio and subtitle (an omitted subtitle means off); no UI calls this yet. */
-  trackChange(selected: SelectedTracks): Promise<ReplanResult> {
-    return this.replanner.trackChange(selected);
+  /**
+   * Switches the audio and subtitle (an omitted subtitle means off); `kind` is what the viewer
+   * picked. A subtitle pick, even a refused one, ends the settings' choice for this session. An
+   * audio pick, while the subtitle is still the one the settings chose, chooses again for the new
+   * audio and sends the result with the audio change, as Silo's web player does.
+   */
+  trackChange(selected: SelectedTracks, kind: 'audio' | 'subtitle'): Promise<ReplanResult> {
+    if (kind === 'subtitle') this.subtitleAuto = 'manual';
+    const plan = this.plan;
+    if (this.subtitleAuto !== 'following' || !plan) return this.replanner.trackChange(selected);
+    const wanted = this.resolveSubtitle(plan, selected.audio?.index);
+    return this.automaticTrackChange(
+      { ...(selected.audio ? { audio: selected.audio } : {}) },
+      wanted,
+    );
   }
 
   /** Switches to a quality label from the plan's `available_qualities` (or `auto`). */

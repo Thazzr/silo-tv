@@ -1,6 +1,8 @@
 // Remembering a viewer's audio and subtitle pick for the series (an episode) or the movie, as
-// Silo's web client does: `PUT /api/v2/audio-prefs/{key}` and `PUT /api/v2/subtitle-prefs/{key}`.
-// Only a pick the viewer made saves one; the detail page's track choice reuses this module.
+// Silo's web client does: `PUT /api/v2/audio-prefs/{key}`, and for a subtitle also the series
+// settings rows (`playback.subtitle_mode` and `playback.subtitle_language` at `profile_series`) next
+// to `PUT /api/v2/subtitle-prefs/{key}`. Only a pick the viewer made saves one; the detail page's
+// track choice reuses this module.
 import { useMemo } from 'react';
 import type { SiloClient } from '../api/client';
 import type { components } from '../api/generated/schema';
@@ -81,6 +83,21 @@ export function subtitlePreferenceBody(
   };
 }
 
+/**
+ * The series settings a subtitle pick stores, in the order the web client writes them: the pick's
+ * language (null for off or a track without one) and the mode (`always` for a track, `off` for
+ * off). `playback.show_forced_subtitles` stays out: the player has no control for it, and writing
+ * the resolved value would pin the default above the profile's own choice.
+ */
+export function subtitleSeriesSettings(
+  track: S['SubtitleInventoryItemV3'] | null,
+): { key: 'playback.subtitle_language' | 'playback.subtitle_mode'; value: string | null }[] {
+  return [
+    { key: 'playback.subtitle_language', value: track?.language || null },
+    { key: 'playback.subtitle_mode', value: track ? 'always' : 'off' },
+  ];
+}
+
 export interface TrackPrefWriter {
   audio(prefId: string, index: number, track: S['WatchAudioTrack']): Promise<void>;
   /** `null` saves "subtitles off". */
@@ -139,11 +156,28 @@ export function createTrackPrefWriter(
       const profile = profileId();
       const body = subtitlePreferenceBody(track);
       return enqueue(profile, `${profile}\u0000subtitle\u0000${prefId}`, async () => {
-        const { response } = await client.PUT('/api/v2/subtitle-prefs/{series_id}', {
-          params: { path: { series_id: prefId }, header: { 'X-Profile-Id': profile } },
-          body,
+        // The settings rows and the track row are independent writes, as in the web client: one
+        // that fails must not cost the other. A retry sends all of them again, which is harmless.
+        const settings = subtitleSeriesSettings(track).map(async ({ key, value }) => {
+          const { response } = await client.PUT('/api/v2/settings/values/{key}', {
+            params: {
+              path: { key },
+              query: { scope: 'profile_series', series_id: prefId },
+              header: { 'X-Profile-Id': profile },
+            },
+            body: { value },
+          });
+          return response.ok;
         });
-        return response.ok;
+        const prefs = (async () => {
+          const { response } = await client.PUT('/api/v2/subtitle-prefs/{series_id}', {
+            params: { path: { series_id: prefId }, header: { 'X-Profile-Id': profile } },
+            body,
+          });
+          return response.ok;
+        })();
+        const sent = await Promise.allSettled([...settings, prefs]);
+        return sent.every((one) => one.status === 'fulfilled' && one.value);
       });
     },
   };

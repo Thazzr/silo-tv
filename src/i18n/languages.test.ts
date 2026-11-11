@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLanguageWord, languageName } from './languages';
+import { canonicalLanguageTag, isLanguageWord, languageName } from './languages';
 
 describe('languageName', () => {
   it.each([
@@ -127,5 +127,27 @@ describe('languageName aliases', () => {
     expect(languageName('nn', 'en')).toBe('Norwegian');
     expect(languageName('yue', 'de')).toBe('Chinesisch');
     expect(languageName('cmn', 'en')).toBe('Chinese');
+  });
+});
+
+describe('canonicalLanguageTag', () => {
+  it.each([
+    ['en', 'en'],
+    ['eng', 'en'],
+    ['ger', 'de'],
+    ['deu', 'de'],
+    ['jpn', 'ja'],
+    ['pt-BR', 'pt-br'],
+    ['pt_BR', 'pt-br'],
+    ['por-PT', 'pt-pt'],
+    [' EN-gb ', 'en-gb'],
+    ['zh-Hant', 'zh-hant'],
+    ['tlh', 'tlh'],
+  ])('writes %j as %j', (tag, expected) => {
+    expect(canonicalLanguageTag(tag)).toBe(expected);
+  });
+
+  it.each(['', ' ', 'e', 'english', '12', '-US', 'en us'])('is null for %j', (tag) => {
+    expect(canonicalLanguageTag(tag)).toBeNull();
   });
 });

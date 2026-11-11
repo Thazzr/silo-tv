@@ -95,6 +95,10 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   const bufferingMode = profileSettings.values['playback.buffering_quality_mode'];
   // A server whose settings do not know the key runs `always` and gets no buffering fields.
   const bufferingKnown = useServerKnowsSetting('playback.buffering_quality_mode');
+  // The fallback for a title whose watch data stores no subtitle settings of its own.
+  const subtitleMode = profileSettings.values['playback.subtitle_mode'];
+  const subtitleLanguage = profileSettings.values['playback.subtitle_language'];
+  const showForced = profileSettings.values['playback.show_forced_subtitles'];
   const profile = useMemo(
     () => ({
       known: profileSettings.known,
@@ -102,8 +106,18 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
       bandwidthCapKbps,
       bufferingMode,
       bufferingKnown,
+      subtitle: { mode: subtitleMode, language: subtitleLanguage, showForced },
     }),
-    [profileSettings.known, preferredQuality, bandwidthCapKbps, bufferingMode, bufferingKnown],
+    [
+      profileSettings.known,
+      preferredQuality,
+      bandwidthCapKbps,
+      bufferingMode,
+      bufferingKnown,
+      subtitleMode,
+      subtitleLanguage,
+      showForced,
+    ],
   );
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
@@ -531,7 +545,7 @@ function PlayingView({
     popover = (
       <AudioMenu
         rows={audioRows(plan, media, lang, unknownTrack)}
-        pick={(index) => playback.trackChange(tracksForAudioPick(plan, index))}
+        pick={(index) => playback.trackChange(tracksForAudioPick(plan, index), 'audio')}
         save={(index, track) => {
           if (prefKey) void trackPrefs.audio(prefKey, index, track);
         }}
@@ -547,7 +561,7 @@ function PlayingView({
         rows={subtitleRows(plan, lang, unknownTrack)}
         offChecked={plan.selected_tracks.subtitle === undefined}
         delayMs={subtitleDelay.delayMs}
-        pick={(item) => playback.trackChange(tracksForSubtitlePick(plan, item))}
+        pick={(item) => playback.trackChange(tracksForSubtitlePick(plan, item), 'subtitle')}
         save={(item) => {
           if (prefKey) void trackPrefs.subtitle(prefKey, item);
         }}

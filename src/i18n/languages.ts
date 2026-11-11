@@ -79,9 +79,13 @@ const SCRIPTS: Record<string, readonly [string, string]> = {
 };
 
 const byCode = new Map<string, readonly [string, string]>();
+const twoLetter = new Map<string, string>();
 for (const [two, three, de, en] of LANGUAGES) {
   byCode.set(two, [de, en]);
-  for (const code of three) byCode.set(code, [de, en]);
+  for (const code of three) {
+    byCode.set(code, [de, en]);
+    twoLetter.set(code, two);
+  }
 }
 const byRegion = new Map(REGIONS.map(([code, de, en]) => [code, [de, en] as const]));
 
@@ -123,4 +127,16 @@ export function languageName(
     if (variant) break;
   }
   return variant ? `${name} (${variant})` : name;
+}
+
+/**
+ * A language tag in the form two tags are compared in: lower case, `_` as `-`, and the language
+ * subtag as its ISO 639-1 code where there is one (`eng` and `en` are one language, `pt_BR` is
+ * `pt-br`). Null for anything that does not start with a language code of two or three letters.
+ * Chromium 79 has no dependable `Intl.Locale` aliasing, so the table above does it.
+ */
+export function canonicalLanguageTag(tag: string): string | null {
+  const [language = '', ...rest] = tag.trim().toLowerCase().replace(/_/g, '-').split('-');
+  if (!/^[a-z]{2,3}$/.test(language)) return null;
+  return [twoLetter.get(language) ?? language, ...rest].join('-');
 }

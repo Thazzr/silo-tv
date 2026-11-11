@@ -12,6 +12,7 @@ import {
 } from '../deviceProfile';
 import { collectProfileProbe } from '../probe';
 import { resumePoint } from '../resume';
+import type { SubtitleWatchFields } from '../subtitleAuto';
 import { trackFields, type Item, type Tracks, type Version } from './facts';
 import { SessionError, type Heading, type Plan, type ProfileHeader } from './types';
 
@@ -72,6 +73,8 @@ export interface WatchData {
   heading: Heading;
   versions: Version[];
   item: Item;
+  /** The title's merged subtitle settings, for choosing the subtitle to start with. */
+  subtitles: SubtitleWatchFields;
 }
 
 export async function loadWatch(
@@ -116,13 +119,23 @@ export async function loadWatch(
     ...(v.edition_raw || v.edition_key ? { edition: v.edition_raw || v.edition_key } : {}),
     audioTracks: v.audio_tracks ?? [],
     subtitleTracks: v.subtitle_tracks ?? [],
+    ...(v.effective_audio_track_index !== undefined
+      ? { effectiveAudioIndex: v.effective_audio_track_index }
+      : {}),
+    ...(v.effective_audio_language ? { effectiveAudioLanguage: v.effective_audio_language } : {}),
   }));
   const item: Item = {
     isEpisode: data.type === 'episode',
     ...(data.series_id ? { seriesId: data.series_id } : {}),
     ...(data.year !== undefined ? { year: data.year } : {}),
   };
-  return { fileId: version.file_id, resume, heading, versions, item };
+  const subtitles: SubtitleWatchFields = {
+    effective_subtitle_mode: data.effective_subtitle_mode,
+    effective_subtitle_language: data.effective_subtitle_language,
+    effective_show_forced_subtitles: data.effective_show_forced_subtitles,
+    effective_subtitle_track_signature: data.effective_subtitle_track_signature,
+  };
+  return { fileId: version.file_id, resume, heading, versions, item, subtitles };
 }
 
 /** What the device can play and the context it plays in, read from the TV. */

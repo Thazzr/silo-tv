@@ -53,6 +53,13 @@ const oneOf = <V extends string | number>(
   parse: (raw) => values.find((value) => value === raw),
 });
 
+/** A nullable language tag: null (no preference) when unset, and for anything that is not a string. */
+const optionalLanguage = (introducedIn: number): SettingDef<string | null> => ({
+  introducedIn,
+  default: null,
+  parse: (raw) => (typeof raw === 'string' ? raw : null),
+});
+
 export interface SubtitleAppearance {
   fontSize: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
   fontFamily: string;
@@ -157,6 +164,11 @@ export const PROFILE_SETTINGS = {
   'playback.auto_play_next_preview': bool(1, false),
   'playback.preferred_quality': oneOf(1, QUALITIES, 'auto'),
   'playback.subtitle_appearance': appearance(1),
+  // Which subtitle a playback starts with (see ../../playback/subtitleAuto.ts); the watch data
+  // carries the per-title merge of these, so the registry is the fallback for a title that has none.
+  'playback.subtitle_mode': oneOf(1, ['auto', 'always', 'off'] as const, 'auto'),
+  'playback.subtitle_language': optionalLanguage(1),
+  'playback.show_forced_subtitles': bool(1, true),
   // Kbit/s; null = uncapped. Sent as `bandwidth_cap_kbps` on every start and replan.
   'playback.max_bitrate_kbps': optionalInteger(1, 100, 200000),
   // What to do on Auto when playback keeps buffering; the server knows the key from revision 23.

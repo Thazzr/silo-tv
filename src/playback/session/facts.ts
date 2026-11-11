@@ -22,6 +22,9 @@ export interface Version {
   edition?: string;
   audioTracks: S['WatchAudioTrack'][];
   subtitleTracks: S['WatchSubtitleTrack'][];
+  /** The audio track the server resolved for the profile, and its language. */
+  effectiveAudioIndex?: number;
+  effectiveAudioLanguage?: string;
 }
 
 /** The item itself, from the watch projection. */
