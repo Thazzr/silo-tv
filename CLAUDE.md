@@ -24,6 +24,14 @@ A native client for LG webOS TVs for the self-hosted media server [Silo](https:/
 - For larger code blocks (>20 lines), use brief placeholders for unmodified sections, e.g. `// ... existing code ...`.
 - Make changes with the edit tools; write code blocks in text only to enumerate hypothetical options.
 - Code blocks carry the language and file name in the info string.
+- **No dead code** (user decision 2026-11-11). Code that can never take effect is removed, not kept:
+  - unused code;
+  - values that are always overwritten;
+  - unreachable branches;
+  - guards another guard already covers;
+  - parameters a middleware replaces.
+
+  A surviving mutant whose code can never matter is a reason to remove that code, not an equivalent to accept. Only a check that TypeScript needs to narrow a type stays, and it is written so that it is visibly that.
 - After a completed implementation task, run the relevant verification before answering.
 - Commit completed, verified work with Conventional Commits, in English.
 - `CHANGELOG.md` is **generated** by [git-cliff](https://git-cliff.org) from the commit messages: config `cliff.toml`, helper `tools/update-changelog.ps1`. **Never edit it by hand.**

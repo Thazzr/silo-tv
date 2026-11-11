@@ -17,6 +17,7 @@ If a product decision is missing - wording the user has to choose, a behaviour t
 
 - **Reading and editing.** Read a file before editing it, and use the Edit tool. If you must script an edit, run Python with `PYTHONIOENCODING=utf-8`, keep each file's line endings, and never write a BOM.
 - **Matching the code.** Match the surrounding code: naming, comment density, idiom. Code comments say *why*, in English.
+- **No dead code.** Do not leave code that can never take effect: unused code, values that are always overwritten, unreachable branches, guards another guard already covers, parameters a middleware replaces. If a mutation check finds such code, remove it instead of calling the mutant equivalent; only a check that TypeScript needs to narrow a type stays.
 - **Node commands** run in the Bash tool (it resolves `npx`/`npm` without PATH tweaks).
 - **Platform (webOS 6 / Chromium 79).**
   - No syntax or API newer than Chromium 79 without a polyfill from `src/polyfills.ts`.
