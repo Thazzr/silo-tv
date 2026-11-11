@@ -23,6 +23,7 @@ const SERVER_DEFAULTS: Record<string, unknown> = {
   'playback.next_up_prompt_seconds': 30,
   'playback.auto_play_next_preview': false,
   'playback.preferred_quality': 'auto',
+  'playback.max_bitrate_kbps': null,
   'playback.subtitle_appearance': {
     fontSize: 'large',
     fontFamily: 'sans-serif',
@@ -75,6 +76,7 @@ const INTRODUCED_IN: Record<string, number> = {
   'playback.next_up_prompt_seconds': 1,
   'playback.auto_play_next_preview': 1,
   'playback.preferred_quality': 1,
+  'playback.max_bitrate_kbps': 1,
   'playback.subtitle_appearance': 1,
   'player.video_skip_back_seconds': 9,
   'player.video_skip_forward_seconds': 9,

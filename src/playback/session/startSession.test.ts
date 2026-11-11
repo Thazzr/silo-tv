@@ -237,6 +237,12 @@ describe('requestStart', () => {
     expect(body).not.toHaveProperty('subtitle_track_index');
   });
 
+  it('sends bandwidth_cap_kbps only when the profile has a cap', () => {
+    expect(send({ bandwidthCapKbps: 8000 }).bandwidth_cap_kbps).toBe(8000);
+    expect(send({ bandwidthCapKbps: null })).not.toHaveProperty('bandwidth_cap_kbps');
+    expect(send()).not.toHaveProperty('bandwidth_cap_kbps');
+  });
+
   it('forbids alternate versions for a picked file and carries the track picks', () => {
     const body = send({
       pinnedFile: true,

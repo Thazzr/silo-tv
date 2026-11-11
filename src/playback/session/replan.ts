@@ -57,6 +57,8 @@ export interface ReplanDeps {
   context(): PlaybackContext | null;
   state(): ReplanState;
   reading(): PlayerReading | null;
+  /** The profile's bitrate cap in kbit/s; null = none. Sent with every operation. */
+  bandwidthCap(): number | null;
   /** The display or output changed: the device profile is read again and kept. */
   refreshProfile(): Promise<{ capabilities: ClientCapabilities; context: PlaybackContext }>;
   /** The new load starts here; until its first frame this is the position to report. */
@@ -90,6 +92,12 @@ export class Replanner {
   private qualityLoad: QualityLoad | null = null;
   /** Fallbacks to the previous quality so far (see `SessionState.qualityFallbacks`). */
   private fallbacks = 0;
+  /** The newest seek asked for while a replan ran: one slot, applied when the replan settles. */
+  private queuedSeek: number | null = null;
+  /** The load an applied replan started that is still to show its metadata, with the seek it owes. */
+  private loadSeek: { loadId: number; seconds: number } | null = null;
+  /** The load id the running replan's adopt started; null when the stream played on. */
+  private reloadedTo: number | null = null;
 
   constructor(private readonly deps: ReplanDeps) {}
 
@@ -104,6 +112,22 @@ export class Replanner {
   /** A new session starts its recovery count over. */
   resetRecoveries(): void {
     this.recoveries = 0;
+  }
+
+  /** A stop, an unload or a new start: a seek that waited for a replan is no longer wanted. */
+  dropQueuedSeek(): void {
+    this.queuedSeek = null;
+    this.loadSeek = null;
+  }
+
+  /**
+   * The seek a new load owes, once its metadata is known (the origin is set then): the position
+   * to seek to instead of the plan's start, or null. A seek bound to another load is gone.
+   */
+  takeLoadSeek(loadId: number): number | null {
+    const owed = this.loadSeek;
+    this.loadSeek = null;
+    return owed && owed.loadId === loadId ? owed.seconds : null;
   }
 
   /** The pending quality load, once: a failure uses it or it is gone. */
@@ -124,7 +148,17 @@ export class Replanner {
     const plan = this.deps.plan();
     const engine = this.deps.engine();
     if (!plan || !engine || this.deps.isStopped()) return;
-    if (this.replanning || this.deps.recoveryActive()) return;
+    if (this.deps.recoveryActive()) return;
+    if (this.loadSeek) {
+      // The new load has not shown its metadata: the old engine is no place for this seek.
+      this.loadSeek.seconds = sourceSeconds;
+      return;
+    }
+    if (this.replanning) {
+      // The running replan decides the stream this seek belongs to; the newest one waits for it.
+      this.queuedSeek = sourceSeconds;
+      return;
+    }
     const origin = this.deps.origin();
     const offset = plan.timeline.timeline_offset_seconds;
     const total = plan.source.duration_seconds;
@@ -181,6 +215,34 @@ export class Replanner {
    * decides what it means for the screen.
    */
   async replan(operation: ReplanOperation, options: ReplanOptions = {}): Promise<ReplanResult> {
+    const result = await this.run(operation, options);
+    this.afterReplan(result);
+    return result;
+  }
+
+  /**
+   * A seek that waited for the replan is applied when it settled as applied, refused or
+   * transient. Any other answer (terminal, ended, gone, loop, a stopped session) drops it. A
+   * `busy` while another replan still runs is not a settle: the queue stays for that one.
+   */
+  private afterReplan(result: ReplanResult): void {
+    if (this.queuedSeek === null || this.replanning) return;
+    const wanted = this.queuedSeek;
+    this.queuedSeek = null;
+    const settled =
+      result.kind === 'applied' || result.kind === 'refused' || result.kind === 'transient';
+    if (!settled || this.deps.isStopped()) return;
+    if (result.kind === 'applied' && this.reloadedTo !== null) {
+      // A new load: the engine and the origin are still the old ones. The seek waits for the
+      // load's own metadata and replaces the plan's start seek there.
+      this.loadSeek = { loadId: this.reloadedTo, seconds: wanted };
+      return;
+    }
+    // The normal path: it clamps, and runs its own replan when the new plan needs one.
+    void this.seekTo(wanted);
+  }
+
+  private async run(operation: ReplanOperation, options: ReplanOptions): Promise<ReplanResult> {
     const plan = this.deps.plan();
     const capabilities = this.deps.capabilities();
     const context = this.deps.context();
@@ -190,11 +252,15 @@ export class Replanner {
     const recovery = operation === 'failure_recovery' || operation === 'seek_failure_recovery';
     if (recovery && this.recoveries >= MAX_RECOVERIES) return { kind: 'loop' };
     this.replanning = true;
+    // Any replan supersedes what an earlier load still owed.
+    this.loadSeek = null;
+    this.reloadedTo = null;
     try {
       let profile = { capabilities, context };
       if (operation === 'output_change') profile = await this.deps.refreshProfile();
       if (recovery) this.recoveries += 1;
       const before = this.deps.state();
+      const cap = this.deps.bandwidthCap();
       const reading = before.hasPlayed ? this.deps.reading() : null;
       const position = options.position ?? reading?.position ?? before.startPosition;
       const { data, error, response } = await this.deps.client.POST(
@@ -215,6 +281,7 @@ export class Replanner {
             attempted_plan_keys: before.attemptedKeys,
             attempt_count: Math.max(1, this.recoveries),
             quality_preference: options.quality ?? before.quality ?? 'auto',
+            ...(cap !== null ? { bandwidth_cap_kbps: cap } : {}),
             position_seconds: position,
             selected_tracks: options.tracks ?? plan.selected_tracks,
             client_capabilities: profile.capabilities,
@@ -251,6 +318,7 @@ export class Replanner {
         // A new load from the viewer's pick may fail before its first frame: then the way back is
         // the quality it came from. The way back itself has no way back.
         const loadAfter = this.deps.state().loadId;
+        this.reloadedTo = loadAfter !== loadBefore ? loadAfter : null;
         this.qualityLoad =
           qualityPick && !options.fallback && loadAfter !== loadBefore
             ? { loadId: loadAfter, previous }

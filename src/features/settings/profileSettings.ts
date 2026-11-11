@@ -30,6 +30,18 @@ const integer = (
     typeof raw === 'number' && Number.isInteger(raw) && raw >= min && raw <= max ? raw : undefined,
 });
 
+/** An optional integer: null (the default) when unset, and for anything that is not one in range. */
+const optionalInteger = (
+  introducedIn: number,
+  min: number,
+  max: number,
+): SettingDef<number | null> => ({
+  introducedIn,
+  default: null,
+  parse: (raw) =>
+    typeof raw === 'number' && Number.isInteger(raw) && raw >= min && raw <= max ? raw : null,
+});
+
 /** A closed set of strings or numbers, as the contract's `enum` value schema. */
 const oneOf = <V extends string | number>(
   introducedIn: number,
@@ -140,6 +152,8 @@ export const PROFILE_SETTINGS = {
   'playback.auto_play_next_preview': bool(1, false),
   'playback.preferred_quality': oneOf(1, QUALITIES, 'auto'),
   'playback.subtitle_appearance': appearance(1),
+  // Kbit/s; null = uncapped. Sent as `bandwidth_cap_kbps` on every start and replan.
+  'playback.max_bitrate_kbps': optionalInteger(1, 100, 200000),
   // Enums in the contract (not free integers), stored for the profile only.
   'player.video_skip_back_seconds': oneOf(9, SKIP_SECONDS, 10),
   'player.video_skip_forward_seconds': oneOf(9, SKIP_SECONDS, 30),
@@ -283,6 +297,7 @@ export type DeviceSettingKey =
   | 'playback.auto_play_next_preview'
   | 'playback.preferred_quality'
   | 'playback.subtitle_appearance'
+  | 'playback.max_bitrate_kbps'
   | 'player.sleep_timer_default_minutes';
 
 /**

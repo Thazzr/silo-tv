@@ -295,6 +295,7 @@
   "player.info.framesDropped": "{dropped} von {total} verworfen",
   "player.info.limit": "Begrenzung",
   "player.info.limited": "Auf {rate} begrenzt (nach Rucklern)",
+  "player.info.maxBitrate": "Maximale Bitrate",
   "player.info.warning": "Hinweis",
   "player.info.warn.hdr_range_assumed_hdr10": "Dynamikbereich der Quelle unbekannt, als HDR10 behandelt",
   "player.info.warn.dolby_vision_removed": "Dolby-Vision-Daten wurden entfernt",

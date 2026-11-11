@@ -16,6 +16,8 @@ import type {
 export interface ProfileQuality {
   known: boolean;
   quality: string;
+  /** The profile's `playback.max_bitrate_kbps`: sent on every start and replan; null = uncapped. */
+  bandwidthCapKbps?: number | null;
 }
 
 const AUTO_PROFILE: ProfileQuality = { known: true, quality: 'auto' };
@@ -68,6 +70,7 @@ export function usePlaybackSession(
     entry.profile = profile;
     if (profile.known) entry.waiters.splice(0).forEach((resolve) => resolve(profile.quality));
   }, [profile]);
+  const bandwidthCap = useCallback(() => profileRef.current.profile.bandwidthCapKbps ?? null, []);
   const profileQuality = useCallback(
     () =>
       profileRef.current.profile.known
@@ -84,6 +87,7 @@ export function usePlaybackSession(
       contentId,
       intent,
       profileQuality,
+      bandwidthCap,
       onState: setState,
       onMediaError: setMediaError,
       onEnded: () => ended.current?.(),
@@ -96,7 +100,7 @@ export function usePlaybackSession(
     };
     // The intent is a plain value: its kind restarts the session, a new object of the same kind must not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, baseUrl, session, contentId, intent?.kind, profileQuality]);
+  }, [client, baseUrl, session, contentId, intent?.kind, profileQuality, bandwidthCap]);
 
   const choose = useCallback((position: number) => void controller.current?.start(position), []);
   const resume = useCallback(() => void controller.current?.resume(), []);

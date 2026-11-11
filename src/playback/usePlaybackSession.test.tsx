@@ -175,6 +175,51 @@ describe('start', () => {
     expect(calls.start[0]?.body.quality_preference).toBe('720p');
   });
 
+  it('sends the profile bitrate cap on the start and on a replan', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: true, quality: 'auto', bandwidthCapKbps: 6000 });
+    await ready(hook);
+    expect(calls.start[0]?.body.bandwidth_cap_kbps).toBe(6000);
+    await act(async () => {
+      await hook.result.current.qualityChange('480p');
+    });
+    expect(calls.replan[0]?.body.bandwidth_cap_kbps).toBe(6000);
+  });
+
+  it('reads the cap anew for a replan after it changed, without restarting the session', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: true, quality: 'auto', bandwidthCapKbps: 6000 });
+    await ready(hook);
+    expect(calls.start[0]?.body.bandwidth_cap_kbps).toBe(6000);
+    hook.rerender({ profile: { known: true, quality: 'auto', bandwidthCapKbps: 2500 } });
+    await act(async () => {
+      await hook.result.current.qualityChange('480p');
+    });
+    expect(calls.replan[0]?.body.bandwidth_cap_kbps).toBe(2500);
+    expect(calls.start).toHaveLength(1);
+  });
+
+  it('sends no bitrate cap when the profile has none', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: true, quality: 'auto', bandwidthCapKbps: null });
+    await ready(hook);
+    await act(async () => {
+      await hook.result.current.qualityChange('480p');
+    });
+    expect(calls.start[0]?.body).not.toHaveProperty('bandwidth_cap_kbps');
+    expect(calls.replan[0]?.body).not.toHaveProperty('bandwidth_cap_kbps');
+  });
+
+  it('waits for the settled profile, so the first start already carries the cap', async () => {
+    const calls = servePlayback(server);
+    const hook = setup(undefined, { known: false, quality: 'auto', bandwidthCapKbps: null });
+    await until(() => calls.watch === 1);
+    expect(calls.start).toHaveLength(0);
+    hook.rerender({ profile: { known: true, quality: 'auto', bandwidthCapKbps: 3000 } });
+    await ready(hook);
+    expect(calls.start[0]?.body.bandwidth_cap_kbps).toBe(3000);
+  });
+
   it('starts at once with `auto` when no profile settings are handed in', async () => {
     const calls = servePlayback(server);
     await ready(setup());

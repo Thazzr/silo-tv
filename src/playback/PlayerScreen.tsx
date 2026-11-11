@@ -73,9 +73,10 @@ export function PlayerScreen({ contentId, title, intent, onExit, onEnded }: Play
   // A start with no quality of its own sends the profile's preferred one, once it is known.
   const profileSettings = useProfileSettings();
   const preferredQuality = profileSettings.values['playback.preferred_quality'];
+  const bandwidthCapKbps = profileSettings.values['playback.max_bitrate_kbps'];
   const profile = useMemo(
-    () => ({ known: profileSettings.known, quality: preferredQuality }),
-    [profileSettings.known, preferredQuality],
+    () => ({ known: profileSettings.known, quality: preferredQuality, bandwidthCapKbps }),
+    [profileSettings.known, preferredQuality, bandwidthCapKbps],
   );
   const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
   const { state } = playback;
@@ -498,6 +499,7 @@ function PlayingView({
               video={video}
               engine={engine}
               qualityName={qualityInUse?.kind === 'name' ? qualityInUse.name : quality}
+              bandwidthCapKbps={settings.values['playback.max_bitrate_kbps']}
               mediaError={mediaError}
               secrets={[mediaUrl, token]}
             />

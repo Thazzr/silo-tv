@@ -56,6 +56,8 @@ export interface ControllerDeps {
    * profile's settings are settled (`auto` when they could not be read); without it, `auto`.
    */
   profileQuality?(): Promise<string>;
+  /** The profile's bitrate cap in kbit/s, read at every start and replan; null or absent = none. */
+  bandwidthCap?(): number | null;
   onState(state: SessionState): void;
   onMediaError(failure: MediaFailure | null): void;
   /** The stream played to its end and the session is stopped. */
@@ -156,6 +158,7 @@ export class PlaybackController {
         loadId: this.loadId,
       }),
       reading: () => this.reading(),
+      bandwidthCap: () => this.deps.bandwidthCap?.() ?? null,
       refreshProfile: async () => {
         const profile = await readDeviceProfile();
         this.capabilities = profile.capabilities;
@@ -284,6 +287,7 @@ export class PlaybackController {
   /** Starts the playback at `position` seconds (0 means from the beginning). */
   async start(position: number, retryInstallation = true): Promise<void> {
     this.set({ kind: 'starting' });
+    this.replanner.dropQueuedSeek();
     this.startPosition = position;
     try {
       // The first start decides the quality: the intent's, else what the profile prefers (the
@@ -301,6 +305,7 @@ export class PlaybackController {
         profileId: this.profileId,
         attemptId: this.attemptId,
         quality: this.quality,
+        bandwidthCapKbps: this.deps.bandwidthCap?.() ?? null,
         position,
         tracks: this.tracks,
         capabilities: this.capabilities,
@@ -461,6 +466,13 @@ export class PlaybackController {
     this.watchdog.disarm();
     if (!engine || !plan) return;
     this.origin = plausible(engine.currentTime) ? engine.currentTime : 0;
+    // A seek the viewer asked for during the replan that started this load replaces the plan's
+    // start seek: one seek, from the new origin.
+    const owed = this.replanner.takeLoadSeek(this.loadId);
+    if (owed !== null) {
+      void this.replanner.seekTo(owed);
+      return;
+    }
     const start = plan.timeline.player_start_seconds;
     if (start > 0) engine.seek(this.origin + start);
   }
@@ -538,6 +550,7 @@ export class PlaybackController {
   stop(): Promise<void> {
     if (this.stopped) return Promise.resolve();
     this.stopped = true;
+    this.replanner.dropQueuedSeek();
     this.progress.clearTimer();
     this.progress.dropPending();
     this.recovery.cancelWait();

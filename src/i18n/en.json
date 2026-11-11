@@ -295,6 +295,7 @@
   "player.info.framesDropped": "{dropped} of {total} dropped",
   "player.info.limit": "Limit",
   "player.info.limited": "Limited to {rate} (after stalls)",
+  "player.info.maxBitrate": "Maximum bitrate",
   "player.info.warning": "Notice",
   "player.info.warn.hdr_range_assumed_hdr10": "Source range unknown, treated as HDR10",
   "player.info.warn.dolby_vision_removed": "Dolby Vision data was removed",

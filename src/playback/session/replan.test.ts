@@ -53,6 +53,7 @@ function setup(answers: Answer[] = [], overrides: { engine?: PlayerEngine | null
     capabilities: capabilities as ClientCapabilities | null,
     context: context as PlaybackContext | null,
     origin: 0,
+    cap: null as number | null,
     reading: { position: 100, paused: false } as PlayerReading | null,
     state: {
       sessionId: 'session-1',
@@ -87,6 +88,7 @@ function setup(answers: Answer[] = [], overrides: { engine?: PlayerEngine | null
     context: () => world.context,
     state: () => world.state,
     reading: () => world.reading,
+    bandwidthCap: () => world.cap,
     refreshProfile: calls.refreshProfile,
     setStartPosition: calls.setStartPosition,
     setQuality: (quality) => {
@@ -170,6 +172,37 @@ describe('Replanner.replan', () => {
       client_playback_context: context,
     });
     expect(t.bodies[0]).not.toHaveProperty('failure');
+  });
+
+  it.each([
+    'quality_change',
+    'track_change',
+    'seek_reanchor',
+    'failure_recovery',
+    'seek_failure_recovery',
+    'output_change',
+  ] as const)(
+    'sends bandwidth_cap_kbps with %s only when the profile has a cap',
+    async (operation) => {
+      const capped = setup();
+      capped.world.cap = 12000;
+      await capped.replanner.replan(operation);
+      expect(capped.bodies[0]).toMatchObject({ operation, bandwidth_cap_kbps: 12000 });
+
+      const uncapped = setup();
+      await uncapped.replanner.replan(operation);
+      expect(uncapped.bodies[0]).not.toHaveProperty('bandwidth_cap_kbps');
+    },
+  );
+
+  it('reads the cap anew for every replan, so a changed setting applies to the next one', async () => {
+    const t = setup();
+    t.world.cap = 5000;
+    await t.replanner.replan('track_change');
+    t.world.cap = null;
+    await t.replanner.replan('track_change');
+    expect(t.bodies[0]).toHaveProperty('bandwidth_cap_kbps', 5000);
+    expect(t.bodies[1]).not.toHaveProperty('bandwidth_cap_kbps');
   });
 
   it('uses a fresh request id for every replan', async () => {
@@ -598,14 +631,221 @@ describe('Replanner.seekTo arithmetic and guards', () => {
       seek: ReturnType<typeof vi.fn>;
     };
 
-  it('does not seek while a slow replan runs', async () => {
+  /** A replan whose answer waits for `release()`: the window in which a seek is queued. */
+  function slowReplan(t: ReturnType<typeof setup>, run: () => Promise<unknown>) {
+    const real = t.post.getMockImplementation()!;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    t.post.mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+      await gate;
+      return real(...args);
+    });
+    return { done: run(), release };
+  }
+
+  it('queues a seek that comes during a running replan and applies it once the replan applied', async () => {
     const e = engineOf(5400);
     const t = setup([], { engine: e });
     t.world.plan = timeline(true, 0);
-    const slow = t.replanner.replan('track_change');
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
     await t.replanner.seekTo(10);
-    await slow;
     expect(e.seek).not.toHaveBeenCalled();
+    slow.release();
+    await slow.done;
+    expect(e.seek).toHaveBeenCalledTimes(1);
+    expect(e.seek).toHaveBeenCalledWith(10);
+  });
+
+  it('keeps only the newest seek requested during the replan', async () => {
+    const e = engineOf(5400);
+    const t = setup([], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
+    await t.replanner.seekTo(10);
+    await t.replanner.seekTo(20);
+    await t.replanner.seekTo(30);
+    slow.release();
+    await slow.done;
+    expect(e.seek).toHaveBeenCalledTimes(1);
+    expect(e.seek).toHaveBeenCalledWith(30);
+  });
+
+  it.each([
+    ['applied', undefined],
+    ['refused', { status: 400, code: 'bad_request' }],
+    ['transient', { status: 503, code: 'unavailable' }],
+  ] as const)('applies the queued seek after a replan that settled %s', async (_kind, answer) => {
+    const e = engineOf(5400);
+    const t = setup(answer ? [answer] : [], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
+    await t.replanner.seekTo(77);
+    slow.release();
+    await slow.done;
+    expect(e.seek).toHaveBeenCalledTimes(1);
+    expect(e.seek).toHaveBeenCalledWith(77);
+  });
+
+  it('applies the queued seek after a viewer-asked replan settled through its caller too', async () => {
+    const e = engineOf(5400);
+    const t = setup([], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.qualityChange('480p'));
+    await t.replanner.seekTo(15);
+    slow.release();
+    await slow.done;
+    expect(e.seek).toHaveBeenCalledWith(15);
+  });
+
+  it('keeps the seek for the new load when the replan applied one, and hands it out once, for that load only', async () => {
+    const e = engineOf(5400);
+    const wrong = setup([], { engine: e });
+    wrong.world.plan = timeline(true, 0);
+    wrong.world.adoptReloads = true;
+    const first = slowReplan(wrong, () =>
+      wrong.replanner.replan('quality_change', { quality: '480p' }),
+    );
+    await wrong.replanner.seekTo(40);
+    first.release();
+    await first.done;
+    // The engine is still the old one: nothing may seek on it.
+    expect(e.seek).not.toHaveBeenCalled();
+    expect(wrong.replanner.takeLoadSeek(3)).toBeNull();
+    // A seek bound to another load is gone for good.
+    expect(wrong.replanner.takeLoadSeek(2)).toBeNull();
+
+    const right = setup([], { engine: e });
+    right.world.plan = timeline(true, 0);
+    right.world.adoptReloads = true;
+    const second = slowReplan(right, () => right.replanner.replan('track_change'));
+    await right.replanner.seekTo(40);
+    second.release();
+    await second.done;
+    expect(right.replanner.takeLoadSeek(2)).toBe(40);
+    expect(right.replanner.takeLoadSeek(2)).toBeNull();
+  });
+
+  it('lets a seek after the applied reload update the owed one, and a stop or another replan drop it', async () => {
+    const e = engineOf(5400);
+    const t = setup([], { engine: e });
+    t.world.plan = timeline(true, 0);
+    t.world.adoptReloads = true;
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
+    await t.replanner.seekTo(40);
+    slow.release();
+    await slow.done;
+    await t.replanner.seekTo(50);
+    expect(e.seek).not.toHaveBeenCalled();
+    expect(t.replanner.takeLoadSeek(2)).toBe(50);
+
+    const stopped = setup([], { engine: e });
+    stopped.world.plan = timeline(true, 0);
+    stopped.world.adoptReloads = true;
+    const s1 = slowReplan(stopped, () => stopped.replanner.replan('track_change'));
+    await stopped.replanner.seekTo(40);
+    s1.release();
+    await s1.done;
+    stopped.replanner.dropQueuedSeek();
+    expect(stopped.replanner.takeLoadSeek(2)).toBeNull();
+
+    const superseded = setup([], { engine: e });
+    superseded.world.plan = timeline(true, 0);
+    superseded.world.adoptReloads = true;
+    const s2 = slowReplan(superseded, () => superseded.replanner.replan('track_change'));
+    await superseded.replanner.seekTo(40);
+    s2.release();
+    await s2.done;
+    await superseded.replanner.replan('failure_recovery');
+    expect(superseded.replanner.takeLoadSeek(2)).toBeNull();
+  });
+
+  it.each([
+    ['terminal', terminalDecision('No.')],
+    ['ended', { status: 410 }],
+    ['gone', { status: 404, code: 'session_not_found' }],
+  ] as const)('drops the queued seek when the replan ended %s', async (_kind, answer) => {
+    const e = engineOf(5400);
+    const t = setup([answer], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.trackChange({}));
+    await t.replanner.seekTo(10);
+    slow.release();
+    await slow.done;
+    expect(e.seek).not.toHaveBeenCalled();
+    // And it does not come back with a later replan.
+    await t.replanner.replan('track_change');
+    expect(e.seek).not.toHaveBeenCalled();
+  });
+
+  it('drops the queued seek on a stop, a new start and a stopped session', async () => {
+    const e = engineOf(5400);
+    const stopped = setup([], { engine: e });
+    stopped.world.plan = timeline(true, 0);
+    const first = slowReplan(stopped, () => stopped.replanner.replan('track_change'));
+    await stopped.replanner.seekTo(10);
+    stopped.replanner.dropQueuedSeek();
+    first.release();
+    await first.done;
+    await stopped.replanner.replan('track_change');
+    expect(e.seek).not.toHaveBeenCalled();
+
+    const ended = setup([], { engine: e });
+    ended.world.plan = timeline(true, 0);
+    const second = slowReplan(ended, () => ended.replanner.replan('track_change'));
+    await ended.replanner.seekTo(10);
+    ended.world.stopped = true;
+    second.release();
+    await second.done;
+    expect(e.seek).not.toHaveBeenCalled();
+  });
+
+  it('does not seek twice for one queued seek', async () => {
+    const e = engineOf(5400);
+    const t = setup([], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
+    await t.replanner.seekTo(10);
+    slow.release();
+    await slow.done;
+    await t.replanner.replan('quality_change', { quality: 'auto' });
+    await t.replanner.replan('track_change');
+    expect(e.seek).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the queue to the running replan when another replan is refused as busy', async () => {
+    const e = engineOf(5400);
+    const t = setup([], { engine: e });
+    t.world.plan = timeline(true, 0);
+    const slow = slowReplan(t, () => t.replanner.replan('track_change'));
+    await t.replanner.seekTo(10);
+    expect(await t.replanner.replan('quality_change', { quality: '480p' })).toEqual({
+      kind: 'busy',
+    });
+    expect(e.seek).not.toHaveBeenCalled();
+    slow.release();
+    await slow.done;
+    expect(e.seek).toHaveBeenCalledWith(10);
+  });
+
+  it('clamps the queued value like any seek, and runs a reanchor when the new plan needs one', async () => {
+    const direct = engineOf(5400);
+    const a = setup([], { engine: direct });
+    a.world.plan = timeline(true, 0);
+    const slowA = slowReplan(a, () => a.replanner.replan('track_change'));
+    await a.replanner.seekTo(99_999);
+    slowA.release();
+    await slowA.done;
+    expect(direct.seek).toHaveBeenCalledWith(5400);
+
+    const anchored = engineOf(5400, []);
+    const b = setup([], { engine: anchored });
+    b.world.plan = timeline(false, 0);
+    const slowB = slowReplan(b, () => b.replanner.replan('track_change'));
+    await b.replanner.seekTo(99_999);
+    slowB.release();
+    await slowB.done;
+    await vi.waitFor(() => expect(b.bodies).toHaveLength(2));
+    expect(b.bodies[1]).toMatchObject({ operation: 'seek_reanchor', position_seconds: 5400 });
   });
 
   it('adds the origin and subtracts the offset for a direct seek, and clamps at the origin and the duration', async () => {

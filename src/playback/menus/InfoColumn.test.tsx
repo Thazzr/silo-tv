@@ -45,6 +45,7 @@ interface Options {
   engine?: FakeEngine | null;
   lang?: Language;
   qualityName?: string | null;
+  bandwidthCapKbps?: number | null;
   mediaError?: MediaFailure | null;
   secrets?: readonly (string | undefined)[];
 }
@@ -57,6 +58,7 @@ const column = (options: Options = {}) => (
       video={options.video === undefined ? videoOfSize(1920, 1080) : options.video}
       engine={options.engine === undefined ? new FakeEngine() : options.engine}
       qualityName={options.qualityName}
+      bandwidthCapKbps={options.bandwidthCapKbps}
       mediaError={options.mediaError}
       secrets={options.secrets}
     />
@@ -374,6 +376,34 @@ describe('the info panel: the connection', () => {
     render(column({ plan }));
     expect(value(footer(), 'Limit')).toBe('Limited to 4 Mbit/s (after stalls)');
     expect(value(footer(), 'Notice')).toBe('Source range unknown, treated as HDR10');
+  });
+
+  it('shows the profile bitrate cap in the footer only when one is set, in the app number format', () => {
+    render(column());
+    expect(value(footer(), 'Maximum bitrate')).toBeNull();
+    expect(screen.queryByTestId('player-info-footer')).toBeNull();
+    cleanup();
+    render(column({ bandwidthCapKbps: 8500 }));
+    expect(value(footer(), 'Maximum bitrate')).toBe('8.5 Mbit/s');
+    cleanup();
+    render(column({ bandwidthCapKbps: 8500, lang: 'de' }));
+    expect(value(footer(), 'Maximale Bitrate')).toBe('8,5 Mbit/s');
+    cleanup();
+    render(column({ bandwidthCapKbps: 500 }));
+    expect(value(footer(), 'Maximum bitrate')).toBe('500 kbit/s');
+  });
+
+  it('keeps the plan bandwidth limit line next to the cap line', () => {
+    const plan = playbackPlan({
+      bandwidth_limit: {
+        kbps: 4000,
+        source: 'observed_rebuffer',
+        expires_at: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    render(column({ plan, bandwidthCapKbps: 8000 }));
+    expect(value(footer(), 'Limit')).toBe('Limited to 4 Mbit/s (after stalls)');
+    expect(value(footer(), 'Maximum bitrate')).toBe('8 Mbit/s');
   });
 
   it('puts the conditional rows in a footer inside the right column, under the source-file facts', () => {

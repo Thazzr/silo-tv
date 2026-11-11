@@ -8,7 +8,7 @@ import { createSiloClient, type SiloClient } from '../api/client';
 import type { components } from '../api/generated/schema';
 import { Session } from '../api/session';
 import { currentTransport } from '../api/transport';
-import { BASE_URL, account } from '../test/apiFixtures';
+import { BASE_URL, account, problem } from '../test/apiFixtures';
 import { FakeEngine } from '../test/fakeEngine';
 import {
   ACCESS_TOKEN,
@@ -945,4 +945,205 @@ describe('heading', () => {
     const { ready } = await playing();
     expect(ready().heading).toEqual({ title: 'First Title' });
   });
+});
+
+describe('a seek during a replan that starts a new load', () => {
+  const planAt = (n: number, url: string, overrides: Partial<S['TimelineV3']> = {}) =>
+    playbackPlan({
+      plan_id: `plan:${n}`,
+      plan_attempt_key: `v3:key-${n}`,
+      stream: { ...playbackPlan().stream, url },
+      timeline: timeline({ player_start_seconds: 120, ...overrides }),
+    });
+
+  /** The first replan answer waits for `release()`, later ones answer at once. */
+  function gatedReplans(answers: S['PlaybackDecision'][]) {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let seen = 0;
+    server.use(
+      http.post(`${BASE_URL}/api/v2/playback/:sessionId/replan`, async () => {
+        const at = seen++;
+        if (at === 0) await gate;
+        return HttpResponse.json(answers[Math.min(at, answers.length - 1)]);
+      }),
+    );
+    return { release, sent: () => seen };
+  }
+
+  /** What the screen does when the new view mounts: a new element, a new engine, its metadata. */
+  function mountNewLoad(controller: PlaybackController, origin: number) {
+    const next = new FakeEngine();
+    controller.attachEngine(null);
+    controller.attachEngine(next);
+    next.currentTime = origin;
+    return next;
+  }
+
+  it('seeks the new engine once, after its metadata, instead of the plan start and never the old one', async () => {
+    const { controller, engine, ready } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+    });
+    const { release } = gatedReplans([playableDecision(planAt(2, '/api/v2/stream/other?st=2'))]);
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    release();
+    expect(await change).toEqual({ kind: 'applied' });
+    expect(ready().loadId).toBe(2);
+    // The old element is about to be released: it must not have been asked to seek.
+    expect(engine.seeks).toEqual([]);
+    const next = mountNewLoad(controller, 5);
+    controller.onLoadedMetadata();
+    expect(next.seeks).toEqual([305]);
+    expect(engine.seeks).toEqual([]);
+  });
+
+  it('seeks inside the new engine seekable range without a server round trip on a non-seekable plan', async () => {
+    const { controller } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: stuckTimeline }))] },
+    });
+    const { release, sent } = gatedReplans([
+      playableDecision(planAt(2, '/api/v2/stream/other?st=2', stuckTimeline)),
+    ]);
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    release();
+    await change;
+    const next = mountNewLoad(controller, 5);
+    next.seekable = [{ start: 0, end: 1000 }];
+    controller.onLoadedMetadata();
+    expect(next.seeks).toEqual([305]);
+    expect(sent()).toBe(1);
+  });
+
+  it('applies the seek at once on the current engine when the stream plays on (no new load)', async () => {
+    const { controller, engine, ready } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+    });
+    const same = playbackPlan({
+      plan_id: 'plan:2',
+      plan_attempt_key: 'v3:key-2',
+      timeline: timeline(),
+    });
+    const { release } = gatedReplans([playableDecision(same)]);
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    release();
+    await change;
+    expect(ready().loadId).toBe(1);
+    expect(engine.seeks).toEqual([300]);
+  });
+
+  it('drops the seek when a stop comes before the new load shows its metadata', async () => {
+    const { controller } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+    });
+    const { release } = gatedReplans([playableDecision(planAt(2, '/api/v2/stream/other?st=2'))]);
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    release();
+    await change;
+    await controller.stop();
+    const next = mountNewLoad(controller, 5);
+    expect(next.seeks).not.toContain(305);
+    expect(next.seeks).toEqual([]);
+  });
+
+  it('does not hand the seek of load 2 to load 3', async () => {
+    const { controller, ready } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+    });
+    const { release } = gatedReplans([
+      playableDecision(planAt(2, '/api/v2/stream/other?st=2')),
+      playableDecision(planAt(3, '/api/v2/stream/third?st=3')),
+    ]);
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    release();
+    await change;
+    // Load 2 never showed metadata (it failed); the next replan starts load 3.
+    await controller.qualityChange('480p');
+    expect(ready().loadId).toBe(3);
+    const next = mountNewLoad(controller, 5);
+    controller.onLoadedMetadata();
+    // Only the plan's own start seek, not the viewer's 300.
+    expect(next.seeks).toEqual([125]);
+  });
+});
+
+describe('a seek that waits for a replan, then the session starts over or stops', () => {
+  /** The replan answer waits for `release()`; it answers applied (same stream) or refused. */
+  function gated(kind: 'applied' | 'refused') {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let sent = 0;
+    server.use(
+      http.post(`${BASE_URL}/api/v2/playback/:sessionId/replan`, async () => {
+        sent += 1;
+        await gate;
+        return kind === 'refused'
+          ? HttpResponse.json(problem('bad_request', 400), { status: 400 })
+          : HttpResponse.json(
+              playableDecision(
+                playbackPlan({
+                  plan_id: 'plan:2',
+                  plan_attempt_key: 'v3:key-2',
+                  timeline: timeline(),
+                }),
+              ),
+            );
+      }),
+    );
+    return { release, sent: () => sent };
+  }
+
+  it.each(['applied', 'refused'] as const)(
+    'drops the queued seek on a new start, also when the replan then settles %s',
+    async (kind) => {
+      const { controller, engine } = await playing({
+        serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+      });
+      const replan = gated(kind);
+      const change = controller.qualityChange('720p');
+      await controller.seekTo(300);
+      await controller.start(50);
+      replan.release();
+      await change;
+      await sleep(20);
+      expect(engine.seeks).toEqual([]);
+      expect(replan.sent()).toBe(1);
+    },
+  );
+
+  it('sends no reanchor for the stale position after a new start', async () => {
+    const { controller } = await playing({
+      serve: { start: [playableDecision(playbackPlan({ timeline: stuckTimeline }))] },
+    });
+    const replan = gated('refused');
+    const change = controller.qualityChange('720p');
+    await controller.seekTo(300);
+    await controller.start(50);
+    replan.release();
+    await change;
+    await sleep(20);
+    expect(replan.sent()).toBe(1);
+  });
+
+  it.each(['applied', 'refused'] as const)(
+    'drops the queued seek on a stop, also when the replan then settles %s',
+    async (kind) => {
+      const { controller, engine } = await playing({
+        serve: { start: [playableDecision(playbackPlan({ timeline: timeline() }))] },
+      });
+      const replan = gated(kind);
+      const change = controller.qualityChange('720p');
+      await controller.seekTo(300);
+      await controller.stop();
+      replan.release();
+      await change;
+      await sleep(20);
+      expect(engine.seeks).toEqual([]);
+      expect(replan.sent()).toBe(1);
+    },
+  );
 });

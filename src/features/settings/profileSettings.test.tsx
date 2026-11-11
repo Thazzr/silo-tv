@@ -112,7 +112,7 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
     expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(40)).toHaveLength(17);
+    expect(keysKnownAt(40)).toHaveLength(18);
   });
 
   it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
@@ -137,6 +137,7 @@ describe('keysKnownAt', () => {
       'playback.next_up_prompt_seconds': 30,
       'playback.auto_play_next_preview': false,
       'playback.preferred_quality': 'auto',
+      'playback.max_bitrate_kbps': null,
       'player.video_skip_back_seconds': 10,
       'player.video_skip_forward_seconds': 30,
       'player.sleep_timer_default_minutes': 30,
@@ -158,6 +159,15 @@ describe('keysKnownAt', () => {
     ['playback.intro_skip_mode', true, 'ask'],
     ['playback.preferred_quality', '1080p', '1080p'],
     ['playback.preferred_quality', '4k', 'auto'],
+    ['playback.max_bitrate_kbps', 100, 100],
+    ['playback.max_bitrate_kbps', 200000, 200000],
+    ['playback.max_bitrate_kbps', 8000, 8000],
+    ['playback.max_bitrate_kbps', 99, null],
+    ['playback.max_bitrate_kbps', 200001, null],
+    ['playback.max_bitrate_kbps', 8000.5, null],
+    ['playback.max_bitrate_kbps', null, null],
+    ['playback.max_bitrate_kbps', '8000', null],
+    ['playback.max_bitrate_kbps', true, null],
     ['player.video_skip_back_seconds', 15, 15],
     ['player.video_skip_back_seconds', 12, 10],
     ['player.video_skip_forward_seconds', '30', 30],
@@ -281,10 +291,10 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
     expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
-    expect(url.searchParams.getAll('keys')).toHaveLength(17);
+    expect(url.searchParams.getAll('keys')).toHaveLength(18);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(17);
+    expect(url.search.match(/keys=/g)).toHaveLength(18);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {

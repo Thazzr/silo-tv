@@ -131,6 +131,8 @@ export interface InfoColumnProps {
   engine: PlayerEngine | null;
   /** The quality the viewer chose, by name, for "Quality chosen: …". */
   qualityName?: string | null;
+  /** The profile's bitrate cap in kbit/s, shown as a footer line when set. */
+  bandwidthCapKbps?: number | null;
   mediaError?: MediaFailure | null;
   /** Texts that must never reach the screen (the media URL, the token). */
   secrets?: readonly (string | undefined)[];
@@ -149,6 +151,7 @@ export function InfoColumn({
   video,
   engine,
   qualityName = null,
+  bandwidthCapKbps = null,
   mediaError = null,
   secrets = NO_SECRETS,
 }: InfoColumnProps) {
@@ -235,6 +238,8 @@ export function InfoColumn({
   }
   const limit = plan.bandwidth_limit ? formatBitrate(plan.bandwidth_limit.kbps, decimal) : null;
   if (limit) footer.push([t('player.info.limit'), t('player.info.limited', { rate: limit })]);
+  const cap = formatBitrate(bandwidthCapKbps, decimal);
+  if (cap) footer.push([t('player.info.maxBitrate'), cap]);
   for (const warning of plan.degradation_warnings ?? []) {
     // A documented code has its own text; the server's message is for a code this app lacks.
     const known = Object.prototype.hasOwnProperty.call(WARNING_TEXT, warning.code)

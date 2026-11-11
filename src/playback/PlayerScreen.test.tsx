@@ -505,6 +505,25 @@ describe('PlayerScreen on a plan the server cannot seek', () => {
   });
 });
 
+describe('PlayerScreen bitrate cap of the profile', () => {
+  it('sends it on the start and shows it in the Info panel', async () => {
+    const { calls } = await playing({}, true, { values: { 'playback.max_bitrate_kbps': 8000 } });
+    expect(calls.start[0]?.body.bandwidth_cap_kbps).toBe(8000);
+    key(BLUE);
+    const panel = await screen.findByTestId('player-info');
+    expect(panel).toHaveTextContent('Maximum bitrate');
+    expect(panel).toHaveTextContent('8 Mbit/s');
+  });
+
+  it('sends nothing and shows no line without a cap', async () => {
+    const { calls } = await playing();
+    expect(calls.start[0]?.body).not.toHaveProperty('bandwidth_cap_kbps');
+    key(BLUE);
+    const panel = await screen.findByTestId('player-info');
+    expect(panel).not.toHaveTextContent('Maximum bitrate');
+  });
+});
+
 describe('PlayerScreen Info on the blue key', () => {
   const osdVisible = () => screen.getByTestId('player-osd').getAttribute('data-visible') === 'true';
   const infoButton = () => screen.getByRole('button', { name: 'Info' });

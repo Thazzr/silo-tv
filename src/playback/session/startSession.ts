@@ -141,6 +141,8 @@ export interface StartRequest {
   profileId: string;
   attemptId: string;
   quality: string;
+  /** The profile's bitrate cap in kbit/s; null sends nothing. */
+  bandwidthCapKbps?: number | null;
   position: number;
   tracks: Tracks;
   capabilities: ClientCapabilities;
@@ -160,6 +162,7 @@ export function requestStart(client: SiloClient, header: ProfileHeader, start: S
       profile_id: start.profileId,
       playback_attempt_id: start.attemptId,
       quality_preference: start.quality,
+      ...(start.bandwidthCapKbps != null ? { bandwidth_cap_kbps: start.bandwidthCapKbps } : {}),
       subtitle_fidelity_preference: 'compatible',
       start_position: start.position,
       // Left out unless the viewer picked one: then the server decides from the preferences.
