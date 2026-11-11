@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, Minus, Plus } from 'lucide-react';
+import { Check, Minus, Plus, SlidersHorizontal } from 'lucide-react';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { SUBTITLE_SYNC_MAX_MS } from '../../features/settings/profileSettings';
 import { useT, type MessageKey } from '../../i18n';
@@ -12,6 +12,7 @@ export const SUBTITLE_OFF_KEY = 'player-menu-subtitle-off';
 export const DELAY_MINUS_KEY = 'player-menu-delay-minus';
 export const DELAY_PLUS_KEY = 'player-menu-delay-plus';
 export const DELAY_RESET_KEY = 'player-menu-delay-reset';
+export const APPEARANCE_KEY = 'player-menu-appearance';
 export const subtitleKey = (trackId: string) => `player-menu-subtitle-${trackId}`;
 
 /** The delay row's buttons, left to right. */
@@ -26,7 +27,8 @@ const SOURCE_TEXT: Record<SubtitleSource, MessageKey> = {
 /**
  * "Off" and the plan's subtitle tracks (language, format and source; the track's own label when it
  * says more), the one that plays checked, then the delay of the subtitle in one row: minus, the
- * value, plus and reset. A pick is a `track_change` replan, handled like an audio pick: applied is
+ * value, plus and reset, and last the "Appearance…" action (the web player's) that opens the
+ * appearance dialog over the player. A pick is a `track_change` replan, handled like an audio pick: applied is
  * saved and closes the menu, refused keeps it open and says so. The delay is a local change of the
  * overlay (the screen saves it), so it never closes the menu. While no subtitle plays the three
  * delay buttons are dimmed and out of the focus order.
@@ -40,6 +42,7 @@ export function SubtitlesMenu({
   onDelay,
   onDelayReset,
   onApplied,
+  onAppearance,
   remember,
   recall,
   onSide,
@@ -59,6 +62,8 @@ export function SubtitlesMenu({
   onDelayReset(): void;
   /** The pick was applied: the menu closes. */
   onApplied(): void;
+  /** Opens the appearance dialog; undefined where the server has no such setting (no row). */
+  onAppearance?: () => void;
   remember(key: string): void;
   recall(): string | null;
   onSide(direction: 'left' | 'right'): void;
@@ -112,6 +117,7 @@ export function SubtitlesMenu({
   const focusRows = [
     ...trackKeys,
     ...(firstDelayKey ? [[firstDelayKey, ...otherDelayKeys] as const] : []),
+    ...(onAppearance ? [APPEARANCE_KEY] : []),
   ];
 
   const delayButton = (
@@ -225,6 +231,20 @@ export function SubtitlesMenu({
           </span>
         </div>
       </section>
+      {onAppearance ? (
+        <section className="player-menu-section" data-testid="menu-actions">
+          <MenuRow
+            focusKey={APPEARANCE_KEY}
+            className="player-menu-action"
+            role="menuitem"
+            data-testid="menu-appearance"
+            onClick={onAppearance}
+          >
+            <SlidersHorizontal size={28} aria-hidden="true" />
+            <span className="player-menu-row-name">{t('player.menu.subtitles.appearance')}</span>
+          </MenuRow>
+        </section>
+      ) : null}
     </MenuPopover>
   );
 }

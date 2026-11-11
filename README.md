@@ -32,7 +32,7 @@ It works with any Silo server (API v2): you enter the server's address on the TV
 | **Detail pages** | title art, ratings, quality badges, seasons and episodes, cast, similar titles, box sets, and person pages with filmography |
 | **Search** | results while you type: box sets, people, movies, series and episodes; the keyboard has ä, ö, ü and ß |
 | **Playback** | Silo's playback protocol v3: direct play, and HLS remux and transcode through hls.js; resume and start over, with an optional rewind on resume |
-| **The player** | the layout of Silo's web player: a scrubber with buffer, trickplay previews, chapters and coloured intro, recap and credits; skips by your profile's steps; skip intro, recap and credits; a quality menu that respects your bitrate limit; an Info panel; subtitles in your appearance, which you can set per TV with a live preview |
+| **The player** | the layout of Silo's web player: a scrubber with buffer, trickplay previews, chapters and coloured intro, recap and credits; skips by your profile's steps; skip intro, recap and credits; a quality menu that respects your bitrate limit; an Info panel; subtitles in your profile's appearance, set in the web app's dialog with a live preview |
 | **Extras** | Trailers & More (YouTube trailers open in the TV's YouTube app), theme music, spoiler protection for unwatched episodes, AI translation of descriptions, each when your profile and server turn it on |
 | **Made for the remote** | arrows, OK and Back everywhere, the Magic Remote pointer and wheel, and focus that comes back to where you were |
 | **Your server's look** | its name, logo, sign-in background and accent colour |

@@ -27,7 +27,8 @@ describe('RESTING_GAP', () => {
 
 describe('subtitleStyles', () => {
   it('maps every font size to its pixel size', () => {
-    expect(FONT_SIZES_PX).toEqual({ small: 36, medium: 44, large: 52, xlarge: 62, xxlarge: 72 });
+    // The web player's 20, 26, 32, 40 and 48 px at 720 px, on the 1080p layout.
+    expect(FONT_SIZES_PX).toEqual({ small: 30, medium: 39, large: 48, xlarge: 60, xxlarge: 72 });
     for (const size of Object.keys(FONT_SIZES_PX) as SubtitleAppearance['fontSize'][]) {
       expect(subtitleStyles(look({ fontSize: size }), 0).line.fontSize).toBe(
         `${FONT_SIZES_PX[size]}px`,
@@ -122,9 +123,17 @@ describe('subtitleStyles in a frame', () => {
   const full = { width: 1920, height: 1080 };
 
   it('scales the font size with the frame height', () => {
-    expect(subtitleStyles(look({ fontSize: 'large' }), 0, half).line.fontSize).toBe('26px');
+    expect(subtitleStyles(look({ fontSize: 'large' }), 0, half).line.fontSize).toBe('24px');
     expect(subtitleStyles(look({ fontSize: 'xxlarge' }), 0, half).line.fontSize).toBe('36px');
-    expect(subtitleStyles(look({ fontSize: 'large' }), 0, full).line.fontSize).toBe('52px');
+    expect(subtitleStyles(look({ fontSize: 'large' }), 0, full).line.fontSize).toBe('48px');
+  });
+
+  it('takes the size scale from the frame when it names one, and the offsets from its height', () => {
+    const preview = { width: 920, height: 330, scale: 1 };
+    const { block, line } = subtitleStyles(look({ fontSize: 'xlarge' }), 0, preview);
+    expect(line.fontSize).toBe('60px');
+    expect(line.padding).toBe('2px 14px');
+    expect(block.bottom).toBe('23.1px');
   });
 
   it('scales the outline offsets and the shadow with the frame height', () => {
@@ -162,8 +171,8 @@ describe('subtitleStyles in a frame', () => {
   it('rounds the scaled lengths of a frame that does not divide evenly', () => {
     // 720 / 1080 = 2/3 and 810 / 1080 = 3/4: no float noise in the pixel values.
     const third = { width: 1280, height: 720 };
-    expect(subtitleStyles(look({ fontSize: 'large' }), 0, third).line.fontSize).toBe('34.67px');
-    expect(subtitleStyles(look({ fontSize: 'small' }), 0, third).line.fontSize).toBe('24px');
+    expect(subtitleStyles(look({ fontSize: 'large' }), 0, third).line.fontSize).toBe('32px');
+    expect(subtitleStyles(look({ fontSize: 'small' }), 0, third).line.fontSize).toBe('20px');
     expect(
       subtitleStyles(look({ backgroundStyle: 'outline' }), 0, third).line.textShadow,
     ).toContain('-1.33px 0px 0 rgba(0, 0, 0, 0.75)');
@@ -174,7 +183,8 @@ describe('subtitleStyles in a frame', () => {
       bottom: '50.4px',
     });
     const quarter = { width: 1440, height: 810 };
-    expect(subtitleStyles(look({ fontSize: 'large' }), 0, quarter).line.fontSize).toBe('39px');
+    expect(subtitleStyles(look({ fontSize: 'large' }), 0, quarter).line.fontSize).toBe('36px');
+    expect(subtitleStyles(look({ fontSize: 'medium' }), 0, quarter).line.fontSize).toBe('29.25px');
     expect(subtitleStyles(look({ position: 'lower-third' }), 0, quarter).block).toEqual({
       bottom: '97.2px',
     });
@@ -188,7 +198,7 @@ describe('subtitleStyles in a frame', () => {
       block: { bottom: '7vh' },
       line: {
         fontFamily: 'sans-serif, sans-serif',
-        fontSize: '52px',
+        fontSize: '48px',
         color: 'rgba(255, 255, 255, 1)',
         textShadow:
           '-2px 0px 0 rgba(0, 0, 0, 0.75), 2px 0px 0 rgba(0, 0, 0, 0.75), 0px -2px 0 rgba(0, 0, 0, 0.75), 0px 2px 0 rgba(0, 0, 0, 0.75), -2px -2px 0 rgba(0, 0, 0, 0.75), 2px -2px 0 rgba(0, 0, 0, 0.75), -2px 2px 0 rgba(0, 0, 0, 0.75), 2px 2px 0 rgba(0, 0, 0, 0.75), -2px 0px 0 #000000, 2px 0px 0 #000000, 0px -2px 0 #000000, 0px 2px 0 #000000, -2px -2px 0 #000000, 2px -2px 0 #000000, -2px 2px 0 #000000, 2px 2px 0 #000000',

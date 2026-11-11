@@ -3,6 +3,7 @@ import { suspendWheel, useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
 import { useSilo } from '../app/SiloContext';
 import { useLanguage, useT, type MessageKey } from '../i18n';
+import { SubtitleAppearanceDialog } from '../features/settings/SubtitleAppearanceDialog';
 import {
   useProfileSetting,
   useProfileSettings,
@@ -339,6 +340,10 @@ function PlayingView({
   // The device's choice, read when the player opens.
   const [timeMode] = useState(getTimeMode);
   const settings = useProfileSettings();
+  // The appearance dialog over the player; the Subtitles menu under it stays open, so the overlay
+  // stays up and the video keeps playing.
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const knowsAppearance = useServerKnowsSetting('playback.subtitle_appearance');
   const total = plan.source.duration_seconds;
   const popoverOpen = isPopover(panel.open);
 
@@ -607,6 +612,7 @@ function PlayingView({
         onDelay={subtitleDelay.nudge}
         onDelayReset={subtitleDelay.reset}
         onApplied={() => panel.finish('subtitles')}
+        onAppearance={knowsAppearance ? () => setAppearanceOpen(true) : undefined}
         remember={panel.remember}
         recall={panel.recall}
         onSide={controls.menuSide}
@@ -699,6 +705,9 @@ function PlayingView({
         onSeekFraction={controls.seekToFraction}
         onAction={controls.action}
       />
+      {appearanceOpen ? (
+        <SubtitleAppearanceDialog onClose={() => setAppearanceOpen(false)} />
+      ) : null}
       {bufferingOffer && bufferingPill.visible ? (
         <BufferingPill
           offer={bufferingOffer}

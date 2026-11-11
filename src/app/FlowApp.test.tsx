@@ -620,7 +620,7 @@ describe('FlowApp', () => {
     expect(libraryQueries()).toHaveLength(0);
   });
 
-  it('opens the subtitle appearance page from Settings and Back returns to Settings', async () => {
+  it('opens the subtitle appearance dialog from Settings and Back returns to Settings', async () => {
     serveData();
     serveSettings(server);
     signedIn(BASE_URL, 'p1');
@@ -629,13 +629,12 @@ describe('FlowApp', () => {
     fireEvent.click(screen.getByRole('button', { name: /Profile menu for/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
     fireEvent.click(await screen.findByRole('button', { name: /Subtitle appearance/ }));
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Subtitle appearance' }),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId('settings-screen')).toBeNull();
+    expect(await screen.findByRole('dialog', { name: 'Subtitle appearance' })).toBeInTheDocument();
+    // The dialog is over the Settings screen, not a screen of its own.
+    expect(screen.getByTestId('settings-screen')).toBeInTheDocument();
     await pressKey(KEY.back);
-    expect(await screen.findByTestId('settings-screen')).toBeInTheDocument();
-    expect(screen.queryByTestId('subtitle-appearance-screen')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('subtitle-dialog')).toBeNull());
+    expect(screen.getByTestId('settings-screen')).toBeInTheDocument();
   });
 
   it('drops the settings the old profile read when the profile is switched', async () => {

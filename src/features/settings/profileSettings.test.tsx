@@ -19,7 +19,7 @@ import {
   useProfileSettings,
   useResetProfileDeviceSetting,
   useServerKnowsSetting,
-  useSetProfileDeviceSetting,
+  useSetProfileSettingAt,
 } from './profileSettings';
 
 const server = setupServer();
@@ -574,7 +574,7 @@ describe('ProfileSettingsSync', () => {
   });
 });
 
-describe('useSetProfileDeviceSetting', () => {
+describe('useSetProfileSettingAt at the profile_device scope', () => {
   interface Put {
     key: string;
     scope: string | null;
@@ -604,7 +604,7 @@ describe('useSetProfileDeviceSetting', () => {
 
   function Toggle() {
     const { value } = useProfileSetting('playback.auto_play_next');
-    const set = useSetProfileDeviceSetting();
+    const set = useSetProfileSettingAt('profile_device');
     return (
       <div>
         <div data-testid="next">{String(value)}</div>
@@ -660,7 +660,7 @@ describe('useSetProfileDeviceSetting', () => {
     let failure: unknown = null;
     function Failing() {
       const { value } = useProfileSetting('playback.auto_play_next');
-      const set = useSetProfileDeviceSetting();
+      const set = useSetProfileSettingAt('profile_device');
       return (
         <div>
           <div data-testid="next">{String(value)}</div>
@@ -682,7 +682,7 @@ describe('useSetProfileDeviceSetting', () => {
   /** `onWrite` hands the write's promise to a test that expects it to reject. */
   function Seconds({ onWrite }: { onWrite?: (write: Promise<void>) => void }) {
     const { value } = useProfileSetting('playback.next_up_prompt_seconds');
-    const set = useSetProfileDeviceSetting();
+    const set = useSetProfileSettingAt('profile_device');
     return (
       <div>
         <div data-testid="seconds">{value}</div>

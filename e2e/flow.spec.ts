@@ -614,10 +614,13 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         case 'PUT /api/v2/settings/values/playback.subtitle_appearance':
           return send(200, {
             key: 'playback.subtitle_appearance',
-            scope: 'profile_device',
+            scope: 'profile',
             value: JSON.parse(requestBody).value,
             revision: 1,
           });
+        case 'DELETE /api/v2/settings/values/playback.subtitle_appearance':
+          res.writeHead(204, cors);
+          return res.end();
         case 'GET /api/v2/catalog/themes/capabilities':
           return send(200, {
             state: 'available',
@@ -1269,7 +1272,7 @@ test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewat
     .toBe(585);
 });
 
-test('Settings: subtitle appearance from the avatar menu, change the size, Back lands on its row and the change was written', async ({
+test('Settings: subtitle appearance dialog from the avatar menu, change the size, Back lands on its entry and the change was written for the profile', async ({
   page,
 }) => {
   const { origin, seen } = await startFakeSilo({ rewatch: true, subtitles: true });
@@ -1289,43 +1292,51 @@ test('Settings: subtitle appearance from the avatar menu, change the size, Back 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
 
-  // The profile's playback row (auto-play next) comes first and has the focus; then the language,
-  // time and rewind rows, then the subtitle row with its one-line summary.
+  // The profile's playback section comes first: the auto-play row has the focus, the subtitle
+  // entry (with its one-line summary) is right below it.
   // (The fake answers false for a setting it does not know, so the saved pill is Off.)
   await expect(
     page.getByTestId('settings-autoplay').getByRole('radio', { name: 'Aus' }),
   ).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
   const opener = page.getByTestId('settings-subtitles');
   await expect(opener).toBeFocused();
-  await expect(opener).toContainText('Groß · Weiß · Kasten');
+  await expect(opener).toContainText('Groß · Weiß · Box');
   await page.keyboard.press('Enter');
 
-  await expect(page.getByRole('heading', { level: 1, name: 'Untertitel-Aussehen' })).toBeVisible();
-  const size = page.getByTestId('subtitle-row-size');
+  const dialog = page.getByRole('dialog', { name: 'Darstellung der Untertitel' });
+  await expect(dialog).toBeVisible();
+  const size = page.getByTestId('subtitle-dialog-size');
   await expect(size).toBeFocused();
-  await expect(page.getByTestId('subtitle-row-size-value')).toHaveText('Groß');
-  const sample = page.getByText('So sehen deine Untertitel aus.');
+  await expect(size.getByRole('radio', { name: 'Groß', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  const sample = page.getByText('Franz jagt im komplett');
   await expect(sample).toBeVisible();
-  // Large is 52 px at 1080p; the preview frame is half the height.
-  await expect(sample).toHaveCSS('font-size', '26px');
+  // The preview draws the cues at their size over the video: Large is 48 px at 1080p.
+  await expect(sample).toHaveCSS('font-size', '48px');
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('subtitle-row-size-value')).toHaveText('Sehr groß');
-  await expect(sample).toHaveCSS('font-size', '31px');
+  await expect(size.getByRole('radio', { name: 'Sehr groß' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(sample).toHaveCSS('font-size', '60px');
   // Move on to the font colour and change it too, as a viewer would before leaving.
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByTestId('subtitle-row-fontColor-value')).toHaveText('Gelb');
+  await expect(
+    page.getByTestId('subtitle-dialog-fontColor').getByRole('radio', { name: 'Gelb' }),
+  ).toHaveAttribute('aria-checked', 'true');
 
-  // Back lands on the row that opened the page, and the change was written for this device.
+  // Back closes the dialog and the focus is on the entry again; each change was written for the
+  // profile (all devices), and this TV's own value dropped.
   await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
   await expect(opener).toBeFocused();
-  await expect(opener).toContainText('Sehr groß · Gelb · Kasten');
+  await expect(opener).toContainText('Sehr groß · Gelb · Box');
   await expect
     .poll(() => {
       const write = seen.find(
@@ -1338,7 +1349,17 @@ test('Settings: subtitle appearance from the avatar menu, change the size, Back 
             (JSON.parse(write.body) as { value: { fontSize: string } }).value.fontSize
         : null;
     })
-    .toBe('?scope=profile_device xlarge');
+    .toBe('?scope=profile xlarge');
+  await expect
+    .poll(() =>
+      seen.some(
+        (e) =>
+          e.method === 'DELETE' &&
+          e.path === '/api/v2/settings/values/playback.subtitle_appearance' &&
+          e.search === '?scope=profile_device',
+      ),
+    )
+    .toBe(true);
 });
 
 test('Home to a series, season 2, play an episode and Back to the same episode, keyboard only', async ({

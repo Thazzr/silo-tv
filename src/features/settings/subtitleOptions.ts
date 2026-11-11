@@ -9,6 +9,9 @@ export interface Stop<V> {
   text: MessageKey;
 }
 
+// The choices and their order are Silo's web client's (the appearance dialog), so a viewer finds
+// the same ones on every device.
+
 export const SIZES: readonly Stop<Look['fontSize']>[] = [
   { value: 'small', text: 'settings.subtitles.size.small' },
   { value: 'medium', text: 'settings.subtitles.size.medium' },
@@ -23,16 +26,24 @@ export const FONTS: readonly Stop<string>[] = [
   { value: 'monospace', text: 'settings.subtitles.font.mono' },
 ];
 
-export const COLORS: readonly Stop<string>[] = [
+export const FONT_COLORS: readonly Stop<string>[] = [
   { value: '#ffffff', text: 'settings.subtitles.color.white' },
-  { value: '#ffff00', text: 'settings.subtitles.color.yellow' },
-  { value: '#00ffff', text: 'settings.subtitles.color.cyan' },
-  { value: '#00ff00', text: 'settings.subtitles.color.green' },
-  { value: '#ff00ff', text: 'settings.subtitles.color.magenta' },
-  { value: '#ff0000', text: 'settings.subtitles.color.red' },
-  { value: '#0000ff', text: 'settings.subtitles.color.blue' },
+  { value: '#facc15', text: 'settings.subtitles.color.yellow' },
+  { value: '#22c55e', text: 'settings.subtitles.color.green' },
+  { value: '#06b6d4', text: 'settings.subtitles.color.cyan' },
+  { value: '#d946ef', text: 'settings.subtitles.color.magenta' },
+  { value: '#ef4444', text: 'settings.subtitles.color.red' },
+  { value: '#3b82f6', text: 'settings.subtitles.color.blue' },
+  { value: '#9ca3af', text: 'settings.subtitles.color.gray' },
   { value: '#000000', text: 'settings.subtitles.color.black' },
-  { value: '#808080', text: 'settings.subtitles.color.gray' },
+];
+
+export const BACKGROUND_COLORS: readonly Stop<string>[] = [
+  { value: '#000000', text: 'settings.subtitles.color.black' },
+  { value: '#374151', text: 'settings.subtitles.color.darkGray' },
+  { value: '#1e3a5f', text: 'settings.subtitles.color.navy' },
+  { value: '#7f1d1d', text: 'settings.subtitles.color.darkRed' },
+  { value: '#14532d', text: 'settings.subtitles.color.darkGreen' },
 ];
 
 export const STYLES: readonly Stop<Look['backgroundStyle']>[] = [
@@ -48,8 +59,11 @@ export const POSITIONS: readonly Stop<Look['position']>[] = [
   { value: 'top', text: 'settings.subtitles.position.top' },
 ];
 
-export const TEXT_OPACITIES: readonly number[] = [25, 50, 75, 100];
-export const BACKGROUND_OPACITIES: readonly number[] = [0, 25, 50, 75, 100];
+/** What one press of Left or Right changes an opacity by, in percent. */
+export const OPACITY_STEP = 5;
+/** The contract's bounds: the text must stay visible, the background may vanish. */
+export const TEXT_OPACITY_RANGE = { min: 1, max: 100 } as const;
+export const BACKGROUND_OPACITY_RANGE = { min: 0, max: 100 } as const;
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
@@ -63,18 +77,31 @@ export function stopText<V>(stops: readonly Stop<V>[], value: V, t: Translate): 
 export function summarizeAppearance(look: Look, t: Translate): string {
   return [
     stopText(SIZES, look.fontSize, t),
-    stopText(COLORS, look.fontColor, t),
+    stopText(FONT_COLORS, look.fontColor, t),
     stopText(STYLES, look.backgroundStyle, t),
   ].join(' · ');
 }
 
 /**
- * The stop one step from `current` in a list that wraps around. A current value that is none of
- * the stops (stored by another client) goes to the first stop on a step forward and to the last
- * on a step back.
+ * The stop one step from `current`; the ends hold. A current value that is none of the stops
+ * (stored by another client) goes to the first stop on a step forward and to the last on a step
+ * back.
  */
 export function stepValue<V>(values: readonly V[], current: V, direction: 1 | -1): V {
   const at = values.indexOf(current);
   if (at < 0) return direction === 1 ? values[0]! : values[values.length - 1]!;
-  return values[(at + direction + values.length) % values.length]!;
+  return values[Math.max(0, Math.min(values.length - 1, at + direction))]!;
+}
+
+/** An opacity one step on, held inside its range; a step always lands on a multiple of the step. */
+export function stepOpacity(
+  current: number,
+  direction: 1 | -1,
+  range: { min: number; max: number },
+): number {
+  const aligned =
+    direction === 1
+      ? Math.floor(current / OPACITY_STEP) + 1
+      : Math.ceil(current / OPACITY_STEP) - 1;
+  return Math.max(range.min, Math.min(range.max, aligned * OPACITY_STEP));
 }

@@ -7,7 +7,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { Session } from '../../api/session';
 import { SectionGridScreen } from '../../features/home/SectionGridScreen';
 import { SettingsScreen } from '../../features/settings/SettingsScreen';
-import { SubtitleAppearanceScreen } from '../../features/settings/SubtitleAppearanceScreen';
 import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { branding, catalogPage, profile, profileCollection } from '../../test/flowFixtures';
@@ -27,10 +26,7 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 type Screen =
-  | { name: 'shell' }
-  | { name: 'settings' }
-  | { name: 'subtitles' }
-  | { name: 'grid'; sectionId: string; title: string };
+  { name: 'shell' } | { name: 'settings' } | { name: 'grid'; sectionId: string; title: string };
 
 /** The shell with Home and the row grid on a screen stack, like the app flow has them. */
 function renderHome({ strict = false }: { strict?: boolean } = {}) {
@@ -62,12 +58,7 @@ function renderHome({ strict = false }: { strict?: boolean } = {}) {
         onLaunchMode={() => undefined}
       />
     ) : screen.name === 'settings' ? (
-      <SettingsScreen
-        onBack={nav.pop}
-        onOpenSubtitleAppearance={() => nav.push({ name: 'subtitles' })}
-      />
-    ) : screen.name === 'subtitles' ? (
-      <SubtitleAppearanceScreen onBack={nav.pop} />
+      <SettingsScreen onBack={nav.pop} />
     ) : (
       <SectionGridScreen
         sectionId={screen.sectionId}
@@ -123,7 +114,7 @@ const key = (row: string, id: string) => cardFocusKey(row, id);
 
 describe('Home in the shell', () => {
   it.each([false, true])(
-    'Back from the subtitle appearance page lands on its row in Settings, not on the first row (StrictMode %s)',
+    'Back from the subtitle appearance dialog lands on its row in Settings, not on the first row (StrictMode %s)',
     async (strict) => {
       serve([homeSection('a', 2)]);
       serveSettings(server);
@@ -131,10 +122,14 @@ describe('Home in the shell', () => {
         http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request }) =>
           HttpResponse.json({
             key: 'playback.subtitle_appearance',
-            scope: 'profile_device',
+            scope: 'profile',
             value: ((await request.json()) as { value: unknown }).value,
             revision: 1,
           }),
+        ),
+        http.delete(
+          `${BASE_URL}/api/v2/settings/values/:key`,
+          () => new HttpResponse(null, { status: 204 }),
         ),
       );
       renderHome({ strict });
@@ -147,11 +142,11 @@ describe('Home in the shell', () => {
       await pressKey(KEY.down);
       await pressKey(KEY.enter);
       const opener = await screen.findByTestId('settings-subtitles');
-      // Auto-play next (the first row, as the server knows the setting), language, time, rewind.
-      for (let i = 0; i < 4; i += 1) await pressKey(KEY.down);
+      // Auto-play next (the first row, as the server knows the setting), then the entry.
+      await pressKey(KEY.down);
       expect(opener).toHaveFocus();
       await pressKey(KEY.enter);
-      await screen.findByTestId('subtitle-row-size');
+      await screen.findByTestId('subtitle-dialog-size');
       await pressKey(KEY.right);
       // The auto-play pill takes the focus on a fresh Settings screen; coming back must not touch
       // it, nor the language row.
@@ -161,7 +156,7 @@ describe('Home in the shell', () => {
       };
       document.addEventListener('focusin', onFocusIn);
       await pressKey(KEY.back);
-      await screen.findByTestId('settings-screen');
+      await waitFor(() => expect(screen.queryByTestId('subtitle-dialog')).toBeNull());
       await waitFor(() => expect(screen.getByTestId('settings-subtitles')).toHaveFocus());
       // And it stays there once the screen has settled.
       await new Promise((resolve) => setTimeout(resolve, 100));

@@ -23,7 +23,6 @@ import type { CollectionTarget } from '../features/library/targets';
 import { PlayerScreen } from '../playback/PlayerScreen';
 import type { StartIntent } from '../playback/resume';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
-import { SubtitleAppearanceScreen } from '../features/settings/SubtitleAppearanceScreen';
 import { FocusIndexMemory } from '../ui/media';
 import type { Launch } from './launch';
 import { Navigator, useNavigator, type NavApi } from './nav';
@@ -60,9 +59,7 @@ type FlowScreen =
   /** The intent says how it starts; without one the player asks when there is something to resume. */
   | { name: 'player'; contentId: string; title: string; intent?: StartIntent }
   /** The device settings. */
-  | { name: 'settings' }
-  /** The subtitle look of this profile on this TV, with a live preview. */
-  | { name: 'subtitleAppearance' };
+  | { name: 'settings' };
 
 export interface FlowAppProps {
   launch: Launch;
@@ -414,14 +411,7 @@ export function FlowApp({
           />,
         );
       case 'settings':
-        return provide(
-          <SettingsScreen
-            onBack={nav.pop}
-            onOpenSubtitleAppearance={() => nav.push({ name: 'subtitleAppearance' })}
-          />,
-        );
-      case 'subtitleAppearance':
-        return provide(<SubtitleAppearanceScreen onBack={nav.pop} />);
+        return provide(<SettingsScreen onBack={nav.pop} />);
       case 'player':
         return provide(
           <PlayerScreen

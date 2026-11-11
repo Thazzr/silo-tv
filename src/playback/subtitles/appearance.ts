@@ -3,13 +3,14 @@ import type { SubtitleAppearance } from '../../features/settings/profileSettings
 
 /**
  * Font size per profile size, in CSS pixels on the 1080p layout (the app scales as a whole to
- * 720p). Small is the smallest comfortably readable size at TV distance.
+ * 720p). They are Silo's web player's: 20, 26, 32, 40 and 48 px at a 720 px reference height,
+ * scaled to 1080.
  */
 export const FONT_SIZES_PX: Record<SubtitleAppearance['fontSize'], number> = {
-  small: 36,
-  medium: 44,
-  large: 52,
-  xlarge: 62,
+  small: 30,
+  medium: 39,
+  large: 48,
+  xlarge: 60,
   xxlarge: 72,
 };
 
@@ -54,12 +55,14 @@ function ring(color: string, scale: number): string[] {
 
 /**
  * A box the subtitles are drawn into instead of the screen (the appearance preview), in CSS
- * pixels. Sizes and offsets scale with its height against the 1080p layout, and the positions
- * are measured in the box, not in `vh` or the screen's safe area.
+ * pixels. The positions are measured in the box, not in `vh` or the screen's safe area. Sizes
+ * scale with the box's height against the 1080p layout, unless `scale` says otherwise (the
+ * preview draws the cues at the size they have over the video).
  */
 export interface SubtitleFrame {
   width: number;
   height: number;
+  scale?: number;
 }
 
 export interface SubtitleStyles {
@@ -75,7 +78,7 @@ export function subtitleStyles(
   lift: number,
   frame?: SubtitleFrame,
 ): SubtitleStyles {
-  const scale = frame ? frame.height / 1080 : 1;
+  const scale = frame ? (frame.scale ?? frame.height / 1080) : 1;
   const effect = rgba(appearance.backgroundColor, appearance.backgroundOpacity);
   const shadows: string[] = [];
   if (appearance.backgroundStyle === 'shadow') {

@@ -10,7 +10,7 @@ import { BASE_URL, account } from '../../test/apiFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
-import { useProfileSettings, useServerKnowsSetting } from './profileSettings';
+import { PROFILE_SETTINGS, useProfileSettings, useServerKnowsSetting } from './profileSettings';
 import { SettingsScreen } from './SettingsScreen';
 
 beforeEach(() => {
@@ -20,10 +20,7 @@ beforeEach(() => {
 
 function setup() {
   const onBack = vi.fn();
-  const view = renderWithSilo(
-    <SettingsScreen onBack={onBack} onOpenSubtitleAppearance={() => undefined} />,
-    { lang: undefined },
-  );
+  const view = renderWithSilo(<SettingsScreen onBack={onBack} />, { lang: undefined });
   return { onBack, ...view };
 }
 
@@ -312,24 +309,27 @@ describe('SettingsScreen subtitle appearance row', () => {
     return session;
   }
 
-  function open(onOpen = vi.fn()) {
-    renderWithSilo(<SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={onOpen} />, {
+  function open() {
+    renderWithSilo(<SettingsScreen onBack={() => undefined} />, {
       lang: undefined,
       session: signedIn(),
     });
-    return onOpen;
   }
 
   it('shows when the server knows the key, with a summary of the current look', async () => {
     serveSettings(server, {
-      values: { 'playback.subtitle_appearance': { fontSize: 'xlarge', fontColor: '#ffff00' } },
+      values: { 'playback.subtitle_appearance': { fontSize: 'xlarge', fontColor: '#facc15' } },
     });
     open();
     const row = await screen.findByRole('button', { name: /Subtitle appearance/ });
-    await waitFor(() => expect(row).toHaveTextContent('Extra large · Yellow · Box'));
-    expect(within(screen.getByTestId('settings-device')).getByTestId('settings-subtitles')).toBe(
+    await waitFor(() => expect(row).toHaveTextContent('X-Large · Yellow · Box'));
+    // It is a profile setting, so it sits in the profile's section, not in the TV's.
+    expect(within(screen.getByTestId('settings-playback')).getByTestId('settings-subtitles')).toBe(
       row,
     );
+    expect(
+      within(screen.getByTestId('settings-device')).queryByTestId('settings-subtitles'),
+    ).toBeNull();
   });
 
   it('summarizes the default look, and in German', async () => {
@@ -338,21 +338,45 @@ describe('SettingsScreen subtitle appearance row', () => {
     open();
     await waitFor(() =>
       expect(screen.getByTestId('settings-subtitles-summary')).toHaveTextContent(
-        'Groß · Weiß · Kasten',
+        'Groß · Weiß · Box',
       ),
     );
-    expect(screen.getByRole('button', { name: /Untertitel-Aussehen/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Darstellung der Untertitel/ })).toBeInTheDocument();
   });
 
-  it('is operated by keyboard: Down from the rewind row, OK opens the page', async () => {
+  it('is operated by keyboard: OK opens the dialog, Back closes it and the focus returns to the row', async () => {
     serveSettings(server);
-    const onOpen = open();
+    open();
     const row = await screen.findByTestId('settings-subtitles');
-    await toRewind();
-    await pressKey(KEY.down);
+    // The language row has the focus (the profile section was not there when the screen opened);
+    // the entry is right above it.
+    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    await pressKey(KEY.up);
     expect(row).toHaveFocus();
+    expect(screen.queryByTestId('subtitle-dialog')).toBeNull();
     await pressKey(KEY.enter);
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    const dialog = await screen.findByTestId('subtitle-dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Subtitle appearance' }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('subtitle-dialog-size')).toHaveFocus());
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('subtitle-dialog')).toBeNull());
+    await waitFor(() => expect(row).toHaveFocus());
+  });
+
+  it('closes only the dialog on Back, not the screen under it', async () => {
+    serveSettings(server);
+    const onBack = vi.fn();
+    renderWithSilo(<SettingsScreen onBack={onBack} />, { lang: undefined, session: signedIn() });
+    fireEvent.click(await screen.findByTestId('settings-subtitles'));
+    await screen.findByTestId('subtitle-dialog');
+    await pressKey(KEY.back);
+    await waitFor(() => expect(screen.queryByTestId('subtitle-dialog')).toBeNull());
+    expect(onBack).not.toHaveBeenCalled();
+    // The screen's own Back works again once the dialog is gone.
+    await pressKey(KEY.back);
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('is hidden when the server is older than the key', async () => {
@@ -361,6 +385,52 @@ describe('SettingsScreen subtitle appearance row', () => {
     await waitFor(() => expect(screen.getByTestId('settings-device')).toBeInTheDocument());
     await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
     expect(screen.queryByTestId('settings-subtitles')).toBeNull();
+  });
+
+  /** Runs `body` with the manifest revision that introduced `key` set to `revision`. */
+  async function introducedAt(
+    key: 'playback.subtitle_appearance' | 'playback.auto_play_next',
+    revision: number,
+    body: () => Promise<void>,
+  ) {
+    const def = PROFILE_SETTINGS[key] as { introducedIn: number };
+    const before = def.introducedIn;
+    def.introducedIn = revision;
+    try {
+      await body();
+    } finally {
+      def.introducedIn = before;
+    }
+  }
+
+  it('is hidden when the server knows auto-play next but not the subtitle appearance', async () => {
+    await introducedAt('playback.subtitle_appearance', 30, async () => {
+      serveSettings(server, { manifestRevision: 10 });
+      open();
+      await screen.findByTestId('settings-autoplay');
+      await act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
+      expect(screen.getByTestId('settings-playback')).toBeInTheDocument();
+      expect(screen.queryByTestId('settings-subtitles')).toBeNull();
+    });
+  });
+
+  it('still shows the Playback section for a server that knows only the subtitle appearance, and the entry has the focus', async () => {
+    await introducedAt('playback.auto_play_next', 30, async () => {
+      serveSettings(server, { manifestRevision: 10 });
+      // The screen mounts once the profile's settings are read, as when it opens from Home.
+      function AfterSettings() {
+        const knows = useServerKnowsSetting('playback.subtitle_appearance');
+        const { known } = useProfileSettings();
+        return knows && known ? <SettingsScreen onBack={() => undefined} /> : null;
+      }
+      renderWithSilo(<AfterSettings />, { lang: undefined, session: signedIn() });
+      const entry = await screen.findByTestId('settings-subtitles');
+      expect(
+        within(screen.getByTestId('settings-playback')).getByTestId('settings-subtitles'),
+      ).toBe(entry);
+      expect(screen.queryByTestId('settings-autoplay')).toBeNull();
+      await waitFor(() => expect(entry).toHaveFocus());
+    });
   });
 
   it('is hidden when the capabilities fail or the server has no contract', async () => {
@@ -428,10 +498,10 @@ describe('SettingsScreen playback section (auto-play next)', () => {
   };
 
   function open() {
-    renderWithSilo(
-      <SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={() => undefined} />,
-      { lang: undefined, session: signedIn() },
-    );
+    renderWithSilo(<SettingsScreen onBack={() => undefined} />, {
+      lang: undefined,
+      session: signedIn(),
+    });
   }
 
   it('is a "Playback" section above "This TV", with a note that it is for the profile', async () => {
@@ -496,9 +566,7 @@ describe('SettingsScreen playback section (auto-play next)', () => {
     function AfterSettings() {
       const knows = useServerKnowsSetting('playback.auto_play_next');
       const { known } = useProfileSettings();
-      return knows && known ? (
-        <SettingsScreen onBack={() => undefined} onOpenSubtitleAppearance={() => undefined} />
-      ) : null;
+      return knows && known ? <SettingsScreen onBack={() => undefined} /> : null;
     }
     renderWithSilo(<AfterSettings />, { lang: undefined, session: signedIn() });
     const row = within(await screen.findByTestId('settings-autoplay'));
@@ -525,8 +593,10 @@ describe('SettingsScreen playback section (auto-play next)', () => {
     open();
     await screen.findByTestId('settings-autoplay');
     // The language row has the focus (the section was not there when the screen opened): Up
-    // enters the playback row on its selected pill, Right moves to Off, OK saves.
+    // passes the subtitle appearance entry and enters the playback row on its selected pill, Right
+    // moves to Off, OK saves.
     await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    await pressKey(KEY.up);
     await pressKey(KEY.up);
     await waitFor(() => expect(pill('On')).toHaveFocus());
     await pressKey(KEY.right);

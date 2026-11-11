@@ -17,6 +17,7 @@ import {
   useServerKnowsSetting,
   useSetProfileSettingAt,
 } from './profileSettings';
+import { SubtitleAppearanceDialog } from './SubtitleAppearanceDialog';
 import { summarizeAppearance } from './subtitleOptions';
 
 interface Choice<V> {
@@ -129,18 +130,13 @@ const LANGUAGE_TEXT: Record<LanguageSetting, MessageKey> = {
 const AUTO_PLAY_KEY = 'playback.auto_play_next';
 
 /**
- * The settings screen: the profile's playback section (auto-play next, stored on the server for the
- * profile, as Silo's web app does) and the device section: the app language, what the player's
- * clock shows and how far playback jumps back when it resumes. The device rows are kept on this
- * device only (see `resumeRewind`, `timeDisplay`, `languageSetting`).
+ * The settings screen: the profile's playback section (auto-play next and the subtitle appearance,
+ * stored on the server for the profile, as Silo's web app does) and the device section: the app
+ * language, what the player's clock shows and how far playback jumps back when it resumes. The
+ * device rows are kept on this device only (see `resumeRewind`, `timeDisplay`,
+ * `languageSetting`).
  */
-export function SettingsScreen({
-  onBack,
-  onOpenSubtitleAppearance,
-}: {
-  onBack: () => void;
-  onOpenSubtitleAppearance: () => void;
-}) {
+export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const t = useT();
   // The row only exists where the server knows the setting it edits.
   const knowsSubtitles = useServerKnowsSetting('playback.subtitle_appearance');
@@ -151,6 +147,7 @@ export function SettingsScreen({
   const [rewind, setRewind] = useState(getResumeRewind);
   const [timeMode, setMode] = useState(getTimeMode);
   const language = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   // Saved at the profile, and this TV's own value dropped: it would outrank the profile's and the
   // row would snap back (what the web app does). A failed write leaves the shown value as it was.
@@ -165,24 +162,41 @@ export function SettingsScreen({
 
   return (
     <Screen title={t('settings.title')} onBack={onBack} testId="settings-screen">
-      {knowsAutoPlay ? (
+      {knowsAutoPlay || knowsSubtitles ? (
         <SettingsSection
           id="settings-playback"
           title={t('settings.playback.title')}
           note={t('settings.playback.note')}
         >
-          <PillRow
-            id="settings-autoplay"
-            title={t('settings.autoPlay.title')}
-            hint={t('settings.autoPlay.hint')}
-            choices={[
-              { value: 'on', label: t('settings.autoPlay.on') },
-              { value: 'off', label: t('settings.autoPlay.off') },
-            ]}
-            selected={values[AUTO_PLAY_KEY] ? 'on' : 'off'}
-            autoFocus
-            onPick={(value) => void pickAutoPlay(value)}
-          />
+          {knowsAutoPlay ? (
+            <PillRow
+              id="settings-autoplay"
+              title={t('settings.autoPlay.title')}
+              hint={t('settings.autoPlay.hint')}
+              choices={[
+                { value: 'on', label: t('settings.autoPlay.on') },
+                { value: 'off', label: t('settings.autoPlay.off') },
+              ]}
+              selected={values[AUTO_PLAY_KEY] ? 'on' : 'off'}
+              autoFocus
+              onPick={(value) => void pickAutoPlay(value)}
+            />
+          ) : null}
+          {knowsSubtitles ? (
+            <Button
+              focusKey="settings-subtitles"
+              // The first row of the section takes the focus; the entry does when it is the only one.
+              autoFocus={!knowsAutoPlay}
+              className="settings-link"
+              data-testid="settings-subtitles"
+              onClick={() => setAppearanceOpen(true)}
+            >
+              <span>{t('settings.subtitles.title')}</span>
+              <span className="settings-link-value" data-testid="settings-subtitles-summary">
+                {summarizeAppearance(values['playback.subtitle_appearance'], t)}
+              </span>
+            </Button>
+          ) : null}
         </SettingsSection>
       ) : null}
       <SettingsSection
@@ -228,20 +242,10 @@ export function SettingsScreen({
             setRewind(seconds);
           }}
         />
-        {knowsSubtitles ? (
-          <Button
-            focusKey="settings-subtitles"
-            className="settings-link"
-            data-testid="settings-subtitles"
-            onClick={onOpenSubtitleAppearance}
-          >
-            <span>{t('settings.subtitles.title')}</span>
-            <span className="settings-link-value" data-testid="settings-subtitles-summary">
-              {summarizeAppearance(values['playback.subtitle_appearance'], t)}
-            </span>
-          </Button>
-        ) : null}
       </SettingsSection>
+      {appearanceOpen ? (
+        <SubtitleAppearanceDialog onClose={() => setAppearanceOpen(false)} />
+      ) : null}
     </Screen>
   );
 }

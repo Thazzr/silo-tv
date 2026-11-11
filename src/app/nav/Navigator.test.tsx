@@ -285,6 +285,86 @@ describe('Navigator Back', () => {
     expect(screen.getByTestId('exit-dialog')).toBeInTheDocument();
   });
 
+  it('gives Back to the newest handler, and back to the one under it once that is gone', () => {
+    const screenBack = vi.fn();
+    const overlayBack = vi.fn();
+    function Overlay() {
+      useBackHandler(overlayBack);
+      return <div data-testid="overlay" />;
+    }
+    function Host() {
+      const [open, setOpen] = useState(false);
+      useBackHandler(screenBack);
+      return (
+        <main>
+          <button onClick={() => setOpen(true)}>open</button>
+          <button onClick={() => setOpen(false)}>close</button>
+          {open ? <Overlay /> : null}
+        </main>
+      );
+    }
+    render(
+      <I18nProvider lang="en">
+        <Navigator<TestScreen> initial={{ name: 'home' }} renderScreen={() => <Host />} />
+      </I18nProvider>,
+    );
+    // An overlay that opens later is the newest handler.
+    fireEvent.click(screen.getByText('open'));
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    expect(overlayBack).toHaveBeenCalledTimes(1);
+    expect(screenBack).not.toHaveBeenCalled();
+    // The overlay leaves: its handler must not take the screen's with it.
+    fireEvent.click(screen.getByText('close'));
+    expect(screen.queryByTestId('overlay')).toBeNull();
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    expect(screenBack).toHaveBeenCalledTimes(1);
+    expect(overlayBack).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();
+  });
+
+  it('takes off the handler that unmounts, not the newest one', () => {
+    const screenBack = vi.fn();
+    const first = vi.fn();
+    const second = vi.fn();
+    function Overlay({ back, id }: { back: () => void; id: string }) {
+      useBackHandler(back);
+      return <div data-testid={id} />;
+    }
+    function Host() {
+      const [open, setOpen] = useState<string[]>([]);
+      useBackHandler(screenBack);
+      const toggle = (id: string) =>
+        setOpen((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
+      return (
+        <main>
+          <button onClick={() => toggle('first')}>first</button>
+          <button onClick={() => toggle('second')}>second</button>
+          {open.includes('first') ? <Overlay id="first" back={first} /> : null}
+          {open.includes('second') ? <Overlay id="second" back={second} /> : null}
+        </main>
+      );
+    }
+    render(
+      <I18nProvider lang="en">
+        <Navigator<TestScreen> initial={{ name: 'home' }} renderScreen={() => <Host />} />
+      </I18nProvider>,
+    );
+    // The first overlay opens, then the second; the first goes while the second stays.
+    fireEvent.click(screen.getByText('first'));
+    fireEvent.click(screen.getByText('second'));
+    fireEvent.click(screen.getByText('first'));
+    expect(screen.queryByTestId('first')).toBeNull();
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    // The second goes: Back reaches the screen's own handler, not the one that already left.
+    fireEvent.click(screen.getByText('second'));
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    expect(screenBack).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
   it('askExit opens the exit popup for a screen that handles Back itself', () => {
     setup(() => undefined);
     expect(screen.queryByTestId('exit-dialog')).not.toBeInTheDocument();

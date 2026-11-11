@@ -361,11 +361,6 @@ export function useSetProfileSettingAt(scope: 'profile' | 'profile_device') {
   );
 }
 
-/** Writes one setting at the `profile_device` scope (this TV only). */
-export function useSetProfileDeviceSetting() {
-  return useSetProfileSettingAt('profile_device');
-}
-
 /**
  * Removes this TV's own value of one setting, so the profile's value (or the default) applies
  * again, and reads the effective values anew. A 404 (there was no device value) counts as done.

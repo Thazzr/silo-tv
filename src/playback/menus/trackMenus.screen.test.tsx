@@ -601,17 +601,23 @@ describe('the subtitles menu', () => {
     await focusOn('player-menu-subtitle-off');
   });
 
-  it('walks through the tracks into the delay row, and holds at the ends', async () => {
+  it('walks through the tracks and the delay row into Appearance, and holds at the ends', async () => {
     await mount(withSubtitle());
     await openMenu('subtitles');
     await focusOn('player-menu-subtitle-sub:1');
-    for (const next of ['player-menu-subtitle-sub:2', 'player-menu-delay-minus']) {
+    for (const next of [
+      'player-menu-subtitle-sub:2',
+      'player-menu-delay-minus',
+      'player-menu-appearance',
+    ]) {
       await pressKey(KEY.down);
       await focusOn(next);
     }
     await pressKey(KEY.down);
-    expect(focusKey()).toBe('player-menu-delay-minus');
-    // Up leaves the delay row for the last track, and Up on the first row holds.
+    expect(focusKey()).toBe('player-menu-appearance');
+    // Up leaves Appearance for the delay row and that for the last track; Up on the first row holds.
+    await pressKey(KEY.up);
+    await focusOn('player-menu-delay-minus');
     await pressKey(KEY.up);
     await focusOn('player-menu-subtitle-sub:2');
     for (const prev of ['sub:1', 'sub:0', 'off']) {
@@ -927,7 +933,7 @@ describe('the subtitle delay', () => {
     ]);
   });
 
-  it('dims all three buttons while no subtitle plays, and Down from the tracks holds', async () => {
+  it('dims all three buttons while no subtitle plays, and Down from the tracks skips them for Appearance', async () => {
     await mount({ settings: { values: { 'player.subtitle_sync_ms': 300 } } });
     await openMenu('subtitles');
     expect([earlier(), later(), reset()].map((el) => (el as HTMLButtonElement).disabled)).toEqual([
@@ -938,7 +944,7 @@ describe('the subtitle delay', () => {
     // They are visible, only dimmed.
     expect(screen.getByTestId('menu-delay-value')).toBeInTheDocument();
     for (let i = 0; i < 6; i += 1) await pressKey(KEY.down);
-    await focusOn('player-menu-subtitle-sub:2');
+    await focusOn('player-menu-appearance');
   });
 
   it('skips a dimmed button with Left and Right: plus to reset, with minus dimmed', async () => {

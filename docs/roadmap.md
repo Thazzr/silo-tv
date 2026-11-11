@@ -119,7 +119,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client; a subtitle no route can show is refused with a note, and the old picture plays on. Audio shows from two tracks on: the web player shows it dimmed with one track, but on a TV a button that does nothing would be a dead focus stop
 - ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
-- 🟨 Subtitle appearance for this TV in the app's settings, with a live preview: size, font, colours, opacity, background style, outline, position; stored per profile for this TV (`playback.subtitle_appearance` at `profile_device`); Reset returns to the profile's own appearance
+- 🟨 Subtitle appearance as Silo's web dialog (user decision 2026-11-11, replacing the TV-only page of 2026-11-10): size, font, colours, opacity, outline, background style, colour and opacity, position, with a live preview; each change is saved at once for the profile on all devices (`playback.subtitle_appearance` at `profile`; this TV's own value is dropped, as the web app does), and "Use fallback style" returns to the server's default; opened from "Appearance…" in the player's Subtitles menu and from the settings' Playback section
 - ✅ Skip intro, recap, credits and previews; automatic skipping following the profile settings (TV 2026-11-10)
 - ⬜ Up Next for episodes: a card in the corner, opened `playback.next_up_prompt_seconds` before the end, with a countdown to the next episode when `playback.auto_play_next` is on
   - skipping credits that run to the end opens the card at once, with a 10 s countdown
@@ -136,7 +136,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - 🟨 previous and next episode as the web player finds them (the current and the next season, playable episodes only; Next crosses into the next season); a press stops the session and opens the episode in the player's place, so Back goes where it would have gone
   - 🟨 the menus like the web player's: audio rows with codec, channel and default badges and a detail line (the active track in blue); subtitle rows with format and source badges and the label line, in the web's source order; the subtitle delay in one row (−, value, +, Reset); chapters with the server's thumbnails; the gear with quality and bitrates only; the clock hides while a menu is open, since the menus open over it
   - 🟨 "Auto-play next episode" left the gear for the settings screen, in a new profile section "Playback": the web player has no toggle for it; it is saved for the profile, and this TV's own value is dropped, as the web app does
-  - ⬜ the subtitle appearance as the web's dialog, saved for the profile on all devices as the web app does
+  - 🟨 the subtitle appearance as the web's dialog, saved for the profile on all devices as the web app does
 - ❌ Sleep timer: dropped (user decision 2026-11-10). LG TVs have a sleep timer of their own, and the progress reported every 10 s keeps the resume point when the TV turns off.
 
 ## Phase 4 – Personal and discovery (target v0.5.0)

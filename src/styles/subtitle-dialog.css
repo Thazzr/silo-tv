@@ -1,0 +1,255 @@
+/* The subtitle appearance dialog, after Silo's web app: a panel over a dimmed screen (no blur, the
+   TV animates nothing but transform and opacity) with a live preview, the settings as rows and a
+   footer. Each row is one focus stop; the sizes are the web's scaled to 20 px text and 75 px
+   targets. */
+.subtitle-dialog {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 1000px;
+  max-height: calc(100vh - 2 * var(--safe-y));
+  overflow: hidden;
+  color: #fff;
+  background: #111114;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
+.subtitle-dialog-header {
+  flex: none;
+  padding: 20px 40px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.subtitle-eyebrow {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+}
+
+.subtitle-dialog-title {
+  margin: 4px 0 0;
+  font-size: 34px;
+  font-weight: 600;
+}
+
+/* A dark diagonal gradient with a faint dot texture, as the web's preview; the sample lines are
+   drawn into it with the player's own styles. */
+.subtitle-preview {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  margin: 16px 40px;
+  overflow: hidden;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(135deg, #1f2937 0%, #0b0f1a 50%, #1e293b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+}
+
+/* The sample may wrap at the largest size: it uses nearly the whole width of the preview. */
+.subtitle-preview .player-subtitles {
+  right: 3%;
+  left: 3%;
+}
+
+.subtitle-dialog-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 40px 8px;
+  overflow-y: auto;
+}
+
+.subtitle-section-title {
+  margin: 20px 0 8px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+}
+
+.subtitle-row + .subtitle-section-title {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.subtitle-dialog-body > .subtitle-section-title:first-child {
+  margin-top: 4px;
+}
+
+.subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--target);
+  margin: 0 0 4px;
+  padding: 6px 16px;
+  font: inherit;
+  font-size: 24px;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: var(--radius-control);
+  outline: none;
+}
+
+.subtitle-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* The focused row: a bright frame and a lift; the chips keep their own selected look inside it. */
+.subtitle-row:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #fff;
+}
+
+.subtitle-row-label {
+  flex: none;
+  width: 190px;
+}
+
+.subtitle-row-control {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.subtitle-chip {
+  padding: 8px 22px;
+  font-size: 22px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.subtitle-chip[aria-checked='true'] {
+  color: #000;
+  background: #fff;
+}
+
+.subtitle-swatch {
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+/* The selected swatch: a little larger, with a white ring and a dark one around it. */
+.subtitle-swatch[aria-checked='true'] {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.9),
+    0 0 0 6px rgba(0, 0, 0, 0.6);
+  transform: scale(1.1);
+}
+
+.subtitle-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+}
+
+.subtitle-step:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.subtitle-percent {
+  min-width: 110px;
+  font-size: 28px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* On: a white track with a black knob; off: a dim track with a white knob. */
+.subtitle-switch {
+  position: relative;
+  flex: none;
+  width: 80px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 22px;
+}
+
+.subtitle-switch::after {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 32px;
+  height: 32px;
+  content: '';
+  background: #fff;
+  border-radius: 50%;
+}
+
+.subtitle-switch[data-on='true'] {
+  background: #fff;
+}
+
+.subtitle-switch[data-on='true']::after {
+  background: #000;
+  transform: translateX(36px);
+}
+
+.subtitle-dialog-footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 40px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.subtitle-reset {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: var(--target);
+  padding: 0 32px;
+  font: inherit;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  outline: none;
+}
+
+.subtitle-reset:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.subtitle-reset:focus {
+  color: #000;
+  background: #fff;
+}
+
+.subtitle-status {
+  margin: 0;
+  font-size: var(--fs-small);
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+}

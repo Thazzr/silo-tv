@@ -1759,7 +1759,7 @@ html {
   border-radius: 38px;
 }
 
-/* A settings row that opens a page of its own: the name on the left, the current look on the right. */
+/* A settings row that opens a dialog of its own: the name on the left, the current look on the right. */
 .btn.settings-link {
   display: flex;
   align-items: center;
@@ -1768,7 +1768,7 @@ html {
   box-sizing: border-box;
   width: 100%;
   max-width: 900px;
-  margin: 24px 0 0;
+  margin: 24px 0 32px;
   text-align: left;
 }
 
@@ -1779,80 +1779,4 @@ html {
 
 .btn:focus .settings-link-value {
   color: rgba(0, 0, 0, 0.6);
-}
-
-/* Subtitle appearance: the preview stays in place on the left while the rows on the right move
-   with the focus. The frame is the 16:9 sample the player's own subtitle styles are drawn into. */
-.subtitle-page {
-  display: grid;
-  grid-template-columns: 960px minmax(0, 1fr);
-  gap: 48px;
-  align-items: start;
-}
-
-.subtitle-preview-column {
-  position: sticky;
-  top: var(--safe-y);
-}
-
-.subtitle-preview {
-  position: relative;
-  box-sizing: border-box;
-  overflow: hidden;
-  border-radius: 12px;
-  /* A bright and a dark half, so the line is seen against both. */
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.18)),
-    linear-gradient(90deg, #d8d2c4 0 50%, #1b2531 50% 100%);
-}
-
-.subtitle-rows {
-  min-width: 0;
-}
-
-.btn.subtitle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: var(--target);
-  margin: 0 0 6px;
-  padding: 8px 12px 8px 28px;
-  text-align: left;
-  /* Scrolled into view, a focused row stays above the bottom of the safe area. */
-  scroll-margin-bottom: var(--safe-y);
-}
-
-.subtitle-row-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--text-secondary);
-}
-
-.btn:focus .subtitle-row-value {
-  color: rgba(0, 0, 0, 0.7);
-}
-
-.subtitle-chevron {
-  padding: 0 14px;
-  font-size: 40px;
-  line-height: var(--target);
-}
-
-.subtitle-swatch {
-  width: 28px;
-  height: 28px;
-  border: 2px solid rgba(128, 128, 128, 0.8);
-  border-radius: 50%;
-}
-
-.btn.subtitle-reset {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  margin: 18px 0 0;
-  scroll-margin-bottom: var(--safe-y);
 }

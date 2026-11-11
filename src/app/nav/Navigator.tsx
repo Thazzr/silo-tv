@@ -40,7 +40,8 @@ interface Entry<S> {
 const NavApiContext = createContext<NavApi<never> | null>(null);
 
 interface NavInternals {
-  setBackHandler(handler: (() => void) | null): void;
+  /** Puts a handler on top of the stack of Back handlers; the returned function takes it off again. */
+  addBackHandler(handler: () => void): () => void;
 }
 const NavInternalsContext = createContext<NavInternals | null>(null);
 
@@ -51,9 +52,11 @@ export function useNavigator<S>(): NavApi<S> {
 }
 
 /**
- * Takes over Back while the calling screen is shown (a PIN prompt that returns to the profile
- * list, a player that stops first). Without a handler Back pops the stack, or asks to exit on
- * the root entry. Does nothing outside a Navigator.
+ * Takes over Back while the calling screen (or a dialog over it) is shown: a PIN prompt that
+ * returns to the profile list, a player that stops first. The newest handler wins, so a dialog
+ * closes before the screen under it reacts, and the screen's handler is back once the dialog is
+ * gone. Without a handler Back pops the stack, or asks to exit on the root entry. Does nothing
+ * outside a Navigator.
  */
 export function useBackHandler(handler: (() => void) | undefined): void {
   const internals = useContext(NavInternalsContext);
@@ -64,8 +67,7 @@ export function useBackHandler(handler: (() => void) | undefined): void {
   const active = handler !== undefined;
   useEffect(() => {
     if (!internals || !active) return;
-    internals.setBackHandler(() => latest.current?.());
-    return () => internals.setBackHandler(null);
+    return internals.addBackHandler(() => latest.current?.());
   }, [internals, active]);
 }
 
@@ -103,7 +105,7 @@ export function Navigator<S>({ initial, renderScreen, children }: NavigatorProps
   const stackRef = useRef(stack);
   const [exitOpen, setExitOpen] = useState(false);
   const exitOpenRef = useRef(false);
-  const backHandler = useRef<(() => void) | null>(null);
+  const backHandlers = useRef<(() => void)[]>([]);
 
   const commit = useCallback((next: Entry<S>[]) => {
     stackRef.current = next;
@@ -159,8 +161,11 @@ export function Navigator<S>({ initial, renderScreen, children }: NavigatorProps
   );
   const internals = useMemo<NavInternals>(
     () => ({
-      setBackHandler: (handler) => {
-        backHandler.current = handler;
+      addBackHandler: (handler) => {
+        backHandlers.current.push(handler);
+        return () => {
+          backHandlers.current = backHandlers.current.filter((entry) => entry !== handler);
+        };
       },
     }),
     [],
@@ -172,8 +177,9 @@ export function Navigator<S>({ initial, renderScreen, children }: NavigatorProps
       // Backspace edits text in a field; every other Back key leaves the screen.
       if (e.keyCode === 8 && isTextField(e.target)) return;
       e.preventDefault();
+      const handler = backHandlers.current[backHandlers.current.length - 1];
       if (exitOpenRef.current) setExit(false);
-      else if (backHandler.current) backHandler.current();
+      else if (handler) handler();
       else if (stackRef.current.length > 1) pop();
       else setExit(true);
     };
