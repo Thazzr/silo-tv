@@ -156,6 +156,9 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
   - Where Silo's own clients disagree, the web client is the reference.
 
 - **Look:** The app looks like a Silo app. Colours and the three-bar motif may be reused. **Silo's logo, wordmark and icons may not**, except unchanged on a "Connect to Silo" hint.
+  - "Silo's icons" means Silo's own artwork: the app icon and the brand marks.
+  - UI icons come from [Lucide](https://lucide.dev) (ISC), the open icon set Silo's web player uses, so the same symbol means the same thing in both apps.
+  - The player's bar and menus follow the web player's layout as closely as a TV allows (user decision 2026-11-11), scaled to the 20 px text and 75 px targets rule.
 - **Name:** The app needs a name of its own (Silo trademark policy). "Silo …", "Silo[word]" and "[word]Silo" are not allowed; wordplay is. The description reads "a client for Silo". Until the user decides, it is called `silo-tv` (repository Thazzr/silo-tv, app ID `io.github.thazzr.silotv`, fixed before the first store release).
 - **Text:**
   - UI text exists in German (informal "du") and English.
