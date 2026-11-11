@@ -133,11 +133,15 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - My Requests
   - request search for missing titles
 - ⬜ Profile settings, in the settings screen that Phase 3 opens with its section "This TV" (user decisions 2026-11-10 and 2026-11-11):
-  - every setting Silo's web app offers a viewer is offered here too, read from the server and written back with the same key and scope; the app behaves as the web app does (rule in `CLAUDE.md`, TV UI rules)
+  - every setting Silo's web app offers a viewer that has a meaning on a TV is offered here too, read from the server and written back with the same key and scope; the app behaves as the web app does (rule in `CLAUDE.md`, TV UI rules)
   - the profile sections go above "This TV", each with a note that it applies to the profile on all devices; a change on the TV is written for the whole profile
   - playback: preferred quality, maximum bitrate, lower quality when buffering, skip intros, auto-skip recaps and credits, start next at preview, auto-play next, the video skip intervals
   - language and subtitles: audio and subtitle language, subtitle mode, show forced subtitles, subtitle appearance
-  - to decide under the 2026-11-11 rule: the settings left out on 2026-11-10 (marker confidence and source, audiobook intervals, browser decoding, a connection speed test)
+  - the settings left out on 2026-11-10, decided again on 2026-11-11:
+    - marker confidence and source come in, because they decide what Skip Intro and Skip Credits act on;
+    - the audiobook intervals come with audiobooks (Phase 5);
+    - browser decoding comes in if it steers anything the TV player has; otherwise it is left out as a browser-only setting, with its reason here;
+    - the connection speed test comes in, as an action rather than a setting.
   - interface, home screen, metadata language, profile picker at launch
   - account and signed-in devices
 
