@@ -30,8 +30,8 @@ export {
   yearsText,
 } from './cardInfo';
 export type { CatalogBoxSet, CatalogItem } from './cardInfo';
-export { Grid, gridCardKey, gridFocusKey, LOAD_AHEAD_CARDS } from './Grid';
-export type { GridCardContext, GridProps } from './Grid';
+export { Grid, gridCardKey, gridFocusKey, gridWindow, LOAD_AHEAD_CARDS } from './Grid';
+export type { GridCardContext, GridProps, GridWindow } from './Grid';
 export * from './layout';
 export { cardFocusKey, EXPLORE_KEY, Row, rowFocusKey } from './Row';
 export type { CardContext, RowProps } from './Row';

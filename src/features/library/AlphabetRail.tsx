@@ -1,56 +1,58 @@
-import { FocusGroup, Focusable } from '../../app/nav';
+import { FocusGroup, Focusable, moveFocusTo } from '../../app/nav';
 import { useT } from '../../i18n';
 import { LETTERS } from './browse';
 
 export const ALPHA_KEY_PREFIX = 'alpha:';
 
 /**
- * The letters at the right edge of Browse: "#" and A to Z. A letter without titles is dimmed and
- * cannot take the focus, so Up and Down pass over it (`available` is undefined while the server
- * has not said, and then every letter can be used). OK on a letter shows only its titles; OK on
- * the chosen letter shows them all again.
+ * The jump marks at the right edge of a title-ordered Browse: "#" and A to Z. A letter without
+ * titles is dimmed and cannot take the focus, so Up and Down pass over it. OK on a letter jumps
+ * the grid to its first title and leaves the focus on the rail; Left goes into the grid, to the
+ * card `gridEntry` names. The active letter is the one the grid shows at its top.
  */
 export function AlphabetRail({
-  available,
-  selected,
-  numbersEnabled,
-  onPick,
+  lit,
+  active,
+  gridEntry,
+  onJump,
 }: {
-  available: ReadonlySet<string> | undefined;
-  selected: string | null;
-  /** "#" is a title-prefix rule that needs the extended rules; without them it is dimmed. */
-  numbersEnabled: boolean;
-  onPick: (letter: string) => void;
+  lit: ReadonlySet<string>;
+  /** The letter of the grid's top row. */
+  active: string | undefined;
+  /** The focus key of the card Left enters the grid on; undefined leaves Left to the spatial search. */
+  gridEntry: () => string | undefined;
+  onJump: (letter: string) => void;
 }) {
   const t = useT();
-  const reachable = (letter: string) =>
-    (letter !== '#' || numbersEnabled) && (!available || available.has(letter));
-  const first = LETTERS.find(reachable);
-  const preferred = selected ?? first;
+  const preferred =
+    active !== undefined && lit.has(active) ? active : LETTERS.find((l) => lit.has(l));
   return (
     <FocusGroup
       focusKey="alpha-rail"
       enterable
       saveLastFocusedChild={false}
       preferredChildFocusKey={preferred ? `${ALPHA_KEY_PREFIX}${preferred}` : undefined}
+      onArrow={(direction) => {
+        const entry = direction === 'left' ? gridEntry() : undefined;
+        return entry === undefined ? false : moveFocusTo(entry);
+      }}
       className="alpha-rail"
       role="toolbar"
       aria-label={t('library.rail.label')}
       data-testid="alpha-rail"
     >
       {LETTERS.map((letter) => {
-        // The chosen letter stays usable, so it can always be switched off again.
-        const usable = reachable(letter) || letter === selected;
+        const usable = lit.has(letter);
         return (
           <Focusable
             key={letter}
             focusKey={`${ALPHA_KEY_PREFIX}${letter}`}
-            className={`alpha-letter${letter === selected ? ' selected' : ''}${usable ? '' : ' dim'}`}
+            className={`alpha-letter${letter === active ? ' active' : ''}${usable ? '' : ' dim'}`}
             disabled={!usable}
-            aria-pressed={letter === selected}
+            aria-current={letter === active ? 'true' : undefined}
             aria-label={t('library.rail.letter', { letter })}
             data-letter={letter}
-            onClick={() => onPick(letter)}
+            onClick={() => onJump(letter)}
           >
             {letter}
           </Focusable>

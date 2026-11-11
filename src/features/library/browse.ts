@@ -59,7 +59,7 @@ export const FACET_LABELS: Record<Facet, MessageKey> = {
   content_rating: 'library.filter.contentRating',
 };
 
-/** Facets and letters that need the server's extended rule vocabulary (`extended_query_rules`). */
+/** Facets that need the server's extended rule vocabulary (`extended_query_rules`). */
 export function facetNeedsExtendedRules(facet: Facet): boolean {
   return facet === 'decade';
 }
@@ -116,26 +116,10 @@ export function filterGroups(filters: FilterSelection): Group[] {
 /** The rule groups of the watch-rule probe: `watched is false`, built like a Browse read builds it. */
 export const WATCH_PROBE_GROUPS: Group[] = filterGroups({ status: ['unwatched'] });
 
-/** Titles that start with a digit: the server has no `name_prefix` for "#", so the rules say it. */
-const NUMBER_GROUP: Group = {
-  match: 'any',
-  rules: Array.from({ length: 10 }, (_, digit) => ({
-    field: 'title',
-    op: 'begins_with',
-    value: String(digit),
-  })),
-};
-
 /** The ratings for the `content_rating` query parameter; undefined sends no parameter. */
 export function contentRatings(filters: FilterSelection): string[] | undefined {
   const values = filters.content_rating;
   return values && values.length > 0 ? values : undefined;
-}
-
-/** The rule groups of a Browse read: the filters, and "#" as the group of numbered titles. */
-export function browseGroups(filters: FilterSelection, letter: string | null): Group[] {
-  const groups = filterGroups(filters);
-  return letter === '#' ? [...groups, NUMBER_GROUP] : groups;
 }
 
 /** The number the Filter pill shows: facets that hold a value. */
@@ -151,23 +135,15 @@ export interface BrowseSelection {
   sort: SortKey;
   descending: boolean;
   filters: FilterSelection;
-  /** The rail's letter; null shows every title. */
-  letter: string | null;
 }
 
 export const DEFAULT_BROWSE: BrowseSelection = {
   sort: 'title',
   descending: false,
   filters: {},
-  letter: null,
 };
 
 /** The parts of a selection that change what the server answers, as one string. */
 export function browseSignature(selection: BrowseSelection): string {
-  return JSON.stringify([
-    selection.sort,
-    selection.descending,
-    selection.filters,
-    selection.letter,
-  ]);
+  return JSON.stringify([selection.sort, selection.descending, selection.filters]);
 }

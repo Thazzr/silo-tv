@@ -22,6 +22,7 @@ import {
   orderedCollections,
   useBoxSetsAvailable,
   useBrowsePages,
+  useBrowseWindow,
   useCatalogFilters,
   useCollectionPages,
   useExtendedRules,
@@ -279,18 +280,16 @@ describe('useBrowsePages', () => {
       'title',
       '',
       [],
-      '',
     ]);
   });
 
-  it('sends the sort, the rule groups, every content rating and the letter as a title prefix', async () => {
+  it('sends the sort, the rule groups, and every content rating, and never a title prefix', async () => {
     const seen = serve('get', '/api/v2/catalog', browsePage(['a']));
     const { wrapper, client } = harness('p1');
     const selection: BrowseSelection = {
       sort: 'added_at',
       descending: true,
       filters: { genre: ['Drama'], content_rating: ['PG', 'R'] },
-      letter: 'B',
     };
     const { result } = renderHook(() => useBrowsePages('lib-1', 'series', selection), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -300,7 +299,7 @@ describe('useBrowsePages', () => {
     expect(url.searchParams.get('match')).toBe('all');
     expect(JSON.parse(url.searchParams.get('groups')!)).toEqual(GENRE_GROUPS);
     expect(url.searchParams.getAll('content_rating')).toEqual(['PG', 'R']);
-    expect(url.searchParams.get('name_prefix')).toBe('B');
+    expect(url.searchParams.has('name_prefix')).toBe(false);
     expect(browseKey(client)).toEqual([
       'library',
       'browse',
@@ -311,27 +310,7 @@ describe('useBrowsePages', () => {
       '-added_at',
       JSON.stringify(GENRE_GROUPS),
       ['PG', 'R'],
-      'B',
     ]);
-  });
-
-  it('turns "#" into the numbered-titles rule group and sends no title prefix', async () => {
-    const seen = serve('get', '/api/v2/catalog', browsePage(['a']));
-    const { wrapper, client } = harness();
-    const { result } = renderHook(
-      () => useBrowsePages('lib-1', 'movie', { ...DEFAULT_BROWSE, letter: '#' }),
-      { wrapper },
-    );
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const url = seen[0]!.url;
-    expect(url.searchParams.has('name_prefix')).toBe(false);
-    const groups = JSON.parse(url.searchParams.get('groups')!) as S['CatalogQueryGroup'][];
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.rules.map((r) => r.value)).toEqual(
-      Array.from({ length: 10 }, (_, d) => String(d)),
-    );
-    expect(browseKey(client)[7]).toBe(url.searchParams.get('groups'));
-    expect(browseKey(client)[9]).toBe('#');
   });
 
   it('follows the server cursor page by page', async () => {
@@ -545,6 +524,101 @@ describe('useWatchRules', () => {
   });
 });
 
+describe('useBrowseWindow', () => {
+  const windowPage = (ids: string[]): S['CatalogBrowseCollection'] =>
+    catalogPage(ids.map((id) => catalogItem({ content_id: id })));
+
+  it('reads each wanted page at its own position with seek and the window cursor', async () => {
+    const seen = serve('get', '/api/v2/catalog', windowPage(['a']));
+    const { wrapper } = harness('p1');
+    const { result } = renderHook(
+      () =>
+        useBrowseWindow(
+          'lib-1',
+          'movie',
+          { ...DEFAULT_BROWSE, filters: { genre: ['Drama'] } },
+          [3, 5],
+          'wc-1',
+        ),
+      { wrapper },
+    );
+    await waitFor(() => expect([...result.current.pages.keys()]).toEqual([3, 5]));
+    const params = seen.map((call) => paramsOf(call.url));
+    expect(params.map((p) => p.seek).sort()).toEqual(['120', '200']);
+    for (const p of params) {
+      expect(p).toMatchObject({
+        library_id: 'lib-1',
+        type: 'movie',
+        sort: 'title',
+        match: 'all',
+        limit: '40',
+        skip_total: 'true',
+      });
+      expect(p.cursor).toBe('wc-1');
+      expect(JSON.parse(p.groups!)).toHaveLength(1);
+    }
+    expect(seen[0]!.profile).toBe('p1');
+    expect(result.current.pages.get(3)!.map((item) => item.content_id)).toEqual(['a']);
+  });
+
+  it('reads nothing until the window cursor is known, and a new cursor or selection reads again with it', async () => {
+    const seen = serve('get', '/api/v2/catalog', windowPage(['a']));
+    const { wrapper } = harness();
+    const { rerender } = renderHook(
+      ({ selection, cursor }: { selection: BrowseSelection; cursor: string | undefined }) =>
+        useBrowseWindow('lib-1', 'movie', selection, [2], cursor),
+      {
+        wrapper,
+        initialProps: { selection: DEFAULT_BROWSE, cursor: undefined as string | undefined },
+      },
+    );
+    await tick();
+    expect(seen).toHaveLength(0);
+    rerender({ selection: DEFAULT_BROWSE, cursor: 'wc-1' });
+    await waitFor(() => expect(seen).toHaveLength(1));
+    expect(seen[0]!.url.searchParams.get('cursor')).toBe('wc-1');
+    // The first read answered again: its new cursor replaces the old one.
+    rerender({ selection: DEFAULT_BROWSE, cursor: 'wc-2' });
+    await waitFor(() => expect(seen).toHaveLength(2));
+    expect(seen[1]!.url.searchParams.get('cursor')).toBe('wc-2');
+    // Another sort has a cursor of its own; the old one is not sent with it.
+    rerender({ selection: { ...DEFAULT_BROWSE, sort: 'year' }, cursor: undefined });
+    await tick();
+    expect(seen).toHaveLength(2);
+    rerender({ selection: { ...DEFAULT_BROWSE, sort: 'year' }, cursor: 'wc-3' });
+    await waitFor(() => expect(seen).toHaveLength(3));
+    expect(seen[2]!.url.searchParams.get('cursor')).toBe('wc-3');
+    expect(seen[2]!.url.searchParams.get('sort')).toBe('year');
+  });
+
+  it('reads nothing when no page is wanted', async () => {
+    const seen = serve('get', '/api/v2/catalog', windowPage(['a']));
+    const { wrapper } = harness();
+    const { result } = renderHook(
+      () => useBrowseWindow('lib-1', 'movie', DEFAULT_BROWSE, [], 'wc-1'),
+      {
+        wrapper,
+      },
+    );
+    await tick();
+    expect(result.current.pages.size).toBe(0);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('leaves a page that failed out of the result', async () => {
+    serve('get', '/api/v2/catalog', null, { fail: 500 });
+    const { wrapper } = harness();
+    const { result } = renderHook(
+      () => useBrowseWindow('lib-1', 'movie', DEFAULT_BROWSE, [1], 'wc-1'),
+      {
+        wrapper,
+      },
+    );
+    await tick();
+    expect(result.current.pages.size).toBe(0);
+  });
+});
+
 describe('useLetters', () => {
   it('posts the filter groups and returns the letters that have titles', async () => {
     const seen = serve('post', '/api/v2/catalog/letters', {
@@ -554,23 +628,31 @@ describe('useLetters', () => {
         { letter: 'B', count: 0, position: 3 },
         { letter: 'C', count: 1, position: 3 },
       ],
-      runs: [],
+      runs: [
+        { letter: 'A', position: 0 },
+        { letter: 'C', position: 3 },
+      ],
       total: 4,
     });
     const { wrapper, client } = harness('p1');
-    const selection: BrowseSelection = {
-      ...DEFAULT_BROWSE,
-      sort: 'year',
-      letter: 'C',
-      filters: { genre: ['Drama'] },
-    };
+    const selection: BrowseSelection = { ...DEFAULT_BROWSE, filters: { genre: ['Drama'] } };
     const { result } = renderHook(() => useLetters('lib-1', 'movie', selection), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const groups = [{ match: 'any', rules: [{ field: 'genre', op: 'contains', value: 'Drama' }] }];
-    expect(seen[0]!.body).toEqual({ library_id: 'lib-1', type: 'movie', match: 'all', groups });
+    expect(seen[0]!.body).toEqual({
+      library_id: 'lib-1',
+      type: 'movie',
+      match: 'all',
+      groups,
+      order: 'asc',
+    });
     expect(seen[0]!.profile).toBe('p1');
-    expect(result.current.data).toBeInstanceOf(Set);
-    expect([...result.current.data!]).toEqual(['A', 'C']);
+    expect([...result.current.data!.lit]).toEqual(['A', 'C']);
+    expect(result.current.data!.runs).toEqual([
+      { letter: 'A', position: 0 },
+      { letter: 'C', position: 3 },
+    ]);
+    expect(result.current.data!.total).toBe(4);
     expect(
       client.getQueryData([
         'library',
@@ -580,8 +662,32 @@ describe('useLetters', () => {
         'lib-1',
         'movie',
         JSON.stringify(groups),
+        'asc',
       ]),
     ).toBe(result.current.data);
+  });
+
+  it('counts the positions in the direction of the title sort', async () => {
+    const seen = serve('post', '/api/v2/catalog/letters', { letters: [], runs: [], total: 0 });
+    const { wrapper } = harness();
+    const { result } = renderHook(
+      () => useLetters('lib-1', 'movie', { ...DEFAULT_BROWSE, descending: true }),
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect((seen[0]!.body as { order: string }).order).toBe('desc');
+  });
+
+  it('is not read for a sort that is not by title', async () => {
+    const seen = serve('post', '/api/v2/catalog/letters', { letters: [], runs: [], total: 0 });
+    const { wrapper } = harness();
+    const { result } = renderHook(
+      () => useLetters('lib-1', 'movie', { ...DEFAULT_BROWSE, sort: 'year' }),
+      { wrapper },
+    );
+    await tick();
+    expect(result.current.data).toBeUndefined();
+    expect(seen).toHaveLength(0);
   });
 
   it('sends an empty group list for no filters and keys a signed-out read with an empty profile', async () => {
@@ -594,10 +700,11 @@ describe('useLetters', () => {
       type: 'series',
       match: 'all',
       groups: [],
+      order: 'asc',
     });
     expect(
-      client.getQueryData(['library', 'letters', BASE_URL, '', 'lib-1', 'series', '[]']),
-    ).toBeInstanceOf(Set);
+      client.getQueryData(['library', 'letters', BASE_URL, '', 'lib-1', 'series', '[]', 'asc']),
+    ).toBeDefined();
   });
 
   it('throws a SiloApiError on a failed read and does not ask again', async () => {

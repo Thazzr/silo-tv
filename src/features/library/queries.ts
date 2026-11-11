@@ -1,17 +1,17 @@
-import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import { toApiError } from '../../api/client';
 import type { components } from '../../api/generated/schema';
 import { useSilo } from '../../app/SiloContext';
 import { GRID_IMAGE_QUERY, ROW_IMAGE_QUERY } from '../../ui/media';
 import { GRID_PAGE_SIZE, useHomeCapabilities, useSectionLimits } from '../home/queries';
 import {
-  browseGroups,
   contentRatings,
   filterGroups,
   sortParam,
   WATCH_PROBE_GROUPS,
   type BrowseSelection,
 } from './browse';
+import type { LetterIndex } from './letterIndex';
 import type { TabKind } from './libraryMemory';
 
 export type UserLibrary = components['schemas']['UserLibrary'];
@@ -87,28 +87,27 @@ export function useLibrarySections(libraryId: string) {
   });
 }
 
+/** What a Browse read of a library depends on, besides the page: the request parts and the cache key. */
+function browseRead(libraryId: string, kind: LibraryKind, selection: BrowseSelection) {
+  const groups = filterGroups(selection.filters);
+  const groupsJson = groups.length > 0 ? JSON.stringify(groups) : undefined;
+  const sort = sortParam(selection.sort, selection.descending);
+  const ratings = contentRatings(selection.filters);
+  return {
+    groupsJson,
+    sort,
+    ratings,
+    keyParts: [libraryId, kind, sort, groupsJson ?? '', ratings ?? []],
+  };
+}
+
 /** The pages of the Browse grid of a library, 40 titles at a time, following the server's cursor. */
 export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: BrowseSelection) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
-  const groups = browseGroups(selection.filters, selection.letter);
-  const { letter } = selection;
-  const groupsJson = groups.length > 0 ? JSON.stringify(groups) : undefined;
-  const sort = sortParam(selection.sort, selection.descending);
-  const ratings = contentRatings(selection.filters);
+  const { groupsJson, sort, ratings, keyParts } = browseRead(libraryId, kind, selection);
   return useInfiniteQuery({
-    queryKey: [
-      'library',
-      'browse',
-      baseUrl,
-      profileId,
-      libraryId,
-      kind,
-      sort,
-      groupsJson ?? '',
-      ratings ?? [],
-      letter ?? '',
-    ],
+    queryKey: ['library', 'browse', baseUrl, profileId, ...keyParts],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const { data, error, response } = await client.GET('/api/v2/catalog', {
@@ -121,8 +120,6 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
             match: 'all',
             groups: groupsJson,
             content_rating: ratings,
-            // "#" is a rule group above; a real letter is the server's own title prefix.
-            name_prefix: letter && letter !== '#' ? letter : undefined,
             limit: GRID_PAGE_SIZE,
             cursor: pageParam,
             ...GRID_IMAGE_QUERY,
@@ -134,6 +131,61 @@ export function useBrowsePages(libraryId: string, kind: LibraryKind, selection: 
     },
     getNextPageParam: (last) => (last.page?.has_more ? last.page.next_cursor : undefined),
   });
+}
+
+/**
+ * Pages of the Browse list read at their own place, for a grid that jumped far down: page `n`
+ * holds the titles from position `n * GRID_PAGE_SIZE` on, read with the catalog's `seek` instead
+ * of every page before it. `windowCursor` is the `window_cursor` of the list's first read: sent as
+ * `cursor` with each `seek`, it pins the pages to the list as that read saw it, so titles added
+ * meanwhile do not shift them (silo web's `useCatalogWindow` does the same with page 0's cursor).
+ * Nothing is read until it is known, and a new one (the first read repeated) keys new pages. The result maps each loaded page to its titles. A server returns a
+ * full page except at the end of the list, so a page's titles sit at consecutive positions.
+ */
+export function useBrowseWindow(
+  libraryId: string,
+  kind: LibraryKind,
+  selection: BrowseSelection,
+  pageIndices: readonly number[],
+  windowCursor: string | undefined,
+): { pages: Map<number, CatalogItem[]>; version: string } {
+  const { client, baseUrl, session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  const { groupsJson, sort, ratings, keyParts } = browseRead(libraryId, kind, selection);
+  const results = useQueries({
+    queries: pageIndices.map((page) => ({
+      queryKey: ['library', 'browse-window', baseUrl, profileId, ...keyParts, windowCursor, page],
+      enabled: windowCursor !== undefined,
+      queryFn: async () => {
+        const { data, error, response } = await client.GET('/api/v2/catalog', {
+          params: {
+            header: { 'X-Profile-Id': profileId },
+            query: {
+              library_id: libraryId,
+              type: kind,
+              sort,
+              match: 'all',
+              groups: groupsJson,
+              content_rating: ratings,
+              limit: GRID_PAGE_SIZE,
+              cursor: windowCursor,
+              seek: page * GRID_PAGE_SIZE,
+              skip_total: true,
+              ...GRID_IMAGE_QUERY,
+            },
+          },
+        });
+        if (!data) throw toApiError(error, response);
+        return data.items;
+      },
+    })),
+  });
+  const pages = new Map<number, CatalogItem[]>();
+  results.forEach((result, i) => {
+    if (result.data) pages.set(pageIndices[i]!, result.data);
+  });
+  // Changes when a page arrives or is read again, so a caller can memoise what it builds from it.
+  return { pages, version: results.map((result) => result.dataUpdatedAt).join(',') };
 }
 
 /**
@@ -160,7 +212,7 @@ export function useSearchCapabilities() {
 
 /**
  * Whether the server accepts the extended rule vocabulary (`extended_query_rules`): the decade
- * rule and the title prefix rules behind "#". A server that cannot say counts as "no": an older
+ * rule. A server that cannot say counts as "no": an older
  * one answers those rules with 422.
  */
 export function useExtendedRules(): boolean {
@@ -227,24 +279,41 @@ export function useWatchRules(libraryId: string, kind: LibraryKind): boolean {
 }
 
 /**
- * The letters that have titles under the current filters, for the rail. The answer does not
- * depend on the letter or the sort. It takes rule groups only, so it does not reflect the content
- * rating (a plain `content_rating` parameter): a letter can be lit with no title left under it. A server that cannot answer leaves every letter usable.
+ * The letter index of the list under the current sort direction and filters, for the rail: the
+ * letters that have titles, where each block of titles starts, and the list's length. It only
+ * exists for a title-ordered list, so it is not read for another sort. It takes rule groups only,
+ * so it does not reflect the content rating (a plain `content_rating` parameter): a letter can be
+ * lit with no title left under it. A server that cannot answer leaves no index, and so no rail.
  */
 export function useLetters(libraryId: string, kind: LibraryKind, selection: BrowseSelection) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   const groups = filterGroups(selection.filters);
+  const order = selection.descending ? 'desc' : 'asc';
   return useQuery({
-    queryKey: ['library', 'letters', baseUrl, profileId, libraryId, kind, JSON.stringify(groups)],
+    queryKey: [
+      'library',
+      'letters',
+      baseUrl,
+      profileId,
+      libraryId,
+      kind,
+      JSON.stringify(groups),
+      order,
+    ],
+    enabled: selection.sort === 'title',
     retry: false,
-    queryFn: async () => {
+    queryFn: async (): Promise<LetterIndex> => {
       const { data, error, response } = await client.POST('/api/v2/catalog/letters', {
         params: { header: { 'X-Profile-Id': profileId } },
-        body: { library_id: libraryId, type: kind, match: 'all', groups },
+        body: { library_id: libraryId, type: kind, match: 'all', groups, order },
       });
       if (!data) throw toApiError(error, response);
-      return new Set(data.letters.filter((entry) => entry.count > 0).map((entry) => entry.letter));
+      return {
+        lit: new Set(data.letters.filter((entry) => entry.count > 0).map((entry) => entry.letter)),
+        runs: data.runs,
+        total: data.total,
+      };
     },
   });
 }

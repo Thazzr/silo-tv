@@ -115,8 +115,8 @@ const servers: Server[] = [];
 /** A small portrait ThumbHash for the stills of the spoiler flow. */
 const STILL_THUMBHASH = 'KAhS8zzDGU8oXWtw6pMcVZjSZHc7jOEppvRQfTg=';
 
-// The titles of the Movies library, for the Browse view: the fake server sorts, filters by genre
-// and by title prefix, and lists the letters the way Silo does.
+// The titles of the Movies library, for the Browse view: the fake server sorts, filters by genre,
+// and lists the letters the way Silo does.
 interface FakeTitle {
   id: string;
   title: string;
@@ -174,14 +174,12 @@ function filterTitles(groups: FakeGroup[]): FakeTitle[] {
 
 function browseTitles(params: URLSearchParams): FakeTitle[] {
   const groups = JSON.parse(params.get('groups') ?? '[]') as FakeGroup[];
-  const prefix = (params.get('name_prefix') ?? '').toLowerCase();
   const sort = params.get('sort') ?? 'title';
   const field = sort.replace(/^-/, '') === 'year' ? 'year' : 'title';
   const direction = sort.startsWith('-') ? -1 : 1;
   const ratings = params.getAll('content_rating');
   return filterTitles(groups)
     .filter((movie) => ratings.length === 0 || ratings.includes(movie.rating))
-    .filter((movie) => movie.title.toLowerCase().startsWith(prefix))
     .sort((a, b) =>
       field === 'year' ? (a.year - b.year) * direction : a.title.localeCompare(b.title) * direction,
     );
@@ -945,16 +943,25 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           });
         case 'POST /api/v2/catalog/letters': {
           const body = JSON.parse(requestBody || '{}') as { groups?: FakeGroup[] };
-          const letters = new Map<string, number>();
-          for (const movie of filterTitles(body.groups ?? [])) {
+          const counts = new Map<string, number>();
+          const matching = filterTitles(body.groups ?? []);
+          for (const movie of matching) {
             const letter = movie.title[0]!.toUpperCase();
-            letters.set(letter, (letters.get(letter) ?? 0) + 1);
+            counts.set(letter, (counts.get(letter) ?? 0) + 1);
           }
-          const sorted = [...letters.entries()].sort(([a], [b]) => a.localeCompare(b));
+          // One block per letter, in title order; a block starts after the titles before it.
+          let position = 0;
+          const runs = [...counts.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([letter, count]) => {
+              const run = { letter, count, position };
+              position += count;
+              return run;
+            });
           return send(200, {
-            total: MOVIES.length,
-            letters: sorted.map(([letter, count], position) => ({ letter, count, position })),
-            runs: sorted.map(([letter], position) => ({ letter, position })),
+            total: matching.length,
+            letters: runs,
+            runs: runs.map(({ letter, position: start }) => ({ letter, position: start })),
           });
         }
         case 'GET /api/v2/library/lib-2/collections': {
@@ -1604,9 +1611,19 @@ test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail 
   const filtered = seen.filter((e) => e.path === '/api/v2/catalog' && e.search.includes('groups='));
   expect(decodeURIComponent(filtered[filtered.length - 1]?.search ?? '')).toContain('"Action"');
 
-  // The alphabet rail: only F and S have titles now. Right from the last poster reaches it.
+  // The alphabet rail only exists in title order: back to Title (the sort pill is a Left away).
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: 'Sortierung · Jahr' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitemradio', { name: /^Jahr/ })).toBeFocused();
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('menuitemradio', { name: /^Titel/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Sortierung · Titel' })).toBeFocused();
+  await expect(posters).toHaveText(['Fourth Title', 'Second Title', 'Seventh Title']);
+  // Only F and S have titles now. Right from the last poster reaches the rail.
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Fourth Title/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Seventh Title/ })).toBeFocused();
@@ -1621,25 +1638,27 @@ test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail 
   }
   await expect(page.getByRole('button', { name: 'Springe zu S' })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Springe zu B' })).toBeDisabled();
-  // OK: the titles under S, in the grid, with the focus on the first of them.
+  // OK jumps to S and leaves the list whole; the focus stays on the rail. Left enters the grid.
   await page.keyboard.press('Enter');
-  await expect(posters).toHaveText(['Second Title', 'Seventh Title']);
-  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect(posters).toHaveText(['Fourth Title', 'Second Title', 'Seventh Title']);
+  await expect(page.getByRole('button', { name: 'Springe zu S' })).toBeFocused();
   await expect(page.getByRole('button', { name: 'Springe zu S' })).toHaveAttribute(
-    'aria-pressed',
+    'aria-current',
     'true',
   );
-  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('name_prefix=S'))).toBe(
-    true,
+  expect(seen.some((e) => e.path === '/api/v2/catalog' && e.search.includes('name_prefix'))).toBe(
+    false,
   );
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
 
-  // Open a title; Back returns to the same poster with the same sort, filter and letter.
+  // Open a title; Back returns to the same poster with the same sort and filter.
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('browse')).toBeVisible();
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
-  await expect(posters).toHaveText(['Second Title', 'Seventh Title']);
+  await expect(posters).toHaveText(['Fourth Title', 'Second Title', 'Seventh Title']);
   await expect(page.getByTestId('filter-count')).toHaveText('1');
 
   // Back from the poster: the sub-view pills, then the tab bar.

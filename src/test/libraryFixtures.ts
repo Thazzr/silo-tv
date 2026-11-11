@@ -140,8 +140,11 @@ export interface LibraryServe {
   watchRules?: boolean | 'fail';
   /** What the search capabilities say about extended rules (decade, title prefix); on by default. */
   extendedRules?: boolean | 'fail';
-  /** The letters that have titles, or a failing letter index. */
-  letters?: string[] | 'fail';
+  /**
+   * The letters that have titles (one title each, in that order), a whole letter index, or a
+   * failing letter index.
+   */
+  letters?: string[] | S['CatalogLetters'] | 'fail';
   collections?:
     | Record<string, S['LibraryCollectionTab'] | 'fail'>
     | ((libraryId: string) => S['LibraryCollectionTab'] | 'fail');
@@ -217,6 +220,7 @@ export function serveLibrary(server: SetupServer, options: LibraryServe = {}): L
       calls.letters.push(await request.json());
       if (options.letters === 'fail') return new HttpResponse(null, { status: 501 });
       const letters = options.letters ?? ['#', 'A', 'B', 'C'];
+      if (!Array.isArray(letters)) return HttpResponse.json(letters);
       return HttpResponse.json({
         letters: letters.map((letter, i) => ({ letter, count: 1, position: i })),
         runs: letters.map((letter, i) => ({ letter, position: i })),

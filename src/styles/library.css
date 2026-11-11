@@ -194,7 +194,7 @@
   background: var(--chrome-selected);
 }
 
-.alpha-letter.selected {
+.alpha-letter.active {
   font-weight: 700;
   background: var(--chrome-selected);
 }
@@ -206,7 +206,7 @@
 }
 
 .alpha-letter:focus,
-.alpha-letter.selected:focus {
+.alpha-letter.active:focus {
   color: var(--focus-content);
   background: var(--focus-fill);
 }

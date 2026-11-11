@@ -29,9 +29,32 @@ export interface GridCardContext {
   onFocused: () => void;
 }
 
+/** The rows a grid shows, reported to a parent that loads by position. */
+export interface GridWindow {
+  /** The first index of the top visible row. */
+  top: number;
+  /** The first index of the first mounted row. */
+  first: number;
+  /** One past the last index of the last mounted row. */
+  end: number;
+}
+
+/**
+ * The window of a grid scrolled to `scrollRow`: the scroll window only, because the focused card's
+ * row is mounted wherever it is and must not widen it.
+ */
+export function gridWindow(scrollRow: number, totalRows: number, columns: number): GridWindow {
+  return {
+    top: scrollRow * columns,
+    first: Math.max(0, scrollRow - MOUNT_ROWS_BEFORE) * columns,
+    end: Math.min(totalRows, scrollRow + 1 + MOUNT_ROWS_AFTER) * columns,
+  };
+}
+
 export interface GridProps<T> {
   gridId: string;
-  items: readonly T[];
+  /** One entry per list position; `undefined` is a title that is not loaded yet (a skeleton card). */
+  items: readonly (T | undefined)[];
   getKey: (item: T) => string;
   renderCard: (item: T, context: GridCardContext) => ReactNode;
   /** The server has more pages. */
@@ -43,6 +66,13 @@ export interface GridProps<T> {
   artUrl?: (item: T) => string | null;
   /** Columns, card size and spacing; the browse grid's six 260x390 posters unless given. Must be stable. */
   layout?: GridMetrics;
+  /** Called when the visible or mounted rows change, for a list that loads the part in view. */
+  onWindow?: (window: GridWindow) => void;
+  /**
+   * Scrolls the grid so the row of `index` is on top. A new object scrolls again. The focus stays
+   * where it is (a jump from outside the grid), and only the remembered index follows.
+   */
+  jumpTo?: { index: number } | null;
 }
 
 /**
@@ -61,6 +91,8 @@ export function Grid<T>({
   memory,
   artUrl,
   layout = DEFAULT_GRID,
+  onWindow,
+  jumpTo,
 }: GridProps<T>) {
   const { columns, rowPitch } = layout;
   const loadAhead = columns * 3;
@@ -74,6 +106,22 @@ export function Grid<T>({
   const [scrolledRow, setScrolledRow] = useState(() => focusedRow);
   const [scrollRow, setScrollRow] = useState(() => focusedRow);
   const effectiveScroll = nextScrollIndex(scrollRow, scrolledRow, 1, totalRows);
+
+  // A jump scrolls to the row of its index; it is not a focus move, so the focused card stays put.
+  // The scroll is set while rendering (the new jump is told apart from the one handled), so the
+  // first frame of the jump is already at the new row.
+  const [handledJump, setHandledJump] = useState(jumpTo);
+  if (jumpTo !== handledJump) {
+    setHandledJump(jumpTo);
+    if (jumpTo) {
+      const row = Math.floor(jumpTo.index / columns);
+      setScrolledRow(row);
+      setScrollRow(row);
+    }
+  }
+  useEffect(() => {
+    if (jumpTo) memory?.set(gridId, jumpTo.index);
+  }, [jumpTo, gridId, memory]);
 
   const loadMore = useRef(onLoadMore);
   useEffect(() => {
@@ -126,7 +174,10 @@ export function Grid<T>({
     (direction: ArrowDirection, fromKey: string) => {
       const now = latest.current;
       if (now.mapped !== now.items) {
-        now.byKey = new Map(now.items.map((item, i) => [gridCardKey(gridId, now.getKey(item)), i]));
+        now.byKey = new Map();
+        now.items.forEach((item, i) => {
+          if (item !== undefined) now.byKey.set(gridCardKey(gridId, now.getKey(item)), i);
+        });
         now.mapped = now.items;
       }
       const from = now.byKey.get(fromKey);
@@ -140,11 +191,27 @@ export function Grid<T>({
       // Below a short last row there may be fewer cards than columns: land on the last one.
       else if (from + columns < total) to = from + columns;
       else if (Math.floor(from / columns) < Math.floor((total - 1) / columns)) to = total - 1;
-      return to < 0 ? false : moveFocusTo(gridCardKey(gridId, now.getKey(now.items[to]!)));
+      if (to < 0) return false;
+      // A title that is not loaded yet cannot take the focus; the press waits for the next one.
+      const target = now.items[to];
+      return target === undefined ? true : moveFocusTo(gridCardKey(gridId, now.getKey(target)));
     },
     [columns, gridId],
   );
   const focusedItem = items[focused];
+
+  const {
+    top: windowTop,
+    first: windowFirst,
+    end: windowEnd,
+  } = gridWindow(effectiveScroll, totalRows, columns);
+  const reportWindow = useRef(onWindow);
+  useEffect(() => {
+    reportWindow.current = onWindow;
+  });
+  useEffect(() => {
+    reportWindow.current?.({ top: windowTop, first: windowFirst, end: windowEnd });
+  }, [windowTop, windowFirst, windowEnd]);
 
   // Pictures of the rows past the window, on the side the focus travels to.
   const firstRow = rows[0];
@@ -196,8 +263,9 @@ export function Grid<T>({
             const style = { left: col * step, top: row * rowPitch };
             const item = items[index];
             if (item === undefined) {
-              // The row of placeholders that stands in for the page that is loading.
-              if (loadingMore && index >= count) {
+              // A title that is not loaded yet, and the row of placeholders that stands in for the
+              // page that is loading.
+              if (index < count || loadingMore) {
                 cells.push(
                   <div className="grid-slot" key={`s${index}`} style={style}>
                     <CardSkeleton shape="grid" />

@@ -10,13 +10,15 @@ export type TabKind = 'movie' | 'series';
 
 /**
  * What the library tabs remember for the session: the library and the sub-view each tab showed,
- * the sort, filters and letter of every library's Browse, and, through `indices`, the focused card of every row and grid.
+ * the sort and filters of every library's Browse, whether its grid jumped to a letter, and, through `indices`, the focused card of every row and grid.
  * It lives with the shell's memory, because leaving a tab or opening a title unmounts the tab.
  */
 export class LibraryMemory {
   private readonly libraries: Partial<Record<TabKind, string>> = {};
   private readonly views: Partial<Record<TabKind, LibraryView>> = {};
   private readonly browse = new Map<string, BrowseSelection>();
+  /** The Browse grids that jumped to a letter: they show the list by position, not page by page. */
+  private readonly jumped = new Set<string>();
   /** The focused card of every row and grid, and the focused row of each Recommended view. */
   readonly indices = new FocusIndexMemory();
 
@@ -45,10 +47,20 @@ export class LibraryMemory {
     this.browse.set(`${kind}:${libraryId}`, selection);
   }
 
+  isJumped(gridId: string): boolean {
+    return this.jumped.has(gridId);
+  }
+
+  setJumped(gridId: string, jumped: boolean): void {
+    if (jumped) this.jumped.add(gridId);
+    else this.jumped.delete(gridId);
+  }
+
   reset(): void {
     for (const key of Object.keys(this.libraries)) delete this.libraries[key as TabKind];
     for (const key of Object.keys(this.views)) delete this.views[key as TabKind];
     this.browse.clear();
+    this.jumped.clear();
     this.indices.clear();
   }
 }

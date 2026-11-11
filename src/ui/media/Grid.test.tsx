@@ -294,3 +294,104 @@ describe('Grid with a layout of four columns', () => {
     expect(getCurrentFocusKey()).toBe(key('g4'));
   });
 });
+
+describe('Grid by position', () => {
+  /** `total` positions of which only the given range is loaded; the rest are `undefined`. */
+  const sparse = (total: number, loaded: [number, number]) => {
+    const list: (Item | undefined)[] = Array.from({ length: total });
+    makeItems(loaded[0], loaded[1]).forEach((item, i) => {
+      list[loaded[0] + i] = item;
+    });
+    return list;
+  };
+
+  function PositionGrid({
+    items,
+    jumpTo,
+    onWindow,
+    memory,
+  }: {
+    items: (Item | undefined)[];
+    jumpTo?: { index: number } | null;
+    onWindow?: (window: { top: number; first: number; end: number }) => void;
+    memory?: FocusIndexMemory;
+  }) {
+    return (
+      <Grid
+        gridId="g"
+        items={items}
+        getKey={(item) => item.content_id}
+        hasMore={false}
+        loadingMore={false}
+        onLoadMore={() => {}}
+        memory={memory}
+        onWindow={onWindow}
+        jumpTo={jumpTo}
+        renderCard={(item, ctx) => (
+          <PosterCard
+            grid
+            item={item}
+            focusKey={ctx.focusKey}
+            onFocused={ctx.onFocused}
+            onOpen={() => {}}
+          />
+        )}
+      />
+    );
+  }
+
+  it('is as long as the list and shows a skeleton card for every title that is not loaded', async () => {
+    renderWithSilo(<PositionGrid items={sparse(60, [0, 12])} />);
+    await act(async () => {});
+    expect(track().style.height).toBe(`${10 * GRID_ROW_PITCH}px`);
+    // Rows 0 to 3 are mounted: two of cards, two of skeletons.
+    expect(screen.getAllByTestId('card-skeleton')).toHaveLength(12);
+    expect(screen.getAllByRole('button', { name: /Grid 12/ }).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the focus where it is when Down would land on a title that is not loaded', async () => {
+    renderWithSilo(<PositionGrid items={sparse(60, [0, 12])} />);
+    await act(async () => {});
+    await focusAt(key('g7'));
+    await pressKey(KEY.down);
+    expect(getCurrentFocusKey()).toBe(key('g7'));
+  });
+
+  /** A grid with a plain button that jumps it to `index`, as the alphabet rail does. */
+  function JumpGrid({
+    index,
+    ...rest
+  }: { index: number } & Omit<Parameters<typeof PositionGrid>[0], 'jumpTo'>) {
+    const [jump, setJump] = useState<{ index: number } | null>(null);
+    return (
+      <>
+        <button type="button" data-testid="jump" onClick={() => setJump({ index })} />
+        <PositionGrid {...rest} jumpTo={jump} />
+      </>
+    );
+  }
+
+  it('scrolls its row to the top on a jump, and the focused card stays where it was', async () => {
+    const memory = new FocusIndexMemory();
+    renderWithSilo(<JumpGrid items={sparse(60, [0, 60])} memory={memory} index={31} />);
+    await act(async () => {});
+    await focusAt(key('g2'));
+    fireEvent.click(screen.getByTestId('jump'));
+    // Index 31 is in row 5.
+    await waitFor(() =>
+      expect(track().style.transform).toBe(`translateY(${-5 * GRID_ROW_PITCH}px)`),
+    );
+    expect(getCurrentFocusKey()).toBe(key('g2'));
+    expect(memory.get('g')).toBe(31);
+  });
+
+  it('reports the top row and the rows that are mounted around it', async () => {
+    const seen = vi.fn();
+    renderWithSilo(<JumpGrid items={sparse(60, [0, 60])} onWindow={seen} index={30} />);
+    await act(async () => {});
+    await focusAt(key('g2'));
+    expect(seen).toHaveBeenLastCalledWith({ top: 0, first: 0, end: 24 });
+    fireEvent.click(screen.getByTestId('jump'));
+    await waitFor(() => expect(seen).toHaveBeenLastCalledWith({ top: 30, first: 24, end: 54 }));
+  });
+});

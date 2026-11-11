@@ -437,48 +437,66 @@ describe('Collections in the shell', () => {
 });
 
 describe('Browse in the shell', () => {
-  it('Back from a title returns to the same poster with the same sort, filter and letter', async () => {
+  it('Back from a title opened after a jump to a letter returns to the same poster', async () => {
     const calls = serve({
-      letters: ['A', 'B'],
-      browse: (query) =>
-        query.get('name_prefix') === 'B'
-          ? {
-              items: [
-                catalogItem({ content_id: 'b1', title: 'Bravo' }),
-                catalogItem({ content_id: 'b2', title: 'Bridge' }),
-              ],
-              total: 2,
-              total_exact: true,
-              window_cursor: 'c',
-            }
-          : { items: titles('Title', 10), total: 10, total_exact: true, window_cursor: 'c' },
+      letters: {
+        letters: [
+          { letter: 'A', count: 100, position: 0 },
+          { letter: 'S', count: 100, position: 100 },
+        ],
+        runs: [
+          { letter: 'A', position: 0 },
+          { letter: 'S', position: 100 },
+        ],
+        total: 200,
+      },
+      browse: (query) => {
+        const start = Number(query.get('seek') ?? 0);
+        return {
+          items: titles('Title', Math.min(40, 200 - start), 'movie', start),
+          total: 200,
+          total_exact: true,
+          window_cursor: 'c',
+          page: { has_more: start + 40 < 200, next_cursor: 'next' },
+        };
+      },
     });
     renderMovies({
       view: 'browse',
       prepare: (memory) =>
         memory.library.setBrowse('movie', 'lib-1', {
-          sort: 'year',
-          descending: true,
+          sort: 'title',
+          descending: false,
           filters: { genre: ['Drama'] },
-          letter: null,
         }),
     });
     await screen.findByTestId('browse');
-    await waitFor(() => expect(document.querySelector('[data-letter="B"]')).not.toBeDisabled());
-    await focus('alpha:B');
+    await waitFor(() => expect(document.querySelector('[data-letter="S"]')).not.toBeDisabled());
+    await focus('alpha:S');
     await pressKey(KEY.enter);
-    await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'b1')));
+    // Position 100 is "Title 101".
+    await waitFor(() =>
+      expect(
+        document.querySelector(
+          `[data-focus-key="${gridCardKey('browse:lib-1:movie', 'Title101')}"]`,
+        ),
+      ).not.toBeNull(),
+    );
+    await pressKey(KEY.left);
+    expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'Title101'));
     await pressKey(KEY.right);
-    expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'b2'));
+    expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'Title102'));
     await pressKey(KEY.enter);
-    expect(await screen.findByTestId('detail-stand-in')).toHaveTextContent('Detail of b2');
+    expect(await screen.findByTestId('detail-stand-in')).toHaveTextContent('Detail of Title102');
     await pressKey(KEY.back);
     await screen.findByTestId('browse');
-    await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'b2')));
-    // The same request as before, so the same poster is there.
+    await waitFor(() =>
+      expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'Title102')),
+    );
+    // The same list as before, and never a title prefix.
     const last = calls.browse[calls.browse.length - 1]!;
-    expect(last.get('sort')).toBe('-year');
-    expect(last.get('name_prefix')).toBe('B');
+    expect(last.get('sort')).toBe('title');
+    expect(calls.browse.some((query) => query.has('name_prefix'))).toBe(false);
     expect(JSON.parse(last.get('groups')!)).toHaveLength(1);
   });
 });

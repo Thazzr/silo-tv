@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  browseGroups,
   browseSignature,
   contentRatings,
   DEFAULT_BROWSE,
@@ -65,7 +64,6 @@ describe('filterGroups', () => {
   it('offers the three rule facets and the content rating, which is a parameter and no rule', () => {
     expect([...FACETS]).toEqual(['genre', 'decade', 'status', 'content_rating']);
     expect(filterGroups({ content_rating: ['PG'] })).toEqual([]);
-    expect(browseGroups({ content_rating: ['PG'] }, 'A')).toEqual([]);
   });
 
   // Silo's personalized boolean rules (internal/catalog/query_definition.go: `is` only, boolean).
@@ -88,11 +86,6 @@ describe('filterGroups', () => {
     expect(isSingleChoice('content_rating')).toBe(false);
   });
 
-  it('keeps the watch state in the browse groups next to the other rules and the "#" group', () => {
-    const groups = browseGroups({ genre: ['Action'], status: ['watched'] }, '#');
-    expect(groups.map((g) => g.rules[0]!.field)).toEqual(['genre', 'watched', 'title']);
-  });
-
   it('reads the content ratings for the query parameter, none when empty', () => {
     expect(contentRatings({})).toBeUndefined();
     expect(contentRatings({ content_rating: [] })).toBeUndefined();
@@ -102,31 +95,6 @@ describe('filterGroups', () => {
   it('marks the decade as needing the extended rules, and the genre as not', () => {
     expect(facetNeedsExtendedRules('decade')).toBe(true);
     expect(facetNeedsExtendedRules('genre')).toBe(false);
-  });
-});
-
-describe('browseGroups', () => {
-  it('adds numbered titles as a group of their own for "#" only', () => {
-    expect(browseGroups({}, 'A')).toEqual([]);
-    const groups = browseGroups({ genre: ['Action'] }, '#');
-    expect(groups).toHaveLength(2);
-    const digits = groups[1]!;
-    expect(digits.match).toBe('any');
-    expect(digits.rules.map((r) => r.value)).toEqual([
-      '0',
-      '1',
-      '2',
-      '3',
-      '4',
-      '5',
-      '6',
-      '7',
-      '8',
-      '9',
-    ]);
-    expect(new Set(digits.rules.map((r) => `${r.field} ${r.op}`))).toEqual(
-      new Set(['title begins_with']),
-    );
   });
 });
 
@@ -153,7 +121,6 @@ describe('letters and the signature', () => {
     expect(browseSignature({ ...DEFAULT_BROWSE, sort: 'year' })).not.toBe(base);
     expect(browseSignature({ ...DEFAULT_BROWSE, descending: true })).not.toBe(base);
     expect(browseSignature({ ...DEFAULT_BROWSE, filters: { genre: ['A'] } })).not.toBe(base);
-    expect(browseSignature({ ...DEFAULT_BROWSE, letter: 'B' })).not.toBe(base);
     expect(browseSignature({ ...DEFAULT_BROWSE, filters: { content_rating: ['PG'] } })).not.toBe(
       base,
     );
@@ -192,11 +159,23 @@ describe('LibraryMemory', () => {
     memory.selectView('series', 'browse');
     memory.setBrowse('movie', 'lib-1', { ...DEFAULT_BROWSE, sort: 'year' });
     memory.indices.set('grid', 4);
+    memory.setJumped('grid', true);
     memory.reset();
     expect(memory.libraryOf('movie')).toBeUndefined();
     expect(memory.viewOf('series')).toBe('recommended');
     expect(memory.browseOf('movie', 'lib-1')).toEqual(DEFAULT_BROWSE);
     expect(memory.indices.get('grid')).toBeUndefined();
+    expect(memory.isJumped('grid')).toBe(false);
+  });
+
+  it('remembers which Browse grids jumped to a letter', () => {
+    const memory = new LibraryMemory();
+    expect(memory.isJumped('grid')).toBe(false);
+    memory.setJumped('grid', true);
+    expect(memory.isJumped('grid')).toBe(true);
+    expect(memory.isJumped('other')).toBe(false);
+    memory.setJumped('grid', false);
+    expect(memory.isJumped('grid')).toBe(false);
   });
 });
 

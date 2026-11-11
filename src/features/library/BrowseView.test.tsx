@@ -1,11 +1,11 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
 import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { BASE_URL, account } from '../../test/apiFixtures';
-import { catalogItem, library } from '../../test/flowFixtures';
+import { library } from '../../test/flowFixtures';
 import {
   facets,
   serveLibrary,
@@ -15,7 +15,8 @@ import {
 } from '../../test/libraryFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
-import { gridCardKey } from '../../ui/media';
+import { gridCardKey, GRID_ROW_PITCH } from '../../ui/media';
+import { DEFAULT_BROWSE } from './browse';
 import { LibraryScreen } from './LibraryScreen';
 import { LibraryMemory } from './libraryMemory';
 
@@ -192,13 +193,21 @@ describe('Browse', () => {
     expect(await screen.findByTestId('browse-empty')).toHaveTextContent(
       'This library has no titles yet.',
     );
-    // With a letter chosen the same answer means "nothing matches".
-    await focus('alpha:A');
-    await pressKey(KEY.enter);
-    await waitFor(() =>
-      expect(screen.getByTestId('browse-empty')).toHaveTextContent(
-        'No titles match these filters.',
-      ),
+  });
+
+  it('says that no titles match when filters are set and the answer is empty', async () => {
+    serveLibrary(server, {
+      browse: () => ({ items: [], total: 0, total_exact: true, window_cursor: 'c' }),
+    });
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', {
+      sort: 'title',
+      descending: false,
+      filters: { genre: ['Action'] },
+    });
+    setup(memory);
+    expect(await screen.findByTestId('browse-empty')).toHaveTextContent(
+      'No titles match these filters.',
     );
   });
 });
@@ -246,7 +255,6 @@ describe('Browse sort', () => {
       sort: 'year',
       descending: true,
       filters: {},
-      letter: null,
     });
     setup(memory);
     await firstRead(calls);
@@ -459,7 +467,6 @@ describe('Browse filter', () => {
       sort: 'title',
       descending: false,
       filters: { genre: ['Action'], decade: ['1990'] },
-      letter: null,
     });
     setup(memory);
     await firstRead(calls);
@@ -547,9 +554,8 @@ describe('Browse filter', () => {
     expect(screen.getByTestId('filter-count')).toHaveTextContent('1');
   });
 
-  it('combines the content rating with sort, genre, decade and a letter, and with paging', async () => {
+  it('combines the content rating with sort, genre, decade and paging', async () => {
     const calls = serveLibrary(server, {
-      letters: ['A', 'B'],
       browse: (query) => ({
         items: titles('Title', 3, 'movie', query.get('cursor') ? 3 : 0),
         total: 3,
@@ -563,12 +569,11 @@ describe('Browse filter', () => {
       sort: 'year',
       descending: true,
       filters: { genre: ['Action'], decade: ['1990'], content_rating: ['PG'] },
-      letter: 'A',
     });
     setup(memory);
     const query = await firstRead(calls);
     expect(query.get('sort')).toBe('-year');
-    expect(query.get('name_prefix')).toBe('A');
+    expect(query.has('name_prefix')).toBe(false);
     expect(query.getAll('content_rating')).toEqual(['PG']);
     expect(groupsOf(query)!.map((g) => g.rules[0]!.field)).toEqual(['genre', 'decade']);
     await screen.findByRole('button', { name: /Title 2/ });
@@ -578,30 +583,22 @@ describe('Browse filter', () => {
     const next = lastRead(calls);
     expect(next.get('cursor')).toBe('c2');
     expect(next.getAll('content_rating')).toEqual(['PG']);
-    expect(next.get('name_prefix')).toBe('A');
     expect(next.get('sort')).toBe('-year');
     expect(screen.getByTestId('filter-count')).toHaveTextContent('3');
   });
 
-  it('keeps the content rating when a letter is chosen, and clears it with the other filters', async () => {
-    const calls = serveLibrary(server, { letters: ['A', 'B'] });
+  it('clears the content rating with the other filters', async () => {
+    const calls = serveLibrary(server);
     const memory = new LibraryMemory();
     memory.setBrowse('movie', 'lib-1', {
       sort: 'title',
       descending: false,
       filters: { content_rating: ['R'] },
-      letter: null,
     });
     setup(memory);
     await firstRead(calls);
     await screen.findByRole('button', { name: /Title 3/ });
-    await waitFor(() => expect(letter('B')).not.toBeDisabled());
-    await focus('alpha:B');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(calls.browse).toHaveLength(2));
     expect(lastRead(calls).getAll('content_rating')).toEqual(['R']);
-    expect(lastRead(calls).get('name_prefix')).toBe('B');
-    await screen.findByRole('button', { name: /Title 3/ });
     await focus('browse-filter');
     await pressKey(KEY.enter);
     const panel = await screen.findByTestId('filter-panel');
@@ -611,7 +608,7 @@ describe('Browse filter', () => {
     await focus('lib-dialog-clear');
     await pressKey(KEY.enter);
     await applyPanel();
-    await waitFor(() => expect(calls.browse).toHaveLength(3));
+    await waitFor(() => expect(calls.browse).toHaveLength(2));
     expect(lastRead(calls).has('content_rating')).toBe(false);
     expect(memory.browseOf('movie', 'lib-1').filters).toEqual({});
     await waitFor(() => expect(screen.queryByTestId('filter-count')).toBeNull());
@@ -736,9 +733,8 @@ describe('Browse filter', () => {
     expect(screen.queryByTestId('filter-count')).toBeNull();
   });
 
-  it('combines the watch state with sort, genre, decade, rating, letter and paging, and the letter index follows it', async () => {
+  it('combines the watch state with sort, genre, decade, rating and paging', async () => {
     const calls = serveLibrary(server, {
-      letters: ['A', 'B'],
       browse: (query) => ({
         items: titles('Title', 3, 'movie', query.get('cursor') ? 3 : 0),
         total: 6,
@@ -757,12 +753,10 @@ describe('Browse filter', () => {
         status: ['in_progress'],
         content_rating: ['PG'],
       },
-      letter: 'A',
     });
     setup(memory);
     const query = await firstRead(calls);
     expect(query.get('sort')).toBe('-year');
-    expect(query.get('name_prefix')).toBe('A');
     expect(query.getAll('content_rating')).toEqual(['PG']);
     expect(groupsOf(query)!.map((g) => g.rules[0]!.field)).toEqual([
       'genre',
@@ -776,12 +770,22 @@ describe('Browse filter', () => {
     expect(next.get('cursor')).toBe('c2');
     expect(groupsOf(next)).toEqual(groupsOf(query));
     expect(screen.getByTestId('filter-count')).toHaveTextContent('4');
-    // The letter rail asks with the same rule groups.
+  });
+
+  it('asks the letter index with the same rule groups as the list', async () => {
+    const calls = serveLibrary(server);
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', {
+      sort: 'title',
+      descending: false,
+      filters: { genre: ['Action'], status: ['in_progress'] },
+    });
+    setup(memory);
     await waitFor(() => expect(calls.letters.length).toBeGreaterThan(0));
     const body = calls.letters[calls.letters.length - 1] as {
       groups: { rules: { field: string }[] }[];
     };
-    expect(body.groups.map((g) => g.rules[0]!.field)).toEqual(['genre', 'decade', 'in_progress']);
+    expect(body.groups.map((g) => g.rules[0]!.field)).toEqual(['genre', 'in_progress']);
   });
 
   it('clears the watch state with the other filters, and restores it with the next visit', async () => {
@@ -823,6 +827,52 @@ describe('Browse filter', () => {
 describe('Browse alphabet rail', () => {
   const letters = (calls: LibraryServe['letters']) => ({ letters: calls });
 
+  /** A letter index with `total` titles in blocks that start at the given positions. */
+  const indexOf = (runs: { letter: string; position: number }[], total: number) => ({
+    letters: [...new Set(runs.map((run) => run.letter))].map((name) => ({
+      letter: name,
+      count: 1,
+      position: runs.find((run) => run.letter === name)!.position,
+    })),
+    runs,
+    total,
+  });
+
+  /** A list of `total` titles in which "Title <n + 1>" sits at position n; seeks are answered by position. */
+  const positioned = (total: number) => ({
+    browse: (query: URLSearchParams) => {
+      const start = Number(query.get('seek') ?? 0);
+      return {
+        items: titles('Title', Math.min(40, total - start), 'movie', start),
+        total,
+        total_exact: true,
+        window_cursor: 'w',
+        page: { has_more: start + 40 < total, next_cursor: 'next' },
+      };
+    },
+  });
+  const seeks = (calls: LibraryCalls) =>
+    calls.browse.filter((query) => query.has('seek')).map((query) => Number(query.get('seek')));
+
+  const LONG = indexOf(
+    [
+      { letter: 'A', position: 0 },
+      { letter: 'B', position: 200 },
+      { letter: 'S', position: 400 },
+      { letter: 'T', position: 500 },
+    ],
+    600,
+  );
+
+  async function longList(memory = new LibraryMemory()) {
+    const calls = serveLibrary(server, { ...positioned(600), letters: LONG });
+    const view = setup(memory);
+    await firstRead(calls);
+    await screen.findByRole('button', { name: /Title 3/ });
+    await waitFor(() => expect(letter('S')).not.toBeDisabled());
+    return { calls, ...view };
+  }
+
   it('shows # and A to Z, with the letters that have no titles dimmed', async () => {
     const calls = serveLibrary(server, letters(['#', 'A', 'C']));
     setup();
@@ -843,14 +893,13 @@ describe('Browse alphabet rail', () => {
     expect(letter('A')).not.toHaveClass('dim');
   });
 
-  it('asks the letter index about the library and the filters, not the letter', async () => {
+  it('asks the letter index about the library, the filters and the title order', async () => {
     const calls = serveLibrary(server);
     const memory = new LibraryMemory();
     memory.setBrowse('movie', 'lib-1', {
-      sort: 'year',
+      sort: 'title',
       descending: true,
       filters: { genre: ['Action'] },
-      letter: 'B',
     });
     setup(memory);
     await waitFor(() => expect(calls.letters).toHaveLength(1));
@@ -859,7 +908,49 @@ describe('Browse alphabet rail', () => {
       type: 'movie',
       match: 'all',
       groups: [{ match: 'any', rules: [{ field: 'genre', op: 'contains', value: 'Action' }] }],
+      order: 'desc',
     });
+  });
+
+  it('is not there for another sort order, and the letter index is not read', async () => {
+    const calls = serveLibrary(server);
+    const memory = new LibraryMemory();
+    memory.setBrowse('movie', 'lib-1', { sort: 'year', descending: true, filters: {} });
+    setup(memory);
+    await firstRead(calls);
+    await screen.findByRole('button', { name: /Title 3/ });
+    expect(screen.queryByTestId('alpha-rail')).toBeNull();
+    expect(calls.letters).toHaveLength(0);
+  });
+
+  it('goes away when the sort changes to another order, and comes back with the title order', async () => {
+    const calls = serveLibrary(server);
+    setup();
+    await firstRead(calls);
+    await waitFor(() => expect(screen.getByTestId('alpha-rail')).toBeInTheDocument());
+    await screen.findByRole('button', { name: /Title 3/ });
+    await focus('browse-sort');
+    await pressKey(KEY.enter);
+    await screen.findByTestId('sort-list');
+    await focus('lib-dialog-sort-year');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.queryByTestId('alpha-rail')).toBeNull());
+    await screen.findByRole('button', { name: /Title 3/ });
+    await focus('browse-sort');
+    await pressKey(KEY.enter);
+    await screen.findByTestId('sort-list');
+    await focus('lib-dialog-sort-title');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.getByTestId('alpha-rail')).toBeInTheDocument());
+  });
+
+  it('is not there when the server cannot give the letter index', async () => {
+    const calls = serveLibrary(server, letters('fail'));
+    setup();
+    await firstRead(calls);
+    await waitFor(() => expect(calls.letters).toHaveLength(1));
+    await screen.findByRole('button', { name: /Title 3/ });
+    expect(screen.queryByTestId('alpha-rail')).toBeNull();
   });
 
   it('passes over dimmed letters with Up and Down', async () => {
@@ -879,6 +970,14 @@ describe('Browse alphabet rail', () => {
     expect(getCurrentFocusKey()).toBe('alpha:C');
   });
 
+  it('does not jump to a letter without titles', async () => {
+    const { calls } = await longList();
+    expect(letter('C')).toBeDisabled();
+    fireEvent.click(letter('C'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(seeks(calls)).toEqual([]);
+  });
+
   it('is reached with Right from the last poster of a row, and Left returns to the grid', async () => {
     const calls = serveLibrary(server, { letters: ['A', 'B'] });
     setup();
@@ -891,117 +990,123 @@ describe('Browse alphabet rail', () => {
     expect(getCurrentFocusKey()).toBe(card('Title6'));
   });
 
-  it('OK on a letter reads the titles under it and moves the focus onto the first of them', async () => {
-    const calls = serveLibrary(server, {
-      letters: ['A', 'B'],
-      browse: async (query) => {
-        // The read of a letter takes a moment: the focus must wait for it.
-        if (query.get('name_prefix') === 'B') {
-          await new Promise((resolve) => setTimeout(resolve, 80));
-          return {
-            items: [
-              catalogItem({ content_id: 'b1', title: 'Bravo' }),
-              catalogItem({ content_id: 'b2', title: 'Bridge' }),
-            ],
-            total: 2,
-            total_exact: true,
-            window_cursor: 'c',
-          };
-        }
-        return { items: titles('Title', 10), total: 10, total_exact: true, window_cursor: 'c' };
-      },
-    });
-    const { memory } = setup();
-    await firstRead(calls);
-    await screen.findByRole('button', { name: /Title 3/ });
-    await waitFor(() => expect(letter('B')).not.toBeDisabled());
-    await focus('alpha:B');
+  it('OK on a letter scrolls the grid to its first title, filters nothing, and keeps the focus on the rail', async () => {
+    const { calls, memory } = await longList();
+    await focus('alpha:S');
     await pressKey(KEY.enter);
-    await waitFor(() => expect(getCurrentFocusKey()).toBe(card('b1')));
-    expect(lastRead(calls).get('name_prefix')).toBe('B');
-    expect(screen.getByRole('button', { name: /Bridge/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Title 3/ })).toBeNull();
-    expect(letter('B')).toHaveAttribute('aria-pressed', 'true');
-    expect(memory.browseOf('movie', 'lib-1').letter).toBe('B');
-    // OK on the chosen letter shows every title again, and the focus is in the grid there.
-    await focus('alpha:B');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(getCurrentFocusKey()).toBe(card('Title1')));
-    expect(lastRead(calls).has('name_prefix')).toBe(false);
-    expect(letter('B')).toHaveAttribute('aria-pressed', 'false');
-  });
-
-  it('reads "#" as the titles that start with a digit', async () => {
-    const calls = serveLibrary(server, letters(['#', 'A']));
-    setup();
-    await firstRead(calls);
-    await screen.findByRole('button', { name: /Title 3/ });
-    await waitFor(() => expect(letter('#')).not.toBeDisabled());
-    await focus('alpha:#');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(calls.browse).toHaveLength(2));
-    const query = lastRead(calls);
-    expect(query.has('name_prefix')).toBe(false);
-    const groups = groupsOf(query)!;
-    expect(groups).toHaveLength(1);
-    expect(groups[0]!.rules.map((r) => `${r.op} ${String(r.value)}`)).toEqual(
-      Array.from({ length: 10 }, (_, d) => `begins_with ${d}`),
-    );
-  });
-
-  it('dims "#" when the server does not advertise extended rules, as its rules need them', async () => {
-    const calls = serveLibrary(server, { ...letters(['#', 'A']), extendedRules: false });
-    setup();
-    await firstRead(calls);
-    await waitFor(() => expect(calls.capabilities).toBeGreaterThan(0));
-    await screen.findByRole('button', { name: /Title 3/ });
-    await waitFor(() => expect(letter('#')).toBeDisabled());
-    expect(letter('A')).not.toBeDisabled();
-  });
-
-  it('keeps the sort and the filters when a letter is chosen, and the letter when they change', async () => {
-    const calls = serveLibrary(server, { letters: ['A', 'B'] });
-    const memory = new LibraryMemory();
-    memory.setBrowse('movie', 'lib-1', {
-      sort: 'rating',
-      descending: true,
-      filters: { decade: ['1990'] },
-      letter: null,
-    });
-    setup(memory);
-    await firstRead(calls);
-    await screen.findByRole('button', { name: /Title 3/ });
-    await waitFor(() => expect(letter('A')).not.toBeDisabled());
+    // Position 400 is "Title 401".
+    await posterShown('Title401');
+    expect(getCurrentFocusKey()).toBe('alpha:S');
+    expect(calls.browse.some((query) => query.has('name_prefix'))).toBe(false);
+    expect(calls.browse.some((query) => query.has('groups'))).toBe(false);
+    // The list stays complete: the grid is as long as the whole list.
+    expect(screen.getByTestId('grid-track').style.height).toBe(`${100 * GRID_ROW_PITCH}px`);
+    expect(memory.browseOf('movie', 'lib-1')).toEqual(DEFAULT_BROWSE);
+    // Another jump works from the same place.
     await focus('alpha:A');
     await pressKey(KEY.enter);
-    await waitFor(() => expect(calls.browse).toHaveLength(2));
-    let query = lastRead(calls);
-    expect(query.get('sort')).toBe('-rating');
-    expect(query.get('name_prefix')).toBe('A');
-    expect(groupsOf(query)).toEqual([
-      { match: 'any', rules: [{ field: 'decade', op: 'is', value: 1990 }] },
-    ]);
-    // A new sort keeps the letter.
-    await screen.findByRole('button', { name: /Title 3/ });
-    await focus('browse-sort');
-    await pressKey(KEY.enter);
-    await screen.findByTestId('sort-list');
-    await focus('lib-dialog-sort-year');
-    await pressKey(KEY.enter);
-    await waitFor(() => expect(calls.browse).toHaveLength(3));
-    query = lastRead(calls);
-    expect(query.get('sort')).toBe('-year');
-    expect(query.get('name_prefix')).toBe('A');
+    await posterShown('Title1');
+    expect(getCurrentFocusKey()).toBe('alpha:A');
   });
 
-  it('leaves every letter usable when the server cannot say which have titles', async () => {
-    const calls = serveLibrary(server, letters('fail'));
+  it('Left after a jump focuses the first title of the letter', async () => {
+    await longList();
+    await focus('alpha:S');
+    await pressKey(KEY.enter);
+    await posterShown('Title401');
+    await pressKey(KEY.left);
+    expect(getCurrentFocusKey()).toBe(card('Title401'));
+  });
+
+  it('marks the letter at the top of the grid, and follows it as the grid scrolls', async () => {
+    await longList();
+    expect(letter('A')).toHaveAttribute('aria-current', 'true');
+    await focus('alpha:S');
+    await pressKey(KEY.enter);
+    await posterShown('Title401');
+    await waitFor(() => expect(letter('S')).toHaveAttribute('aria-current', 'true'));
+    expect(letter('A')).not.toHaveAttribute('aria-current');
+    // One row up: its last title (position 395) is under B.
+    await pressKey(KEY.left);
+    await pressKey(KEY.up);
+    await waitFor(() => expect(letter('B')).toHaveAttribute('aria-current', 'true'));
+    expect(letter('S')).not.toHaveAttribute('aria-current');
+  });
+
+  it('jumps far down by position: the pages around the target are read, not the ones before it', async () => {
+    const { calls } = await longList();
+    calls.browse.length = 0;
+    await focus('alpha:S');
+    await pressKey(KEY.enter);
+    await posterShown('Title401');
+    await waitFor(() => expect(seeks(calls).length).toBeGreaterThan(0));
+    // Position 400 is on page 10; its neighbours are read by seek, and nothing before page 9.
+    expect(seeks(calls).every((seek) => seek >= 9 * 40 && seek <= 12 * 40)).toBe(true);
+    expect(seeks(calls)).toContain(400);
+    // Every seek read carries the window cursor of the first read, which pins the list.
+    const seekReads = calls.browse.filter((query) => query.has('seek'));
+    expect(seekReads.every((query) => query.get('cursor') === 'w')).toBe(true);
+    expect(calls.browse.length).toBeLessThanOrEqual(4);
+  });
+
+  it('jumps to the first run of a letter that the collation split in two', async () => {
+    const calls = serveLibrary(server, {
+      ...positioned(300),
+      letters: indexOf(
+        [
+          { letter: 'A', position: 0 },
+          { letter: 'C', position: 100 },
+          { letter: 'D', position: 200 },
+          { letter: 'C', position: 250 },
+        ],
+        300,
+      ),
+    });
     setup();
     await firstRead(calls);
-    await waitFor(() => expect(calls.letters).toHaveLength(1));
+    await waitFor(() => expect(letter('C')).not.toBeDisabled());
+    calls.browse.length = 0;
+    await focus('alpha:C');
+    await pressKey(KEY.enter);
+    await posterShown('Title101');
+    expect(seeks(calls)).toContain(80);
+    expect(seeks(calls).some((seek) => seek >= 200)).toBe(false);
+  });
+
+  it('shows skeleton cards for the titles that are not loaded yet', async () => {
+    serveLibrary(server, {
+      letters: LONG,
+      browse: async (query) => {
+        if (query.has('seek')) await new Promise((resolve) => setTimeout(resolve, 150));
+        return positioned(600).browse(query);
+      },
+    });
+    setup();
     await screen.findByRole('button', { name: /Title 3/ });
-    expect(letter('Q')).not.toBeDisabled();
-    expect(document.querySelectorAll('.alpha-letter.dim')).toHaveLength(0);
+    await waitFor(() => expect(letter('S')).not.toBeDisabled());
+    await focus('alpha:S');
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.queryAllByTestId('card-skeleton').length).toBeGreaterThan(0));
+    await posterShown('Title401');
+    expect(screen.queryAllByTestId('card-skeleton')).toHaveLength(0);
+  });
+
+  it('is restored with the next visit: the grid shows the same place, by position', async () => {
+    const memory = new LibraryMemory();
+    const { calls, unmount } = await longList(memory);
+    await focus('alpha:S');
+    await pressKey(KEY.enter);
+    await posterShown('Title401');
+    await pressKey(KEY.left);
+    unmount();
+    setup(memory);
+    await posterShown('Title401');
+    // The grid starts at the row of the card it had the focus on, with the whole list's length.
+    expect(screen.getByTestId('grid-track').style.transform).toBe(
+      `translateY(${-66 * GRID_ROW_PITCH}px)`,
+    );
+    expect(screen.getByTestId('grid-track').style.height).toBe(`${100 * GRID_ROW_PITCH}px`);
+    expect(calls.browse.some((query) => query.has('name_prefix'))).toBe(false);
   });
 });
 
