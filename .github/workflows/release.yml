@@ -61,7 +61,17 @@ jobs:
       - name: Install Chromium for the E2E tests
         run: |
           npx playwright install chromium --only-shell
-          npx playwright install-deps chromium
+          # install-deps runs apt, and the runner's Ubuntu mirror is sometimes unreachable for a
+          # while. Retry twice with a pause; the step fails only when the last attempt fails.
+          attempt=1
+          until npx playwright install-deps chromium; do
+            if [ "$attempt" -ge 3 ]; then
+              echo "install-deps failed $attempt times" >&2
+              exit 1
+            fi
+            sleep $((attempt * 30))
+            attempt=$((attempt + 1))
+          done
 
       - name: Check that the tag matches the versions
         run: node scripts/release-check.mjs "$TAG"
