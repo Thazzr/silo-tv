@@ -281,6 +281,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/catalog/filters/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Typeahead over one facet of a scope, with title counts. */
+        get: operations["searchCatalogFacet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/catalog/items/{id}": {
         parameters: {
             query?: never;
@@ -394,6 +411,23 @@ export interface paths {
         get: operations["getPerson"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/catalog/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Page the catalog by a JSON rule-group query; the body form of the browse. */
+        post: operations["queryCatalogItems"];
         delete?: never;
         options?: never;
         head?: never;
@@ -858,6 +892,23 @@ export interface paths {
         };
         /** Get what this server's settings API supports. */
         get: operations["getSettingsContractCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/settings/overlay-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the server-wide card overlay defaults. */
+        get: operations["getOverlayConfig"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1709,6 +1760,26 @@ export interface components {
             /** @example asc */
             order: string;
         };
+        CatalogFacetMatches: {
+            /** @description Whether more values than limit start with q */
+            has_more: boolean;
+            /** @description Values that start with q, case-insensitively, A-Z; empty for an empty q. Empty, never null */
+            matches: string[];
+            /** @description The ranked answer, each value with its title count. For genre, studio, network, country, original_language and content_rating a value matches when it or any word in it starts with q; whole-value matches rank first, then more titles, then A-Z, and an empty q returns the most common values. For author, narrator and series these are the names in matches. Empty, never null */
+            values: components["schemas"]["CatalogFacetValue"][];
+            /** @description Whether more values matched than limit for values */
+            values_has_more: boolean;
+        };
+        CatalogFacetValue: {
+            /**
+             * Format: int64
+             * @description Titles in the scope with this value; values can lag catalog changes by up to two minutes
+             * @example 42
+             */
+            count: number;
+            /** @example Warner Bros. Pictures */
+            value: string;
+        };
         CatalogFilters: {
             /** @description First 1000 alphabetically; searchCatalogFacet pages the rest */
             authors: string[];
@@ -2366,6 +2437,57 @@ export interface components {
              * @description Media scope, as the listCatalogItems type parameter
              * @example movie
              */
+            type?: string;
+        };
+        CatalogQuery: {
+            collection_id?: string;
+            cursor?: string;
+            /** @enum {string} */
+            group?: "work";
+            /** @description Rule groups; empty matches everything */
+            groups?: components["schemas"]["CatalogQueryGroup"][];
+            /**
+             * @description Restrict to one library
+             * @example 1
+             */
+            library_id?: string;
+            /**
+             * Format: int64
+             * @description Page size; default 50, maximum 100
+             * @example 50
+             */
+            limit?: number;
+            /**
+             * @description How the groups combine; default all
+             * @enum {string}
+             */
+            match?: "all" | "any";
+            /** @description Alphabetical jump: only titles whose sort title (or title, when none is set) starts here */
+            name_prefix?: string;
+            /** @enum {string} */
+            order?: "asc" | "desc";
+            /**
+             * @description Opaque identifier
+             * @example 1
+             */
+            person_id?: string;
+            q?: string;
+            /** Format: int64 */
+            query_limit?: number;
+            /** @enum {string} */
+            scope?: "home" | "library";
+            section_id?: string;
+            /** Format: int64 */
+            seek?: number;
+            skip_total?: boolean;
+            /**
+             * @description Sort field; default added date, newest first
+             * @example title
+             */
+            sort?: string;
+            /** @enum {string} */
+            source?: "query" | "section" | "library_collection" | "user_collection" | "favorites" | "watchlist" | "history" | "person";
+            /** @description Media scope, as the listCatalogItems type parameter */
             type?: string;
         };
         CatalogQueryGroup: {
@@ -3163,7 +3285,7 @@ export interface components {
              */
             section_item_limit_max?: number;
             /**
-             * @description Sections, profile section settings, admin section definitions and recommendation rows carry title_key, with title_args when its message has placeholders, for titles the server writes, so a client can translate them (a few, such as a seasonal row's in-season title, have none; a client shows title whenever the key is absent or unknown), and profile section settings carry default_title_key and default_title_args the same way for default_title. Informational: clients act on title_key whenever it is present. Absent when the home sections service is not configured, and on a server that predates the fields
+             * @description Sections, profile section settings, admin section definitions and recommendation rows carry title_key, with title_args when its message has placeholders, for titles the server writes, so a client can translate them (a few, such as an editorial row's subject title, have none; a client shows title whenever the key is absent or unknown), and profile section settings carry default_title_key and default_title_args the same way for default_title. Request Discover rows carry title_key the same way, and the section recipe gallery's presets carry display_name_key, description_short_key and description_long_key for their text; those came later, so a server that reports this flag may not send them. Informational: clients act on each key whenever it is present. Absent when the home sections service is not configured, and on a server that predates section title keys
              * @example true
              */
             section_title_keys?: boolean;
@@ -3466,6 +3588,65 @@ export interface components {
             display_id?: string;
             hdr_evidence: string;
             hdr_types?: components["schemas"]["HDRCapabilitiesV3"];
+        };
+        OverlayConfig: {
+            /**
+             * @description Administrator-chosen overlay defaults document; absent when none is set
+             * @example {"badges":true}
+             */
+            defaults?: string;
+            /**
+             * @description Whether card overlays are enabled server-wide
+             * @example true
+             */
+            enabled: boolean;
+            /**
+             * @description Whether this server has the asset storage uploadAdminOverlayImage needs
+             * @example true
+             */
+            image_uploads_available: boolean;
+            /** @description Images administrators uploaded for badges, in upload order; card overlay documents name them by ref */
+            images: components["schemas"]["OverlayImage"][];
+            /**
+             * @description Default quick-action mode; one of the ui.card_quick_actions values in the settings contract
+             * @example both
+             */
+            quick_actions_default: string;
+            /**
+             * @description Default for profiles that have not chosen whether cards show quick actions
+             * @example false
+             */
+            quick_actions_enabled: boolean;
+        };
+        OverlayImage: {
+            /**
+             * Format: int64
+             * @description Stored height in pixels
+             * @example 120
+             */
+            height: number;
+            /**
+             * @description Administrator's label for the image
+             * @example 4K Dolby Vision
+             */
+            name: string;
+            /**
+             * @description Content reference card overlay documents use; it changes exactly when the stored bytes change
+             * @example 9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp
+             */
+            ref: string;
+            /**
+             * Format: uri-reference
+             * @description Public, immutable path of the image bytes
+             * @example /api/v2/overlay-images/9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7.webp
+             */
+            url: string;
+            /**
+             * Format: int64
+             * @description Stored width in pixels
+             * @example 300
+             */
+            width: number;
         };
         PageInfo: {
             /**
@@ -4300,7 +4481,7 @@ export interface components {
                 [key: string]: string;
             };
             /**
-             * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section or recommendation row name. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
+             * @description Key of the shared translation catalog message whose English is title, present only while title is the server's own text: a built-in or generated section, recommendation row or request Discover row name, or a seasonal row's built-in in-season title. A client that has the key shows its translation, filling title_args, and otherwise shows title. Absent when an administrator or the profile typed the title, except that upgrading keyed existing titles identical to a built-in name, and a profile title equal to the administrator's keeps the key. A client acts on title_key whenever it is present
              * @example home.section.recentlyAddedIn
              */
             title_key?: string;
@@ -7678,6 +7859,129 @@ export interface operations {
             };
         };
     };
+    searchCatalogFacet: {
+        parameters: {
+            query: {
+                /** @description What scope to list facets for; default query */
+                source?: "query" | "section" | "library_collection" | "user_collection" | "favorites" | "watchlist" | "history" | "person";
+                scope?: "home" | "library";
+                section_id?: string;
+                /** @description Opaque identifier */
+                library_id?: string;
+                /** @description Restrict to several libraries, one library_ids parameter per id; combines with library_id. Libraries the viewer cannot see are dropped, and a scope left with none is empty. Not accepted with source=section */
+                library_ids?: string[];
+                collection_id?: string;
+                /** @description Opaque identifier */
+                person_id?: string;
+                /** @description Media scope, as on listCatalogItems; video_with_episodes lists the facets of video */
+                type?: string;
+                /** @description true omits the file-derived facets (resolutions, audio and subtitle languages) */
+                skip_technical?: boolean;
+                /** @description The facet to search */
+                facet: "genre" | "studio" | "network" | "country" | "original_language" | "content_rating" | "author" | "narrator" | "series";
+                /** @description Case-insensitive search text; see matches and values for how each answers it */
+                q?: string;
+                /** @description Most values to return in matches and in values; default 20, maximum 100 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogFacetMatches"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCatalogItem: {
         parameters: {
             query?: {
@@ -8539,6 +8843,160 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    queryCatalogItems: {
+        parameters: {
+            query?: {
+                /** @description Artwork size for every image in the response; absent picks each surface's default */
+                image_size?: "small" | "medium" | "large" | "original";
+                /** @description Width in device pixels the client draws poster_url at. Overrides image_size for posters: the narrowest cached size at least this wide, else the original */
+                poster_width?: number;
+                /** @description Width in device pixels the client draws backdrop_url and backdrop_urls at. Overrides image_size for backdrops */
+                backdrop_width?: number;
+                /** @description Width in device pixels the client draws logo_url at. Overrides image_size for logos */
+                logo_width?: number;
+                /** @description Width in device pixels the client draws an episode's or a local extra's still_url at. Overrides image_size for those stills */
+                still_width?: number;
+                /** @description Width in device pixels the client draws a cast or crew photo_url at. Overrides image_size for headshots */
+                photo_width?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogQuery"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogBrowseCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Timeout */
+            408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unsupported Media Type */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Implemented */
+            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12426,6 +12884,108 @@ export interface operations {
                 headers: {
                     /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
                     ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getOverlayConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlayConfig"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
