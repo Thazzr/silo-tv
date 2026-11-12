@@ -627,5 +627,13 @@
   "search.hint.textPeople": "Find movies, series and people",
   "search.empty.title": "No results",
   "search.empty.text": "Try a different search term",
-  "search.error": "The search failed."
+  "search.error": "The search failed.",
+  "card.episodesLeft": "{count} episodes left",
+  "card.episodeLeftOne": "1 episode left",
+  "card.badge.multiAudio": "Multi-Audio",
+  "card.badge.rtAudience": "RT Audience",
+  "card.status.returning": "Returning",
+  "card.status.ended": "Ended",
+  "card.status.cancelled": "Cancelled",
+  "card.status.upcoming": "Upcoming"
 }

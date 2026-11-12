@@ -102,6 +102,39 @@ describe('ui.time_format', () => {
   });
 });
 
+describe('the card overlay settings', () => {
+  const document = { version: 2, items: { year: { enabled: true } } };
+
+  it('are asked for from their revisions on (the document 1, the switch 8) and default to no preference', () => {
+    expect(keysKnownAt(0)).not.toContain('ui.card_overlays');
+    expect(keysKnownAt(1)).toContain('ui.card_overlays');
+    expect(keysKnownAt(7)).not.toContain('ui.card_overlays_enabled');
+    expect(keysKnownAt(8)).toContain('ui.card_overlays_enabled');
+    for (const key of ['ui.card_overlays', 'ui.card_overlays_enabled'] as const) {
+      expect(PROFILE_SETTINGS[key].default).toBeNull();
+    }
+  });
+
+  it('reads the stored document and the switch, and null for anything unusable', () => {
+    const values = settingValuesFrom([
+      { key: 'ui.card_overlays', value: document },
+      { key: 'ui.card_overlays_enabled', value: false },
+    ]);
+    expect(values['ui.card_overlays']!.items.year).toEqual({
+      enabled: true,
+      position: 'bottom-left',
+    });
+    expect(values['ui.card_overlays_enabled']).toBe(false);
+
+    const unusable = settingValuesFrom([
+      { key: 'ui.card_overlays', value: 'garbage' },
+      { key: 'ui.card_overlays_enabled', value: 'yes' },
+    ]);
+    expect(unusable['ui.card_overlays']).toBeNull();
+    expect(unusable['ui.card_overlays_enabled']).toBeNull();
+  });
+});
+
 describe('keysKnownAt', () => {
   it('lists only the keys a manifest revision knows', () => {
     expect(keysKnownAt(0)).toEqual(['playback.auto_skip_intro']);
@@ -112,7 +145,7 @@ describe('keysKnownAt', () => {
     expect(keysKnownAt(16)).toContain('ui.title_art');
     expect(keysKnownAt(16)).not.toContain('catalog.hide_unwatched_episode_images');
     expect(keysKnownAt(17)).toContain('catalog.hide_unwatched_episode_images');
-    expect(keysKnownAt(40)).toHaveLength(22);
+    expect(keysKnownAt(40)).toHaveLength(24);
   });
 
   it('gates the player keys by their revisions and swaps the intro key at revision 7', () => {
@@ -347,10 +380,10 @@ describe('useProfileSetting', () => {
     expect(request.headers.get('X-Profile-Id')).toBe('p1');
     const url = new URL(request.url);
     expect(url.searchParams.getAll('keys')).toEqual(keysKnownAt(40));
-    expect(url.searchParams.getAll('keys')).toHaveLength(22);
+    expect(url.searchParams.getAll('keys')).toHaveLength(24);
     // Repeated, never comma-separated.
     expect(url.search).not.toMatch(/,|%2C/i);
-    expect(url.search.match(/keys=/g)).toHaveLength(22);
+    expect(url.search.match(/keys=/g)).toHaveLength(24);
   });
 
   it('is not known while the read is in flight, and reports the default meanwhile', async () => {

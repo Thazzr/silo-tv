@@ -2,6 +2,7 @@ import { memo, type KeyboardEventHandler, type ReactNode } from 'react';
 import { Focusable } from '../../app/nav';
 import { useT } from '../../i18n';
 import { Artwork } from './Artwork';
+import { CardBadges, ItemWatchStatus } from './CardBadges';
 import {
   boxSetCaption,
   cardSubtitle,
@@ -130,6 +131,8 @@ export const PosterCard = memo(function PosterCard({
             protect={protectsCardArt(item, 'poster', spoilers)}
           />
           {badge ? <CardPill place="start" text={badge} /> : null}
+          <CardBadges item={item} without={badge ? 'top-left' : undefined} />
+          <ItemWatchStatus item={item} />
         </>
       }
       caption={<Caption item={item} subtitle={subtitle} />}
@@ -231,6 +234,8 @@ export const LandscapeCard = memo(function LandscapeCard({
             title={cardTitle(item)}
             protect={protectsCardArt(item, 'landscape', spoilers)}
           />
+          <CardBadges item={item} raised={fraction !== null} />
+          <ItemWatchStatus item={item} />
           {fraction !== null ? (
             <span className="card-progress" aria-hidden="true">
               <span

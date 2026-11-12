@@ -1029,7 +1029,7 @@ describe('DetailScreen: a series', () => {
         seasonOf(2, {
           episode_count: 8,
           title: 'The Rising',
-          user_data: rollup({ watched_count: 2 }),
+          user_data: rollup({ watched_count: 2, unplayed_count: 6 }),
         }),
         seasonOf(3, { episode_count: 4 }),
       ],
@@ -1046,9 +1046,14 @@ describe('DetailScreen: a series', () => {
     const first = within(card(/Season 1/));
     const second = within(card(/The Rising/));
     const third = within(card(/Season 3/));
-    expect(first.getByTestId('season-watched')).toBeInTheDocument();
-    expect(second.queryByTestId('season-watched')).toBeNull();
-    expect(third.queryByTestId('season-watched')).toBeNull();
+    expect(first.getByTestId('watch-status-done')).toBeInTheDocument();
+    expect(first.queryByTestId('watch-status-left')).toBeNull();
+    expect(second.queryByTestId('watch-status-done')).toBeNull();
+    // A started season shows how many episodes it has left; an untouched one shows nothing.
+    expect(second.getByTestId('watch-status-left')).toHaveTextContent('6');
+    expect(second.getByRole('img', { name: '6 episodes left' })).toBeInTheDocument();
+    expect(third.queryByTestId('watch-status-done')).toBeNull();
+    expect(third.queryByTestId('watch-status-left')).toBeNull();
     expect(first.getByTestId('season-progress')).toHaveAttribute(
       'style',
       expect.stringContaining('width: 100%'),

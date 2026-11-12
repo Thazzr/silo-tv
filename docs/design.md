@@ -21,7 +21,7 @@ All sizes are CSS pixels on the 1920×1080 layout (the TV renders it at device p
 | `--accent` | none by default; the server's branding accent when it keeps 4.5:1 contrast on `--bg` | small highlights only, never the only focus cue |
 | `--error` / `--warning` / `--danger` | `#FF6961` / `#F4C869` / `#FF453A` | messages, sign out |
 | `--progress` | fill `#FFFFFF` (or the server accent when it passes the contrast rule) on a track of `rgba(0, 0, 0, 0.6)` with a 1 px `rgba(255, 255, 255, 0.35)` outline, 6 px high, radius 3 px, inset 10 px from the left, right and bottom edge of the artwork | progress on cards and in the player – it must stay visible on bright artwork (TV test 2026-11-09: a 4 px light bar on the edge of bright posters was almost invisible) |
-| `--radius-card` | 12 px | cards; 18 px for episode stills |
+| `--radius-card` | 16 px | every card and still, as in Silo's web app (`rounded-xl`) |
 | `--font` | Inter (OFL), bundled: Regular 400, Medium 500, SemiBold 600, Bold 700 | everything; tabular digits for timecodes |
 
 ## Layout

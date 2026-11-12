@@ -627,5 +627,13 @@
   "search.hint.textPeople": "Finde Filme, Serien und Personen",
   "search.empty.title": "Keine Treffer",
   "search.empty.text": "Versuch es mit einem anderen Suchbegriff",
-  "search.error": "Die Suche ist fehlgeschlagen."
+  "search.error": "Die Suche ist fehlgeschlagen.",
+  "card.episodesLeft": "{count} Folgen übrig",
+  "card.episodeLeftOne": "1 Folge übrig",
+  "card.badge.multiAudio": "Multi-Audio",
+  "card.badge.rtAudience": "RT-Publikum",
+  "card.status.returning": "Wird fortgesetzt",
+  "card.status.ended": "Beendet",
+  "card.status.cancelled": "Abgesetzt",
+  "card.status.upcoming": "Demnächst"
 }

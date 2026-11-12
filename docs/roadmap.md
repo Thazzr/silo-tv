@@ -56,7 +56,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - 🟨 the episode page: the still as the backdrop, "Series › Season 1 › Episode 3", runtime and air date with the quality badges, "Play Episode", and "More Episodes" with the current one marked (a sibling's page starts on its card in that row)
   - 🟨 cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
   - 🟨 the sections in the web app's order per page type, with local extras (one row per kind) and "Trailers & More" (YouTube) as two sections; Down and Up walk them block by block
-  - quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`)
+  - 🟨 quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`, `ui.card_overlays_enabled`) or the server's defaults, at most three per corner, with the web's icons where its style shows them; the watch status in the top right (a check, or the episodes left); the web's 16 px card radius
   - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5
 - 🟨 Similar titles
 - ✅ Person page from the cast: portrait, dates, biography and filmography, filtered by All, Movies or Series (TV 2026-11-09)
@@ -231,6 +231,7 @@ The app follows the web app wherever a TV allows it (user decision 2026-11-11). 
 - **Translation of episode overviews** starts from the translate pill in the action row, not from a chip in the grid's heading.
 - **Sizes:** text is at least 20 px and targets at least 75 px at 1080p, so captions, badges and chips are larger than the web's, and section headings keep the app's TV type scale.
 - **No blur or filters:** glass surfaces are opaque; spoiler protection blurs with a ThumbHash picture instead of a CSS filter.
+- **Card badges in one look:** the profile's badge style (classic, pill, plate, …) only decides whether a badge shows its icon; every badge is drawn in one style with 20 px text. Brand wordmarks (Dolby Vision, Dolby Atmos, HDR10, AV1) stay text, because the app's icons come from Lucide only.
 - **Playback speed** is left out (see Phase 3): the TV's video element cannot play at another speed cleanly.
 
 ## Deliberately not planned

@@ -13,6 +13,7 @@ export {
   PosterCard,
 } from './Cards';
 export type { CardProps, FrameProps } from './Cards';
+export { WatchStatus } from './CardBadges';
 export {
   boxSetCaption,
   cardSubtitle,

@@ -117,6 +117,13 @@ interface FakeOptions {
    * their body), and every file has one downloaded subtitle.
    */
   pills?: boolean;
+  /**
+   * The server speaks the settings contract (nothing stored for the card overlays, the server-wide
+   * defaults apply) and its titles carry what the badges show: "First Title" (m1) is a watched
+   * 1080p Dolby Vision BluRay with EAC3 audio, "A Show" (s1) is a started series with three
+   * episodes left, and every movie of the Browse view has a resolution.
+   */
+  badges?: boolean;
 }
 
 interface FakeProfile {
@@ -202,11 +209,12 @@ function browseTitles(params: URLSearchParams): FakeTitle[] {
     );
 }
 
-const asCard = (movie: FakeTitle) => ({
+const asCard = (movie: FakeTitle, badges = false) => ({
   content_id: movie.id,
   title: movie.title,
   type: 'movie',
   year: movie.year,
+  ...(badges ? { overlay_summary: { resolution: '2160p' } } : {}),
 });
 
 async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: string; seen: Seen[] }> {
@@ -282,7 +290,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
     options.spoilers === undefined &&
     options.themeMusic === undefined &&
     options.subtitles === undefined &&
-    options.buffering === undefined;
+    options.buffering === undefined &&
+    options.badges === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -855,11 +864,24 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                       ? (options.themeMusic ?? false)
                       : key === 'playback.buffering_quality_mode'
                         ? (options.buffering ?? 'always')
-                        : false,
+                        : key.startsWith('ui.card_overlays')
+                          ? null
+                          : false,
               source: 'profile',
               definition_revision: 1,
             })),
             revision: 40,
+          });
+        case 'GET /api/v2/settings/overlay-config':
+          if (settingsUnknown) return send(404, { title: 'not found', status: 404 });
+          return send(200, {
+            enabled: true,
+            // The pill preset prefers glyphs, and no item says otherwise.
+            defaults: JSON.stringify({ version: 2, preset: 'pill', order: [], items: {} }),
+            image_uploads_available: false,
+            images: [],
+            quick_actions_default: 'both',
+            quick_actions_enabled: false,
           });
         case 'PUT /api/v2/settings/values/playback.subtitle_appearance':
           return send(200, {
@@ -1045,6 +1067,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                     duration_seconds: 5400,
                     item_source: 'in_progress',
                     overview: 'The second title, half way through.',
+                    ...(options.badges ? { overlay_summary: { resolution: '2160p' } } : {}),
                   },
                   ...(withRewatch
                     ? [
@@ -1081,9 +1104,49 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 title: 'Neu hinzugefügt',
                 items: [
                   ...(withSeries
-                    ? [{ content_id: 's1', title: 'A Show', type: 'series', year: 2020 }]
+                    ? [
+                        {
+                          content_id: 's1',
+                          title: 'A Show',
+                          type: 'series',
+                          year: 2020,
+                          ...(options.badges
+                            ? {
+                                user_state: {
+                                  in_watchlist: false,
+                                  is_favorite: false,
+                                  not_interested: false,
+                                  played: false,
+                                  watched_count: 1,
+                                  unplayed_count: 3,
+                                },
+                              }
+                            : {}),
+                        },
+                      ]
                     : []),
-                  { content_id: 'm1', title: 'First Title', type: 'movie', year: 2019 },
+                  {
+                    content_id: 'm1',
+                    title: 'First Title',
+                    type: 'movie',
+                    year: 2019,
+                    ...(options.badges
+                      ? {
+                          overlay_summary: {
+                            resolution: '1080p',
+                            hdr: 'DV',
+                            audio: 'EAC3',
+                            release_type: 'BluRay',
+                          },
+                          user_state: {
+                            in_watchlist: false,
+                            is_favorite: false,
+                            not_interested: false,
+                            played: true,
+                          },
+                        }
+                      : {}),
+                  },
                   { content_id: 'm3', title: 'Third Title', type: 'movie', year: 2020 },
                 ],
                 total_count: 40,
@@ -1095,7 +1158,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           if (url.searchParams.has('q')) {
             const text = (url.searchParams.get('q') ?? '').toLowerCase();
             const found = [
-              ...MOVIES.map(asCard),
+              ...MOVIES.map((movie) => asCard(movie)),
               ...sagaFilms.map((film) => ({
                 content_id: film.content_id,
                 title: film.title,
@@ -1157,7 +1220,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               (url.searchParams.get('groups') ?? '').includes('"watched"')
             )
               return send(422, { type: 'about:blank', title: 'Unprocessable', status: 422 });
-            const items = browseTitles(url.searchParams).map(asCard);
+            const items = browseTitles(url.searchParams).map((movie) =>
+              asCard(movie, options.badges),
+            );
             return send(200, {
               items,
               total: items.length,
@@ -1187,7 +1252,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 is_custom: false,
                 customized: false,
                 total_count: 2,
-                items: MOVIES.slice(0, 2).map(asCard),
+                items: MOVIES.slice(0, 2).map((movie) => asCard(movie)),
               },
             ],
           });
@@ -4554,4 +4619,96 @@ test('detail page: in the tallest hero the page scrolls the pills row into the s
   await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
   await expect.poll(bottom).toBeGreaterThan(1026);
+});
+
+test('cards: a Home row card shows the profile badges top left and the watch state top right, 16 px round, 20 px text', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ badges: true, series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const first = page.getByRole('button', { name: /First Title/ }).first();
+  await expect(first).toBeVisible({ timeout: 10_000 });
+
+  // The default badges of the server: resolution, range and audio top left, the release bottom left.
+  const badges = first.locator('.badge-stack-top-left .badge');
+  await expect(badges).toHaveText([/1080p/i, 'DV', 'EAC3']);
+  // The pill preset draws a monitor before the resolution and a speaker before the audio codec,
+  // none before the Dolby Vision wordmark.
+  await expect(badges.nth(0).locator('svg')).toHaveCount(1);
+  await expect(badges.nth(1).locator('svg')).toHaveCount(0);
+  await expect(badges.nth(2).locator('svg')).toHaveCount(1);
+  await expect(first.locator('.badge-stack-bottom-left .badge')).toHaveText('BluRay');
+  // They read as upper case, in at least 20 px.
+  const look = await badges.first().evaluate((el) => {
+    const style = el.ownerDocument.defaultView!.getComputedStyle(el);
+    return { size: parseFloat(style.fontSize), transform: style.textTransform };
+  });
+  expect(look.size).toBeGreaterThanOrEqual(20);
+  expect(look.transform).toBe('uppercase');
+
+  // A watched title has the green check in the top-right corner, the badges are on the left.
+  const art = (await first.locator('.card-art').boundingBox())!;
+  const check = (await first.getByTestId('watch-status-done').boundingBox())!;
+  expect(check.x + check.width).toBeGreaterThan(art.x + art.width - 16);
+  expect(check.y).toBeLessThan(art.y + 16);
+  expect(check.width).toBeGreaterThanOrEqual(40);
+  const badge = (await badges.first().boundingBox())!;
+  expect(badge.x).toBeLessThan(art.x + 16);
+  expect(badge.x + badge.width).toBeLessThan(check.x);
+
+  // The art's corners are 16 px round.
+  await expect(first.locator('.card-art')).toHaveCSS('border-radius', '16px');
+  await expect(first.locator('.art')).toHaveCSS('border-radius', '16px');
+
+  // A started series shows how many episodes it has left, and has no file data for badges.
+  const show = page.getByRole('button', { name: /A Show/ }).first();
+  await expect(show.getByTestId('watch-status-left')).toHaveText('3');
+  await expect(show.locator('.card-badges')).toHaveCount(0);
+});
+
+test('cards: the library grid draws badges on its posters', async ({ page }) => {
+  const { origin } = await startFakeSilo({ badges: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('tab', { name: 'Empfohlen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByTestId('card-title')).toHaveCount(6);
+  const grid = page.getByTestId('browse').locator('.card-grid');
+  await expect(grid.first().locator('.badge-stack-top-left .badge')).toHaveText('4K');
+  await expect(grid.first().locator('.card-art')).toHaveCSS('border-radius', '16px');
+});
+
+test('cards: the seasons of a started series show the check and the episodes left', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, posters: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  const first = page.getByRole('button', { name: /Staffel 1/ });
+  const second = page.getByRole('button', { name: /Staffel 2/ });
+  await expect(first.getByTestId('watch-status-done')).toBeVisible();
+  await expect(second.getByTestId('watch-status-left')).toHaveText('1');
+  await expect(second.getByTestId('watch-status-done')).toHaveCount(0);
+  await expect(first.locator('.card-art')).toHaveCSS('border-radius', '16px');
 });

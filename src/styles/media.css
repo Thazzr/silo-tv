@@ -200,6 +200,138 @@
   bottom: 10px;
 }
 
+/* The profile's overlay badges (CardBadges): stacks in three corners and rails on the two edges,
+   all in one look, 20 px text (LG checklist). The top right belongs to .watch-status, so there is
+   no stack for it. Nothing here takes focus or the pointer. */
+.card-badges {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.badge-stack {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.badge-stack-top-left {
+  top: 8px;
+  left: 8px;
+  align-items: flex-start;
+  /* Leaves the corner of the watch status free. */
+  max-width: calc(100% - 64px);
+}
+
+.badge-stack-bottom-left,
+.badge-stack-bottom-right {
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+}
+
+/* Both bottom corners in use: each gets half of the width, a long badge is cut with an ellipsis. */
+.card-badges-split .badge-stack-bottom-left,
+.card-badges-split .badge-stack-bottom-right {
+  max-width: calc(50% - 12px);
+}
+
+.badge-stack-bottom-left {
+  left: 8px;
+  align-items: flex-start;
+}
+
+.badge-stack-bottom-right {
+  right: 8px;
+  align-items: flex-end;
+}
+
+.badge-stack-left-edge,
+.badge-stack-right-edge {
+  top: 50%;
+  gap: 8px;
+  max-width: calc(100% - 16px);
+  transform: translateY(-50%);
+}
+
+.badge-stack-left-edge {
+  left: 8px;
+  align-items: flex-start;
+}
+
+.badge-stack-right-edge {
+  right: 8px;
+  align-items: flex-end;
+}
+
+/* A card with a progress bar (10 px from the foot, 8 px high): the bottom stacks sit above it. */
+.card-badges-raised .badge-stack-bottom-left,
+.card-badges-raised .badge-stack-bottom-right {
+  bottom: 26px;
+}
+
+.badge {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 10px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  line-height: 26px;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  background-color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+
+.badge-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge-glyph {
+  flex: none;
+}
+
+/* The watch state in the top right of a poster or wide card: 40 px so the digits reach 20 px. */
+.watch-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  color: #ffffff;
+  pointer-events: none;
+  border-radius: 20px;
+}
+
+.watch-status-done {
+  background: #10b981;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.watch-status-left {
+  padding: 0 8px;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 1;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-variant-numeric: tabular-nums;
+}
+
 .card-caption {
   display: block;
   height: 57px;

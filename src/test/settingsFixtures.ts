@@ -11,6 +11,8 @@ type S = components['schemas'];
 const SERVER_DEFAULTS: Record<string, unknown> = {
   'ui.title_art': true,
   'ui.time_format': 'auto',
+  'ui.card_overlays': null,
+  'ui.card_overlays_enabled': null,
   'catalog.hide_unwatched_episode_images': false,
   'catalog.hide_unwatched_episode_overviews': false,
   'ui.theme_music_enabled': false,
@@ -58,16 +60,23 @@ export interface SettingsServe {
   effective?: 'fail';
   /** The reads wait for this before answering, to look at the state while they are in flight. */
   gate?: Promise<void>;
+  /** Only the overlay defaults wait for this (the profile's settings answer at once). */
+  overlayGate?: Promise<void>;
+  /** The server-wide card overlay defaults, or `fail` for a 500. */
+  overlayConfig?: Partial<S['OverlayConfig']> | 'fail';
 }
 
 export interface SettingsCalls {
   capabilities: Request[];
   effective: Request[];
+  overlayConfig: Request[];
 }
 
 const INTRODUCED_IN: Record<string, number> = {
   'ui.title_art': 16,
   'ui.time_format': 1,
+  'ui.card_overlays': 1,
+  'ui.card_overlays_enabled': 8,
   'catalog.hide_unwatched_episode_images': 17,
   'catalog.hide_unwatched_episode_overviews': 17,
   'ui.theme_music_enabled': 11,
@@ -93,7 +102,7 @@ const INTRODUCED_IN: Record<string, number> = {
 
 /** Registers the two settings reads; the returned object records the requests. */
 export function serveSettings(server: SetupServer, options: SettingsServe = {}): SettingsCalls {
-  const calls: SettingsCalls = { capabilities: [], effective: [] };
+  const calls: SettingsCalls = { capabilities: [], effective: [], overlayConfig: [] };
   const revision = options.manifestRevision ?? 40;
   const introduced = options.introducedIn ?? INTRODUCED_IN;
   server.use(
@@ -117,6 +126,21 @@ export function serveSettings(server: SetupServer, options: SettingsServe = {}):
         supports_idempotent_writes: true,
         supports_overlay_images: false,
         ...options.capabilities,
+      };
+      return HttpResponse.json(document);
+    }),
+    http.get(`${BASE_URL}/api/v2/settings/overlay-config`, async ({ request }) => {
+      calls.overlayConfig.push(request.clone());
+      await options.gate;
+      await options.overlayGate;
+      if (options.overlayConfig === 'fail') return new HttpResponse(null, { status: 500 });
+      const document: S['OverlayConfig'] = {
+        enabled: true,
+        image_uploads_available: false,
+        images: [],
+        quick_actions_default: 'both',
+        quick_actions_enabled: false,
+        ...options.overlayConfig,
       };
       return HttpResponse.json(document);
     }),

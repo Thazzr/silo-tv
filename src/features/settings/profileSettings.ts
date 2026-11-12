@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toApiError } from '../../api/client';
 import { getPlatform } from '../../platform';
 import { useSilo } from '../../app/SiloContext';
+import { parseBadgePrefs, type BadgePrefs } from '../../ui/media/badges';
 
 /** One registry entry: its type lives in `parse`, which returns undefined for an unusable value. */
 interface SettingDef<T> {
@@ -40,6 +41,23 @@ const optionalInteger = (
   default: null,
   parse: (raw) =>
     typeof raw === 'number' && Number.isInteger(raw) && raw >= min && raw <= max ? raw : null,
+});
+
+/** A boolean the profile may not have chosen: null (inherit the server's) when unset. */
+const optionalBool = (introducedIn: number): SettingDef<boolean | null> => ({
+  introducedIn,
+  default: null,
+  parse: (raw) => (typeof raw === 'boolean' ? raw : null),
+});
+
+/**
+ * The card overlay document: null when the profile has none (the server's default applies), else
+ * the parsed badges. A value that is not a document counts as none.
+ */
+const badgeDocument = (introducedIn: number): SettingDef<BadgePrefs | null> => ({
+  introducedIn,
+  default: null,
+  parse: (raw) => parseBadgePrefs(raw),
 });
 
 /** A closed set of strings or numbers, as the contract's `enum` value schema. */
@@ -152,6 +170,10 @@ const QUALITIES = ['auto', '480p', '720p', '1080p', '2160p', 'original'] as cons
 export const PROFILE_SETTINGS = {
   'ui.title_art': bool(16, true),
   'ui.time_format': oneOf(1, ['auto', '12h', '24h'] as const, 'auto'),
+  // The badges on cards, read only. Null = the profile has no preference (the server's default
+  // applies); the switch came with manifest revision 8.
+  'ui.card_overlays': badgeDocument(1),
+  'ui.card_overlays_enabled': optionalBool(8),
   'catalog.hide_unwatched_episode_images': bool(17, false),
   'catalog.hide_unwatched_episode_overviews': bool(17, false),
   'ui.theme_music_enabled': bool(11, false),

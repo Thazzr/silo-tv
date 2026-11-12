@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { Check } from 'lucide-react';
 import { FocusGroup, focusFromPointer } from '../../app/nav';
 import { useT } from '../../i18n';
 import {
@@ -10,6 +9,7 @@ import {
   mountedIndices,
   nextScrollIndex,
   useMediaUrl,
+  WatchStatus,
 } from '../../ui/media';
 import { seasonCountText, seasonLabel, seasonProgress, type Season } from './info';
 import { DETAIL_INSET, SEASON_STEP, SEASON_STRIP_HEIGHT, seasonsVisible } from './layout';
@@ -51,15 +51,12 @@ function SeasonCard({
       art={
         <>
           <Artwork src={url(season.poster_url)} thumbhash={season.poster_thumbhash} title={label} />
-          {season.user_data?.played ? (
-            <span
-              className="season-check"
-              data-testid="season-watched"
-              role="img"
-              aria-label={t('detail.watched')}
-            >
-              <Check size={22} strokeWidth={3} aria-hidden="true" />
-            </span>
+          {season.user_data ? (
+            <WatchStatus
+              played={season.user_data.played}
+              watchedCount={season.user_data.watched_count}
+              unplayedCount={season.user_data.unplayed_count}
+            />
           ) : null}
           {progress !== null ? (
             <span className="card-progress" aria-hidden="true">
