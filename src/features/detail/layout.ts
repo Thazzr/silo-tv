@@ -14,11 +14,12 @@ import type { DetailKind } from './info';
 export const DETAIL_INSET = 100;
 /** The least height of the hero; it grows with its text column (logo, synopsis, credits, actions). */
 export const HERO_HEIGHT = 760;
-/** The hero's text column (title, facts, synopsis, credits), from the inset to 1000 px. */
-export const DETAIL_TEXT_WIDTH = 900;
+/** The widest text of the hero's lower part (synopsis, credits), from the inset to 1400 px. */
+export const DETAIL_BODY_TEXT_WIDTH = 1300;
 /**
- * The least opacity of black over the backdrop under the text column; src/styles/detail.css draws
- * at least this (0.92 up to 66 % of the width, past the end of a movie's or series' text column).
+ * The least opacity of black over the backdrop under the hero's text; src/styles/detail.css draws
+ * at least this (0.92 up to 74 % of the width = 1421 px, past the end of the widest text at
+ * `DETAIL_INSET + DETAIL_BODY_TEXT_WIDTH`; layout.test.ts reads the stop from the stylesheet).
  * A white backdrop then shows as #141414 or darker.
  */
 export const DETAIL_SHADE_MIN_ALPHA = 0.92;
@@ -60,6 +61,14 @@ export function detailScrollOffset(zone: DetailZone, tops: DetailBlockTops): num
  */
 export function pillsScrollOffset(pillsBottom: number, viewportHeight: number): number {
   return Math.max(0, pillsBottom - (viewportHeight - SAFE_TOP));
+}
+
+/** The least height of the hero's cover; a short title block never shrinks it to a stamp. */
+export const COVER_MIN_HEIGHT = 300;
+
+/** The cover's height: that of the title block beside it, at least `COVER_MIN_HEIGHT`. */
+export function coverHeight(titleBlockHeight: number): number {
+  return Math.max(COVER_MIN_HEIGHT, Math.round(titleBlockHeight));
 }
 
 /** The fewest synopsis lines the hero keeps when it has to give way (the rest is under "More"). */

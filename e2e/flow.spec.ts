@@ -438,7 +438,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             genres: ['Drama', 'Crime'],
             content_rating: 'PG',
             overview:
-              'The second title, half way through. It tells of a long evening, a house full of guests and one quiet person who notices what nobody else does: the clock that is five minutes slow, the open window, the second cup that nobody ordered. By the time the guests leave, everything in the house has changed, and so has the person who saw it all happen from the hallway. Years later the same guests meet again in the same house, and the clock is still five minutes slow, which is exactly why nobody ever misses the last train home that night.',
+              'The second title, half way through. It tells of a long evening, a house full of guests and one quiet person who notices what nobody else does: the clock that is five minutes slow, the open window, the second cup that nobody ordered. By the time the guests leave, everything in the house has changed, and so has the person who saw it all happen from the hallway. Years later the same guests meet again in the same house, and the clock is still five minutes slow, which is exactly why nobody ever misses the last train home that night.' +
+              // At the hero's 1300 px width the text still runs past six lines.
+              ' The house is quiet again, and the guests have long gone home.'.repeat(8),
             ratings: [
               { source: 'imdb', name: 'IMDb', display: '8.1' },
               { source: 'tmdb', name: 'TMDB', display: '7.9' },
@@ -507,7 +509,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               'Two patrol officers answer one more call, and the night turns out to be longer than the shift they signed up for.',
             studios: ['Studio Ponoc'],
             genres: ['Drama', 'Crime', 'Thriller'],
-            overview: `${'A long evening in a quiet town, a patrol car with two tired officers and one call that does not end where the radio said it would. '.repeat(4)}Nobody who was there remembers the night the same way, and the last line of this text says THE END.`,
+            overview: `${'A long evening in a quiet town, a patrol car with two tired officers and one call that does not end where the radio said it would. '.repeat(12)}Nobody who was there remembers the night the same way, and the last line of this text says THE END.`,
             ratings: [
               { source: 'imdb', name: 'IMDb', display: '6.1' },
               { source: 'tmdb', name: 'TMDB', display: '6.4' },
@@ -534,7 +536,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             genres: ['Drama', 'Crime', 'Thriller'],
             crew: [{ person_id: 'c3', name: 'Vince Creator', job: 'Creator' }],
             overview:
-              'A long synopsis that runs over four lines on the hero of the detail page: it tells of a school, its playground, a great many children and the one teacher who has to keep them all busy until the bell rings and the next lesson begins, which is exactly why it needs the full text under the button.',
+              'A long synopsis that runs over four lines on the hero of the detail page: it tells of a school, its playground, a great many children and the one teacher who has to keep them all busy until the bell rings and the next lesson begins, which is exactly why it needs the full text under the button.'.repeat(
+                3,
+              ),
             ratings: [
               { source: 'imdb', name: 'IMDb', display: '7.4' },
               { source: 'tmdb', name: 'TMDb', display: '7.9' },
@@ -2675,7 +2679,7 @@ test('detail page: a focused action pill is black on white, a focused season car
   await expect.poll(() => scale(season1)).toBe(100);
 });
 
-test('detail page: the backdrop stays, the page snaps to the seasons row, the text column is narrow', async ({
+test('detail page: the backdrop stays, the page snaps to the seasons row, the title block is narrow', async ({
   page,
 }) => {
   await openSeriesDetail(page);
@@ -2683,11 +2687,12 @@ test('detail page: the backdrop stays, the page snaps to the seasons row, the te
   const before = await layer.boundingBox();
   expect(before).toEqual({ x: 0, y: 0, width: 1920, height: 1080 });
 
-  // The hero's text column, beside the poster, ends where the full-strength shade ends (1267 px).
-  const column = await page.locator('.detail-text').boundingBox();
-  expect(column!.x + column!.width).toBeLessThanOrEqual(1267);
+  // The hero's title block, beside the cover, ends inside the full-strength shade (1421 px);
+  // the synopsis below runs at most 1300 px wide from the cover's left edge.
+  const column = await page.locator('.detail-head').boundingBox();
+  expect(column!.x + column!.width).toBeLessThanOrEqual(1421);
   const synopsis = await page.getByTestId('detail-synopsis').boundingBox();
-  expect(synopsis!.x + synopsis!.width).toBeLessThanOrEqual(1267);
+  expect(synopsis!.width).toBeLessThanOrEqual(1300);
 
   // Down to the seasons: the actions are out of view, and no pill reaches into the top
   // safe-area band (54 px).
@@ -2724,33 +2729,51 @@ async function openMovieDetail(page: Page, size: { width: number; height: number
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
 }
 
-/** The poster sits left of the text column, bottom-aligned with it, and the column keeps the safe area. */
-async function expectHeroLayout(page: Page, size: { width: number; height: number }) {
+/**
+ * The cover top left, as tall as the title block beside it (from its first element's top to its
+ * last element's bottom, at least 300 px, 2:3 wide), and the synopsis below both from the cover's
+ * left edge. Returns the boxes.
+ */
+async function expectCoverBesideTitleBlock(page: Page) {
   const poster = (await page.getByTestId('detail-poster').boundingBox())!;
-  const column = (await page.locator('.detail-text').boundingBox())!;
+  const head = (await page.locator('.detail-head').boundingBox())!;
+  const first = (await page.locator('.detail-head > :first-child').boundingBox())!;
+  const last = (await page.locator('.detail-head > :last-child').boundingBox())!;
+  const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+  const titleBlockHeight = last.y + last.height - first.y;
+  expect(Math.abs(first.y - head.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(poster.y - first.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(poster.height - Math.max(300, titleBlockHeight))).toBeLessThanOrEqual(1);
+  expect(Math.abs(poster.width - (poster.height * 2) / 3)).toBeLessThanOrEqual(1);
   expect(Math.round(poster.x)).toBe(100);
-  expect(Math.round(poster.width)).toBe(300);
-  expect(Math.round(poster.height)).toBe(450);
-  // 40 px between the poster and the column, no overlap, and the column ends inside the safe area.
-  expect(Math.round(column.x - (poster.x + poster.width))).toBe(40);
-  expect(column.x + column.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
-  // The column is 800 px wide, and in a 1280 px window it ends at the right safe margin (95 %).
-  if (size.width === 1920) expect(Math.round(column.width)).toBe(800);
-  else expect(Math.round(column.x + column.width)).toBe(Math.round(size.width * 0.95));
-  // The shade stays at full strength (0.92) up to 66 % of the width, past the column's end.
+  // 40 px between the cover and the title block.
+  expect(Math.round(head.x - (poster.x + poster.width))).toBe(40);
+  // The synopsis starts at the cover's left edge, below the cover and the title block.
+  expect(Math.round(synopsis.x)).toBe(Math.round(poster.x));
+  expect(synopsis.y).toBeGreaterThanOrEqual(poster.y + poster.height + 16 - 1);
+  expect(synopsis.y).toBeGreaterThanOrEqual(last.y + last.height + 16 - 1);
+  return { poster, head, first, last, synopsis };
+}
+
+/** The cover beside the title block, the synopsis below them in the wide width, inside the safe area. */
+async function expectHeroLayout(page: Page, size: { width: number; height: number }) {
+  const { poster, head, synopsis } = await expectCoverBesideTitleBlock(page);
+  // The title block is 800 px wide, and in a 1280 px window it ends at the right safe margin (95 %).
+  expect(head.x + head.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
+  expect(Math.round(head.width)).toBeLessThanOrEqual(800);
+  // The synopsis is wider than the old 800 px column, at most 1300 px, and keeps the safe area.
+  expect(synopsis.width).toBeGreaterThan(size.width === 1920 ? 800 : 700);
+  expect(synopsis.width).toBeLessThanOrEqual(1300);
+  expect(synopsis.x + synopsis.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
+  // The shade stays at full strength (0.92) up to 74 % of the width, past the widest text (1400 px).
   const shade = await page
     .locator('.detail-shade')
     .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundImage);
-  expect(shade).toContain('rgba(0, 0, 0, 0.92) 66%');
-  // Bottom-aligned with the column (title block, facts, synopsis, credits and the action row).
-  expect(Math.abs(poster.y + poster.height - (column.y + column.height))).toBeLessThanOrEqual(1);
+  expect(shade).toContain('rgba(0, 0, 0, 0.92) 74%');
   const image = page.getByTestId('detail-poster').locator('img');
   await expect(image).toBeVisible();
-  // Everything in the column stays left of the right safe margin, the synopsis included.
-  const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
-  expect(synopsis.x + synopsis.width).toBeLessThanOrEqual(size.width * 0.95 + 1);
-  // Nothing in the column reaches under the poster.
-  const left = await page.locator('.detail-text *').evaluateAll((els) =>
+  // Nothing in the title block reaches under the cover.
+  const left = await page.locator('.detail-head *').evaluateAll((els) =>
     Math.min(
       ...els
         .map((el) => el.getBoundingClientRect())
@@ -2766,7 +2789,7 @@ for (const size of [
   { width: 1920, height: 1080 },
   { width: 1280, height: 720 },
 ]) {
-  test(`detail page: a movie hero has the web's parts and the poster beside the column at ${size.width} px`, async ({
+  test(`detail page: a movie hero has the web's parts, the cover beside the title block and the text below at ${size.width} px`, async ({
     page,
   }) => {
     await openMovieDetail(page, size);
@@ -2820,6 +2843,105 @@ for (const size of [
   });
 }
 
+test('detail page: a movie with a logo, tagline and ratings has its cover exactly as tall as the title block, and the text below it', async ({
+  page,
+}) => {
+  await openLongMovie(page, {});
+  const { poster, first, last, synopsis } = await expectCoverBesideTitleBlock(page);
+  // The cover runs from the kicker's top to the ratings' bottom.
+  const kicker = (await page.getByTestId('detail-kicker').boundingBox())!;
+  const ratings = (await page.getByTestId('detail-ratings').boundingBox())!;
+  expect(Math.abs(poster.y - kicker.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(poster.y + poster.height - (ratings.y + ratings.height))).toBeLessThanOrEqual(1);
+  expect(poster.height).toBeGreaterThan(300);
+  expect(first.y).toBe(kicker.y);
+  expect(last.y + last.height).toBe(ratings.y + ratings.height);
+  // The synopsis takes the wide width, not the title block's 800 px.
+  expect(synopsis.width).toBeGreaterThan(800);
+  expect(synopsis.width).toBeLessThanOrEqual(1300);
+  expect((await heroFit(page)).pillsBottom).toBeLessThanOrEqual(1026);
+});
+
+test('detail page: a credit line longer than 1300 px wraps inside the text width', async ({
+  page,
+}) => {
+  await page.route('**/api/v2/catalog/items/m2*', async (route) => {
+    const response = await route.fetch();
+    const item = await response.json();
+    // Long names and many genres make one credit line far wider than 1300 px if nothing caps it
+    // (the line names two directors and two writers at most).
+    const name = (who: string) => `${who} with a remarkably long name of many parts`;
+    item.crew = [
+      { person_id: 'c1', name: name('Dana Director'), job: 'Director' },
+      { person_id: 'c2', name: name('Dino Director'), job: 'Director' },
+      { person_id: 'c3', name: name('Wen Writer'), job: 'Writer' },
+      { person_id: 'c4', name: name('Wim Writer'), job: 'Writer' },
+    ];
+    item.genres = ['Drama', 'Crime', 'Thriller', 'Mystery', 'Adventure', 'Documentary'];
+    await route.fulfill({ response, json: item });
+  });
+  await openLongMovie(page, {});
+  // Only 1920 px discriminates: at 1280 px the body is narrower than 1300 px anyway.
+  const credits = (await page.getByTestId('detail-credits').boundingBox())!;
+  expect(credits.width).toBeLessThanOrEqual(1300);
+  expect(credits.x + credits.width).toBeLessThanOrEqual(1400);
+  // The line did wrap: it is more than one 31 px line high.
+  expect(credits.height).toBeGreaterThan(62);
+});
+
+test('detail page: a movie with a short title block has a 300 px cover and the text 16 px below it', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({});
+  await openSecondTitle(page, origin);
+  await expect(page.getByTestId('detail-tagline')).toHaveCount(0);
+  await expect(page.getByTestId('detail-ratings')).toHaveCount(0);
+  const { poster, head, synopsis } = await expectCoverBesideTitleBlock(page);
+  expect(head.height).toBeLessThan(300);
+  expect(Math.round(poster.height)).toBe(300);
+  expect(Math.round(poster.width)).toBe(200);
+  expect(Math.round(synopsis.y - (poster.y + poster.height))).toBe(16);
+});
+
+test('detail page: a series page and a season page have the cover beside the title block', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, true);
+  const series = await expectCoverBesideTitleBlock(page);
+  expect(series.poster.height).toBeGreaterThan(300);
+  expect(series.synopsis.width).toBeGreaterThan(800);
+
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  const season = await expectCoverBesideTitleBlock(page);
+  // The breadcrumb is the title block's first element.
+  const crumb = (await page.getByTestId('detail-breadcrumb').boundingBox())!;
+  expect(Math.abs(season.poster.y - crumb.y)).toBeLessThanOrEqual(1);
+});
+
+test('detail page: an episode page has no cover and its text takes the wide width', async ({
+  page,
+}) => {
+  await openSeriesDetail(page, true);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toContainText('Folge');
+  await expect(page.getByTestId('detail-poster')).toHaveCount(0);
+  const head = (await page.locator('.detail-head').boundingBox())!;
+  const body = (await page.locator('.detail-body').boundingBox())!;
+  expect(Math.round(head.x)).toBe(100);
+  expect(Math.round(body.x)).toBe(100);
+  expect(body.width).toBeGreaterThan(1300);
+  expect(body.y).toBeGreaterThanOrEqual(head.y + head.height + 16 - 1);
+  const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+  expect(Math.round(synopsis.x)).toBe(100);
+});
+
 test('detail page: the poster fades with the text column once the focus has left the hero', async ({
   page,
 }) => {
@@ -2848,7 +2970,7 @@ test('detail page: many chips and badges wrap inside the text column', async ({ 
   });
   await openMovieDetail(page, { width: 1920, height: 1080 });
   await expect(page.locator('.detail-chip')).toHaveCount(3);
-  const column = (await page.locator('.detail-text').boundingBox())!;
+  const column = (await page.locator('.detail-head').boundingBox())!;
   const boxes = await page
     .locator('.detail-chip, .detail-badge')
     .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()).map((r) => [r.top, r.right]));
@@ -4814,7 +4936,7 @@ test('detail page: a long movie hero gives its synopsis lines up so the pills en
   page,
 }) => {
   await openLongMovie(page, {});
-  // Ten lines of text, six at the most on a movie: four are drawn, and the pills end above the
+  // Many lines of text, six at the most on a movie: fewer are drawn, and the pills end above the
   // 5 % bottom safe line (1080 - 54 = 1026) with the page at its origin.
   const fit = await heroFit(page);
   expect(fit.contentLines).toBeGreaterThanOrEqual(9);
@@ -4841,26 +4963,23 @@ test('detail page: a long movie hero gives its synopsis lines up so the pills en
   await expect(page.getByTestId('synopsis-full')).toContainText('THE END');
 });
 
-test('detail page: a long movie hero with a wrapping pills row keeps two synopsis lines and scrolls the pills in, and back', async ({
+test('detail page: a long movie hero in a short window keeps two synopsis lines and scrolls the pills in, and back', async ({
   page,
 }) => {
-  // Two files make a Version pill too, so the pills wrap onto a second line: even two synopsis
-  // lines (the least) leave the hero ending below the safe line.
+  // The pills no longer wrap at the hero's full width, so the window is short: even two synopsis
+  // lines (the least) leave the hero ending below the bottom safe line (800 - 54 = 746).
+  await page.setViewportSize({ width: 1920, height: 800 });
   await openLongMovie(page, { pills: true });
   const fit = await heroFit(page);
   expect(fit.lines).toBe(2);
-  expect(fit.pillsBottom).toBeGreaterThan(1026);
+  expect(fit.pillsBottom).toBeGreaterThan(746);
   expect(await pageOffset(page)).toBe(0);
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('pill-version')).toBeFocused();
-  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeLessThanOrEqual(1026);
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
-  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeLessThanOrEqual(1026);
-  await page.keyboard.press('ArrowUp');
+  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeLessThanOrEqual(746);
   await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
-  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeGreaterThan(1026);
+  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeGreaterThan(746);
 });
 
 test('detail page: a movie with a short synopsis shows all of it and no More', async ({ page }) => {

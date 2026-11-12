@@ -105,7 +105,7 @@ function setup(
 
 const ready = () => screen.findByTestId('detail-hero');
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
-const LONG_TEXT = 'The synopsis goes on and on. '.repeat(20).trim();
+const LONG_TEXT = 'The synopsis goes on and on. '.repeat(30).trim();
 
 describe('DetailScreen: a movie', () => {
   it('shows the title, the facts, the synopsis and Play, and focuses Play', async () => {
@@ -526,7 +526,7 @@ describe('DetailScreen: the hero like the web', () => {
 
   it('cuts a movie synopsis at six lines and a series synopsis at three', async () => {
     // Between three and six lines of text: only the series is cut.
-    const text = 'Some words of the synopsis. '.repeat(9).trim();
+    const text = 'Some words of the synopsis. '.repeat(14).trim();
     serveDetail(server, { item: () => itemDetail({ overview: text }) });
     const movie = setup({ itemId: 'm1' });
     await ready();
@@ -901,11 +901,12 @@ describe('DetailScreen: loading and errors', () => {
     setup({ itemId: 'm1' });
     expect(screen.getByTestId('detail-skeleton')).toBeInTheDocument();
     expect(screen.getByTestId('row-skeleton')).toBeInTheDocument();
-    // The poster stands where the poster goes, beside the text column.
-    const row = screen.getByTestId('detail-skeleton').querySelector('.detail-hero-row');
-    expect(row).not.toBeNull();
-    expect(row!.querySelector(':scope > .detail-poster')).not.toBeNull();
-    expect(row!.querySelector(':scope > .detail-text')).not.toBeNull();
+    // The poster stands where the poster goes, beside the title block, with the body below.
+    const grid = screen.getByTestId('detail-skeleton').querySelector('.detail-hero-grid');
+    expect(grid).not.toBeNull();
+    expect(grid!.querySelector(':scope > .detail-poster')).not.toBeNull();
+    expect(grid!.querySelector(':scope > .detail-head')).not.toBeNull();
+    expect(grid!.querySelector(':scope > .detail-body')).not.toBeNull();
     await ready();
     expect(screen.queryByTestId('detail-skeleton')).toBeNull();
   });

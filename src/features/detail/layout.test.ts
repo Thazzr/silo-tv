@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
+  COVER_MIN_HEIGHT,
   DETAIL_INSET,
   DETAIL_SCROLLED_DIM_ALPHA,
   DETAIL_SHADE_MIN_ALPHA,
-  DETAIL_TEXT_WIDTH,
+  DETAIL_BODY_TEXT_WIDTH,
   EPISODE_GRID,
   EPISODE_ROW_CARD,
   MORE_BLOCK_HEIGHT,
@@ -12,6 +14,7 @@ import {
   SEASON_STEP,
   SEASON_STRIP_HEIGHT,
   SYNOPSIS_MIN_LINES,
+  coverHeight,
   detailScrollOffset,
   fitSynopsisLines,
   isAbove,
@@ -20,6 +23,17 @@ import {
   zoneOrder,
 } from './layout';
 import { SCREEN_WIDTH, rowVisibleCards } from '../../ui/media';
+
+const detailCss = readFileSync('src/styles/detail.css', 'utf-8');
+
+describe('coverHeight', () => {
+  it('follows the title block and never falls below the least height', () => {
+    expect(coverHeight(412.4)).toBe(412);
+    expect(coverHeight(COVER_MIN_HEIGHT)).toBe(COVER_MIN_HEIGHT);
+    expect(coverHeight(120)).toBe(COVER_MIN_HEIGHT);
+    expect(coverHeight(0)).toBe(COVER_MIN_HEIGHT);
+  });
+});
 
 describe('fitSynopsisLines', () => {
   // A movie: six lines of 36 px drawn out of ten the text needs, "More" on the page.
@@ -222,8 +236,11 @@ describe('hero text column', () => {
   };
   const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 
-  it('ends before 1000 px', () => {
-    expect(DETAIL_INSET + DETAIL_TEXT_WIDTH).toBeLessThanOrEqual(1000);
+  it('ends inside the full-strength shade of the stylesheet', () => {
+    const stop = /rgba\(0, 0, 0, 0\.92\) (\d+)%/.exec(detailCss);
+    expect(stop).not.toBeNull();
+    const fullStrengthEdge = (Number(stop![1]) / 100) * SCREEN_WIDTH;
+    expect(DETAIL_INSET + DETAIL_BODY_TEXT_WIDTH).toBeLessThanOrEqual(fullStrengthEdge);
   });
 
   it('keeps the secondary text at 4.5:1 over a white backdrop under the weakest shade', () => {

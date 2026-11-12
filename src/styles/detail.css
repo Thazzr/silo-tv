@@ -52,19 +52,32 @@
   opacity: 0;
 }
 
-/* The web's hero: the poster (220 x 330 there) left of the text column, bottom-aligned with it
-   (300 px, 40 px, 800 px; e2e/flow.spec.ts measures them). */
-.detail-hero-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 40px;
+/* The hero's grid: the cover top left, as tall as the title block beside it (DetailHero measures
+   the block into --cover-height, at least 300 px; the width is the poster's 2:3), and below both,
+   from the cover's left edge, the synopsis, the credits and the actions across the full width.
+   The title block keeps its 800 px column; the third column only gives the body its full width.
+   A page without a cover (an episode) has an empty first column, so its parts below the title
+   block read alike. The cover's column is sized by the variable, not by `auto`: a body that spans
+   all columns would otherwise widen it. */
+.detail-hero-grid {
+  --cover-height: 300px;
+  display: grid;
+  grid-template-columns: 0 minmax(0, 800px) minmax(0, 1fr);
+  gap: 16px 0;
+  width: calc(95vw - 100px);
+}
+
+.detail-hero-grid.detail-has-poster {
+  grid-template-columns: calc(var(--cover-height) * 2 / 3) minmax(0, 800px) minmax(0, 1fr);
+  column-gap: 40px;
 }
 
 .detail-poster {
   position: relative;
   box-sizing: border-box;
-  width: 300px;
-  height: 450px;
+  grid-area: 1 / 1;
+  width: calc(var(--cover-height) * 2 / 3);
+  height: var(--cover-height);
   overflow: hidden;
   background: var(--surface-raised);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -73,9 +86,15 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
-/* The 800 px column, but never past the right safe margin (5 %) of a narrower, 1280 px window. */
-.detail-hero-row > .detail-text {
-  width: min(800px, calc(95vw - 440px));
+.detail-hero-grid > .detail-head {
+  grid-area: 1 / 2;
+  align-self: start;
+  width: auto;
+}
+
+.detail-hero-grid > .detail-body {
+  grid-area: 2 / 1 / 3 / 4;
+  width: auto;
 }
 
 /* The picture and its darkening sit behind the page and do not scroll with it. */
@@ -96,8 +115,9 @@
 }
 
 /* Darkens the picture so the text keeps 4.5:1 even over a white backdrop. The poster and the text
-   column (100 to 1240 px) lie under at least 92 % black (DETAIL_SHADE_MIN_ALPHA, up to 66 % of
-   the width = 1267 px: the lightest picture is then darker than #141414,
+   text (up to 1400 px: the synopsis and the credits are at most 1300 px wide from the 100 px inset)
+   lie under at least 92 % black (DETAIL_SHADE_MIN_ALPHA, up to 74 % of the width = 1421 px:
+   the lightest picture is then darker than #141414,
    which gives the secondary text above 6:1. The foot only darkens a little, so the lower half of
    the screen still shows the picture behind the episodes. */
 .detail-shade {
@@ -114,8 +134,8 @@
     linear-gradient(
       90deg,
       rgba(0, 0, 0, 0.96) 0,
-      rgba(0, 0, 0, 0.92) 66%,
-      rgba(0, 0, 0, 0.3) 92%,
+      rgba(0, 0, 0, 0.92) 74%,
+      rgba(0, 0, 0, 0.3) 94%,
       rgba(0, 0, 0, 0.1) 100%
     );
 }
@@ -291,6 +311,7 @@
 
 .detail-synopsis {
   display: -webkit-box;
+  max-width: 1300px;
   margin: 0;
   overflow: hidden;
   font-size: 26px;
@@ -314,6 +335,7 @@
 }
 
 .detail-credits {
+  max-width: 1300px;
   margin: 0;
   font-size: 23px;
   line-height: 31px;
@@ -348,9 +370,9 @@
   border-radius: 38px;
 }
 
-/* The row is wider than the text column (the synopsis stays narrow). Its pills are a little
-   smaller than the page's others so the longest German labels (Next episode, Mark series
-   watched) still fit between the poster and the right edge of the safe area on one line. */
+/* The row takes the width it needs. Its pills are a little smaller than the page's others so the
+   longest German labels (Next episode, Mark series watched) still fit inside the right safe
+   margin on one line. */
 .detail-actions {
   gap: 14px;
   margin-top: 8px;
@@ -366,18 +388,13 @@
 }
 
 /* The pills under the action row (Edition, Version, Audio, Subtitles): a label and what it says
-   now. Like the action row they may be wider than the text column, but they wrap onto a second
-   line rather than run past the right safe margin (the page's left edge is the poster's right
-   edge, or the inset when the page has no poster). */
+   now. Like the action row they take the width they need, but they wrap onto a second
+   line rather than run past the right safe margin. */
 .detail-pills {
   flex-wrap: wrap;
   gap: 14px;
   width: max-content;
   max-width: calc(95vw - 100px);
-}
-
-.detail-has-poster .detail-pills {
-  max-width: calc(95vw - 440px);
 }
 
 .detail-pills .detail-track {
@@ -976,7 +993,7 @@
 }
 
 .detail-skeleton-synopsis {
-  width: 900px;
+  width: 1300px;
   max-width: 100%;
   height: 144px;
 }

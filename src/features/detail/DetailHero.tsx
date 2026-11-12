@@ -27,15 +27,15 @@ import {
   type ItemDetail,
   type Season,
 } from './info';
-import { fitSynopsisLines, SAFE_TOP } from './layout';
+import { coverHeight, fitSynopsisLines, SAFE_TOP } from './layout';
 import type { FileVersion } from './versions';
 
 /**
- * How many characters of 26 px text one line holds (an 800 to 900 px column). A synopsis longer
+ * How many characters of 26 px text one line holds (the 1300 px text width). A synopsis longer
  * than `lines` of them is taken to be cut when the layout cannot say (it is measured wherever
  * there is a layout).
  */
-const CHARS_PER_LINE = 60;
+const CHARS_PER_LINE = 100;
 
 /** The synopsis, at most `lines` lines, with "More" under it when the text goes on. */
 export function Synopsis({
@@ -157,9 +157,10 @@ export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrol
 }
 
 /**
- * The top of a detail page, like the web's hero: the poster beside a column with the kicker, the
- * title art or the title, the tagline, the chips and quality badges, the external ratings, the
- * synopsis, the credit line and the action row (`actions`). A season page has a breadcrumb in place
+ * The top of a detail page, like the web's hero, but laid out for a TV: the poster beside the title
+ * block (the kicker, the title art or the title, the tagline, the chips and quality badges, the
+ * external ratings), as tall as that block (at least 300 px), and below both, across the full
+ * width, the synopsis, the credit line and the action row (`actions`). A season page has a breadcrumb in place
  * of the kicker, the series' title (or its logo) with the season's own title under it, and no
  * ratings or credits; its synopsis is the season's. An episode page has no poster (its still is
  * the backdrop), a breadcrumb (series, season, episode), the episode's title, its runtime and air
@@ -254,6 +255,15 @@ export function DetailHero({
   const maxLines = series || season || episode ? 3 : 6;
   const [fitted, setFitted] = useState(maxLines);
   const textRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  // The cover is as tall as the title block beside it (CSS cannot size a width from a stretched
+  // height here). The logo box has a fixed size and the fonts are bundled, so the block's height
+  // is known after the first layout; writing the style directly keeps it out of the render cycle.
+  useLayoutEffect(() => {
+    const height = headRef.current?.getBoundingClientRect().height ?? 0;
+    gridRef.current?.style.setProperty('--cover-height', `${coverHeight(height)}px`);
+  });
   // After every render, before the paint: the pills, the logo and the text all arrive by props.
   // The window is fixed at launch, the logo box has a fixed size and the fonts are bundled, so no
   // other event changes the layout. A fit that gives the same count sets the same state, which
@@ -282,7 +292,10 @@ export function DetailHero({
 
   return (
     <div className="detail-hero" data-testid="detail-hero">
-      <div className={episode ? 'detail-hero-row' : 'detail-hero-row detail-has-poster'}>
+      <div
+        ref={gridRef}
+        className={episode ? 'detail-hero-grid' : 'detail-hero-grid detail-has-poster'}
+      >
         {episode ? null : (
           <div className="detail-poster" data-testid="detail-poster" data-faded={faded}>
             <Artwork
@@ -292,7 +305,7 @@ export function DetailHero({
             />
           </div>
         )}
-        <div ref={textRef} className="detail-text" data-faded={faded}>
+        <div ref={headRef} className="detail-text detail-head" data-faded={faded}>
           {crumbs ? (
             <nav
               className="detail-breadcrumb"
@@ -376,6 +389,8 @@ export function DetailHero({
               ))}
             </ul>
           ) : null}
+        </div>
+        <div ref={textRef} className="detail-text detail-body" data-faded={faded}>
           {synopsis.text ? (
             <Synopsis
               text={synopsis.text}
