@@ -5,6 +5,7 @@ import {
   cardBadges,
   defaultBadgePrefs,
   parseBadgePrefs,
+  primaryRatingText,
   resolveBadgePrefs,
   type BadgePosition,
   type BadgePrefs,
@@ -616,5 +617,30 @@ describe('glyphs and the preset', () => {
       ['EAC3', 'volume'],
     ]);
     expect(all['bottom-left'].map((badge) => badge.glyph ?? null)).toEqual([null]);
+  });
+});
+
+describe('primaryRatingText', () => {
+  it('names the first source the item has a score for, as text', () => {
+    expect(primaryRatingText(catalogItem({ rating_tmdb: 7 }), en)).toBe('TMDB 7.0');
+    expect(primaryRatingText(catalogItem({ rating_tmdb: 7, rating_imdb: 8.14 }), en)).toBe(
+      'IMDb 8.1',
+    );
+    expect(
+      primaryRatingText(catalogItem({ rating_rt_critic: 91, rating_rt_audience: 80 }), en),
+    ).toBe('RT 91%');
+    expect(primaryRatingText(catalogItem({ rating_rt_audience: 80 }), de)).toBe(
+      `${de.t('card.badge.rtAudience')} 80%`,
+    );
+  });
+
+  it('is null without any score', () => {
+    expect(primaryRatingText(catalogItem(), en)).toBeNull();
+  });
+
+  it('does not depend on which rating badges the profile turned on', () => {
+    // The default document shows none of the rating badges; the text line still names one.
+    expect(texts(catalogItem({ rating_tmdb: 7 }), defaultBadgePrefs(), 'left-edge')).toEqual([]);
+    expect(primaryRatingText(catalogItem({ rating_tmdb: 7 }), en)).toBe('TMDB 7.0');
   });
 });

@@ -89,6 +89,27 @@ export function useHomeSections() {
   return { query, rowLimit, profileId };
 }
 
+/**
+ * The featured section that is Home's hero carousel, read whole (its layout limit cuts the slides)
+ * with the artwork widths of the hero. `sectionId` comes from the list of sections; without one
+ * nothing is read.
+ */
+export function useFeaturedSection(sectionId: string | undefined) {
+  const { client, baseUrl, session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  return useQuery({
+    queryKey: ['home', 'featured', baseUrl, profileId, sectionId],
+    enabled: sectionId !== undefined,
+    queryFn: async () => {
+      const { data, error, response } = await client.GET('/api/v2/home/sections/{id}/items', {
+        params: { path: { id: sectionId! }, query: { ...ROW_IMAGE_QUERY } },
+      });
+      if (!data) throw toApiError(error, response);
+      return data;
+    },
+  });
+}
+
 /** Reads one section again (after a removal, or "Try again"); throws when the read fails. */
 export function useSectionReader(rowLimit: number | undefined) {
   const { client } = useSilo();

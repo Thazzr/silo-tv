@@ -86,6 +86,29 @@ export function useLibrarySections(libraryId: string) {
   });
 }
 
+/** The featured section that is a library's hero carousel, read whole with the hero's artwork widths. */
+export function useLibraryFeaturedSection(libraryId: string, sectionId: string | undefined) {
+  const { client, baseUrl, session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  return useQuery({
+    queryKey: ['library', 'featured', baseUrl, profileId, libraryId, sectionId],
+    enabled: sectionId !== undefined,
+    queryFn: async () => {
+      const { data, error, response } = await client.GET(
+        '/api/v2/library/{id}/sections/{section_id}/items',
+        {
+          params: {
+            path: { id: libraryId, section_id: sectionId! },
+            query: { ...ROW_IMAGE_QUERY },
+          },
+        },
+      );
+      if (!data) throw toApiError(error, response);
+      return data;
+    },
+  });
+}
+
 /** What a Browse read of a library depends on, besides the page: the request parts and the cache key. */
 function browseRead(libraryId: string, kind: LibraryKind, selection: BrowseSelection) {
   const groups = filterGroups(selection.filters);

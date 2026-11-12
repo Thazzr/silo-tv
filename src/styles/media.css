@@ -504,6 +504,27 @@
 .home {
   position: relative;
   height: 100%;
+  /* The hero is 520 px high; with a featured carousel it is the web's 66 % of the window, 760 px at
+     most (713 px at 1080 p). While the focus is in the rows the whole stage moves up by the
+     difference, so the visible part of the hero and the rows below it are what they were. */
+  --hero-h: 520px;
+  --hero-shift: 0px;
+}
+
+.home[data-featured='true'] {
+  --hero-h: max(520px, min(66vh, 760px));
+  --hero-shift: calc(var(--hero-h) - 520px);
+}
+
+/* The hero and the rows move together (transform only). */
+.home-stage {
+  position: absolute;
+  inset: 0;
+  transition: transform var(--transition);
+}
+
+.home-stage[data-rows='true'] {
+  transform: translateY(calc(-1 * var(--hero-shift)));
 }
 
 .hero {
@@ -511,8 +532,203 @@
   top: 0;
   right: 0;
   left: 0;
-  height: 520px;
+  height: var(--hero-h);
   overflow: hidden;
+}
+
+/* The card the focus is on in the rows, over the carousel (which stays mounted underneath). */
+.hero-card,
+.hero-carousel,
+.hero-controls,
+.hero-error {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-card {
+  z-index: 1;
+}
+
+.hero-carousel {
+  overflow: hidden;
+}
+
+/* Opacity, not visibility: the buttons must stay focusable while the card covers them, so the
+   focus can go back up to them. */
+.hero-carousel[data-shown='false'] {
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* The crossfade of the slides: the active one fades in over the one fading out (1 s, opacity only). */
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1000ms ease-in-out;
+}
+
+.hero-slide[data-active='true'] {
+  opacity: 1;
+}
+
+.hero-slide-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  opacity: 0;
+  transition: opacity 600ms ease-out;
+}
+
+.hero-slide-img[data-loaded='true'] {
+  opacity: 1;
+}
+
+.hero-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 88px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+/* "Play" is the primary pill, "More Info" the quieter one; focus is the white fill with dark
+   content, the ring and the larger size on both, so neither depends on its colour at rest. */
+.hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  min-height: var(--target);
+  padding: 0 40px;
+  font: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--chrome-selected);
+  border: 2px solid var(--chrome-border);
+  border-radius: 38px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.hero-btn-primary {
+  color: var(--focus-content);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.hero-btn:hover {
+  background: var(--chrome-selected);
+}
+
+.hero-btn-primary:hover {
+  background: var(--text);
+}
+
+.hero-btn:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+  transform: scale(1.06);
+}
+
+/* The slide indicator: "01 -- 10", the rail that fills over the 8 s of a slide, and the pause or
+   play mark. One focusable control: Left and Right page, OK pauses and resumes. */
+.hero-pager {
+  position: absolute;
+  right: 88px;
+  bottom: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  box-sizing: border-box;
+  min-height: var(--target);
+  padding: 0 32px;
+  font: inherit;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 38px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.hero-pager:hover {
+  background: var(--chrome);
+}
+
+.hero-pager:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+  transform: scale(1.06);
+}
+
+.hero-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  letter-spacing: 0.12em;
+}
+
+.hero-counter-line {
+  width: 40px;
+  height: 2px;
+  background: currentcolor;
+  opacity: 0.5;
+}
+
+.hero-rail {
+  position: relative;
+  width: 200px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.hero-rail::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: currentcolor;
+  opacity: 0.25;
+}
+
+/* The fill grows over one turn of the carousel (CAROUSEL_TURN_MS = 8000) and starts afresh for
+   every slide; it stands still while the carousel does. */
+.hero-rail > span {
+  position: absolute;
+  inset: 0;
+  background: currentcolor;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: hero-rail 8000ms linear forwards;
+}
+
+.hero-rail[data-paused='true'] > span {
+  animation-play-state: paused;
+}
+
+@keyframes hero-rail {
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .hero-backdrop {
@@ -534,6 +750,81 @@
   to {
     opacity: 1;
   }
+}
+
+/* The carousel's layers over the slides, as the web's hero has them: the picture at 90 % brightness
+   (a 10 % black layer, as a filter is not allowed), a fade from the bottom, a fade from the left
+   under the text and a soft vignette. The picture's upper right stays as bright as it is. */
+.hero-dim,
+.hero-fade-bottom,
+.hero-fade-left,
+.hero-vignette,
+.hero-top-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-dim {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.hero-fade-bottom {
+  background: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 1) 0,
+    rgba(0, 0, 0, 0.88) 12%,
+    rgba(0, 0, 0, 0.48) 30%,
+    rgba(0, 0, 0, 0.12) 50%,
+    rgba(0, 0, 0, 0) 66%
+  );
+}
+
+.hero-fade-left {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.88) 0,
+    rgba(0, 0, 0, 0.58) 16%,
+    rgba(0, 0, 0, 0.22) 34%,
+    rgba(0, 0, 0, 0) 50%
+  );
+}
+
+.hero-vignette {
+  background: radial-gradient(
+    ellipse 120% 100% at 60% 45%,
+    rgba(0, 0, 0, 0) 55%,
+    rgba(0, 0, 0, 0.18) 100%
+  );
+}
+
+/* Only the library's hero, which bleeds under the pills: a scrim there and a stronger bottom fade. */
+.hero-top-scrim {
+  display: none;
+}
+
+.library-stage .hero-top-scrim {
+  display: block;
+  inset: 0 0 auto;
+  height: 180px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.7) 0,
+    rgba(0, 0, 0, 0.3) 55%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.library-stage .hero-fade-bottom {
+  background: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 1) 0,
+    rgba(0, 0, 0, 1) 10%,
+    rgba(0, 0, 0, 0.86) 26%,
+    rgba(0, 0, 0, 0.45) 48%,
+    rgba(0, 0, 0, 0.12) 70%,
+    rgba(0, 0, 0, 0) 88%
+  );
 }
 
 /* Darkens the picture so the text keeps 4.5:1 even over a white backdrop: the lightest possible
@@ -566,9 +857,10 @@
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  font-size: 84px;
-  font-weight: 700;
+  font-size: 72px;
+  font-weight: 800;
   line-height: 1.05;
+  letter-spacing: -0.04em;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -602,7 +894,7 @@
   font-size: 22px;
   line-height: 31px;
   color: var(--text-secondary);
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -613,7 +905,7 @@
 
 .hero-skeleton-title {
   width: 560px;
-  height: 84px;
+  height: 72px;
 }
 
 .hero-skeleton-meta {
@@ -629,9 +921,9 @@
 /* The rows sit below the hero; the focused row is scrolled up to the top of this box. */
 .home-rows {
   position: absolute;
-  top: 520px;
+  top: var(--hero-h);
   right: 0;
-  bottom: 0;
+  bottom: calc(-1 * var(--hero-shift));
   left: 0;
   overflow: hidden;
 }

@@ -42,7 +42,7 @@ describe('Hero', () => {
     renderWithSilo(<Harness initial={heat} />);
     expect(shown()).toBe('heat');
     expect(screen.getByTestId('hero-title')).toHaveTextContent('Heat');
-    expect(screen.getByTestId('hero-meta')).toHaveTextContent('1995 · 2 h 50 min · R');
+    expect(screen.getByTestId('hero-meta')).toHaveTextContent('1995 · 2h 50m · R');
     expect(screen.getByTestId('hero-synopsis')).toHaveTextContent('A group of professional');
     expect(screen.getByTestId('hero-backdrop').getAttribute('src')).toBe(
       `${BASE_URL}/img/heat-backdrop.webp`,
@@ -54,9 +54,12 @@ describe('Hero', () => {
     change(alien);
     wait(HERO_REST_MS - 50);
     expect(shown()).toBe('heat');
+    // What is drawn follows the same rest, not just the attribute.
+    expect(screen.getByTestId('hero-title')).toHaveTextContent('Heat');
     wait(50);
+    expect(screen.getByTestId('hero-title')).toHaveTextContent('Alien');
     expect(shown()).toBe('alien');
-    expect(screen.getByTestId('hero-meta')).toHaveTextContent('1979 · 1 h 57 min');
+    expect(screen.getByTestId('hero-meta')).toHaveTextContent('1979 · 1h 57m');
   });
 
   it('does not update while the focus runs across cards', () => {

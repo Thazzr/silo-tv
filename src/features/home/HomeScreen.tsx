@@ -21,10 +21,13 @@ import {
   type FocusIndexMemory,
 } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
-import { Hero, HeroSkeleton } from './Hero';
+import { HERO_KEY } from './Carousel';
+import { featuredSlides, firstFeatured } from './featured';
+import { Hero, HeroSkeleton, type Featured } from './Hero';
 import {
   ROW_ITEM_LIMIT,
   useDismissItem,
+  useFeaturedSection,
   useHomeSections,
   useSectionReader,
   type DismissSurface,
@@ -101,10 +104,13 @@ export interface HomeScreenProps {
 }
 
 /**
- * The Home tab: the server's sections as rows of cards under a hero that shows the focused card.
- * Rows come in server order; an empty section is hidden and a row that cannot be read shows a
- * small error with "Try again" instead. The rows scroll with a transform so the focused row sits
- * just below the hero, and only the rows around it have cards mounted.
+ * The Home tab: a hero over the server's sections as rows of cards. The hero is the carousel of
+ * the layout's first featured section (which is not a row) while the focus is in the hero or
+ * above it, and shows the card that has the focus while the focus is in the rows; a layout
+ * without a featured section has the card mode only. Rows come in server order; an empty section
+ * is hidden and a row that cannot be read shows a small error with "Try again" instead. The rows
+ * scroll with a transform so the focused row sits just below the hero, and only the rows around
+ * it have cards mounted.
  */
 export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }: HomeScreenProps) {
   const t = useT();
@@ -112,7 +118,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   const { query, rowLimit } = useHomeSections();
   const readSection = useSectionReader(rowLimit);
   const dismiss = useDismissItem();
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, openPage, playSlide } = useItemOpener({ onPlay, onOpenDetail });
 
   const [overrides, setOverrides] = useState<{ stamp: number; map: Record<string, Override> }>({
     stamp: 0,
@@ -131,26 +137,56 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
     [query.dataUpdatedAt],
   );
 
+  // The first featured section is the hero's carousel, read on its own; it is no row.
+  const featuredId = query.data ? firstFeatured(query.data)?.id : undefined;
+  const featuredQuery = useFeaturedSection(featuredId);
+  const slides = useMemo(
+    () => (featuredQuery.data ? featuredSlides(featuredQuery.data) : []),
+    [featuredQuery.data],
+  );
+  let featured: Featured | null = null;
+  if (featuredId !== undefined) {
+    if (featuredQuery.isPending) featured = { kind: 'loading' };
+    else if (featuredQuery.isError) {
+      featured = {
+        kind: 'error',
+        text: 'hero.failed',
+        onRetry: () => void featuredQuery.refetch(),
+      };
+    } else if (slides.length > 0) {
+      featured = { kind: 'slides', slides, onPlay: playSlide, onOpen: openPage };
+    }
+  }
+
   const rows = useMemo(
     () =>
       (query.data ?? []).flatMap((section) => {
+        if (section.id === featuredId) return [];
         const row = rowFrom(section, activeOverrides[section.id], titleOf);
         return row ? [row] : [];
       }),
-    [query.data, activeOverrides, titleOf],
+    [query.data, activeOverrides, titleOf, featuredId],
   );
 
   const [focusedRow, setFocusedRow] = useState(() => rowMemory.get(LAST_ROW_KEY) ?? 0);
   const [focusedItem, setFocusedItem] = useState<CatalogItem | null>(null);
+  // Whether the focus is on something in the rows (not in the hero or above it).
+  const [inRows, setInRows] = useState(false);
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
-  const heroItem = useMemo(() => {
+  const cardItem = useMemo(() => {
     if (focusedItem) return focusedItem;
     // Before the first focus: the card the memory points at, else the first one.
     const row = rows[activeRow];
     return row ? (row.items[rowMemory.get(row.id) ?? 0] ?? row.items[0] ?? null) : null;
   }, [focusedItem, rows, activeRow, rowMemory]);
+  // With a featured section the hero shows a card only while the focus is in the rows; and the
+  // rows then sit where the focused row is, else at their first row, just under the hero.
+  const carouselMode = featured !== null && !inRows;
+  const heroItem = carouselMode ? null : cardItem;
 
-  const offset = rows.slice(0, activeRow).reduce((sum, row) => sum + heightOf(row), 0);
+  const offset = carouselMode
+    ? 0
+    : rows.slice(0, activeRow).reduce((sum, row) => sum + heightOf(row), 0);
 
   const retry = async (row: RowModel) => {
     try {
@@ -304,7 +340,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
         </Button>
       </div>
     );
-  } else if (rows.length === 0) {
+  } else if (rows.length === 0 && featured === null) {
     body = (
       <div className="home-message" data-testid="home-empty">
         <h2 className="section-title">{t('home.empty.title')}</h2>
@@ -313,8 +349,20 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
     );
   } else {
     body = (
-      <>
-        <Hero item={heroItem} />
+      <FocusGroup
+        focusKey="home-stack"
+        enterable
+        saveLastFocusedChild
+        className="home-stage"
+        data-rows={inRows}
+        // Up and Down go from the hero to the rows and from row to row by index (a failed row
+        // stops at its Try again button).
+        onArrow={stackArrows([
+          ...(featured?.kind === 'slides' || featured?.kind === 'error' ? [HERO_KEY] : []),
+          ...rows.map((row) => (row.failed ? `home-retry:${row.id}` : rowFocusKey(row.id))),
+        ])}
+      >
+        <Hero item={heroItem} featured={featured} />
         <div
           className="home-rows"
           // Focus can scroll an overflow-hidden box on its own; the transform is the only scroll.
@@ -327,15 +375,14 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
             saveLastFocusedChild
             preferredChildFocusKey={rows[activeRow] ? rowFocusKey(rows[activeRow].id) : undefined}
             className="home-rows-inner"
-            // Up and Down go from row to row by index (a failed row stops at its Try again button).
-            onArrow={stackArrows(
-              rows.map((row) => (row.failed ? `home-retry:${row.id}` : rowFocusKey(row.id))),
-            )}
+            onFocusWithin={setInRows}
             style={{ transform: `translateY(${-offset}px)` }}
           >
             {rows.map((row, index) => {
+              // With a carousel the first rows stay mounted too: they show under the hero.
               const near =
-                index >= activeRow - MOUNT_ROWS_BEFORE && index <= activeRow + MOUNT_ROWS_AFTER;
+                (index >= activeRow - MOUNT_ROWS_BEFORE && index <= activeRow + MOUNT_ROWS_AFTER) ||
+                (featured !== null && index <= MOUNT_ROWS_AFTER);
               if (row.failed) {
                 return (
                   <section
@@ -386,12 +433,16 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
             })}
           </FocusGroup>
         </div>
-      </>
+      </FocusGroup>
     );
   }
 
   return (
-    <section className="home" data-testid="home">
+    <section
+      className="home"
+      data-testid="home"
+      data-featured={featured !== null || query.isPending}
+    >
       {body}
       {pending?.row.surface ? (
         <RemoveDialog

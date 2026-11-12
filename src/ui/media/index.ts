@@ -14,6 +14,7 @@ export {
 } from './Cards';
 export type { CardProps, FrameProps } from './Cards';
 export { WatchStatus } from './CardBadges';
+export { primaryRatingText } from './badges';
 export {
   boxSetCaption,
   cardSubtitle,

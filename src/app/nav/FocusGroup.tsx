@@ -12,6 +12,8 @@ export interface FocusGroupProps extends HTMLAttributes<HTMLDivElement> {
   enterable?: boolean;
   /** Called when the group itself holds the focus, which happens only while it has no focusable child. */
   onFocusSelf?: () => void;
+  /** Called with true when the focus moves onto an element inside the group, with false when it leaves. */
+  onFocusWithin?: (within: boolean) => void;
   /** Arrow keys cannot leave the group (screens, dialogs). */
   boundary?: boolean;
   /** Focus another child when the focused one disappears; off for dialogs that restore it themselves. */
@@ -33,6 +35,7 @@ export function FocusGroup({
   focusKey,
   enterable = false,
   onFocusSelf,
+  onFocusWithin,
   boundary = false,
   autoRestoreFocus = true,
   saveLastFocusedChild,
@@ -56,7 +59,15 @@ export function FocusGroup({
         : parentArrow,
     [hasHandler, parentArrow],
   );
-  const { ref, focusKey: key } = useFocusable<unknown, HTMLDivElement>({
+  const within = useRef(onFocusWithin);
+  useEffect(() => {
+    within.current = onFocusWithin;
+  });
+  const {
+    ref,
+    focusKey: key,
+    hasFocusedChild,
+  } = useFocusable<unknown, HTMLDivElement>({
     focusKey,
     focusable: enterable,
     // The service also reports focus that moved to a child; only the group itself counts here.
@@ -65,11 +76,16 @@ export function FocusGroup({
           if (getCurrentFocusKey() === focusKey) onFocusSelf();
         }
       : undefined,
+    // Tracking makes the group render when the focus enters or leaves it: only for those that ask.
+    trackChildren: onFocusWithin !== undefined,
     isFocusBoundary: boundary,
     autoRestoreFocus,
     saveLastFocusedChild,
     preferredChildFocusKey,
   });
+  useEffect(() => {
+    within.current?.(hasFocusedChild);
+  }, [hasFocusedChild]);
   return (
     <FocusContext.Provider value={key}>
       <ArrowContext.Provider value={arrow}>

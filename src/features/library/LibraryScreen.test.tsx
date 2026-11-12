@@ -404,7 +404,7 @@ describe('sub-view pills', () => {
 });
 
 describe('Recommended', () => {
-  it('shows the library sections as rows in server order, without empty and featured ones', async () => {
+  it('shows the library sections as rows in server order, without empty ones and the featured one (the hero)', async () => {
     const calls = serveLibrary(server, {
       sections: {
         'lib-1': [
@@ -555,6 +555,21 @@ describe('libraryRows', () => {
 
   it('prefixes the row id with the library, so two libraries never share a focus memory', () => {
     expect(libraryRows([section()], lib, 'movie', (s) => s.title)[0]!.id).toBe('lib-1/s');
+  });
+
+  it('leaves out the section that is the hero carousel, and only that one', () => {
+    const rows = libraryRows(
+      [
+        section({ id: 'hero', featured: true }),
+        section({ id: 'other', featured: true }),
+        section({ id: 'plain' }),
+      ],
+      lib,
+      'movie',
+      (s) => s.title,
+      'hero',
+    );
+    expect(rows.map((row) => row.id)).toEqual(['lib-1/other', 'lib-1/plain']);
   });
 
   it('marks a row with more than it shows', () => {

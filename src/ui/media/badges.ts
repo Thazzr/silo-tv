@@ -495,3 +495,18 @@ export function cardBadges(
   }
   return result;
 }
+
+/** The rating sources of an item in the order the badges list them: the first with a score is shown alone. */
+const RATING_IDS = ['rating_imdb', 'rating_tmdb', 'rating_rt', 'rating_rt_audience'] as const;
+
+/**
+ * The one rating a text line shows ("TMDB 7.0"): the first source the item has a score for, as
+ * text. The server only sends the sources the administrator shows.
+ */
+export function primaryRatingText(item: CatalogItem, context: BadgeContext): string | null {
+  for (const id of RATING_IDS) {
+    const text = REGISTRY.find((def) => def.id === id)?.text(item, context);
+    if (text) return text;
+  }
+  return null;
+}

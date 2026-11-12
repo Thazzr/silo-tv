@@ -21,6 +21,20 @@
   min-height: 0;
 }
 
+/* The pills (75 px and 12 px below) are drawn over the Recommended hero, which bleeds under them. */
+.library {
+  --library-head: 87px;
+}
+
+.library[data-pill-rows='2'] {
+  --library-head: 174px;
+}
+
+.library .lib-pills {
+  position: relative;
+  z-index: 2;
+}
+
 /* Skeletons and grids fill the body; the grid scrolls inside it with a transform. */
 .library-body .grid-viewport,
 .browse-grid .grid-viewport {
@@ -68,9 +82,37 @@
 }
 
 /* ---- Recommended ---- */
-.library-rows {
+/* The stage is the body; with a featured carousel the hero starts at the top of the content (under
+   the pills) and is 72 % of the window high, 760 px at most. Like on Home, the stage moves up by
+   the difference to 520 px while the focus is in the rows. Without one `--hero-h` is the height
+   of the pills, so the rows start at the top of the body. */
+.library-stage {
+  --hero-h: var(--library-head);
+  --hero-shift: 0px;
   position: absolute;
   inset: 0;
+  transition: transform var(--transition);
+}
+
+.library-stage[data-featured='true'] {
+  --hero-h: max(520px, min(72vh, 760px));
+  --hero-shift: calc(var(--hero-h) - 520px);
+}
+
+.library-stage[data-rows='true'][data-featured='true'] {
+  transform: translateY(calc(-1 * var(--hero-shift)));
+}
+
+.library-stage .hero {
+  top: calc(-1 * var(--library-head));
+}
+
+.library-rows {
+  position: absolute;
+  top: calc(var(--hero-h) - var(--library-head));
+  right: 0;
+  bottom: calc(-1 * var(--hero-shift));
+  left: 0;
   overflow: hidden;
 }
 

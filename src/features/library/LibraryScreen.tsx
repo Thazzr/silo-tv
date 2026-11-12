@@ -213,7 +213,13 @@ export function LibraryScreen({
   return (
     <FocusTrackerContext.Provider value={track}>
       <OverlayBackContext.Provider value={registerOverlayBack}>
-        <section className="library" data-testid="library-screen" data-kind={kind}>
+        <section
+          className="library"
+          data-testid="library-screen"
+          data-kind={kind}
+          // The pills the hero bleeds under: one row, or two with the library pills.
+          data-pill-rows={severalLibraries ? 2 : 1}
+        >
           {severalLibraries ? (
             <PillRow
               focusKey="library-pills"

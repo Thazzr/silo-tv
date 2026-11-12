@@ -124,6 +124,11 @@ interface FakeOptions {
    * episodes left, and every movie of the Browse view has a resolution.
    */
   badges?: boolean;
+  /**
+   * Home and the Movies library have a featured section ("Trending", three slides: the first three
+   * titles), which is the hero carousel; it is read on its own, like the web does.
+   */
+  featured?: boolean;
 }
 
 interface FakeProfile {
@@ -208,6 +213,24 @@ function browseTitles(params: URLSearchParams): FakeTitle[] {
       field === 'year' ? (a.year - b.year) * direction : a.title.localeCompare(b.title) * direction,
     );
 }
+
+/** The featured section of Home or of the Movies library: the first three titles as slides. */
+const featuredSection = (id: string) => ({
+  id,
+  section_type: 'trending',
+  title: 'Trending',
+  featured: true,
+  item_limit: 3,
+  is_custom: false,
+  customized: false,
+  total_count: 3,
+  items: MOVIES.slice(0, 3).map((movie) => ({
+    ...asCard(movie),
+    genres: [movie.genre],
+    overview: `${movie.title} is on the carousel.`,
+    backdrop_url: '/img/bd-bright.svg',
+  })),
+});
 
 const asCard = (movie: FakeTitle, badges = false) => ({
   content_id: movie.id,
@@ -393,6 +416,13 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
             'base64',
           ),
+        );
+      }
+      if (req.method === 'GET' && url.pathname === '/img/bd-bright.svg') {
+        // A plain light grey picture of a known brightness (200 of 255).
+        res.writeHead(200, { ...cors, 'Content-Type': 'image/svg+xml' });
+        return res.end(
+          '<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="rgb(200,200,200)"/></svg>',
         );
       }
       const tallMovie = tall
@@ -1051,9 +1081,14 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             section_item_limit_max: 100,
             row_item_limit_max: 100,
           });
+        case 'GET /api/v2/home/sections/trending/items':
+          return send(200, featuredSection('trending'));
+        case 'GET /api/v2/library/lib-1/sections/lib-trending/items':
+          return send(200, featuredSection('lib-trending'));
         case 'GET /api/v2/home/sections':
           return send(200, {
             sections: [
+              ...(options.featured ? [featuredSection('trending')] : []),
               {
                 id: 'continue_watching',
                 section_type: 'continue_watching',
@@ -1245,6 +1280,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         case 'GET /api/v2/library/lib-1/sections':
           return send(200, {
             sections: [
+              ...(options.featured ? [featuredSection('lib-trending')] : []),
               {
                 id: 'rec',
                 section_type: 'recently_added',
@@ -4714,4 +4750,150 @@ test('cards: the seasons of a started series show the check and the episodes lef
   await expect(second.getByTestId('watch-status-left')).toHaveText('1');
   await expect(second.getByTestId('watch-status-done')).toHaveCount(0);
   await expect(first.locator('.card-art')).toHaveCSS('border-radius', '16px');
+});
+
+test('Home: the featured carousel turns every 8 s, stands still on its buttons, is paged from the indicator, and the hero shows the focused card in the rows, keyboard only', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const { origin } = await startFakeSilo({ featured: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const carousel = page.getByTestId('hero-carousel');
+  const slideNumber = page.getByTestId('hero-slide-number');
+  await expect(carousel).toBeVisible({ timeout: 10_000 });
+
+  // The featured section is the carousel, not a row; no kicker, the title as text, "01 -- 03".
+  await expect(page.getByTestId('row-title')).toHaveText(['Weiterschauen', 'Kürzlich hinzugefügt']);
+  await expect(slideNumber).toHaveText('01');
+  await expect(page.getByTestId('hero-slide-count')).toHaveText('03');
+  await expect(page.getByTestId('hero-title')).toHaveText('First Title');
+  await expect(page.getByTestId('hero-synopsis')).toHaveText('First Title is on the carousel.');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mehr Infos' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Diashow pausieren' })).toBeVisible();
+
+  // The hero is 66 % of the window (713 px at 1080 p) and the first row shows its title below it,
+  // inside the safe area.
+  const hero = await page.getByTestId('hero').boundingBox();
+  expect(hero!.height).toBeCloseTo(712.8, 0);
+  const rowTitle = await page.getByTestId('row-title').first().boundingBox();
+  expect(rowTitle!.y).toBeGreaterThanOrEqual(hero!.y + hero!.height - 1);
+  expect(rowTitle!.y + rowTitle!.height).toBeLessThanOrEqual(1080 - 54);
+
+  // Left alone, the carousel turns after 8 s.
+  await expect(slideNumber).toHaveText('02', { timeout: 14_000 });
+  await expect(page.getByTestId('hero-title')).toHaveText('Second Title');
+
+  // Down from the tab bar lands on "Abspielen"; on the buttons the carousel stands still.
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await page.waitForTimeout(9000);
+  await expect(slideNumber).toHaveText('02');
+
+  // Right twice reaches the indicator; Right there pages to the next slide.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Mehr Infos' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Diashow pausieren' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(slideNumber).toHaveText('03');
+
+  // Down enters the first row; the hero shows the focused card and the carousel is out of sight.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await expect(carousel).toHaveCSS('opacity', '0');
+  await expect(page.getByTestId('hero-card').getByTestId('hero-title')).toHaveText('Second Title');
+
+  // Up returns to the indicator it left, and the carousel to the slide it showed.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Diashow pausieren' })).toBeFocused();
+  await expect(carousel).toHaveCSS('opacity', '1');
+  await expect(slideNumber).toHaveText('03');
+  await expect(page.getByTestId('hero-title')).toHaveText('Third Title');
+
+  // OK on the indicator pauses; its name follows.
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Diashow abspielen' })).toBeFocused();
+});
+
+test('Movies: Recommended opens with the carousel under the pills, Down reaches its buttons and then the rows, keyboard only', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ featured: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  const carousel = page.getByTestId('hero-carousel');
+  await expect(carousel).toBeVisible();
+  await expect(page.getByTestId('hero-slide-number')).toHaveText('01');
+  await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
+
+  // The hero starts at the top of the content, under the pills; the pills stay on top of it.
+  const hero = await page.getByTestId('hero').boundingBox();
+  expect(hero!.y).toBeCloseTo(141, 0);
+  expect(hero!.height).toBeCloseTo(760, 0);
+  const pill = page.getByRole('tab', { name: 'Empfohlen' });
+  const box = await pill.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(hero!.y);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(hero!.y + 200);
+  const topmost = await page.evaluate(
+    `document.elementFromPoint(${box!.x + box!.width / 2}, ${box!.y + box!.height / 2})?.closest('[role="tab"]')?.textContent ?? null`,
+  );
+  expect(topmost).toBe('Empfohlen');
+
+  // Down from the pills reaches "Abspielen", Down again the first row, Up the button again.
+  await page.keyboard.press('ArrowDown');
+  await expect(
+    page.getByTestId('library-screen').getByRole('tab', { name: 'Empfohlen' }),
+  ).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await expect(carousel).toHaveCSS('opacity', '0');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await expect(carousel).toHaveCSS('opacity', '1');
+});
+
+test("Home: the carousel's picture is as bright as the web's, only the left third and the bottom are shaded", async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ featured: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('hero-carousel')).toBeVisible({ timeout: 10_000 });
+  const brightnessAt = async (x: number, y: number) => {
+    const png = await page.screenshot({ clip: { x, y, width: 1, height: 1 } });
+    return page.evaluate(
+      `(async () => {
+        const img = new Image();
+        img.src = 'data:image/png;base64,${png.toString('base64')}';
+        await img.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const context = canvas.getContext('2d');
+        context.drawImage(img, 0, 0);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        return (r + g + b) / 3;
+      })()`,
+    ) as Promise<number>;
+  };
+  // The right half, above the copy: the picture (200) at 90 % brightness is 180; at least 85 % of it.
+  await expect.poll(() => brightnessAt(1300, 400), { timeout: 10_000 }).toBeGreaterThanOrEqual(170);
+  // The left third under the text is shaded.
+  expect(await brightnessAt(100, 400)).toBeLessThan(100);
 });

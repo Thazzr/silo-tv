@@ -66,8 +66,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Smooth scrolling on TV hardware (TV 2026-11-09): memoised rows and cards, artwork prefetched in the direction of travel, arrow keys in rows and grids move by index without the navigation library's layout measuring, permanent compositor layers over large pictures (measured with `npm run tv:profile`)
 - ✅ The Magic Remote wheel scrolls lists (LG recommendation): one wheel notch is one Up/Down step everywhere; suspended in the player and the probe (TV 2026-11-09)
 - ✅ The Magic Remote pointer moves the focus but never scrolls the page at the screen edge (TV 2026-11-10)
-- ⬜ Featured hero carousel, as in Silo's web app, on Home and on the Movies and Series tabs (user decision 2026-11-10):
-  - it shows the featured section of the home layout or of the library ("Featured — No. 01", title, meta, synopsis, Play and More Info, a "01 — 09" indicator); a mixed library shows only the tab's kind
+- 🟨 Featured hero carousel, as in Silo's web app, on Home and on the Movies and Series tabs (user decision 2026-11-10):
+  - it shows the featured section of the home layout or of the library (the title as text, meta, synopsis, Play and More Info, a "01 — 10" indicator; no "Featured — No. 01" line, as the web app shows it on 2026-11-12); a mixed library shows only the tab's kind
   - it turns every 8 s while the focus is elsewhere; Left/Right on the focusable indicator pages, OK pauses
   - in the rows below, the hero shows the focused card as before; the featured section is no longer a row of its own
 - ✅ Profile settings read from the server (effective values, gated by the settings contract), shared by the features below (TV 2026-11-11)

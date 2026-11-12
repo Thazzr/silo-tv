@@ -113,6 +113,8 @@ export function facets(overrides: Partial<S['CatalogFilters']> = {}): S['Catalog
 export interface LibraryCalls {
   /** `library/{id}/sections` reads. */
   sections: { id: string; query: URLSearchParams }[];
+  /** `library/{id}/sections/{section_id}/items` reads (the featured section of a hero carousel). */
+  featured: { id: string; sectionId: string; query: URLSearchParams }[];
   /** The query strings of the Browse (catalog) reads. */
   browse: URLSearchParams[];
   filters: URLSearchParams[];
@@ -130,6 +132,8 @@ export interface LibraryServe {
   libraries?: S['UserLibrary'][];
   /** The sections of each library by its id; a library without an entry has one row of movies. */
   sections?: Record<string, S['Section'][]>;
+  /** Answers the read of one section of a library: its entry of `sections` (404 when there is none), or this. */
+  sectionItems?: 'fail' | ((libraryId: string, sectionId: string) => Response | undefined);
   /** Answers a Browse read; defaults to ten titles. */
   browse?: (
     params: URLSearchParams,
@@ -159,6 +163,7 @@ export interface LibraryServe {
 export function serveLibrary(server: SetupServer, options: LibraryServe = {}): LibraryCalls {
   const calls: LibraryCalls = {
     sections: [],
+    featured: [],
     browse: [],
     filters: [],
     probes: [],
@@ -175,6 +180,16 @@ export function serveLibrary(server: SetupServer, options: LibraryServe = {}): L
       const id = String(params.id);
       calls.sections.push({ id, query: new URL(request.url).searchParams });
       return HttpResponse.json({ sections: options.sections?.[id] ?? [homeSection(`${id}-rec`)] });
+    }),
+    http.get(`${BASE_URL}/api/v2/library/:id/sections/:sectionId/items`, ({ request, params }) => {
+      const id = String(params.id);
+      const sectionId = String(params.sectionId);
+      calls.featured.push({ id, sectionId, query: new URL(request.url).searchParams });
+      if (options.sectionItems === 'fail') return new HttpResponse(null, { status: 500 });
+      const custom = options.sectionItems?.(id, sectionId);
+      if (custom) return custom;
+      const found = (options.sections?.[id] ?? []).find((section) => section.id === sectionId);
+      return found ? HttpResponse.json(found) : new HttpResponse(null, { status: 404 });
     }),
     http.get(`${BASE_URL}/api/v2/catalog`, async ({ request }) => {
       const query = new URL(request.url).searchParams;

@@ -1,24 +1,28 @@
 import { useEffect, useState } from 'react';
-import { useT } from '../../i18n';
+import { useLanguage, useT, type MessageKey } from '../../i18n';
 import { useProfileSetting } from '../settings/profileSettings';
 import {
   cardTitle,
-  episodeLabel,
   heroProtection,
   useMediaUrl,
   useSpoilerSettings,
   type CatalogItem,
 } from '../../ui/media';
+import { Carousel, HeroError } from './Carousel';
+import { heroMeta } from './heroMeta';
 
 /** How long the focus must rest on a card before the hero follows it. */
 export const HERO_REST_MS = 250;
 
 /**
  * Follows `value` once it has stopped changing for `restMs`. The first value is taken at once,
- * so the hero is never empty; while the focus runs across cards nothing is replaced.
+ * so the hero is never empty; so is a value after `null`, and `null` itself, so a hero that
+ * lets go of its card and picks one up again does not show the old one in between. While the
+ * focus runs across cards nothing is replaced.
  */
-export function useRestedValue<T>(value: T, restMs: number): T {
+export function useRestedValue<T>(value: T | null, restMs: number): T | null {
   const [rested, setRested] = useState(value);
+  if ((value === null || rested === null) && value !== rested) setRested(value);
   useEffect(() => {
     if (value === rested) return;
     const id = setTimeout(() => setRested(value), restMs);
@@ -27,65 +31,94 @@ export function useRestedValue<T>(value: T, restMs: number): T {
   return rested;
 }
 
-function runtimeText(minutes: number, t: ReturnType<typeof useT>): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return t('media.runtime.minutes', { m });
-  return m === 0 ? t('media.runtime.hours', { h }) : t('media.runtime.hoursMinutes', { h, m });
-}
-
-/** Year, runtime (or the episode number) and the content rating, in that order. */
-export function heroMeta(item: CatalogItem, t: ReturnType<typeof useT>): string {
-  const parts: string[] = [];
-  const label = episodeLabel(item);
-  if (label) parts.push(label);
-  else if (item.year) parts.push(String(item.year));
-  if (item.runtime && item.runtime > 0) parts.push(runtimeText(item.runtime, t));
-  if (item.content_rating) parts.push(item.content_rating);
-  return parts.join(' · ');
-}
+/** What the featured section of a screen gives the hero. */
+export type Featured =
+  | { kind: 'loading' }
+  /** `text` is the message above "Retry section"; `onRetry` reads the section again. */
+  | { kind: 'error'; text: MessageKey; onRetry: () => void }
+  | {
+      kind: 'slides';
+      slides: readonly CatalogItem[];
+      /** "Play" of a slide, and the remote's Play key. */
+      onPlay: (item: CatalogItem) => void;
+      /** "More Info" of a slide. */
+      onOpen: (item: CatalogItem) => void;
+    };
 
 /**
- * The top of Home: the backdrop of the card that has the focus, its title art (or its title),
- * a meta line and a two-line synopsis. It is display only. For an episode it shows the series'
- * art, since the episode's own pictures are stills. It changes after the focus has rested on a
- * card, so scrolling quickly through a row does not decode a picture per card.
+ * The top of Home and of a library's Recommended view. It has two modes.
+ * - Without `item` it is the featured carousel (when the screen has a featured section): the
+ *   slides, their title, meta line and synopsis, "Play", "More Info" and the slide indicator.
+ * - With an `item`, the card that has the focus in the rows below, it shows that card instead:
+ *   its backdrop, its title art (or title), a meta line and a synopsis, display only. For an
+ *   episode it shows the series' art, since the episode's own pictures are stills. It changes after
+ *   the focus has rested on a card, so scrolling quickly through a row does not decode a picture
+ *   per card.
+ * The carousel stays mounted under the card (invisible), so the focus can go back up to its
+ * buttons and the slide it showed is still the one it shows. A screen without a featured section
+ * has the card mode only.
  */
 export function Hero({
   item,
+  featured = null,
   restMs = HERO_REST_MS,
 }: {
   item: CatalogItem | null;
+  featured?: Featured | null;
   restMs?: number;
 }) {
-  const t = useT();
-  const url = useMediaUrl();
   const shown = useRestedValue(item, restMs);
+  let carousel = null;
+  if (featured?.kind === 'slides') {
+    carousel = (
+      <Carousel
+        slides={featured.slides}
+        shown={item === null}
+        onPlay={featured.onPlay}
+        onOpen={featured.onOpen}
+      />
+    );
+  } else if (featured?.kind === 'error') {
+    carousel = <HeroError text={featured.text} onRetry={featured.onRetry} />;
+  } else if (featured?.kind === 'loading' && item === null) {
+    return <HeroSkeleton />;
+  }
+  return (
+    <div className="hero" data-testid="hero" data-content-id={shown?.content_id}>
+      {carousel}
+      {shown ? <FocusedCard item={shown} /> : null}
+    </div>
+  );
+}
+
+function FocusedCard({ item }: { item: CatalogItem }) {
+  const t = useT();
+  const lang = useLanguage();
+  const url = useMediaUrl();
   const titleArt = useProfileSetting('ui.title_art');
   const spoilers = useSpoilerSettings();
   const [failed, setFailed] = useState<string | null>(null);
-  if (!shown) return <div className="hero" data-testid="hero" />;
 
-  const episode = shown.type.trim().toLowerCase() === 'episode';
+  const episode = item.type.trim().toLowerCase() === 'episode';
   // An unwatched episode's own still would give the story away: the backdrop is then left out.
-  const hidden = heroProtection(shown, spoilers);
+  const hidden = heroProtection(item, spoilers);
   const backdrop = hidden.hideBackdrop
     ? null
     : url(
-        (episode ? (shown.series_backdrop_url ?? shown.backdrop_url) : shown.backdrop_url) ??
+        (episode ? (item.series_backdrop_url ?? item.backdrop_url) : item.backdrop_url) ??
           undefined,
       );
-  const logo = url(shown.logo_url);
-  const title = cardTitle(shown);
+  const logo = url(item.logo_url);
+  const title = cardTitle(item);
   const hasLogo = logo !== null && failed !== logo;
   // Until the profile's choice is known the logo is neither shown nor requested; its box is
   // reserved so the text below does not jump once the answer arrives.
   const showLogo = hasLogo && titleArt.known && titleArt.value;
   const reserveLogo = hasLogo && !titleArt.known;
-  const meta = heroMeta(shown, t);
+  const meta = heroMeta(item, { t, lang });
 
   return (
-    <div className="hero" data-testid="hero" data-content-id={shown.content_id}>
+    <div className="hero-card" data-testid="hero-card">
       {backdrop ? (
         <img
           key={backdrop}
@@ -118,9 +151,9 @@ export function Hero({
             {meta}
           </p>
         ) : null}
-        {shown.overview && !hidden.hideOverview ? (
+        {item.overview && !hidden.hideOverview ? (
           <p className="hero-synopsis" data-testid="hero-synopsis">
-            {shown.overview}
+            {item.overview}
           </p>
         ) : null}
       </div>

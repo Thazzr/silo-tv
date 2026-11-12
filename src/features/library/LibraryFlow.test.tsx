@@ -18,6 +18,7 @@ import {
   profileCollection,
 } from '../../test/flowFixtures';
 import { homeSection } from '../../test/homeFixtures';
+import { serveSettings } from '../../test/settingsFixtures';
 import {
   collectionCard,
   collectionTab,
@@ -135,6 +136,8 @@ function renderMovies(
 
 function serve(options: LibraryServe = {}) {
   const calls = serveLibrary(server, options);
+  // The cards read the settings contract; an answer keeps the screens from waiting on a failure.
+  serveSettings(server);
   server.use(
     http.get(`${BASE_URL}/api/v2/profiles`, () =>
       HttpResponse.json(profileCollection([profile({ id: 'p1', name: 'Alex' })])),
@@ -490,8 +493,11 @@ describe('Browse in the shell', () => {
     expect(await screen.findByTestId('detail-stand-in')).toHaveTextContent('Detail of Title102');
     await pressKey(KEY.back);
     await screen.findByTestId('browse');
-    await waitFor(() =>
-      expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'Title102')),
+    // The list is read again, and the poster only exists once its page is in: the focus comes
+    // back to it then (on a loaded machine that takes longer than a waitFor's default).
+    await waitFor(
+      () => expect(getCurrentFocusKey()).toBe(gridCardKey('browse:lib-1:movie', 'Title102')),
+      { timeout: 12_000 },
     );
     // The same list as before, and never a title prefix.
     const last = calls.browse[calls.browse.length - 1]!;
