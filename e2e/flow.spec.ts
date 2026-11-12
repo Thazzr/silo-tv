@@ -3698,9 +3698,18 @@ test('a long filter list scrolls so the focused genre is visible, Down and Up', 
   for (let i = 0; i < 41; i += 1) await page.keyboard.press('ArrowDown');
   await inList('Genre 40');
   expect(await page.locator('.lib-panel-list').evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  // The panel sits in a fixed backdrop; a step inside the visible part must not move the list.
+  const listTop = () => page.locator('.lib-panel-list').evaluate((el) => el.scrollTop);
+  const atEnd = await listTop();
+  await page.keyboard.press('ArrowUp');
+  await inList('Genre 39');
+  expect(await listTop()).toBe(atEnd);
+  await page.keyboard.press('ArrowDown');
+  await inList('Genre 40');
+  expect(await listTop()).toBe(atEnd);
   for (let i = 0; i < 41; i += 1) await page.keyboard.press('ArrowUp');
   await inList('Action');
-  expect(await page.locator('.lib-panel-list').evaluate((el) => el.scrollTop)).toBe(0);
+  expect(await listTop()).toBe(0);
 });
 
 test('a screen taller than the window scrolls the document to the focused element', async ({
@@ -3739,6 +3748,47 @@ test('a screen taller than the window scrolls the document to the focused elemen
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByRole('radio', { name: '7 s' })).toBeFocused();
   await expect.poll(inWindow).toBe(true);
+});
+
+test('Settings: scrolling back up shows the page title and the section headings above the focus, keyboard only', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true, subtitles: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const title = page.getByRole('heading', { level: 1, name: 'Einstellungen' });
+  await expect(title).toBeVisible();
+  const scrollY = () => page.evaluate<number>('window.scrollY');
+
+  // Down through auto-play, the subtitle entry, language and clock to the last row (rewind).
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('settings-rewind').locator(':focus')).toHaveCount(1);
+  expect(await scrollY()).toBeGreaterThan(0);
+
+  // Up to the section's first row: its heading shows again.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('settings-language').locator(':focus')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 2, name: 'Dieser Fernseher' })).toBeInViewport({
+    ratio: 1,
+  });
+
+  // Up to the very first control: the page is back at the top, the title fully in view.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(
+    page.getByTestId('settings-autoplay').getByRole('radio', { name: 'Aus' }),
+  ).toBeFocused();
+  await expect(title).toBeInViewport({ ratio: 1 });
+  expect(await scrollY()).toBe(0);
 });
 
 test('search: type with the on-screen keyboard, results with a box set, open a title and come back, clear again, keyboard only', async ({

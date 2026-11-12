@@ -78,6 +78,61 @@ function canScroll(el: HTMLElement): boolean {
   return scrolls(style.overflowX) || scrolls(style.overflowY);
 }
 
+/** Whether the element stays where it is on screen while its page scrolls (a sticky or fixed bar). */
+function staysOnScreen(el: Element, scope: ParentNode): boolean {
+  // Only what lies between the element and the scrolling box counts: a dialog's own fixed
+  // backdrop is above the box and moves nothing inside it.
+  const stop = scope === document ? document.documentElement : scope;
+  for (let up: Element | null = el; up && up !== stop; up = up.parentElement) {
+    const { position } = getComputedStyle(up);
+    if (position === 'sticky' || position === 'fixed') return true;
+  }
+  return false;
+}
+
+/**
+ * The bottom edge of the focusable element that lies above `node` in `scope`, or null when
+ * there is none. Focusable means what the navigation joined (`data-focus-key`), not every
+ * `tabindex`. It has to come before `node` in the document and end above where `node` starts, so a
+ * neighbour in the same row is not "above". Bars that stay on screen and elements that take no
+ * room do not count.
+ */
+function precedingFocusableBottom(scope: ParentNode, node: HTMLElement): number | null {
+  const top = node.getBoundingClientRect().top;
+  const all = scope.querySelectorAll<HTMLElement>('[data-focus-key]:not(:disabled)');
+  for (let i = all.length - 1; i >= 0; i -= 1) {
+    const other = all[i]!;
+    if (!(other.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    const rect = other.getBoundingClientRect();
+    if (rect.bottom > top || (rect.width === 0 && rect.height === 0) || staysOnScreen(other, scope))
+      continue;
+    return rect.bottom;
+  }
+  return null;
+}
+
+/**
+ * How far to scroll a box, or the document, vertically for the focused element: the way the room
+ * needs. Where the element is the first focusable one of the box, or the way is up, it goes
+ * further up so that what lies between the focusable element above and this one shows too (a
+ * heading, a note, a setting's name), or all the way to the top when none is above. The focused
+ * element wins: it never moves out of the room at the bottom. `edgeTop` is where the visible
+ * part starts, `scrolled` how far the box is scrolled now, `aboveBottom` the bottom edge of the
+ * focusable element before the focused one, if any.
+ */
+function verticalScroll(
+  rect: { top: number; bottom: number },
+  room: { top: number; bottom: number },
+  edgeTop: number,
+  scrolled: number,
+  aboveBottom: number | null,
+): number {
+  const needed = overshoot(rect.top, rect.bottom, room.top, room.bottom);
+  if (needed >= 0 && aboveBottom !== null) return needed;
+  const wished = aboveBottom === null ? scrolled : edgeTop - aboveBottom;
+  return -Math.max(-needed, Math.min(wished, room.bottom - rect.bottom));
+}
+
 /** What native focus scrolling did before (scroll the nearest way, honour scroll-padding), by hand. */
 export function scrollFocusedIntoView(node: HTMLElement): void {
   if (node.closest(`[${TRANSFORM_SCROLLED_ATTR}="box"]`)) return;
@@ -88,11 +143,16 @@ export function scrollFocusedIntoView(node: HTMLElement): void {
     const box = el.getBoundingClientRect();
     const rect = node.getBoundingClientRect();
     const m = EDGE_MARGIN;
-    el.scrollTop += overshoot(
-      rect.top,
-      rect.bottom,
-      box.top + edgeMargin(node, 'Top'),
-      box.bottom - edgeMargin(node, 'Bottom'),
+    const room = {
+      top: box.top + edgeMargin(node, 'Top'),
+      bottom: box.bottom - edgeMargin(node, 'Bottom'),
+    };
+    el.scrollTop += verticalScroll(
+      rect,
+      room,
+      box.top,
+      el.scrollTop,
+      precedingFocusableBottom(el, node),
     );
     el.scrollLeft += overshoot(rect.left, rect.right, box.left + m, box.right - m);
   }
@@ -101,7 +161,14 @@ export function scrollFocusedIntoView(node: HTMLElement): void {
   // The document: the same, inside the window minus its scroll padding.
   const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
   const rect = node.getBoundingClientRect();
-  const dy = overshoot(rect.top, rect.bottom, pad, window.innerHeight - edgeMargin(node, 'Bottom'));
+  const room = { top: pad, bottom: window.innerHeight - edgeMargin(node, 'Bottom') };
+  const dy = verticalScroll(
+    rect,
+    room,
+    pad,
+    root.scrollTop,
+    precedingFocusableBottom(document, node),
+  );
   if (dy !== 0) root.scrollTop += dy;
 }
 

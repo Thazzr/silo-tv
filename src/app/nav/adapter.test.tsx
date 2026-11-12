@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Focusable } from '.';
 import { NavAdapter, scrollFocusedIntoView } from './adapter';
 import * as origin from './origin';
@@ -602,5 +602,235 @@ describe('scrollFocusedIntoView: the document', () => {
     const node = documentCase(root, { top: 200, bottom: 300 });
     scrollFocusedIntoView(node);
     expect(writes).toBe(0);
+  });
+});
+
+describe('scrollFocusedIntoView: scrolling back up shows what stands above the focus', () => {
+  // The document is searched for focusable elements, so the other tests' pages must be gone.
+  beforeEach(() => document.body.replaceChildren());
+
+  /**
+   * A list at 100..400 on screen (room for the focused element: 124..376), scrolled by 400. The
+   * markup is a focusable "above", plain text, the focused element, and a focusable below it.
+   */
+  function page(aboveMarkup = '<button id="above" data-focus-key="above">a</button>') {
+    const host = html(
+      `<div id="list" style="overflow-y:auto">${aboveMarkup}<p>heading</p>` +
+        '<button id="c" data-focus-key="c">c</button>' +
+        '<button id="below" data-focus-key="below">b</button></div>',
+    );
+    const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+      top: 100,
+      bottom: 400,
+      scrollHeight: 2000,
+    });
+    state.scrollTop = 400;
+    return { host, state };
+  }
+
+  function place(host: HTMLElement, id: string, top: number, bottom: number) {
+    const el = host.querySelector<HTMLElement>(`#${id}`)!;
+    el.getBoundingClientRect = () =>
+      ({ top, bottom, left: 0, right: 50, width: 50, height: bottom - top }) as DOMRect;
+    return el;
+  }
+
+  it('scrolls to the very top when no focusable element is above', () => {
+    const { host, state } = page('');
+    state.scrollTop = 100;
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('scrolls to the top for the first focusable element even when it already lies in the room', () => {
+    const { host, state } = page('');
+    state.scrollTop = 100;
+    scrollFocusedIntoView(place(host, 'c', 124, 174));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('leaves an element in the room where it is when a focusable element is above', () => {
+    const { host, state } = page();
+    place(host, 'above', -100, -50);
+    scrollFocusedIntoView(place(host, 'c', 124, 174));
+    expect(state.scrollTop).toBe(400);
+  });
+
+  it('shows what lies between the focusable element above and the focused one', () => {
+    const { host, state } = page();
+    place(host, 'above', -100, -50);
+    scrollFocusedIntoView(place(host, 'c', 80, 130));
+    // The element above ends at the top edge of the list afterwards: 150 px up, not just 44.
+    expect(state.scrollTop).toBe(250);
+  });
+
+  it('is limited by the room, and the focused element stays fully visible', () => {
+    const { host, state } = page();
+    place(host, 'above', -600, -500);
+    scrollFocusedIntoView(place(host, 'c', 80, 330));
+    // The element may move down only until it ends at the bottom of the room (376).
+    expect(state.scrollTop).toBe(400 - 46);
+  });
+
+  it('shows the start of a focused element that is taller than the room, as before', () => {
+    const { host, state } = page();
+    place(host, 'above', -600, -500);
+    scrollFocusedIntoView(place(host, 'c', 80, 500));
+    expect(state.scrollTop).toBe(400 - 44);
+  });
+
+  it('does not scroll further than the way the room needs when the element above is in view', () => {
+    const { host, state } = page();
+    place(host, 'above', 40, 90);
+    scrollFocusedIntoView(place(host, 'c', 100, 150));
+    expect(state.scrollTop).toBe(400 - 24);
+  });
+
+  it('does not take a focusable element that comes after the focused one for the one above', () => {
+    const { host, state } = page('');
+    state.scrollTop = 100;
+    place(host, 'below', -500, -450);
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('does not take a neighbour in the same row for the focusable element above', () => {
+    const { host, state } = page('<button id="left" data-focus-key="left">l</button>');
+    state.scrollTop = 100;
+    place(host, 'left', 90, 140);
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('ignores elements the navigation does not know, disabled ones and ones without a box', () => {
+    const { host, state } = page(
+      '<button id="above" tabindex="0">plain</button>' +
+        '<button id="off" data-focus-key="off" disabled>off</button>' +
+        '<button id="gone" data-focus-key="gone">gone</button>',
+    );
+    state.scrollTop = 100;
+    place(host, 'above', -300, -250);
+    place(host, 'off', -300, -250);
+    host.querySelector<HTMLElement>('#gone')!.getBoundingClientRect = () =>
+      ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 }) as DOMRect;
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('ignores a bar that stays on screen above the content', () => {
+    const { host, state } = page(
+      '<div style="position:sticky"><button id="above" data-focus-key="above">bar</button></div>',
+    );
+    state.scrollTop = 100;
+    place(host, 'above', 0, 50);
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it.each([
+    [
+      'the element itself',
+      '<button id="above" data-focus-key="above" style="position:fixed">bar</button>',
+    ],
+    [
+      'an ancestor inside the box',
+      '<div style="position:fixed"><button id="above" data-focus-key="above">bar</button></div>',
+    ],
+  ])('ignores a fixed bar: %s', (_name, markup) => {
+    const { host, state } = page(markup);
+    state.scrollTop = 100;
+    place(host, 'above', 0, 50);
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('ignores a focusable element without room even when its box lies below the edge', () => {
+    const { host, state } = page();
+    state.scrollTop = 100;
+    host.querySelector<HTMLElement>('#above')!.getBoundingClientRect = () =>
+      ({ top: 20, bottom: 20, left: 0, right: 0, width: 0, height: 0 }) as DOMRect;
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  it('does not count a focusable element outside the scrolling box', () => {
+    const { host, state } = page('');
+    state.scrollTop = 100;
+    const outside = document.createElement('button');
+    outside.setAttribute('data-focus-key', 'outside');
+    outside.getBoundingClientRect = () =>
+      ({ top: -900, bottom: -850, left: 0, right: 50, width: 50, height: 50 }) as DOMRect;
+    host.before(outside);
+    scrollFocusedIntoView(place(host, 'c', 90, 140));
+    expect(state.scrollTop).toBe(0);
+  });
+
+  describe('a list in a fixed backdrop, as in a dialog or a menu', () => {
+    function dialogList() {
+      const host = html(
+        '<div style="position:fixed"><div id="list" style="overflow-y:auto">' +
+          '<button id="a" data-focus-key="a">a</button><button id="c" data-focus-key="c">c</button>' +
+          '</div></div>',
+      );
+      const state = layoutBox(host.querySelector<HTMLElement>('#list')!, {
+        top: 100,
+        bottom: 400,
+        scrollHeight: 2000,
+      });
+      state.scrollTop = 400;
+      place(host, 'a', 130, 180);
+      return { host, state };
+    }
+
+    it('leaves a scrolled list alone when the item is inside the room', () => {
+      const { host, state } = dialogList();
+      scrollFocusedIntoView(place(host, 'c', 200, 250));
+      expect(state.scrollTop).toBe(400);
+    });
+
+    it('takes the list to the top for its first item', () => {
+      const { host, state } = dialogList();
+      state.scrollTop = 100;
+      scrollFocusedIntoView(place(host, 'a', 130, 180));
+      expect(state.scrollTop).toBe(0);
+    });
+  });
+
+  it('scrolls the document to the top when no focusable element is above', () => {
+    const host = html('<button id="c" data-focus-key="c">c</button>');
+    const root = { scrollHeight: 5000, clientHeight: 1080, scrollTop: 300 };
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, value: root });
+    withStyles(document.documentElement, { scrollPaddingTop: '160px' });
+    try {
+      scrollFocusedIntoView(nodeAt(host, { top: 100, bottom: 150 }));
+      expect(root.scrollTop).toBe(0);
+    } finally {
+      Reflect.deleteProperty(document, 'scrollingElement');
+    }
+  });
+
+  it('reveals what lies above a control in the document', () => {
+    const host = html(
+      '<button id="above" data-focus-key="above">a</button><p>heading</p>' +
+        '<button id="c" data-focus-key="c">c</button>',
+    );
+    place(host, 'above', -300, -250);
+    const root = { scrollHeight: 5000, clientHeight: 1080, scrollTop: 2000 };
+    Object.defineProperty(document, 'scrollingElement', { configurable: true, value: root });
+    withStyles(document.documentElement, { scrollPaddingTop: '160px' });
+    try {
+      scrollFocusedIntoView(place(host, 'c', 100, 150));
+      // 160 - (-250): the element above ends at the padding edge afterwards.
+      expect(root.scrollTop).toBe(2000 - 410);
+    } finally {
+      Reflect.deleteProperty(document, 'scrollingElement');
+    }
+  });
+
+  it('leaves scrolling down alone', () => {
+    const { host, state } = page();
+    place(host, 'above', -100, -50);
+    scrollFocusedIntoView(place(host, 'c', 300, 420));
+    expect(state.scrollTop).toBe(400 + 44);
   });
 });
