@@ -603,6 +603,8 @@ describe('SettingsScreen playback section (auto-play next)', () => {
     await pressKey(KEY.enter);
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]?.value).toBe(false);
+    // The save ends with dropping this TV's own value: wait for it, or it lands in the next test.
+    await waitFor(() => expect(deletes).toHaveLength(1));
   });
 
   it('keeps the shown value when the write fails', async () => {
