@@ -536,21 +536,34 @@ describe('libraryRows', () => {
     section_type: 'recently_added',
     featured: false,
     total_count: 2,
-    items: titles('T', 2),
+    items: titles(overrides.id ?? 's', 2),
     ...overrides,
   });
 
-  it('uses landscape cards for rows in progress and poster cards for the rest', () => {
+  it('uses wide cards for Continue Watching and Next Up and poster cards for the rest', () => {
     const rows = libraryRows(
       [
         section({ id: 'cw', section_type: 'continue_watching' }),
+        section({ id: 'nu', section_type: 'next_up' }),
         section({ id: 'ra', section_type: 'recently_added' }),
+        section({ id: 'ip', section_type: 'in_progress' }),
       ],
       lib,
       'movie',
       (s) => s.title,
     );
-    expect(rows.map((row) => row.shape)).toEqual(['landscape', 'poster']);
+    expect(rows.map((row) => row.shape)).toEqual(['landscape', 'landscape', 'poster', 'poster']);
+  });
+
+  it('shows every card the server sends, also one that a row above shows', () => {
+    const shared = titles('x', 2);
+    const rows = libraryRows(
+      [section({ id: 'a', items: shared }), section({ id: 'b', items: shared })],
+      lib,
+      'movie',
+      (s) => s.title,
+    );
+    expect(rows.map((row) => row.items.length)).toEqual([2, 2]);
   });
 
   it('prefixes the row id with the library, so two libraries never share a focus memory', () => {

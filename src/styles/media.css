@@ -18,11 +18,11 @@
 }
 
 .card-poster {
-  width: 176px;
+  width: 185px;
 }
 
 .card-landscape {
-  width: 360px;
+  width: 315px;
 }
 
 .card-grid {
@@ -39,22 +39,19 @@
 }
 
 .card-poster .card-art {
-  height: 264px;
+  height: 278px;
 }
 
 .card-landscape .card-art {
-  height: 200px;
+  height: 177px;
 }
 
 .card-grid .card-art {
   height: 390px;
 }
 
-/* Focus: the art grows on whole pixels (176 -> 185, 360 -> 378, 260 -> 273 wide). */
-.card-poster:focus .card-art {
-  transform: scale(1.0511);
-}
-
+/* Focus: the art grows by 5 %. */
+.card-poster:focus .card-art,
 .card-landscape:focus .card-art,
 .card-grid:focus .card-art {
   transform: scale(1.05);
@@ -339,7 +336,9 @@
   overflow: hidden;
 }
 
+/* The wide card's three lines (WIDE_CAPTION_HEIGHT). */
 .card-landscape .card-caption {
+  height: 83px;
   margin-top: 14px;
 }
 
@@ -364,6 +363,12 @@
 .card-sub {
   font-size: var(--fs-small);
   line-height: 26px;
+}
+
+/* The year line of a poster card, in the web's meta style. */
+.card-sub-meta {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .card:focus .card-title {
@@ -509,6 +514,9 @@
      difference, so the visible part of the hero and the rows below it are what they were. */
   --hero-h: 520px;
   --hero-shift: 0px;
+  /* While the focus is in the rows the stage also moves up by this much, so a poster row's last
+     caption line ends at the safe area's bottom edge (1026 px at 1080 p) instead of at 1080 px. */
+  --rows-lift: 56px;
 }
 
 .home[data-featured='true'] {
@@ -524,7 +532,7 @@
 }
 
 .home-stage[data-rows='true'] {
-  transform: translateY(calc(-1 * var(--hero-shift)));
+  transform: translateY(calc(-1 * (var(--hero-shift) + var(--rows-lift))));
 }
 
 .hero {
@@ -923,7 +931,7 @@
   position: absolute;
   top: var(--hero-h);
   right: 0;
-  bottom: calc(-1 * var(--hero-shift));
+  bottom: calc(-1 * (var(--hero-shift) + var(--rows-lift)));
   left: 0;
   overflow: hidden;
 }

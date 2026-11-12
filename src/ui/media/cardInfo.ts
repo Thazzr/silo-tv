@@ -3,6 +3,7 @@
 import type { components } from '../../api/generated/schema';
 import type { MessageKey } from '../../i18n';
 import { resumePoint } from '../../playback/resume';
+import type { CardShape } from './layout';
 
 export type CatalogItem = components['schemas']['CatalogItem'];
 export type CatalogBoxSet = components['schemas']['CatalogBoxSet'];
@@ -44,10 +45,44 @@ export function cardTitle(item: CatalogItem): string {
   return isEpisode(item) ? item.series_title || item.title : item.title;
 }
 
-/** "S1 · E3" for an episode that knows both numbers, else the year of a movie or series. */
-export function cardSubtitle(item: CatalogItem): string {
+type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
+
+/**
+ * The line under a poster card's title, as the web has it: "S1 · E3" for an episode that knows
+ * both numbers; else the year of a movie, and the year and "Series" for a series (the card sets
+ * it in capitals).
+ */
+export function cardSubtitle(item: CatalogItem, t: Translate): string {
   if (isEpisode(item)) return episodeLabel(item) ?? '';
-  return item.year ? String(item.year) : '';
+  const series = item.type.trim().toLowerCase() === 'series';
+  return [item.year ? String(item.year) : null, series ? t('card.series') : null]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * The lines under a wide card (Continue Watching, Next Up): the title is `cardTitle`; this is the
+ * rest, as the web has it. `episode` is "Season 4 Episode 7 • Title" (without the title when the
+ * series' title is not known, since the card's title is then the episode's own); `status` is
+ * "Next Episode" on a Next Up card, else the minutes left ("12 min left") once the length is known.
+ */
+export function wideCaption(
+  item: CatalogItem,
+  t: Translate,
+): { episode: string | null; status: string | null } {
+  let episode: string | null = null;
+  if (item.season_number !== undefined && item.episode_number !== undefined) {
+    const numbers = { season: item.season_number, episode: item.episode_number };
+    episode =
+      item.series_title && item.title
+        ? t('card.wide.episodeWithTitle', { ...numbers, title: item.title })
+        : t('card.wide.episode', numbers);
+  }
+  if (item.item_source === 'next_up') return { episode, status: t('card.wide.nextEpisode') };
+  const total = item.duration_seconds ?? (item.runtime ? item.runtime * 60 : 0);
+  if (total <= 0) return { episode, status: null };
+  const left = Math.max(0, total - (item.position_seconds ?? 0));
+  return { episode, status: t('card.wide.minutesLeft', { minutes: Math.round(left / 60) }) };
 }
 
 export function episodeLabel(item: CatalogItem): string | null {
@@ -90,12 +125,10 @@ export function watchedFraction(item: CatalogItem): number | null {
   return Math.max(0, Math.min(1, position / total));
 }
 
-/** Sections that show landscape cards: Continue Watching, anything in progress, any "next" row. */
-export function isLandscapeSection(sectionType: string): boolean {
-  return /continue|in_progress|next/i.test(sectionType);
+/** The cards of a row by its section type, as the web does: wide for the progress rows, else posters. */
+export function sectionCardShape(sectionType: string): CardShape {
+  return sectionType === 'continue_watching' || sectionType === 'next_up' ? 'landscape' : 'poster';
 }
-
-type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
 /** "2001–2011", or one year when both are the same; null when the server gave no year. */
 export function yearsText(first: number | undefined, last: number | undefined): string | null {

@@ -10,7 +10,13 @@ describe('skeletons', () => {
     const card = screen.getByTestId('card-skeleton');
     expect(card).toHaveClass('card-landscape');
     expect(card.querySelector('.card-art')).not.toBeNull();
-    expect(card.querySelectorAll('.skeleton-line')).toHaveLength(2);
+    // A wide card has three caption lines.
+    expect(card.querySelectorAll('.skeleton-line')).toHaveLength(3);
+  });
+
+  it('a poster card skeleton has two caption lines', () => {
+    renderWithSilo(<CardSkeleton shape="poster" />);
+    expect(screen.getByTestId('card-skeleton').querySelectorAll('.skeleton-line')).toHaveLength(2);
   });
 
   it('a row skeleton is as high as a real row of its shape and fills the screen with cards', () => {

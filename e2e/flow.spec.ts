@@ -1453,7 +1453,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
 
   // The row shows two of 40 titles and ends with Explore all: OK opens the row's grid.
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Alle entdecken/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('section-grid-title')).toHaveText('Kürzlich hinzugefügt');
   await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
@@ -1467,7 +1467,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   // Back returns to Home, on the Explore all card it was opened from.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('home')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Alle entdecken/ })).toBeFocused();
 
   // Up to Continue Watching: OK on the movie opens its page (tapped, not held), which offers to
   // resume where the profile stopped.
@@ -3388,7 +3388,7 @@ test('detail page: a movie in a box set shows its row; Explore all opens the box
   await expect(row.getByRole('button', { name: /Saga One/ })).toBeFocused();
   await expect.poll(async () => Math.abs((await row.boundingBox())!.y - 54)).toBeLessThanOrEqual(2);
   for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
-  await expect(row.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
+  await expect(row.getByRole('button', { name: /Alle entdecken/ })).toBeFocused();
   await page.keyboard.press('Enter');
 
   // The box set page: the title at once, then the chip line and the label of a set in progress.
@@ -3431,7 +3431,7 @@ test('detail page: a movie in a box set shows its row; Explore all opens the box
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await expect(
-    page.getByTestId('row-boxset').getByRole('button', { name: /Alle ansehen/ }),
+    page.getByTestId('row-boxset').getByRole('button', { name: /Alle entdecken/ }),
   ).toBeFocused();
 });
 
@@ -4896,4 +4896,102 @@ test("Home: the carousel's picture is as bright as the web's, only the left thir
   await expect.poll(() => brightnessAt(1300, 400), { timeout: 10_000 }).toBeGreaterThanOrEqual(170);
   // The left third under the text is shaded.
   expect(await brightnessAt(100, 400)).toBeLessThan(100);
+});
+
+test('Home rows like the web: wide Continue Watching cards with three lines, the hero repeating them, posters with the year line and Explore all, keyboard only', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true, series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ }).first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  const sizeOf = (card: ReturnType<typeof page.locator>) =>
+    card.evaluate((el) => ({
+      width: el.clientWidth,
+      art: el.querySelector('.card-art')!.clientHeight,
+    }));
+
+  // Down into Continue Watching, then Right to the episode: a 315x177 card with its three lines.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const episode = page.locator('.card-landscape:focus');
+  await expect(episode).toBeFocused();
+  expect(await sizeOf(episode)).toEqual({ width: 315, art: 177 });
+  await expect(episode.getByTestId('card-title')).toHaveText('A Show');
+  await expect(episode.getByTestId('card-episode')).toHaveText('Staffel 1 Folge 9 • Episode 1.9');
+  await expect(episode.getByTestId('card-status')).toHaveText('Noch 35 Min.');
+  // The hero repeats the lines once the focus has rested.
+  await expect(page.getByTestId('hero-title')).toHaveText('A Show');
+  await expect(page.getByTestId('hero-episode')).toHaveText('Staffel 1 Folge 9 • Episode 1.9');
+  await expect(page.getByTestId('hero-status')).toHaveText('Noch 35 Min.');
+  // The cards stand 335 px apart (315 + the web's 20 px gap).
+  const lefts = await page
+    .getByTestId('row-continue_watching')
+    .locator('.row-slot')
+    .evaluateAll((slots) => slots.map((slot) => slot.getBoundingClientRect().left));
+  expect(lefts[1]! - lefts[0]!).toBe(335);
+
+  // Down into Recently Added: 185x278 posters with the title and the year line; the hero follows
+  // and drops the lines of the wide card.
+  await page.keyboard.press('ArrowDown');
+  const poster = page.locator('.card-poster:focus');
+  await expect(poster).toBeFocused();
+  expect(await sizeOf(poster)).toEqual({ width: 185, art: 278 });
+  await expect(poster.getByTestId('card-title')).toBeVisible();
+  await expect(poster.getByTestId('card-sub')).toHaveText(/^\d{4}( Serie)?$/);
+  await expect(page.getByTestId('hero-title')).toHaveText(
+    await poster.getByTestId('card-title').innerText(),
+  );
+  await expect(page.getByTestId('hero-episode')).toHaveCount(0);
+  await expect(page.getByTestId('hero-status')).toHaveCount(0);
+
+  // The row ends with the "Alle entdecken" card.
+  // The series, the first and the third title come first.
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Alle entdecken/ })).toBeFocused();
+});
+
+test('rows mode keeps the focused row inside the safe area: its last caption line ends at or above 1026 px, wide and poster rows on Home, a poster row on Movies', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true, series: true, featured: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('hero-carousel')).toBeVisible({ timeout: 10_000 });
+  // Where the focused card's caption ends, once the rows have settled under the focus.
+  const captionEnd = async () => {
+    await page.waitForTimeout(600);
+    return page
+      .locator('.card:focus .card-caption')
+      .evaluate((el) => el.getBoundingClientRect().bottom);
+  };
+
+  // Down past the carousel's buttons into Continue Watching (wide), then into Recently Added.
+  for (let i = 0; i < 2; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-landscape:focus')).toBeFocused();
+  expect(await captionEnd()).toBeLessThanOrEqual(1026);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-poster:focus')).toBeFocused();
+  expect(await captionEnd()).toBeLessThanOrEqual(1026);
+
+  // Movies: the Recommended view's first row.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('hero-slide-number')).toHaveText('01');
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-poster:focus')).toBeFocused();
+  expect(await captionEnd()).toBeLessThanOrEqual(1026);
 });

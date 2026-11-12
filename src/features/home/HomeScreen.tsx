@@ -10,12 +10,12 @@ import {
   cardFocusKey,
   cardTitle,
   CatalogRow,
-  isLandscapeSection,
   keepAtOrigin,
   RowSkeleton,
   ROW_ERROR_HEIGHT,
   rowFocusKey,
   rowHeight,
+  sectionCardShape,
   type CardShape,
   type CatalogItem,
   type FocusIndexMemory,
@@ -73,7 +73,7 @@ function rowFrom(
   const base = {
     id: section.id,
     title: titleOf(section),
-    shape: isLandscapeSection(section.section_type) ? ('landscape' as const) : ('poster' as const),
+    shape: sectionCardShape(section.section_type),
     surface: surfaceOf(section.section_type),
   };
   if (override?.kind === 'failed') return { ...base, items: [], hasMore: false, failed: true };
@@ -169,20 +169,23 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   );
 
   const [focusedRow, setFocusedRow] = useState(() => rowMemory.get(LAST_ROW_KEY) ?? 0);
-  const [focusedItem, setFocusedItem] = useState<CatalogItem | null>(null);
+  const [focusedCard, setFocusedCard] = useState<{ item: CatalogItem; shape: CardShape } | null>(
+    null,
+  );
   // Whether the focus is on something in the rows (not in the hero or above it).
   const [inRows, setInRows] = useState(false);
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
-  const cardItem = useMemo(() => {
-    if (focusedItem) return focusedItem;
+  const card = useMemo(() => {
+    if (focusedCard) return focusedCard;
     // Before the first focus: the card the memory points at, else the first one.
     const row = rows[activeRow];
-    return row ? (row.items[rowMemory.get(row.id) ?? 0] ?? row.items[0] ?? null) : null;
-  }, [focusedItem, rows, activeRow, rowMemory]);
+    const item = row ? (row.items[rowMemory.get(row.id) ?? 0] ?? row.items[0]) : undefined;
+    return row && item ? { item, shape: row.shape } : null;
+  }, [focusedCard, rows, activeRow, rowMemory]);
   // With a featured section the hero shows a card only while the focus is in the rows; and the
   // rows then sit where the focused row is, else at their first row, just under the hero.
   const carouselMode = featured !== null && !inRows;
-  const heroItem = carouselMode ? null : cardItem;
+  const heroCard = carouselMode ? null : card;
 
   const offset = carouselMode
     ? 0
@@ -263,7 +266,10 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
     },
     [rowMemory],
   );
-  const cardFocused = useCallback((item: CatalogItem) => setFocusedItem(item), []);
+  const cardFocused = useCallback(
+    (item: CatalogItem, shape: CardShape) => setFocusedCard({ item, shape }),
+    [],
+  );
   useEffect(() => {
     const press: { item: CatalogItem; fired: boolean; timer: ReturnType<typeof setTimeout> }[] = [];
     const findCard = (): PendingRemoval | null => {
@@ -362,7 +368,11 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
           ...rows.map((row) => (row.failed ? `home-retry:${row.id}` : rowFocusKey(row.id))),
         ])}
       >
-        <Hero item={heroItem} featured={featured} />
+        <Hero
+          item={heroCard?.item ?? null}
+          wide={heroCard?.shape === 'landscape'}
+          featured={featured}
+        />
         <div
           className="home-rows"
           // Focus can scroll an overflow-hidden box on its own; the transform is the only scroll.

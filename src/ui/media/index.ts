@@ -24,11 +24,12 @@ export {
   GRID_IMAGE_QUERY,
   IMAGE_WIDTHS,
   isEpisode,
-  isLandscapeSection,
+  sectionCardShape,
   landscapeArt,
   posterArt,
   ROW_IMAGE_QUERY,
   watchedFraction,
+  wideCaption,
   yearsText,
 } from './cardInfo';
 export type { CatalogBoxSet, CatalogItem } from './cardInfo';

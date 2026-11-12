@@ -89,6 +89,8 @@
 .library-stage {
   --hero-h: var(--library-head);
   --hero-shift: 0px;
+  /* As on Home: the stage also moves up by this much while the focus is in the rows. */
+  --rows-lift: 56px;
   position: absolute;
   inset: 0;
   transition: transform var(--transition);
@@ -100,7 +102,7 @@
 }
 
 .library-stage[data-rows='true'][data-featured='true'] {
-  transform: translateY(calc(-1 * var(--hero-shift)));
+  transform: translateY(calc(-1 * (var(--hero-shift) + var(--rows-lift))));
 }
 
 .library-stage .hero {
@@ -111,7 +113,7 @@
   position: absolute;
   top: calc(var(--hero-h) - var(--library-head));
   right: 0;
-  bottom: calc(-1 * var(--hero-shift));
+  bottom: calc(-1 * (var(--hero-shift) + var(--rows-lift)));
   left: 0;
   overflow: hidden;
 }

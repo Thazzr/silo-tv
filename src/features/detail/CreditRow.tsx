@@ -1,11 +1,29 @@
 import { memo, useCallback } from 'react';
-import { PersonCard, Row, type CardContext, type FocusIndexMemory } from '../../ui/media';
+import {
+  CAPTION_HEIGHT,
+  CARD_GAP,
+  CARD_SIZE,
+  captionOffset,
+  PersonCard,
+  Row,
+  type CardContext,
+  type CardMetrics,
+  type FocusIndexMemory,
+} from '../../ui/media';
 import type { PersonTarget } from '../person/personMemory';
 import { type CreditEntry } from './credits';
 import { initials } from './info';
 import { DETAIL_INSET } from './layout';
 
 const entryKey = (entry: CreditEntry) => entry.key;
+
+/** Poster-sized cards, but 40 px apart: the divider label of a group stands in the gap. */
+const CREDIT_CARDS: CardMetrics = {
+  ...CARD_SIZE.poster,
+  captionOffset: captionOffset('poster'),
+  captionHeight: CAPTION_HEIGHT,
+  gap: CARD_GAP,
+};
 
 /**
  * A row of people: the "Cast & Crew" strip of a movie or series (directors, writers, cast, with a
@@ -56,6 +74,7 @@ export const CreditRow = memo(function CreditRow({
       rowId="cast"
       title={title}
       shape="poster"
+      metrics={CREDIT_CARDS}
       items={entries}
       getKey={entryKey}
       memory={memory}

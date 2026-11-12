@@ -35,6 +35,12 @@ describe('PosterCard', () => {
     expect(screen.getByRole('button', { name: /Heat/ })).toHaveClass('card-poster');
   });
 
+  it("sets the year line of a series after its year, in the web's meta style", () => {
+    poster({ item: catalogItem({ title: 'Dark', type: 'series', year: 1997 }) });
+    expect(screen.getByTestId('card-sub')).toHaveTextContent('1997 Series');
+    expect(screen.getByTestId('card-sub')).toHaveClass('card-sub-meta');
+  });
+
   it('is a grid card with the grid class', () => {
     poster({ grid: true });
     expect(screen.getByRole('button', { name: /Heat/ })).toHaveClass('card-grid');
@@ -117,13 +123,27 @@ describe('LandscapeCard', () => {
     return renderWithSilo(<LandscapeCard item={item} focusKey="l1" onOpen={() => undefined} />);
   }
 
-  it('is a landscape card with the backdrop, the series title and "S1 · E3"', () => {
+  it('is a wide card with the backdrop and three lines: series, episode with title, time left', () => {
     landscape();
     expect(screen.getByRole('button', { name: /Severance/ })).toHaveClass('card-landscape');
     expect(document.querySelector('img')?.getAttribute('src')).toBe(
       `${BASE_URL}/img/sev-backdrop.webp`,
     );
-    expect(screen.getByTestId('card-sub')).toHaveTextContent('S1 · E3');
+    expect(screen.getByTestId('card-title')).toHaveTextContent('Severance');
+    expect(screen.getByTestId('card-episode')).toHaveTextContent('Season 1 Episode 3 • Pilot');
+    expect(screen.getByTestId('card-status')).toHaveTextContent('30 min left');
+  });
+
+  it('says "Next Episode" on a Next Up card', () => {
+    landscape({ ...resuming, item_source: 'next_up' });
+    expect(screen.getByTestId('card-status')).toHaveTextContent('Next Episode');
+  });
+
+  it('has no episode line for a movie, only its title and the time left', () => {
+    landscape(catalogItem({ title: 'Heat', type: 'movie', runtime: 120, position_seconds: 3600 }));
+    expect(screen.getByTestId('card-title')).toHaveTextContent('Heat');
+    expect(screen.queryByTestId('card-episode')).toBeNull();
+    expect(screen.getByTestId('card-status')).toHaveTextContent('60 min left');
   });
 
   it('draws the progress bar from the resume position', () => {
@@ -148,7 +168,7 @@ describe('ExploreAllCard', () => {
     renderWithSilo(
       <ExploreAllCard shape="landscape" rowTitle="Next Up" focusKey="x" onOpen={onOpen} />,
     );
-    const card = screen.getByRole('button', { name: 'Explore all, Next Up' });
+    const card = screen.getByRole('button', { name: 'Explore all Next Up' });
     expect(card).toHaveClass('card-landscape');
     expect(screen.getByText('Explore all')).toBeInTheDocument();
     fireEvent.click(card);

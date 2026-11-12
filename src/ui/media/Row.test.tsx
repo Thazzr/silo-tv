@@ -115,12 +115,12 @@ describe('Row', () => {
     for (let i = 0; i < 7; i += 1) await pressKey(KEY.right);
     expect(getCurrentFocusKey()).toBe(key('r', 'i8'));
     expect(track().style.transform).toBe('translateX(0px)');
-    // The ninth needs one step of 216 px (176 + 40).
+    // The ninth needs one step of 205 px (185 + 20).
     await pressKey(KEY.right);
     expect(getCurrentFocusKey()).toBe(key('r', 'i9'));
-    expect(track().style.transform).toBe('translateX(-216px)');
+    expect(track().style.transform).toBe('translateX(-205px)');
     await pressKey(KEY.right);
-    expect(track().style.transform).toBe('translateX(-432px)');
+    expect(track().style.transform).toBe('translateX(-410px)');
     // Back to the left edge the strip scrolls back.
     for (let i = 0; i < 9; i += 1) await pressKey(KEY.left);
     expect(getCurrentFocusKey()).toBe(key('r', 'i1'));
@@ -139,7 +139,7 @@ describe('Row', () => {
     // The next key moves on from the hovered card and brings the tenth into view.
     await pressKey(KEY.right);
     expect(getCurrentFocusKey()).toBe(key('r', 'i10'));
-    expect(track().style.transform).toBe('translateX(-432px)');
+    expect(track().style.transform).toBe('translateX(-410px)');
   });
 
   it('mounts only the cards near the viewport and follows the focus', async () => {
@@ -202,7 +202,7 @@ describe('Row', () => {
     renderWithSilo(<TestRow data={items(20)} memory={memory} />);
     expect(document.querySelector(`[data-focus-key="${key('r', 'i13')}"]`)).not.toBeNull();
     // Scrolled so that card 13 is the last visible one: first visible index 5.
-    expect(track().style.transform).toBe('translateX(-1080px)');
+    expect(track().style.transform).toBe('translateX(-1025px)');
   });
 
   it('writes the focused index into the memory', async () => {
@@ -219,7 +219,7 @@ describe('Row initialIndex', () => {
   it('starts on that card, scrolled into view, when the memory holds none', () => {
     renderWithSilo(<TestRow data={items(20)} initialIndex={12} />);
     expect(document.querySelector(`[data-focus-key="${key('r', 'i13')}"]`)).not.toBeNull();
-    expect(track().style.transform).toBe('translateX(-1080px)');
+    expect(track().style.transform).toBe('translateX(-1025px)');
   });
 
   it('is entered on that card when the focus comes into the row', async () => {
@@ -313,7 +313,7 @@ describe('Row visibleCards', () => {
       await setFocus(cardFocusKey('n', 'i1'));
     });
     for (let i = 0; i < 5; i += 1) await pressKey(KEY.right);
-    // The sixth card is focused: with five visible the strip has moved by one card (216 px).
-    expect(screen.getByTestId('row-track').style.transform).toBe('translateX(-216px)');
+    // The sixth card is focused: with five visible the strip has moved by one card (205 px).
+    expect(screen.getByTestId('row-track').style.transform).toBe('translateX(-205px)');
   });
 });

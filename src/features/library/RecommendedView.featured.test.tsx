@@ -7,7 +7,7 @@ import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
 import { account } from '../../test/apiFixtures';
 import { catalogItem, library } from '../../test/flowFixtures';
-import { homeSection } from '../../test/homeFixtures';
+import { homeSection, resumeEpisode } from '../../test/homeFixtures';
 import { serveLibrary, type LibraryServe } from '../../test/libraryFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
@@ -191,6 +191,39 @@ describe('Recommended: the two modes of the hero', () => {
     await waitFor(() => expect(getCurrentFocusKey()).toBe(HERO_PLAY_KEY));
     expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'true');
     expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'false');
+  });
+
+  it('shows the episode line and the time left over a Continue Watching card, "Next Episode" over a Next Up card, and neither over a poster', async () => {
+    serve([
+      featuredSection(),
+      homeSection('cw', 1, {
+        section_type: 'continue_watching',
+        items: [resumeEpisode('e1', { series_title: 'Verity', title: 'Chapter Seven' })],
+      }),
+      homeSection('nu', 1, {
+        section_type: 'next_up',
+        items: [resumeEpisode('e2', { item_source: 'next_up', position_seconds: undefined })],
+      }),
+      homeSection('rec', 1, { title: 'Recent' }),
+    ]);
+    setup();
+    await carousel();
+    await screen.findByText('Recent');
+    await focus(cardFocusKey('lib-1/cw', 'e1'));
+    await waitFor(() => expect(screen.getByTestId('hero-status')).toHaveTextContent('30 min left'));
+    expect(screen.getByTestId('hero-episode')).toHaveTextContent(
+      'Season 1 Episode 3 • Chapter Seven',
+    );
+    await focus(cardFocusKey('lib-1/nu', 'e2'));
+    await waitFor(() =>
+      expect(screen.getByTestId('hero-status')).toHaveTextContent('Next Episode'),
+    );
+    await focus(cardFocusKey('lib-1/rec', 'rec-1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('hero')).toHaveAttribute('data-content-id', 'rec-1'),
+    );
+    expect(screen.queryByTestId('hero-episode')).toBeNull();
+    expect(screen.queryByTestId('hero-status')).toBeNull();
   });
 
   it('opens the page of the slide with "More Info" and plays it with "Play"', async () => {

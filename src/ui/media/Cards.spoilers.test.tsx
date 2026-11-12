@@ -58,7 +58,7 @@ describe('cards: spoiler protection', () => {
     expect(stillImages()).toHaveLength(0);
     // The caption and the frame stay as they are.
     expect(screen.getByTestId('card-title')).toHaveTextContent('Severance');
-    expect(screen.getByTestId('card-sub')).toHaveTextContent('S1 · E1');
+    expect(screen.getByTestId('card-episode')).toHaveTextContent('Season 1 Episode 1 • Pilot');
   });
 
   it('shows the still of a watched, started or not-an-episode-still card', async () => {

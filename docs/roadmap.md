@@ -37,6 +37,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 ## Phase 2 – Browse (target v0.3.0)
 
 - ✅ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures (TV 2026-11-09)
+- 🟨 Rows and cards as in Silo's web app: wide cards for Continue Watching and Next Up with the episode and time-left lines under them, posters with the title and the year ("1997 SERIE") in every other row, the web's sizes; the focused row stays inside the safe area
+- ⬜ A card a row above already shows is dropped from a lower row, for the section types the server's recipe catalogue marks, as the web app does (needs `GET /api/v2/sections/recipes` pinned first)
 - 🟨 Row titles in the viewer's language: the server's built-in sections carry a title key, which the app shows in German as the web app does ("Diese Woche im Trend"); a title an admin typed shows as typed
 - 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
 - 🟨 Library tabs for Movies and Series (the browse grid with its filters checked on the TV, 2026-11-09):
@@ -227,6 +229,7 @@ The app follows the web app wherever a TV allows it (user decision 2026-11-11). 
 
 - **No hover:** cards have no play disc and no More button (whether a remote key should offer the web's card actions is still open); OK on a card opens its page and the remote's Play key plays it. Rows have no scroll arrows; the focus moves them.
 - **Popovers become list dialogs** with 75 px rows (the More menu, the resume question, later the track pickers); Back closes them.
+- **"Alle entdecken" is the last card of a row**, not a link beside the row title: a header link would need a focus stop of its own in every row.
 - **Breadcrumbs are text:** Back is the way back, so the crumbs on season and episode pages are not focusable.
 - **The episode grid scrolls** inside the page instead of showing at most four rows first; a long season stays one grid.
 - **Translation of episode overviews** starts from the translate pill in the action row, not from a chip in the grid's heading.

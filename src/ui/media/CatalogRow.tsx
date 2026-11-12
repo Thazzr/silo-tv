@@ -25,11 +25,11 @@ export interface CatalogRowProps {
   onOpen: (item: CatalogItem) => void;
   onExploreAll: (rowId: string, title: string) => void;
   onRowFocused: (rowIndex: number) => void;
-  onCardFocused?: (item: CatalogItem) => void;
+  onCardFocused?: (item: CatalogItem, shape: CardShape) => void;
 }
 
 /**
- * A row of catalog cards (posters, or landscape cards for rows in progress) for a screen that
+ * A row of catalog cards (posters, or wide cards for Continue Watching and Next Up) for a screen that
  * stacks several rows (Home, a library's Recommended view). It is memoised: while the focus runs
  * along another row the screen re-renders, and this row must not.
  */
@@ -54,6 +54,10 @@ export const CatalogRow = memo(function CatalogRow({
     [hasMore, onExploreAll, rowId, title],
   );
   const rowFocused = useCallback(() => onRowFocused(rowIndex), [onRowFocused, rowIndex]);
+  const cardFocused = useCallback(
+    (item: CatalogItem) => onCardFocused?.(item, shape),
+    [onCardFocused, shape],
+  );
   const renderCard = useCallback(
     (item: CatalogItem, ctx: CardContext) =>
       shape === 'landscape' ? (
@@ -81,7 +85,7 @@ export const CatalogRow = memo(function CatalogRow({
       artUrl={artUrl}
       onExploreAll={exploreAll}
       onRowFocused={rowFocused}
-      onCardFocused={onCardFocused}
+      onCardFocused={cardFocused}
       renderCard={renderCard}
     />
   );

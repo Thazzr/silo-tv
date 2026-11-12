@@ -8,13 +8,17 @@ import {
   cardTitle,
   filmCountText,
   GRID_IMAGE_QUERY,
-  isLandscapeSection,
   landscapeArt,
   posterArt,
   ROW_IMAGE_QUERY,
+  sectionCardShape,
   watchedFraction,
+  wideCaption,
   yearsText,
 } from './cardInfo';
+
+const t = (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) =>
+  translate('en', key, params);
 
 const episode = catalogItem({
   type: 'episode',
@@ -27,16 +31,21 @@ const episode = catalogItem({
 describe('captions', () => {
   it('shows an episode under its series with "S1 · E3", a movie with its year', () => {
     expect(cardTitle(episode)).toBe('Severance');
-    expect(cardSubtitle(episode)).toBe('S1 · E3');
+    expect(cardSubtitle(episode, t)).toBe('S1 · E3');
     expect(cardTitle(catalogItem({ title: 'Heat' }))).toBe('Heat');
-    expect(cardSubtitle(catalogItem({ year: 1995 }))).toBe('1995');
-    expect(cardSubtitle(catalogItem({ year: undefined }))).toBe('');
+    expect(cardSubtitle(catalogItem({ year: 1995 }), t)).toBe('1995');
+    expect(cardSubtitle(catalogItem({ year: undefined }), t)).toBe('');
+  });
+
+  it('adds "Series" after the year of a series, and names a series without a year', () => {
+    expect(cardSubtitle(catalogItem({ type: 'series', year: 1997 }), t)).toBe('1997 Series');
+    expect(cardSubtitle(catalogItem({ type: ' Series ', year: undefined }), t)).toBe('Series');
   });
 
   it('falls back to the episode title without a series, and to no label without numbers', () => {
     const bare = catalogItem({ type: 'episode', title: 'Pilot' });
     expect(cardTitle(bare)).toBe('Pilot');
-    expect(cardSubtitle(bare)).toBe('');
+    expect(cardSubtitle(bare, t)).toBe('');
   });
 });
 
@@ -107,14 +116,81 @@ describe('watchedFraction', () => {
   });
 });
 
-describe('isLandscapeSection', () => {
-  it.each(['continue_watching', 'next_up', 'in_progress', 'system-next-up'])(
-    '%s shows landscape cards',
-    (type) => expect(isLandscapeSection(type)).toBe(true),
+describe('sectionCardShape', () => {
+  it.each(['continue_watching', 'next_up'])('%s shows wide cards', (type) =>
+    expect(sectionCardShape(type)).toBe('landscape'),
   );
-  it.each(['recently_added', 'genre', 'trending', 'collection'])('%s shows posters', (type) =>
-    expect(isLandscapeSection(type)).toBe(false),
+  // By the section's type, not by a pattern in it: a custom "next ..." row is a poster row.
+  it.each(['recently_added', 'genre', 'trending', 'collection', 'in_progress', 'system-next-up'])(
+    '%s shows posters',
+    (type) => expect(sectionCardShape(type)).toBe('poster'),
   );
+});
+
+describe('wideCaption', () => {
+  const resumed = catalogItem({
+    type: 'episode',
+    title: 'Chapter Seven',
+    series_title: 'Verity',
+    season_number: 4,
+    episode_number: 7,
+    position_seconds: 600,
+    duration_seconds: 3600,
+  });
+
+  it('names the episode with its title and the minutes left', () => {
+    expect(wideCaption(resumed, t)).toEqual({
+      episode: 'Season 4 Episode 7 • Chapter Seven',
+      status: '50 min left',
+    });
+  });
+
+  it('says "Next Episode" on a Next Up card, whatever the length', () => {
+    expect(wideCaption({ ...resumed, item_source: 'next_up' }, t).status).toBe('Next Episode');
+  });
+
+  it('leaves out the episode title when the series is not known', () => {
+    expect(wideCaption({ ...resumed, series_title: undefined }, t).episode).toBe(
+      'Season 4 Episode 7',
+    );
+  });
+
+  it('has no episode line for a movie, and counts the whole film when nothing was played', () => {
+    const movie = catalogItem({ title: 'Heat', runtime: 170 });
+    expect(wideCaption(movie, t)).toEqual({ episode: null, status: '170 min left' });
+  });
+
+  it('rounds the minutes left to the nearest minute', () => {
+    const left = (seconds: number) =>
+      wideCaption(catalogItem({ duration_seconds: 1000, position_seconds: 1000 - seconds }), t)
+        .status;
+    expect(left(100)).toBe('2 min left');
+    expect(left(70)).toBe('1 min left');
+    expect(left(90)).toBe('2 min left');
+  });
+
+  it('keeps the episode line of an episode without a length, and has no time left for it', () => {
+    const noLength = { ...resumed, duration_seconds: undefined, runtime: undefined };
+    expect(wideCaption(noLength, t)).toEqual({
+      episode: 'Season 4 Episode 7 • Chapter Seven',
+      status: null,
+    });
+  });
+
+  it('has no episode line unless both the season and the episode number are known', () => {
+    expect(wideCaption({ ...resumed, season_number: undefined }, t).episode).toBeNull();
+    expect(wideCaption({ ...resumed, episode_number: undefined }, t).episode).toBeNull();
+  });
+
+  it('leaves the " • " out when the episode has no title of its own', () => {
+    expect(wideCaption({ ...resumed, title: '' }, t).episode).toBe('Season 4 Episode 7');
+  });
+
+  it('has no time left without a length, and never a negative one', () => {
+    expect(wideCaption(catalogItem({ title: 'Heat' }), t).status).toBeNull();
+    const over = catalogItem({ position_seconds: 4000, duration_seconds: 3600 });
+    expect(wideCaption(over, t).status).toBe('0 min left');
+  });
 });
 
 describe('image widths', () => {

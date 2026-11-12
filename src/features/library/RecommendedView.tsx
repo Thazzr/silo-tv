@@ -6,11 +6,11 @@ import { useT } from '../../i18n';
 import { useSectionTitle, type SectionTitleSource } from '../../i18n/sectionTitle';
 import {
   CatalogRow,
-  isLandscapeSection,
   keepAtOrigin,
   RowSkeleton,
   rowFocusKey,
   rowHeight,
+  sectionCardShape,
   type CardShape,
   type CatalogItem,
 } from '../../ui/media';
@@ -77,9 +77,7 @@ export function libraryRows(
       {
         id: `${library.id}/${section.id}`,
         title: titleOf(section),
-        shape: isLandscapeSection(section.section_type)
-          ? ('landscape' as const)
-          : ('poster' as const),
+        shape: sectionCardShape(section.section_type),
         items,
         hasMore:
           section.has_more === true ||
@@ -147,13 +145,15 @@ export function RecommendedView({
   const [focusedRow, setFocusedRow] = useState(
     () => memory.indices.get(lastRowKey(library, kind)) ?? 0,
   );
-  const [focusedItem, setFocusedItem] = useState<CatalogItem | null>(null);
+  const [focusedCard, setFocusedCard] = useState<{ item: CatalogItem; shape: CardShape } | null>(
+    null,
+  );
   // Whether the focus is on something in the rows (not in the hero or above it).
   const [inRows, setInRows] = useState(false);
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
   // The hero shows the focused card while the focus is in the rows, else its carousel.
   const carouselMode = featured !== null && !inRows;
-  const heroItem = carouselMode ? null : focusedItem;
+  const heroCard = carouselMode ? null : focusedCard;
   const offset = carouselMode
     ? 0
     : rows.slice(0, activeRow).reduce((sum, row) => sum + rowHeight(row.shape), 0);
@@ -173,7 +173,10 @@ export function RecommendedView({
       library: { id: now.library.id, type: isMixed(now.library) ? now.kind : undefined },
     });
   }, []);
-  const cardFocused = useCallback((item: CatalogItem) => setFocusedItem(item), []);
+  const cardFocused = useCallback(
+    (item: CatalogItem, shape: CardShape) => setFocusedCard({ item, shape }),
+    [],
+  );
   const memoryIndices = memory.indices;
   const rowFocused = useCallback(
     (index: number) => {
@@ -224,7 +227,13 @@ export function RecommendedView({
         ...rows.map((row) => rowFocusKey(row.id)),
       ])}
     >
-      {featured ? <Hero item={heroItem} featured={featured} /> : null}
+      {featured ? (
+        <Hero
+          item={heroCard?.item ?? null}
+          wide={heroCard?.shape === 'landscape'}
+          featured={featured}
+        />
+      ) : null}
       <div
         className="library-rows"
         data-testid="recommended"

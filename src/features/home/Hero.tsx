@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLanguage, useT, type MessageKey } from '../../i18n';
 import { useProfileSetting } from '../settings/profileSettings';
 import {
@@ -6,6 +6,7 @@ import {
   heroProtection,
   useMediaUrl,
   useSpoilerSettings,
+  wideCaption,
   type CatalogItem,
 } from '../../ui/media';
 import { Carousel, HeroError } from './Carousel';
@@ -51,23 +52,29 @@ export type Featured =
  *   slides, their title, meta line and synopsis, "Play", "More Info" and the slide indicator.
  * - With an `item`, the card that has the focus in the rows below, it shows that card instead:
  *   its backdrop, its title art (or title), a meta line and a synopsis, display only. For an
- *   episode it shows the series' art, since the episode's own pictures are stills. It changes after
- *   the focus has rested on a card, so scrolling quickly through a row does not decode a picture
- *   per card.
+ *   episode it shows the series' art, since the episode's own pictures are stills. A `wide` card
+ *   (Continue Watching, Next Up) adds the lines its caption has: the episode line and the time
+ *   left. It changes after the focus has rested on a card, so scrolling quickly through a row
+ *   does not decode a picture per card.
  * The carousel stays mounted under the card (invisible), so the focus can go back up to its
  * buttons and the slide it showed is still the one it shows. A screen without a featured section
  * has the card mode only.
  */
 export function Hero({
   item,
+  wide = false,
   featured = null,
   restMs = HERO_REST_MS,
 }: {
   item: CatalogItem | null;
+  /** The card is a wide one: its row shows the episode line and the time left under it. */
+  wide?: boolean;
   featured?: Featured | null;
   restMs?: number;
 }) {
-  const shown = useRestedValue(item, restMs);
+  // The card and its kind rest together, so a card never shows the lines of the previous kind.
+  const card = useMemo(() => (item ? { item, wide } : null), [item, wide]);
+  const shown = useRestedValue(card, restMs);
   let carousel = null;
   if (featured?.kind === 'slides') {
     carousel = (
@@ -84,14 +91,14 @@ export function Hero({
     return <HeroSkeleton />;
   }
   return (
-    <div className="hero" data-testid="hero" data-content-id={shown?.content_id}>
+    <div className="hero" data-testid="hero" data-content-id={shown?.item.content_id}>
       {carousel}
-      {shown ? <FocusedCard item={shown} /> : null}
+      {shown ? <FocusedCard item={shown.item} wide={shown.wide} /> : null}
     </div>
   );
 }
 
-function FocusedCard({ item }: { item: CatalogItem }) {
+function FocusedCard({ item, wide }: { item: CatalogItem; wide: boolean }) {
   const t = useT();
   const lang = useLanguage();
   const url = useMediaUrl();
@@ -116,6 +123,9 @@ function FocusedCard({ item }: { item: CatalogItem }) {
   const showLogo = hasLogo && titleArt.known && titleArt.value;
   const reserveLogo = hasLogo && !titleArt.known;
   const meta = heroMeta(item, { t, lang });
+  const { episode: episodeLine, status } = wide
+    ? wideCaption(item, t)
+    : { episode: null, status: null };
 
   return (
     <div className="hero-card" data-testid="hero-card">
@@ -149,6 +159,16 @@ function FocusedCard({ item }: { item: CatalogItem }) {
         {meta ? (
           <p className="hero-meta" data-testid="hero-meta">
             {meta}
+          </p>
+        ) : null}
+        {episodeLine ? (
+          <p className="hero-meta" data-testid="hero-episode">
+            {episodeLine}
+          </p>
+        ) : null}
+        {status ? (
+          <p className="hero-meta" data-testid="hero-status">
+            {status}
           </p>
         ) : null}
         {item.overview && !hidden.hideOverview ? (

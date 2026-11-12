@@ -11,6 +11,7 @@ import {
   landscapeArt,
   posterArt,
   watchedFraction,
+  wideCaption,
   type CatalogBoxSet,
   type CatalogItem,
 } from './cardInfo';
@@ -44,8 +45,8 @@ export interface FrameProps {
 
 /**
  * The focusable shell every card shares: a picture box with the focus ring and the shadow (both
- * only fade in, the scale is a transform) and a two-line caption below it. Focus changes only the
- * caption's colour, never its size, so a truncated title does not reflow.
+ * only fade in, the scale is a transform) and a caption of two or three lines below it. Focus
+ * changes only the caption's colour, never its size, so a truncated title does not reflow.
  */
 export function CardFrame({
   focusKey,
@@ -79,27 +80,46 @@ export function CardFrame({
   );
 }
 
-function Caption({
-  item,
-  subtitle = cardSubtitle(item),
-}: {
-  item: CatalogItem;
-  subtitle?: string;
-}) {
+/** The caption of a poster card: the title and, in the web's meta style, the year line. */
+function PosterCaption({ item, subtitle }: { item: CatalogItem; subtitle?: string }) {
+  const t = useT();
   return (
     <>
       <span className="card-title" data-testid="card-title">
         {cardTitle(item)}
       </span>
-      <span className="card-sub" data-testid="card-sub">
-        {subtitle}
+      <span className="card-sub card-sub-meta" data-testid="card-sub">
+        {subtitle ?? cardSubtitle(item, t)}
       </span>
     </>
   );
 }
 
+/** The caption of a wide card: the title, "Season 4 Episode 7 • Title", then the time left. */
+function WideCaption({ item }: { item: CatalogItem }) {
+  const t = useT();
+  const { episode, status } = wideCaption(item, t);
+  return (
+    <>
+      <span className="card-title" data-testid="card-title">
+        {cardTitle(item)}
+      </span>
+      {episode ? (
+        <span className="card-sub" data-testid="card-episode">
+          {episode}
+        </span>
+      ) : null}
+      {status ? (
+        <span className="card-sub" data-testid="card-status">
+          {status}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /**
- * A poster card: 176x264 in rows, 260x390 in browse grids. The cards are memoised: a focus move
+ * A poster card: 185x278 in rows, 260x390 in browse grids. The cards are memoised: a focus move
  * redraws nothing in a card (the ring is CSS), so rows and grids skip the ones that did not change.
  */
 export const PosterCard = memo(function PosterCard({
@@ -135,7 +155,7 @@ export const PosterCard = memo(function PosterCard({
           <ItemWatchStatus item={item} />
         </>
       }
-      caption={<Caption item={item} subtitle={subtitle} />}
+      caption={<PosterCaption item={item} subtitle={subtitle} />}
     />
   );
 });
@@ -205,8 +225,8 @@ export const BoxSetCard = memo(function BoxSetCard({
 });
 
 /**
- * A landscape card, 360x200, for Continue Watching, Next Up and other rows that are in progress:
- * a progress bar along the bottom edge shows how far the profile got.
+ * A wide card, 315x177, for Continue Watching and Next Up: a progress bar along the bottom edge
+ * shows how far the profile got, and three lines under it say what it is and how much is left.
  */
 export const LandscapeCard = memo(function LandscapeCard({
   item,
@@ -247,7 +267,7 @@ export const LandscapeCard = memo(function LandscapeCard({
           ) : null}
         </>
       }
-      caption={<Caption item={item} />}
+      caption={<WideCaption item={item} />}
     />
   );
 });

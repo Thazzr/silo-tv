@@ -11,7 +11,10 @@ import {
   type CardShape,
 } from './layout';
 
-/** A card-shaped block: the picture box and the two caption lines, as the real card has them. */
+/**
+ * A card-shaped block: the picture box and the caption lines, as the real card has them (a wide
+ * card has three).
+ */
 export function CardSkeleton({ shape }: { shape: CardShape | 'grid' }) {
   return (
     <span
@@ -23,6 +26,7 @@ export function CardSkeleton({ shape }: { shape: CardShape | 'grid' }) {
       <span className="card-caption">
         <span className="skeleton-line skeleton-line-title" />
         <span className="skeleton-line skeleton-line-sub" />
+        {shape === 'landscape' ? <span className="skeleton-line skeleton-line-sub" /> : null}
       </span>
     </span>
   );
