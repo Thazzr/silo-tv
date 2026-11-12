@@ -55,10 +55,15 @@ interface FakeOptions {
    */
   boxSet?: boolean;
   /**
-   * "Second Title" (m2) has two local extras (a trailer with a title, a featurette without one)
-   * and one YouTube video; the first extra's file answers the playback calls like any title.
+   * "Second Title" (m2) and the series (s1) have two local extras (a trailer with a title, a
+   * featurette without one) and one YouTube video; the first extra's file answers the playback
+   * calls like any title.
    */
   extras?: boolean;
+  /** The season pages carry a cast of two and a crew (director, writer, producer, screenplay). */
+  seasonCredits?: boolean;
+  /** How many episodes each season lists (2 when omitted). */
+  episodeCount?: number;
   /** A biography of about 4,000 characters on the person pages (the last line says THE END). */
   longBio?: boolean;
   /** How many seasons the series has (2 when omitted). */
@@ -364,6 +369,26 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             })),
           }
         : {};
+      const extrasOf = {
+        extras: [
+          {
+            content_id: 'local-x1',
+            kind: 'trailer',
+            title: 'Official Trailer',
+            duration_seconds: 125,
+          },
+          { content_id: 'local-x2', kind: 'featurette', duration_seconds: 600 },
+        ],
+        videos: [
+          {
+            site: 'youtube',
+            site_key: 'dQw4w9WgXcQ',
+            kind: 'teaser',
+            is_official: true,
+            name: 'The Teaser',
+          },
+        ],
+      };
       const tallSeries = tall
         ? {
             logo_url: '/img/logo.png',
@@ -432,28 +457,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                     ? { overview: 'Der übersetzte Text.', machine_translated_fields: ['overview'] }
                     : { pending_translation_language: 'de' }
                   : {}),
-                ...(withExtras
-                  ? {
-                      extras: [
-                        {
-                          content_id: 'local-x1',
-                          kind: 'trailer',
-                          title: 'Official Trailer',
-                          duration_seconds: 125,
-                        },
-                        { content_id: 'local-x2', kind: 'featurette', duration_seconds: 600 },
-                      ],
-                      videos: [
-                        {
-                          site: 'youtube',
-                          site_key: 'dQw4w9WgXcQ',
-                          kind: 'teaser',
-                          is_official: true,
-                          name: 'The Teaser',
-                        },
-                      ],
-                    }
-                  : {}),
+                ...(withExtras ? extrasOf : {}),
               }
             : {
                 ...baseItem,
@@ -466,6 +470,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 play_content_id: 'e11',
                 play_season_number: 1,
                 ...tallSeries,
+                ...(withExtras ? extrasOf : {}),
               },
         );
       }
@@ -509,11 +514,28 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           series_title: 'A Show',
           season_number: n,
           air_date: '2008-01-20',
-          episode_count: 2,
+          episode_count: options.episodeCount ?? 2,
           overview: tall
             ? `What happens in season ${n}. ${'It goes on and on, over many lines. '.repeat(20)}`
             : `What happens in season ${n}.`,
           ...(options.posters ? { poster_url: `/img/poster-season${n}.png` } : {}),
+          ...(options.seasonCredits
+            ? {
+                cast: ['Ann Actor', 'Bo Actor'].map((name, order) => ({
+                  person_id: `p${order}`,
+                  name,
+                  character: `Role ${order}`,
+                  order,
+                })),
+                crew: [
+                  { person_id: 'c1', name: 'Dana Director', job: 'Director' },
+                  { person_id: 'c2', name: 'Wen Writer', job: 'Writer' },
+                  { person_id: 'c5', name: 'Sam Screen', job: 'Screenplay' },
+                  { person_id: 'c4', name: 'Pia Producer', job: 'Producer' },
+                  { person_id: 'c6', name: 'Pat Producer', job: 'Producer' },
+                ],
+              }
+            : {}),
         });
       }
       const episodePage = /^\/api\/v2\/catalog\/items\/e(\d+)(\d)$/.exec(url.pathname);
@@ -549,7 +571,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       if (req.method === 'GET' && episodes) {
         const season = Number(episodes[1]);
         return send(200, {
-          items: [1, 2].map((n) => ({
+          items: Array.from({ length: options.episodeCount ?? 2 }, (_, i) => i + 1).map((n) => ({
             content_id: `e${season}${n}`,
             season_number: season,
             episode_number: n,
@@ -610,12 +632,25 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             : [],
         });
       }
-      // The person page of a cast member (the tall movie's cast has the ids p0 to p3).
-      const person = /^\/api\/v2\/catalog\/people\/p(\d)$/.exec(url.pathname);
+      // The person page of a cast member (the tall movie's cast has the ids p0 to p3) or of a
+      // crew member (c1 to c6).
+      const person = /^\/api\/v2\/catalog\/people\/([pc])(\d)$/.exec(url.pathname);
       if (req.method === 'GET' && person) {
+        const names: Record<string, string[]> = {
+          p: ['Ann Actor', 'Bo Actor', 'Cy Actor', 'Di Actor'],
+          c: [
+            '',
+            'Dana Director',
+            'Wen Writer',
+            'Vince Creator',
+            'Pia Producer',
+            'Sam Screen',
+            'Pat Producer',
+          ],
+        };
         return send(200, {
-          id: `p${person[1]}`,
-          name: ['Ann Actor', 'Bo Actor', 'Cy Actor', 'Di Actor'][Number(person[1])],
+          id: `${person[1]}${person[2]}`,
+          name: names[person[1]!]![Number(person[2])],
           birth_date: '1940-04-25',
           birthplace: 'Springfield, USA',
           bio: options.longBio ? longBio : 'An actor from the fake server.',
@@ -2565,7 +2600,7 @@ test('detail page: the poster fades with the text column once the focus has left
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
   expect(await opacity('.detail-poster')).toBe('1');
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await expect.poll(() => opacity('.detail-poster')).toBe('0');
   await expect.poll(() => opacity('.detail-text')).toBe('0');
 });
@@ -2738,7 +2773,7 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
 
   // Down from the action pills to the cast row, then to the similar row.
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await expect.poll(async () => Math.abs((await top('row-cast')) - 54)).toBeLessThanOrEqual(2);
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Similar 1/ })).toBeFocused();
@@ -2748,7 +2783,7 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
   expect(await opacity('[data-zone="similar"]')).toBe('1');
 });
 
-test('detail page: Trailer & Mehr plays a local extra from its start, and Back returns to the same card, keyboard only', async ({
+test('detail page: Extras (one row per kind) play a local extra from its start and Trailer & mehr lists the YouTube videos; Back returns to the same card, keyboard only', async ({
   page,
 }) => {
   const { origin, seen } = await startFakeSilo({ extras: true });
@@ -2764,22 +2799,28 @@ test('detail page: Trailer & Mehr plays a local extra from its start, and Back r
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
 
-  // The row: the local extras in the server's order (a caption, else the kind), then YouTube.
-  const row = page.getByTestId('row-extras');
-  await expect(row.getByRole('heading', { name: 'Trailer & Mehr' })).toBeVisible();
-  await expect(row.getByTestId('extra-title')).toHaveText([
-    'Official Trailer',
-    'Featurette',
-    'The Teaser',
-  ]);
-  await expect(row.getByTestId('extra-runtime')).toHaveText(['2:05', '10:00', 'Teaser']);
+  // "Extras": the local extras, one row per kind in the server's order (a caption, else the kind).
+  const extras = page.getByTestId('detail-extras');
+  await expect(extras.getByRole('heading', { name: 'Extras', exact: true })).toBeVisible();
+  await expect(extras.locator('.row-title')).toHaveText(['Trailer', 'Featurettes']);
+  await expect(extras.getByTestId('extra-title')).toHaveText(['Official Trailer', 'Featurette']);
+  await expect(extras.getByTestId('extra-runtime')).toHaveText(['2:05', '10:00']);
+  // "Trailer & mehr": the YouTube video, its kind and the Official badge.
+  const trailers = page.getByTestId('row-trailers');
+  await expect(trailers.getByRole('heading', { name: 'Trailer & mehr' })).toBeVisible();
+  await expect(trailers.getByTestId('extra-title')).toHaveText(['The Teaser']);
+  await expect(trailers.getByTestId('extra-kind')).toHaveText(['Teaser']);
+  await expect(trailers.getByTestId('extra-official')).toHaveText(['Offiziell']);
 
-  // Down from Play to the row; the second card, then back to the first, OK plays the extra.
+  // Down from Play through the three rows and back; OK on the first card plays the extra.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
-  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Featurette/ })).toBeFocused();
-  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /The Teaser/ })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('player')).toBeVisible();
@@ -2803,6 +2844,221 @@ test('detail page: Trailer & Mehr plays a local extra from its start, and Back r
   ).toEqual([]);
 });
 
+test('detail page: Cast & Crew leads with the director, a rotated label stands before the writers and the cast, and Back returns to the writer, keyboard only', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+
+  const strip = page.getByTestId('row-cast');
+  await expect(strip.getByRole('heading', { name: 'Besetzung & Crew' })).toBeVisible();
+  await expect(strip.getByTestId('card-title')).toHaveText([
+    'Dana Director',
+    'Wen Writer',
+    'Ann Actor',
+    'Bo Actor',
+    'Cy Actor',
+    'Di Actor',
+  ]);
+  await expect(strip.getByTestId('card-sub')).toHaveText([
+    'Regie',
+    'Drehbuch',
+    'Role 0',
+    'Role 1',
+    'Role 2',
+    'Role 3',
+  ]);
+  // The labels stand in the gap before the writers and before the cast, rotated, 20 px or more.
+  const dividers = strip.getByTestId('credit-divider');
+  await expect(dividers).toHaveCount(2);
+  await expect(dividers.locator('.credit-divider-label')).toHaveText(['Drehbuch', 'Besetzung']);
+  const label = dividers.locator('.credit-divider-label').first();
+  expect(
+    await label.evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).writingMode),
+  ).toBe('vertical-rl');
+  expect(
+    await label.evaluate((el) =>
+      parseFloat(el.ownerDocument.defaultView!.getComputedStyle(el).fontSize),
+    ),
+  ).toBeGreaterThanOrEqual(20);
+  const writer = (await page.getByRole('button', { name: /Wen Writer/ }).boundingBox())!;
+  const director = (await page.getByRole('button', { name: /Dana Director/ }).boundingBox())!;
+  const gap = (await label.boundingBox())!;
+  expect(gap.x).toBeGreaterThan(director.x + director.width);
+  expect(gap.x + gap.width).toBeLessThan(writer.x);
+
+  // Down to the director, Right across the "Drehbuch" label to the writer, OK opens the page.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Wen Writer/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('person-name')).toHaveText('Wen Writer');
+
+  // Back: the detail page with the same card focused.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  await expect(page.getByRole('button', { name: /Wen Writer/ })).toBeFocused();
+});
+
+test('detail page: a season shows Besetzung and the Crew box; a name opens the person page, and Back returns to the same name, keyboard only', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, seasonCredits: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
+  // Down to the seasons row, OK on the first season opens its page.
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toContainText('Staffel 1');
+  await expect(page.getByTestId('episode-grid')).toBeVisible();
+
+  // Besetzung: the cast only. Crew: a box with a row per job; Screenplay is no writer here.
+  await expect(
+    page.getByTestId('row-cast').getByRole('heading', { name: 'Besetzung' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('row-cast').getByTestId('card-title')).toHaveText([
+    'Ann Actor',
+    'Bo Actor',
+  ]);
+  const box = page.getByTestId('crew-box');
+  await expect(page.getByRole('heading', { name: 'Crew', exact: true })).toBeVisible();
+  await expect(box.locator('.crew-label')).toHaveText(['Regie', 'Drehbuch', 'Produktion']);
+  await expect(page.getByTestId('crew-row-writer').getByTestId('crew-name')).toHaveText([
+    'Wen Writer',
+  ]);
+  await expect(box.getByText('Sam Screen')).toHaveCount(0);
+  await expect(page.getByTestId('crew-row-producer').getByTestId('crew-name')).toHaveText([
+    'Pia Producer',
+    'Pat Producer',
+  ]);
+  // A name is a target of at least 75 px.
+  const name = (await page.getByRole('button', { name: 'Pia Producer' }).boundingBox())!;
+  expect(name.height).toBeGreaterThanOrEqual(75);
+
+  // Down into the grid and past it to Besetzung, then to the Crew box and down to the producers.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Dana Director' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Wen Writer' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Pia Producer' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Pat Producer' })).toBeFocused();
+  // The focused name is a light fill with dark text, as every focused button.
+  expect(
+    await page
+      .getByRole('button', { name: 'Pat Producer' })
+      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundColor),
+  ).toBe('rgb(255, 255, 255)');
+  // OK opens the person page.
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('person-name')).toHaveText(/./);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-breadcrumb')).toContainText('Staffel 1');
+  await expect(page.getByRole('button', { name: 'Pat Producer' })).toBeFocused();
+});
+
+test('detail page: Down from the last row of a scrolling episode grid lands on Besetzung, Up from it on the grid card it left', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, seasonCredits: true, episodeCount: 12 });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('episode-grid')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
+
+  // Down into the grid and through its three rows (the grid scrolls inside its viewport).
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1\.1(?!\d)/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1\.6(?!\d)/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1\.11(?!\d)/ })).toBeFocused();
+  // Down again: the next block is Besetzung, not the Crew box.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  // Up: the grid, on the card it was left from, not the Play button.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: /Episode 1\.11(?!\d)/ })).toBeFocused();
+});
+
+test('detail page: a series scrolls to Extras and Trailer & mehr between its seasons and its cast', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, extras: true, tall: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  const top = async (selector: string) => (await page.locator(selector).first().boundingBox())!.y;
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  // Down: the seasons, then the first row of extras.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Official Trailer/ })).toBeFocused();
+  await expect
+    .poll(async () => Math.abs((await top('[data-testid="detail-extras"]')) - 54))
+    .toBeLessThanOrEqual(2);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /The Teaser/ })).toBeFocused();
+  await expect
+    .poll(async () => Math.abs((await top('[data-testid="row-trailers"]')) - 54))
+    .toBeLessThanOrEqual(2);
+  // The cast and crew of a series are one strip: its first card is the creator, the cast follows.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Vince Creator/ })).toBeFocused();
+  await expect(page.getByTestId('row-cast').getByTestId('card-sub').first()).toHaveText('Idee');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+});
+
 test('detail page: a cast card opens the person page; Movies, a title, and Back return to the same card and filter, keyboard only', async ({
   page,
 }) => {
@@ -2817,9 +3073,12 @@ test('detail page: a cast card opens the person page; Movies, a title, and Back 
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
 
-  // Down to the cast, Right to the second person, OK opens the page; the name is there at once.
+  // Down to the strip (director, writer, then the cast), Right to the second actor, OK opens the
+  // page; the name is there at once.
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Bo Actor/ })).toBeFocused();
   await page.keyboard.press('Enter');
@@ -2978,6 +3237,9 @@ test('person page: a 4,000-character biography opens in full; Down scrolls it to
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');
@@ -3405,6 +3667,9 @@ test('Magic Remote wheel: a long biography dialog scrolls its text', async ({ pa
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
   await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('person-name')).toHaveText('Ann Actor');

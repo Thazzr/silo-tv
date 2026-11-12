@@ -3,7 +3,8 @@ import { translate, type MessageKey } from '../../i18n';
 import {
   EXTRAS_LIMIT,
   extraCaption,
-  extraEntries,
+  extraGroupLabel,
+  extraGroups,
   extraKindLabel,
   extraRuntime,
   localExtras,
@@ -69,6 +70,7 @@ describe('extraRuntime', () => {
     expect(extraRuntime(3723)).toBe('1:02:03');
     expect(extraRuntime(undefined)).toBe('');
     expect(extraRuntime(0)).toBe('');
+    expect(extraRuntime(-5)).toBe('');
   });
 });
 
@@ -82,6 +84,13 @@ describe('localExtras', () => {
 
   it('is empty without extras', () => {
     expect(localExtras({})).toEqual([]);
+  });
+
+  it('drops an extra without a content id', () => {
+    const shown = localExtras({
+      extras: [extra('a'), { content_id: '', kind: 'trailer' }, extra('b')],
+    });
+    expect(shown.map((e) => e.content_id)).toEqual(['local-a', 'local-b']);
   });
 });
 
@@ -104,22 +113,57 @@ describe('youtubeVideos', () => {
   });
 });
 
-describe('extraEntries', () => {
-  it('puts the local extras first, then the YouTube videos', () => {
-    const entries = extraEntries({
-      extras: [extra('a'), extra('b')],
-      videos: [video('abcdefghijk')],
+describe('extraGroupLabel', () => {
+  it('names the group of every kind in the plural, in English and German', () => {
+    const groups = {
+      trailer: ['Trailers', 'Trailer'],
+      teaser: ['Teasers', 'Teaser'],
+      featurette: ['Featurettes', 'Featurettes'],
+      clip: ['Clips', 'Clips'],
+      behind_the_scenes: ['Behind the Scenes', 'Hinter den Kulissen'],
+      bloopers: ['Bloopers', 'Outtakes'],
+      deleted_scene: ['Deleted Scenes', 'Entfallene Szenen'],
+      other: ['Other', 'Sonstige'],
+    } as const;
+    for (const [kind, [english, german]] of Object.entries(groups)) {
+      expect(extraGroupLabel(kind as keyof typeof groups, en)).toBe(english);
+      expect(extraGroupLabel(kind as keyof typeof groups, de)).toBe(german);
+    }
+  });
+});
+
+describe('extraGroups', () => {
+  it('groups the local extras by kind, in the order the server lists each kind', () => {
+    const groups = extraGroups({
+      extras: [
+        extra('a', { kind: 'trailer' }),
+        extra('b', { kind: 'trailer' }),
+        extra('c', { kind: 'featurette' }),
+        extra('d', { kind: 'bloopers' }),
+      ],
     });
-    expect(entries.map((e) => e.key)).toEqual([
-      'local:local-a',
-      'local:local-b',
-      'youtube:abcdefghijk',
+    expect(groups.map((g) => g.kind)).toEqual(['trailer', 'featurette', 'bloopers']);
+    expect(groups.map((g) => g.extras.map((e) => e.content_id))).toEqual([
+      ['local-a', 'local-b'],
+      ['local-c'],
+      ['local-d'],
     ]);
-    expect(entries[2]).toMatchObject({ type: 'youtube', videoId: 'abcdefghijk' });
   });
 
-  it('is empty when there is nothing to show', () => {
-    expect(extraEntries({})).toEqual([]);
-    expect(extraEntries({ videos: [video('vimeo-id-123', { site: 'vimeo' })] })).toEqual([]);
+  it('puts the kinds the app does not know with "other", wherever they stand', () => {
+    const groups = extraGroups({
+      extras: [
+        extra('a', { kind: 'making_of' }),
+        extra('b', { kind: 'trailer' }),
+        extra('c', { kind: 'other' }),
+        extra('d', { kind: 'constructor' }),
+      ],
+    });
+    expect(groups.map((g) => g.kind)).toEqual(['other', 'trailer']);
+    expect(groups[0]!.extras.map((e) => e.content_id)).toEqual(['local-a', 'local-c', 'local-d']);
+  });
+
+  it('is empty without extras', () => {
+    expect(extraGroups({})).toEqual([]);
   });
 });

@@ -15,7 +15,6 @@ import { catalogItem } from '../../test/flowFixtures';
 import { memoryStorage, testDevice } from '../../test/renderFlow';
 import {
   BOXSET_ROW_LIMIT,
-  CAST_LIMIT,
   DETAIL_IMAGE_QUERY,
   SIMILAR_LIMIT,
   itemDetailKey,
@@ -102,7 +101,6 @@ describe('constants and keys', () => {
   it('pins the limits and the image widths of the detail reads', () => {
     expect(SIMILAR_LIMIT).toBe(12);
     expect(BOXSET_ROW_LIMIT).toBe(20);
-    expect(CAST_LIMIT).toBe(24);
     expect(DETAIL_IMAGE_QUERY).toEqual({
       poster_width: 352,
       backdrop_width: 1920,

@@ -1,15 +1,32 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { SiloApiError } from '../../api/problem';
-import { focusFromPointer, getCurrentFocusKey, moveFocusTo, useBackHandler } from '../../app/nav';
+import {
+  FocusGroup,
+  focusFromPointer,
+  getCurrentFocusKey,
+  moveFocusTo,
+  stackArrows,
+  useBackHandler,
+} from '../../app/nav';
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
 import {
-  PersonCard,
   PosterCard,
   Row,
   cardFocusKey,
+  gridFocusKey,
   keepAtOrigin,
+  rowFocusKey,
   protectsEpisodeOverview,
   useSpoilerSettings,
   type CatalogItem,
@@ -25,13 +42,15 @@ import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeGrid, EpisodeGridSkeleton } from './EpisodeGrid';
 import { EPISODE_ROW_ID, EpisodeRow } from './EpisodeRow';
-import { extraEntries } from './extras';
-import { ExtrasRow } from './ExtrasRow';
+import { castCrewStrip, castRow, crewBoxRows } from './credits';
+import { CreditRow } from './CreditRow';
+import { CREW_BOX_KEY, CrewBox } from './CrewBox';
+import { extraGroups, youtubeVideos } from './extras';
+import { ExtrasSection } from './ExtrasSection';
 import {
   defaultSeason,
   detailKind,
   heroSynopsis,
-  initials,
   orderSeasons,
   seasonLabel,
   type Episode,
@@ -42,6 +61,7 @@ import {
   DETAIL_INSET,
   detailScrollOffset,
   isAbove,
+  zoneOrder,
   type DetailBlockTops,
   type DetailBlockZone,
   type DetailZone,
@@ -49,7 +69,6 @@ import {
 import { useItemBoxSet } from '../boxset/queries';
 import {
   BOXSET_ROW_LIMIT,
-  CAST_LIMIT,
   useItemDetail,
   useSeasonEpisodes,
   useSeasons,
@@ -58,6 +77,7 @@ import {
 import { SeasonRail, SeasonRailSkeleton } from './SeasonRail';
 import { SectionHead } from './SectionHead';
 import { SynopsisDialog } from './SynopsisDialog';
+import { TrailersRow } from './TrailersRow';
 import { useDescriptionTranslation } from './useDescriptionTranslation';
 import { useThemeMusic } from './useThemeMusic';
 
@@ -85,8 +105,10 @@ export interface DetailScreenProps {
 const BLOCK_ZONES: readonly DetailBlockZone[] = [
   'seasons',
   'episodes',
-  'cast',
   'extras',
+  'trailers',
+  'cast',
+  'crew',
   'boxSet',
   'similar',
 ];
@@ -96,11 +118,12 @@ const NOTICE_MS = 4000;
 
 /**
  * The detail page of any title, like the web's one route for every type: hero with the primary
- * actions, then the seasons of a series (or, with one season, its episodes), the episodes of a
- * season, or the cast of a movie, then "More like this". The page loads its item first (a skeleton
- * shaped like the page stands in) and lays itself out by the item's type; a title that is gone
- * shows a message with Back, any other failure offers Try again. It is read again whenever it
- * shows again, so the buttons follow what the player changed.
+ * actions, then the sections of its type in the web's order (a movie: cast and crew, extras,
+ * trailers, its box set, more like this; a series: its seasons or episodes, extras, trailers, cast
+ * and crew, more like this; a season and an episode: the episodes, cast and crew). The page loads
+ * its item first (a skeleton shaped like the page stands in) and lays itself out by the item's
+ * type; a title that is gone shows a message with Back, any other failure offers Try again. It is
+ * read again whenever it shows again, so the buttons follow what the player changed.
  */
 export function DetailScreen(props: DetailScreenProps) {
   const t = useT();
@@ -307,15 +330,22 @@ function DetailBody({
   const { open: openSimilar } = useItemOpener({ onPlay: playItem, onOpenDetail });
   const similarItems = similar.data ?? [];
 
-  // --- Cast -------------------------------------------------------------------------------------
-  const cast = useMemo(
-    () => [...detail.cast].sort((a, b) => a.order - b.order).slice(0, CAST_LIMIT),
-    [detail.cast],
+  // --- Cast and crew ---------------------------------------------------------------------------
+  // A movie and a series show one strip (directors or creators, writers, cast); a season and an
+  // episode show the cast and, in a box of its own, the crew.
+  const people = useMemo(
+    () => (season || episode ? castRow(detail) : castCrewStrip(detail, series, t)),
+    [detail, season, episode, series, t],
   );
-  // --- Trailer & More ---------------------------------------------------------------------------
-  // Local extras, then YouTube videos. Only movies and series own any, so the page just reads
-  // what the detail carries.
-  const extras = useMemo(() => extraEntries(detail), [detail]);
+  const crewRows = useMemo(
+    () => (season || episode ? crewBoxRows(detail) : []),
+    [detail, season, episode],
+  );
+  // --- Extras and Trailers & More ---------------------------------------------------------------
+  // Local extras (played in the app), then the YouTube videos (handed to the TV's app). Only movies
+  // and series own any, so the page just reads what the detail carries.
+  const extras = useMemo(() => extraGroups(detail), [detail]);
+  const videos = useMemo(() => youtubeVideos(detail), [detail]);
   const extrasBackdrop = useMemo(
     () => ({ url: detail.backdrop_url, thumbhash: detail.backdrop_thumbhash }),
     [detail.backdrop_url, detail.backdrop_thumbhash],
@@ -385,7 +415,8 @@ function DetailBody({
     setTops((old) => (BLOCK_ZONES.every((block) => old[block] === next[block]) ? old : next));
   }, []);
   const offset = detailScrollOffset(zone, tops);
-  const fade = (block: DetailZone) => (isAbove(block, zone) ? 'true' : 'false');
+  const order = zoneOrder(kind);
+  const fade = (block: DetailZone) => (isAbove(block, zone, order) ? 'true' : 'false');
   // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
   const enter = useCallback((next: DetailZone) => {
     if (!focusFromPointer()) setZone(next);
@@ -393,8 +424,10 @@ function DetailBody({
   const inHero = useCallback(() => enter('hero'), [enter]);
   const inSeasons = useCallback(() => enter('seasons'), [enter]);
   const inEpisodes = useCallback(() => enter('episodes'), [enter]);
-  const inCast = useCallback(() => enter('cast'), [enter]);
   const inExtras = useCallback(() => enter('extras'), [enter]);
+  const inTrailers = useCallback(() => enter('trailers'), [enter]);
+  const inCast = useCallback(() => enter('cast'), [enter]);
+  const inCrew = useCallback(() => enter('crew'), [enter]);
   const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
   const inSimilar = useCallback(() => enter('similar'), [enter]);
 
@@ -411,8 +444,12 @@ function DetailBody({
   // --- The block under the hero: the seasons row, the episode grid, or "More Episodes" ----------
   // A series with several seasons shows them as a row of cards (a failed or pending read shows its
   // own stand-in there); a season, and a series with exactly one season, list the episodes.
+  // The focus key of what holds the focus in a block (the page's Up and Down walk these).
+  let seasonsStop: string | undefined;
+  let episodesStop: string | undefined;
   let seasonsBlock = null;
   if (series && seasonsQuery.isError && !seasonsQuery.data) {
+    seasonsStop = 'detail-seasons-retry';
     seasonsBlock = (
       <div className="detail-section-message" role="alert" data-testid="seasons-error">
         <p className="error">{t('detail.seasonsError')}</p>
@@ -428,6 +465,7 @@ function DetailBody({
   } else if (series && seasonsQuery.isPending) {
     seasonsBlock = <SeasonRailSkeleton />;
   } else if (series && seasons.length > 1) {
+    seasonsStop = 'detail-seasons';
     seasonsBlock = (
       <SeasonRail
         seasons={seasons}
@@ -443,6 +481,7 @@ function DetailBody({
   if (season || singleSeason) {
     let grid;
     if (episodesQuery.isError && !episodes) {
+      episodesStop = 'detail-episodes-retry';
       grid = (
         <div className="detail-section-message" role="alert" data-testid="episodes-error">
           <p className="error">{t('detail.episodesError')}</p>
@@ -464,6 +503,7 @@ function DetailBody({
         </p>
       );
     } else {
+      episodesStop = gridFocusKey(`episodes:${detail.content_id}`);
       grid = (
         <EpisodeGrid
           gridId={`episodes:${detail.content_id}`}
@@ -488,6 +528,7 @@ function DetailBody({
     );
   } else if (showsSiblings) {
     // The siblings of an episode: only a season with several episodes has such a row.
+    episodesStop = rowFocusKey(EPISODE_ROW_ID);
     episodesBlock = (
       <div
         className="detail-episode-row"
@@ -512,8 +553,10 @@ function DetailBody({
   const blockSet = [
     seasonsBlock ? 'seasons' : '',
     episodesBlock ? 'episodes' : '',
-    kind === 'item' && cast.length > 0 ? 'cast' : '',
     extras.length > 0 ? 'extras' : '',
+    videos.length > 0 ? 'trailers' : '',
+    people.length > 0 ? 'cast' : '',
+    crewRows.length > 0 ? 'crew' : '',
     boxSetFilms.length > 0 ? 'boxSet' : '',
     similarItems.length > 0 ? 'similar' : '',
   ].join('|');
@@ -527,6 +570,129 @@ function DetailBody({
     page.querySelectorAll('[data-zone], .detail-hero').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, [measure, blockSet]);
+
+  // --- The blocks under the hero, in the order of the page's type --------------------------------
+  const sections: Partial<Record<DetailZone, ReactNode>> = {
+    seasons: seasonsBlock ? (
+      <section
+        className="detail-section detail-seasons-block"
+        data-testid="detail-seasons"
+        data-zone="seasons"
+        data-faded={fade('seasons')}
+      >
+        {seasonsBlock}
+      </section>
+    ) : null,
+    episodes: episodesBlock,
+    extras:
+      extras.length > 0 ? (
+        <div data-zone="extras" data-faded={fade('extras')}>
+          <ExtrasSection
+            groups={extras}
+            memory={memory.rows}
+            onRowFocused={inExtras}
+            onPlay={playExtra}
+          />
+        </div>
+      ) : null,
+    trailers:
+      videos.length > 0 ? (
+        <div data-zone="trailers" data-faded={fade('trailers')}>
+          <TrailersRow
+            videos={videos}
+            backdrop={extrasBackdrop}
+            memory={memory.rows}
+            onRowFocused={inTrailers}
+            onOpenYouTube={openYouTube}
+          />
+        </div>
+      ) : null,
+    cast:
+      people.length > 0 ? (
+        <div data-zone="cast" data-faded={fade('cast')}>
+          <CreditRow
+            title={t(season || episode ? 'detail.cast' : 'detail.castCrew')}
+            entries={people}
+            memory={memory.rows}
+            onRowFocused={inCast}
+            onOpenPerson={onOpenPerson}
+          />
+        </div>
+      ) : null,
+    crew:
+      crewRows.length > 0 ? (
+        <div data-zone="crew" data-faded={fade('crew')}>
+          <CrewBox rows={crewRows} onFocused={inCrew} onOpenPerson={onOpenPerson} />
+        </div>
+      ) : null,
+    boxSet:
+      boxSet && boxSetFilms.length > 0 ? (
+        <div data-zone="boxSet" data-faded={fade('boxSet')}>
+          <Row
+            rowId="boxset"
+            title={boxSet.title}
+            shape="poster"
+            items={boxSetFilms}
+            getKey={(item) => item.content_id}
+            memory={memory.rows}
+            inset={DETAIL_INSET}
+            onRowFocused={inBoxSet}
+            onExploreAll={openBoxSet}
+            renderCard={(item, ctx) => (
+              <PosterCard
+                item={item}
+                focusKey={ctx.focusKey}
+                onFocused={ctx.onFocused}
+                onOpen={openBoxSetFilm}
+                badge={item.content_id === detail.content_id ? t('boxset.thisFilm') : undefined}
+              />
+            )}
+          />
+        </div>
+      ) : null,
+    similar:
+      similarItems.length > 0 ? (
+        <div data-zone="similar" data-faded={fade('similar')}>
+          <Row
+            rowId="similar"
+            title={t('detail.similar')}
+            shape="poster"
+            items={similarItems}
+            getKey={(item) => item.content_id}
+            memory={memory.rows}
+            inset={DETAIL_INSET}
+            onRowFocused={inSimilar}
+            renderCard={(item, ctx) => (
+              <PosterCard
+                item={item}
+                focusKey={ctx.focusKey}
+                onFocused={ctx.onFocused}
+                onOpen={openSimilar}
+              />
+            )}
+          />
+        </div>
+      ) : null,
+  };
+
+  // Up and Down go from block to block in the page's order, by focus key: the library's spatial
+  // search compares layout positions, which a scrolling grid (its cards sit unscrolled) and a
+  // scrolled page do not match, so it would skip a block. Each block's own remembered child
+  // takes the focus; the hero above the first block and the end below the last are left to it.
+  const stopOf: Partial<Record<DetailZone, readonly (string | undefined)[]>> = {
+    seasons: [seasonsStop],
+    episodes: [episodesStop],
+    extras: extras.map((group) => rowFocusKey(`extras-${group.kind}`)),
+    trailers: [videos.length > 0 ? rowFocusKey('trailers') : undefined],
+    cast: [people.length > 0 ? rowFocusKey('cast') : undefined],
+    // A box of names without a person page holds no focus.
+    crew: [
+      crewRows.some((row) => row.names.some((name) => name.personId)) ? CREW_BOX_KEY : undefined,
+    ],
+    boxSet: [boxSetFilms.length > 0 ? rowFocusKey('boxset') : undefined],
+    similar: [similarItems.length > 0 ? rowFocusKey('similar') : undefined],
+  };
+  const stops = order.flatMap((block) => stopOf[block] ?? []).filter((key) => key !== undefined);
 
   return (
     <>
@@ -581,106 +747,18 @@ function DetailBody({
               )
             }
           />
-          {seasonsBlock ? (
-            <section
-              className="detail-section detail-seasons-block"
-              data-testid="detail-seasons"
-              data-zone="seasons"
-              data-faded={fade('seasons')}
-            >
-              {seasonsBlock}
-            </section>
-          ) : null}
-          {episodesBlock}
-          {kind === 'item' && cast.length > 0 ? (
-            <div data-zone="cast" data-faded={fade('cast')}>
-              <Row
-                rowId="cast"
-                title={t('detail.cast')}
-                shape="poster"
-                items={cast}
-                getKey={(person) => person.person_id ?? `${person.order}-${person.name}`}
-                memory={memory.rows}
-                inset={DETAIL_INSET}
-                onRowFocused={inCast}
-                renderCard={(person, ctx) => (
-                  <PersonCard
-                    name={person.name}
-                    role={person.character}
-                    photo={person.photo_url}
-                    thumbhash={person.photo_thumbhash}
-                    initials={initials(person.name)}
-                    focusKey={ctx.focusKey}
-                    onFocused={ctx.onFocused}
-                    onOpen={() => {
-                      // A credit without a person id has no page to open.
-                      if (person.person_id) {
-                        onOpenPerson({ personId: person.person_id, personName: person.name });
-                      }
-                    }}
-                  />
-                )}
-              />
-            </div>
-          ) : null}
-          {extras.length > 0 ? (
-            <div data-zone="extras" data-faded={fade('extras')}>
-              <ExtrasRow
-                entries={extras}
-                backdrop={extrasBackdrop}
-                memory={memory.rows}
-                onRowFocused={inExtras}
-                onPlayExtra={playExtra}
-                onOpenYouTube={openYouTube}
-              />
-            </div>
-          ) : null}
-          {boxSet && boxSetFilms.length > 0 ? (
-            <div data-zone="boxSet" data-faded={fade('boxSet')}>
-              <Row
-                rowId="boxset"
-                title={boxSet.title}
-                shape="poster"
-                items={boxSetFilms}
-                getKey={(item) => item.content_id}
-                memory={memory.rows}
-                inset={DETAIL_INSET}
-                onRowFocused={inBoxSet}
-                onExploreAll={openBoxSet}
-                renderCard={(item, ctx) => (
-                  <PosterCard
-                    item={item}
-                    focusKey={ctx.focusKey}
-                    onFocused={ctx.onFocused}
-                    onOpen={openBoxSetFilm}
-                    badge={item.content_id === detail.content_id ? t('boxset.thisFilm') : undefined}
-                  />
-                )}
-              />
-            </div>
-          ) : null}
-          {similarItems.length > 0 ? (
-            <div data-zone="similar" data-faded={fade('similar')}>
-              <Row
-                rowId="similar"
-                title={t('detail.similar')}
-                shape="poster"
-                items={similarItems}
-                getKey={(item) => item.content_id}
-                memory={memory.rows}
-                inset={DETAIL_INSET}
-                onRowFocused={inSimilar}
-                renderCard={(item, ctx) => (
-                  <PosterCard
-                    item={item}
-                    focusKey={ctx.focusKey}
-                    onFocused={ctx.onFocused}
-                    onOpen={openSimilar}
-                  />
-                )}
-              />
-            </div>
-          ) : null}
+          <FocusGroup
+            focusKey="detail-blocks"
+            enterable={stops.length > 0}
+            // Entering from the hero always lands on the first block, not on the last one used.
+            saveLastFocusedChild={false}
+            preferredChildFocusKey={stops[0]}
+            onArrow={stackArrows(stops)}
+          >
+            {order.map((block) => (
+              <Fragment key={block}>{sections[block]}</Fragment>
+            ))}
+          </FocusGroup>
         </div>
         {notice ? (
           <p className="detail-notice" role="status" data-testid="detail-notice">

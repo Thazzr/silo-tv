@@ -229,13 +229,14 @@ describe('DetailScreen: the hero of a season page', () => {
     expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
   });
 
-  it('asks for neither similar titles, nor a box set, nor shows a cast row', async () => {
+  it('asks for neither similar titles nor a box set, and shows its cast as a Cast row', async () => {
     const calls = serveSeason({ cast: [{ name: 'An Actor', character: 'X', order: 0 }] });
     setup({ itemId: 'season-1' });
     await grid();
     expect(calls.similar).toEqual([]);
     expect(calls.boxSets).toEqual([]);
-    expect(screen.queryByRole('heading', { name: 'Cast' })).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Cast' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Cast & Crew' })).toBeNull();
   });
 });
 

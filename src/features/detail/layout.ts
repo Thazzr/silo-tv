@@ -8,6 +8,7 @@ import {
   type CardMetrics,
   type GridMetrics,
 } from '../../ui/media';
+import type { DetailKind } from './info';
 
 /** Side inset of the detail pages. */
 export const DETAIL_INSET = 100;
@@ -32,7 +33,8 @@ export const DETAIL_SCROLLED_DIM_ALPHA = 0.85;
 export const SAFE_TOP = 54;
 
 /** The blocks of the page the view snaps between, in page order. */
-export type DetailZone = 'hero' | 'seasons' | 'episodes' | 'cast' | 'extras' | 'boxSet' | 'similar';
+export type DetailZone =
+  'hero' | 'seasons' | 'episodes' | 'extras' | 'trailers' | 'cast' | 'crew' | 'boxSet' | 'similar';
 /** The zones below the hero, which have a block of their own to scroll to. */
 export type DetailBlockZone = Exclude<DetailZone, 'hero'>;
 /** The measured top of each block below the hero inside the page (layout position, in px). */
@@ -51,19 +53,30 @@ export function detailScrollOffset(zone: DetailZone, tops: DetailBlockTops): num
   return top === undefined ? 0 : Math.max(0, top - SAFE_TOP);
 }
 
-const ZONE_ORDER: readonly DetailZone[] = [
-  'hero',
-  'seasons',
-  'episodes',
-  'cast',
-  'extras',
-  'boxSet',
-  'similar',
-];
+/**
+ * The blocks of a page in the order the web draws them (docs/roadmap.md, Detail pages): a movie
+ * leads with its cast, a series with its seasons and the extras, a season and an episode end with
+ * the cast and the crew. A block that is not on the page is simply never focused.
+ */
+export function zoneOrder(kind: DetailKind): readonly DetailZone[] {
+  switch (kind) {
+    case 'item':
+      return ['hero', 'cast', 'extras', 'trailers', 'boxSet', 'similar'];
+    case 'series':
+      return ['hero', 'seasons', 'episodes', 'extras', 'trailers', 'cast', 'similar'];
+    case 'season':
+    case 'episode':
+      return ['hero', 'episodes', 'cast', 'crew'];
+  }
+}
 
 /** Whether the block of `zone` lies above the block that holds the focus (it then fades out). */
-export function isAbove(zone: DetailZone, focused: DetailZone): boolean {
-  return ZONE_ORDER.indexOf(zone) < ZONE_ORDER.indexOf(focused);
+export function isAbove(
+  zone: DetailZone,
+  focused: DetailZone,
+  order: readonly DetailZone[],
+): boolean {
+  return order.indexOf(zone) < order.indexOf(focused);
 }
 
 /** A season card: a 220x330 poster (the web's 140x210, scaled) with its label and episode count. */

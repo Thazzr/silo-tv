@@ -309,14 +309,14 @@ describe('DetailScreen: a movie', () => {
     await ready();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
-    await focusKeyIs('card:cast:p-1');
+    await focusKeyIs('card:cast:cast:p-1');
     await pressKey(KEY.right);
-    await focusKeyIs('card:cast:p-2');
+    await focusKeyIs('card:cast:cast:p-2');
     await pressKey(KEY.enter);
     await screen.findByTestId('person-stub');
     await pressKey(KEY.back);
     await ready();
-    await focusKeyIs('card:cast:p-2');
+    await focusKeyIs('card:cast:cast:p-2');
   });
 
   it('puts the initials on a cast card without a photo', async () => {
@@ -338,11 +338,11 @@ describe('DetailScreen: a movie', () => {
     await screen.findByRole('button', { name: /Similar One/ });
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
-    await focusKeyIs('card:cast:0-First Actor');
+    await focusKeyIs('card:cast:cast:0-First Actor');
     await pressKey(KEY.down);
     await focusKeyIs('card:similar:x1');
     await pressKey(KEY.up);
-    await focusKeyIs('card:cast:0-First Actor');
+    await focusKeyIs('card:cast:cast:0-First Actor');
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
   });
@@ -574,7 +574,7 @@ describe('DetailScreen: the hero like the web', () => {
     expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'false');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
-    await focusKeyIs('card:cast:0-First Actor');
+    await focusKeyIs('card:cast:cast:0-First Actor');
     await waitFor(() =>
       expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'true'),
     );
@@ -608,7 +608,7 @@ describe('DetailScreen: the pointer', () => {
       expect(document.querySelector('[data-zone="cast"]')).toHaveAttribute('data-faded', 'false');
       // Up to the cast row is a key press: the page scrolls to it.
       await pressKey(KEY.up);
-      await focusKeyIs('card:cast:0-First Actor');
+      await focusKeyIs('card:cast:cast:0-First Actor');
       expect(page().style.transform).toBe('translateY(-846px)');
     } finally {
       top.mockRestore();
@@ -799,7 +799,7 @@ describe('DetailScreen: the box set row of a movie', () => {
     const zone = (name: string) => document.querySelector(`[data-zone="${name}"]`)!;
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
-    await focusKeyIs('card:cast:0-First Actor');
+    await focusKeyIs('card:cast:cast:0-First Actor');
     expect(zone('boxSet')).toHaveAttribute('data-faded', 'false');
     await pressKey(KEY.down);
     await focusKeyIs('card:boxset:f0');
@@ -1244,7 +1244,7 @@ describe('DetailScreen: a series', () => {
     await screen.findByTestId('season-rail');
   });
 
-  it('shows no cast row for a series, and More like this after the seasons', async () => {
+  it('shows the cast of a series in the Cast & Crew strip, with More like this after it', async () => {
     serveDetail(server, {
       item: () => series({ cast: [{ name: 'An Actor', character: 'X', order: 0 }] }),
       seasons,
@@ -1253,7 +1253,8 @@ describe('DetailScreen: a series', () => {
     });
     setup({ itemId: 's1' });
     await screen.findByRole('button', { name: /Similar One/ });
-    expect(screen.queryByRole('heading', { name: 'Cast' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Cast & Crew' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'An Actor, X' })).toBeInTheDocument();
     // The credit line names no cast; a series without crew shows its genres only.
     expect(screen.getByTestId('detail-credits')).toHaveTextContent(
       'Drama · Mystery · Thriller · Comedy',

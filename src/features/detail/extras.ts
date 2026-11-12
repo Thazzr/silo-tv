@@ -1,5 +1,5 @@
-// "Trailer & More" on a detail page, as pure functions: which cards the row shows, in which order,
-// and what their captions say. Spoiler rules do not apply to extras (they hold no plot of the
+// The extras of a detail page, as pure functions: which cards the "Extras" rows and the "Trailers
+// & More" row show, in which order, and what their captions say. Spoiler rules do not apply to extras (they hold no plot of the
 // title's episodes), so nothing here consults them.
 import type { components } from '../../api/generated/schema';
 import type { MessageKey } from '../../i18n';
@@ -13,31 +13,35 @@ export type ItemVideo = S['ItemVideoInfo'];
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;
 
-/** The row shows at most this many local extras (and, separately, this many YouTube videos). */
+/** Each section shows at most this many local extras (and, separately, this many YouTube videos). */
 export const EXTRAS_LIMIT = 24;
 
-/** The card of one entry of the row. */
-export type ExtraEntry =
-  | { type: 'local'; key: string; extra: ItemExtra }
-  | { type: 'youtube'; key: string; video: ItemVideo; videoId: string };
+/** The kinds the server knows: the singular label of a card, the plural heading of a group. */
+const KIND_LABELS = {
+  trailer: ['extras.kind.trailer', 'extras.group.trailer'],
+  teaser: ['extras.kind.teaser', 'extras.group.teaser'],
+  featurette: ['extras.kind.featurette', 'extras.group.featurette'],
+  clip: ['extras.kind.clip', 'extras.group.clip'],
+  behind_the_scenes: ['extras.kind.behindTheScenes', 'extras.group.behindTheScenes'],
+  bloopers: ['extras.kind.bloopers', 'extras.group.bloopers'],
+  deleted_scene: ['extras.kind.deletedScene', 'extras.group.deletedScene'],
+  other: ['extras.kind.other', 'extras.group.other'],
+} as const satisfies Record<string, readonly [MessageKey, MessageKey]>;
+export type ExtraKind = keyof typeof KIND_LABELS;
 
-const KIND_LABELS: Record<string, MessageKey> = {
-  trailer: 'extras.kind.trailer',
-  teaser: 'extras.kind.teaser',
-  featurette: 'extras.kind.featurette',
-  clip: 'extras.kind.clip',
-  behind_the_scenes: 'extras.kind.behindTheScenes',
-  bloopers: 'extras.kind.bloopers',
-  deleted_scene: 'extras.kind.deletedScene',
-  other: 'extras.kind.other',
-};
+/** A kind the app does not know (a newer server) is "other". */
+function knownKind(kind: string): ExtraKind {
+  return Object.prototype.hasOwnProperty.call(KIND_LABELS, kind) ? (kind as ExtraKind) : 'other';
+}
 
-/** The label of a kind; a kind the app does not know (a newer server) reads as "Extra". */
+/** The label of a kind, singular ("Trailer"); a kind the app does not know reads as "Extra". */
 export function extraKindLabel(kind: string, t: Translate): string {
-  const key = Object.prototype.hasOwnProperty.call(KIND_LABELS, kind)
-    ? KIND_LABELS[kind]
-    : undefined;
-  return t(key ?? 'extras.kind.other');
+  return t(KIND_LABELS[knownKind(kind)][0]);
+}
+
+/** The heading of a kind's group of extras, plural ("Trailers"); an unknown kind is "Other". */
+export function extraGroupLabel(kind: ExtraKind, t: Translate): string {
+  return t(KIND_LABELS[kind][1]);
 }
 
 /** A card's caption: the title when there is one, else the kind's label. */
@@ -64,18 +68,20 @@ export function youtubeVideos(detail: Pick<ItemDetail, 'videos'>): ItemVideo[] {
     .slice(0, EXTRAS_LIMIT);
 }
 
-/** All cards of the row: the local extras first, then the YouTube videos. */
-export function extraEntries(detail: Pick<ItemDetail, 'extras' | 'videos'>): ExtraEntry[] {
-  const local = localExtras(detail).map((extra): ExtraEntry => ({
-    type: 'local',
-    key: `local:${extra.content_id}`,
-    extra,
-  }));
-  const remote = youtubeVideos(detail).map((video): ExtraEntry => ({
-    type: 'youtube',
-    key: `youtube:${video.site_key}`,
-    video,
-    videoId: video.site_key,
-  }));
-  return [...local, ...remote];
+/** One kind's local extras: a row under its own heading. */
+export interface ExtraGroup {
+  kind: ExtraKind;
+  extras: ItemExtra[];
+}
+
+/** The local extras grouped by kind, in the order the server's list first shows each kind. */
+export function extraGroups(detail: Pick<ItemDetail, 'extras'>): ExtraGroup[] {
+  const groups: ExtraGroup[] = [];
+  for (const extra of localExtras(detail)) {
+    const kind = knownKind(extra.kind);
+    const group = groups.find((one) => one.kind === kind);
+    if (group) group.extras.push(extra);
+    else groups.push({ kind, extras: [extra] });
+  }
+  return groups;
 }

@@ -733,6 +733,153 @@
   font-style: italic;
 }
 
+/* ---- Cast, crew, extras and trailers ---- */
+/* The label before a group of the "Cast & Crew" strip: it sits in the gap left of the group's first
+   card (CARD_GAP, 40 px), so the strip's steps stay even. Rotated text, a hairline at its right. */
+.credit-divider {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  width: 40px;
+  height: 264px;
+  pointer-events: none;
+}
+
+.credit-divider::after {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  bottom: 0;
+  width: 1px;
+  content: '';
+  background: var(--hairline);
+}
+
+.credit-divider-label {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0.2em;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+/* "Extras": the kind's heading over each row is a subheading of the section's. */
+.detail-extras .row-title {
+  font-size: 26px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* The kind and the outlined "Official" badge under a trailer's title. */
+.trailer-kind-text {
+  margin-right: 10px;
+}
+
+.trailer-official {
+  display: inline-block;
+  box-sizing: border-box;
+  padding: 0 10px;
+  font-size: var(--fs-small);
+  line-height: 22px;
+  vertical-align: top;
+  border: 1px solid currentcolor;
+  border-radius: 12px;
+}
+
+/* The "Crew" box of a season or an episode: the web's subtle glass, opaque here (no blur on the
+   TV), a row per job with a label and the names. */
+.detail-crew {
+  padding-bottom: 30px;
+}
+
+.crew-box {
+  box-sizing: border-box;
+  padding: 8px 28px;
+  margin: 0 100px;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+}
+
+/* 75 px targets, plus room for the focused name to grow. */
+.crew-row {
+  display: flex;
+  align-items: center;
+  min-height: 91px;
+}
+
+.crew-label {
+  flex: none;
+  width: 220px;
+  font-size: var(--fs-card-title);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* One line: a row wider than the box scrolls by a transform (CrewBox.tsx). */
+.crew-names {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.crew-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  padding: 8px 12px;
+  white-space: nowrap;
+  transition: transform var(--transition);
+}
+
+.crew-name {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  min-height: 75px;
+  padding: 0 8px;
+  margin: 0;
+  font: inherit;
+  font-size: 26px;
+  color: rgba(237, 237, 237, 0.85);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.crew-name-plain {
+  cursor: default;
+}
+
+.crew-name:hover {
+  background: var(--chrome-selected);
+}
+
+/* The same cue as every button: a light fill with dark text, and it grows a little. */
+.crew-name:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  transform: scale(1.04);
+}
+
+.crew-sep {
+  margin: 0 4px 0 -8px;
+  font-size: 26px;
+  color: var(--text-secondary);
+}
+
 /* ---- Messages and skeletons ---- */
 .detail-message {
   max-width: 900px;

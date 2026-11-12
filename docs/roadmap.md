@@ -54,7 +54,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - 🟨 the actions: mark watched or unwatched, favourite, a star rating (one focus stop: OK starts, Left/Right picks 1–5, OK saves, Back cancels, the set star again clears it), and a More menu with watchlist, not interested, mark unwatched and start over (shuffle joins with Shuffle)
   - 🟨 the series page: a row of season posters with the watched check and progress, specials first (a series with one season lists its episodes directly); the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis)
   - 🟨 the episode page: the still as the backdrop, "Series › Season 1 › Episode 3", runtime and air date with the quality badges, "Play Episode", and "More Episodes" with the current one marked (a sibling's page starts on its card in that row)
-  - cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
+  - 🟨 cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
+  - 🟨 the sections in the web app's order per page type, with local extras (one row per kind) and "Trailers & More" (YouTube) as two sections; Down and Up walk them block by block
   - quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`)
   - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5
 - 🟨 Similar titles
@@ -69,7 +70,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - it turns every 8 s while the focus is elsewhere; Left/Right on the focusable indicator pages, OK pauses
   - in the rows below, the hero shows the focused card as before; the featured section is no longer a row of its own
 - ✅ Profile settings read from the server (effective values, gated by the settings contract), shared by the features below (TV 2026-11-11)
-- ✅ Trailers & More: local trailers and extras play in the app's player; YouTube videos go to the TV's YouTube app (hand-off verified on webOS 26, 2026-11-10; an embedded YouTube player is not possible from `file://`, YouTube answers error 153; TV 2026-11-11)
+- ✅ Trailers & More: local trailers and extras play in the app's player (since the detail pages follow the web app, in an "Extras" section of their own); YouTube videos go to the TV's YouTube app (hand-off verified on webOS 26, 2026-11-10; an embedded YouTube player is not possible from `file://`, YouTube answers error 153; TV 2026-11-11)
 - ✅ Theme music on detail pages when the profile turns it on (`ui.theme_music_enabled`, `ui.theme_music_loop`) and the server offers it: quiet, only while the page is on top, stopped at once for the player or any other screen; series use the series' theme (a season's own theme comes later) (TV 2026-11-11)
 - ✅ Title art (logo instead of text) following the profile setting `ui.title_art` (TV 2026-11-10)
 - ✅ Spoiler protection following the profile settings: a blurred preview (ThumbHash, no CSS filter) instead of the still, and a hidden description, for unwatched episodes (TV 2026-11-11)

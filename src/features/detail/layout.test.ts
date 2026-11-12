@@ -13,6 +13,7 @@ import {
   detailScrollOffset,
   isAbove,
   seasonsVisible,
+  zoneOrder,
 } from './layout';
 import { SCREEN_WIDTH, rowVisibleCards } from '../../ui/media';
 
@@ -47,14 +48,6 @@ describe('the seasons row and the episode grid', () => {
     expect(detailScrollOffset('seasons', { episodes: 812 })).toBe(0);
   });
 
-  it('puts the seasons row above the episode grid and both above the cast', () => {
-    expect(isAbove('hero', 'seasons')).toBe(true);
-    expect(isAbove('seasons', 'episodes')).toBe(true);
-    expect(isAbove('seasons', 'cast')).toBe(true);
-    expect(isAbove('episodes', 'seasons')).toBe(false);
-    expect(isAbove('seasons', 'seasons')).toBe(false);
-  });
-
   it('draws season posters of 220 x 330, 260 px apart, six and a bit across', () => {
     expect(SEASON_CARD).toEqual({ width: 220, height: 330 });
     expect(SEASON_STEP).toBe(260);
@@ -84,35 +77,72 @@ describe('the More Episodes row', () => {
   });
 });
 
+describe('zoneOrder', () => {
+  // The web's order below the hero (docs/roadmap.md, Detail pages).
+  it("puts a movie's cast and crew first, then extras, trailers, the box set and similar titles", () => {
+    expect(zoneOrder('item')).toEqual(['hero', 'cast', 'extras', 'trailers', 'boxSet', 'similar']);
+  });
+
+  it("puts a series' seasons and episodes first, its cast and crew after the trailers", () => {
+    expect(zoneOrder('series')).toEqual([
+      'hero',
+      'seasons',
+      'episodes',
+      'extras',
+      'trailers',
+      'cast',
+      'similar',
+    ]);
+  });
+
+  it('ends a season and an episode with the cast and then the crew', () => {
+    expect(zoneOrder('season')).toEqual(['hero', 'episodes', 'cast', 'crew']);
+    expect(zoneOrder('episode')).toEqual(['hero', 'episodes', 'cast', 'crew']);
+  });
+});
+
 describe('isAbove', () => {
+  const movie = zoneOrder('item');
+  const series = zoneOrder('series');
+
   it('is true for every block above the focused one', () => {
-    expect(isAbove('hero', 'episodes')).toBe(true);
-    expect(isAbove('hero', 'similar')).toBe(true);
-    expect(isAbove('cast', 'similar')).toBe(true);
-    expect(isAbove('episodes', 'similar')).toBe(true);
+    expect(isAbove('hero', 'cast', movie)).toBe(true);
+    expect(isAbove('hero', 'similar', movie)).toBe(true);
+    expect(isAbove('cast', 'similar', movie)).toBe(true);
+    expect(isAbove('hero', 'seasons', series)).toBe(true);
+    expect(isAbove('seasons', 'episodes', series)).toBe(true);
+    expect(isAbove('episodes', 'similar', series)).toBe(true);
   });
 
   it('is false for the focused block, the ones below it and the hero while it is focused', () => {
-    expect(isAbove('hero', 'hero')).toBe(false);
-    expect(isAbove('episodes', 'episodes')).toBe(false);
-    expect(isAbove('similar', 'cast')).toBe(false);
-    expect(isAbove('similar', 'hero')).toBe(false);
+    expect(isAbove('hero', 'hero', movie)).toBe(false);
+    expect(isAbove('cast', 'cast', movie)).toBe(false);
+    expect(isAbove('similar', 'cast', movie)).toBe(false);
+    expect(isAbove('similar', 'hero', movie)).toBe(false);
+    expect(isAbove('episodes', 'seasons', series)).toBe(false);
   });
 
-  it('puts the extras row after the cast and the episodes and before the box set', () => {
-    expect(isAbove('cast', 'extras')).toBe(true);
-    expect(isAbove('episodes', 'extras')).toBe(true);
-    expect(isAbove('extras', 'boxSet')).toBe(true);
-    expect(isAbove('extras', 'similar')).toBe(true);
-    expect(isAbove('boxSet', 'extras')).toBe(false);
-    expect(isAbove('extras', 'extras')).toBe(false);
+  it('follows the order of the page type: the cast is above the extras on a movie, below on a series', () => {
+    expect(isAbove('cast', 'extras', movie)).toBe(true);
+    expect(isAbove('extras', 'cast', movie)).toBe(false);
+    expect(isAbove('cast', 'extras', series)).toBe(false);
+    expect(isAbove('extras', 'cast', series)).toBe(true);
+    expect(isAbove('trailers', 'cast', series)).toBe(true);
   });
 
-  it('puts the box set row between the cast and the similar titles', () => {
-    expect(isAbove('cast', 'boxSet')).toBe(true);
-    expect(isAbove('boxSet', 'similar')).toBe(true);
-    expect(isAbove('similar', 'boxSet')).toBe(false);
-    expect(isAbove('boxSet', 'boxSet')).toBe(false);
+  it('puts the extras before the trailers and the trailers before the box set', () => {
+    expect(isAbove('extras', 'trailers', movie)).toBe(true);
+    expect(isAbove('trailers', 'boxSet', movie)).toBe(true);
+    expect(isAbove('boxSet', 'trailers', movie)).toBe(false);
+    expect(isAbove('boxSet', 'similar', movie)).toBe(true);
+    expect(isAbove('similar', 'boxSet', movie)).toBe(false);
+  });
+
+  it('puts the crew box below the cast on a season page', () => {
+    const season = zoneOrder('season');
+    expect(isAbove('cast', 'crew', season)).toBe(true);
+    expect(isAbove('crew', 'cast', season)).toBe(false);
+    expect(isAbove('episodes', 'cast', season)).toBe(true);
   });
 });
 
