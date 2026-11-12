@@ -2126,7 +2126,11 @@ test('Movies: Browse sorted by year, filtered by genre, a letter jump, a detail 
   await page.keyboard.press('Enter');
   await expect(page.getByRole('button', { name: 'Sortierung · Titel' })).toBeFocused();
   await expect(posters).toHaveText(['Fourth Title', 'Second Title', 'Seventh Title']);
-  // Only F and S have titles now. Right from the last poster reaches the rail.
+  // Only F and S have titles now. The rail's letters come with the filtered list's own answer;
+  // until they do, no letter is a target and Right has nowhere to go.
+  await expect(page.getByRole('button', { name: 'Springe zu S' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Springe zu B' })).toBeDisabled();
+  // Right from the last poster reaches the rail.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Fourth Title/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');

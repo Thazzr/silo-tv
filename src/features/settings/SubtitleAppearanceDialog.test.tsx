@@ -700,12 +700,21 @@ describe('SubtitleAppearanceDialog saving', () => {
   });
 
   it('shows no error and goes back to the stored value when a write fails', async () => {
-    const { writes } = serve({ put: 500, values: { [STORED_KEY]: look({ fontSize: 'small' }) } });
+    let release = () => undefined as void;
+    const putGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { writes } = serve({
+      put: 500,
+      putGate,
+      values: { [STORED_KEY]: look({ fontSize: 'small' }) },
+    });
     await open();
     await pressKey(KEY.right);
-    // Shown at once ...
-    expect(selected('size')).toEqual(['Medium']);
     await waitFor(() => expect(puts(writes)).toHaveLength(1));
+    // Shown at once, while the server has not answered yet ...
+    expect(selected('size')).toEqual(['Medium']);
+    act(() => release());
     // ... and back on the last stored value once the server refused. No popup, no message.
     await waitFor(() => expect(selected('size')).toEqual(['Small']));
     expect(screen.queryByRole('alert')).toBeNull();
@@ -868,9 +877,9 @@ describe('SubtitleAppearanceDialog reset and the queue behind it', () => {
     reset();
     chip('font', 'Monospace');
     act(() => release());
-    await pause(300);
+    // The failed change is shown until the server has refused it, so wait for the revert.
+    await waitFor(() => expect(selected('font')).toEqual(['Sans-serif']));
     expect(selected('size')).toEqual(['Large']);
-    expect(selected('font')).toEqual(['Sans-serif']);
   });
 
   it('shows the previous value again when the reset’s DELETE fails', async () => {
@@ -909,8 +918,8 @@ describe('SubtitleAppearanceDialog reset and the queue behind it', () => {
     chip('font', 'Serif');
     act(() => release());
     await waitFor(() => expect(writes.filter((w) => w.method === 'PUT')).toHaveLength(2));
-    await pause(150);
+    // The failed second change is shown until the server has refused it, so wait for the revert.
+    await waitFor(() => expect(selected('font')).toEqual(['Sans-serif']));
     expect(selected('size')).toEqual(['X-Large']);
-    expect(selected('font')).toEqual(['Sans-serif']);
   });
 });
