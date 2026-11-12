@@ -5,6 +5,7 @@ import type { Language, MessageKey } from '../../i18n';
 import { audioCodecBadge, type AudioTrackFormat } from '../../playback/audioLabel';
 import { resumePoint } from '../../playback/resume';
 import { parseDate } from '../person/info';
+import { audioScore, type FileVersion } from './versions';
 
 type S = components['schemas'];
 export type ItemDetail = S['CatalogItemDetail'];
@@ -26,43 +27,6 @@ export function detailKind(detail: ItemDetail): DetailKind {
   return isEpisodeDetail(detail) ? 'episode' : 'item';
 }
 
-type FileVersion = S['FileVersion'];
-
-const RESOLUTION_RANK: Record<string, number> = {
-  '4k': 4,
-  '2160p': 4,
-  '1440p': 3,
-  '1080p': 2,
-  '720p': 1,
-  '480p': 0,
-};
-
-const resolutionScore = (resolution: string): number =>
-  RESOLUTION_RANK[resolution.toLowerCase()] ?? -1;
-
-/**
- * The version the page describes (its runtime and quality badges): the one the profile played
- * last, else the one the server resolved for the profile (`effective_version_*`), else the sharpest
- * one; an edition the profile chose narrows the choice first.
- */
-export function selectedVersion(detail: ItemDetail): FileVersion | undefined {
-  const edition = detail.effective_version_edition_key ?? detail.user_data?.last_edition_key;
-  const inEdition = detail.versions.filter((version) => version.edition_key === edition);
-  const candidates = inEdition.length > 0 ? inEdition : detail.versions;
-  const last = detail.user_data?.last_file_id;
-  const played = candidates.find((version) => version.file_id === last);
-  if (played) return played;
-  const resolved = candidates.find(
-    (version) =>
-      version.resolution === detail.effective_version_resolution &&
-      version.hdr === detail.effective_version_hdr,
-  );
-  if (resolved) return resolved;
-  return [...candidates].sort(
-    (a, b) => resolutionScore(b.resolution) - resolutionScore(a.resolution),
-  )[0];
-}
-
 const yearOf = (date: string | undefined): number | undefined => {
   const year = Number.parseInt(date ?? '', 10);
   return Number.isNaN(year) ? undefined : year;
@@ -78,8 +42,12 @@ function yearChip(detail: ItemDetail): string | null {
 }
 
 /** The runtime chip of an item: the selected version's duration, else the item's own runtime. */
-function itemRuntimeChip(detail: ItemDetail, t: Translate): string | null {
-  const seconds = selectedVersion(detail)?.duration ?? 0;
+function itemRuntimeChip(
+  detail: ItemDetail,
+  version: FileVersion | undefined,
+  t: Translate,
+): string | null {
+  const seconds = version?.duration ?? 0;
   return runtimeChip(seconds > 0 ? Math.round(seconds / 60) : (detail.runtime ?? 0), t);
 }
 
@@ -96,13 +64,14 @@ function runtimeChip(minutes: number, t: Translate): string | null {
  * selected version. A series: years, content rating, the numbers of seasons and episodes (from the
  * season list, so they are missing until that has loaded: it is empty before). A season: the year
  * it first aired, its indicator ("Season 1", "Specials") and its number of episodes, which falls
- * back to `loadedEpisodes` when the item carries none.
+ * back to `loadedEpisodes` when the item carries none. `version` is the selected version of a movie.
  */
 export function detailChips(
   detail: ItemDetail,
   seasons: readonly Season[],
   t: Translate,
   loadedEpisodes = 0,
+  version?: FileVersion,
 ): string[] {
   if (isSeason(detail)) {
     const count = detail.episode_count ?? loadedEpisodes;
@@ -121,7 +90,7 @@ export function detailChips(
     }
     if (episodes > 0) chips.push(episodeCountText(episodes, t));
   } else {
-    chips.push(itemRuntimeChip(detail, t));
+    chips.push(itemRuntimeChip(detail, version, t));
   }
   return chips.filter((chip): chip is string => Boolean(chip));
 }
@@ -130,8 +99,13 @@ export function detailChips(
  * The chips of an episode page: the runtime of the selected version (the item's own runtime when
  * the version has none), then the air date in the medium format. Either may be missing.
  */
-export function episodeChips(detail: ItemDetail, lang: Language, t: Translate): string[] {
-  return [itemRuntimeChip(detail, t), mediumDate(detail.air_date, lang)].filter(
+export function episodeChips(
+  detail: ItemDetail,
+  lang: Language,
+  t: Translate,
+  version?: FileVersion,
+): string[] {
+  return [itemRuntimeChip(detail, version, t), mediumDate(detail.air_date, lang)].filter(
     (chip): chip is string => Boolean(chip),
   );
 }
@@ -226,25 +200,6 @@ export function heroCredits(detail: ItemDetail, t: Translate): HeroCredits {
   };
 }
 
-// The order of a version's audio codecs when the best one is picked for the badge. A codec the web
-// does not rank (AC3, ...) never gets a badge there, and none does here.
-const AUDIO_RANK: [string, number][] = [
-  ['atmos', 6],
-  ['truehd', 5],
-  ['dts-hd', 4],
-  ['dts:x', 4],
-  ['dts', 3],
-  ['flac', 2],
-  ['eac3', 1],
-  ['e-ac-3', 1],
-  ['aac', 0],
-];
-
-const audioScore = (codec: string): number => {
-  const lower = codec.toLowerCase();
-  return AUDIO_RANK.find(([key]) => lower.includes(key))?.[1] ?? -1;
-};
-
 /**
  * The audio badge of a version: its best-ranked audio codec, worded by the player's rule
  * (`audioCodecBadge`); of two equally ranked tracks the Atmos one (equal ranks differ in their
@@ -297,11 +252,10 @@ export function videoRangeLabel(version: FileVersion): string {
 }
 
 /**
- * The quality badges of a movie, from the selected version: resolution ("2160P"), dynamic range
- * and the best audio codec. A series has none.
+ * The quality badges of a movie or episode, from the selected version: resolution ("2160P"),
+ * dynamic range and the best audio codec. A page without a selected version has none.
  */
-export function qualityBadges(detail: ItemDetail): string[] {
-  const version = isSeries(detail) ? undefined : selectedVersion(detail);
+export function qualityBadges(version: FileVersion | undefined): string[] {
   if (!version) return [];
   return [
     version.resolution.toUpperCase(),

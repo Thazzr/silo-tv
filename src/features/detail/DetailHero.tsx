@@ -27,6 +27,7 @@ import {
   type ItemDetail,
   type Season,
 } from './info';
+import type { FileVersion } from './versions';
 
 /**
  * How many characters of 26 px text one line holds (an 800 to 900 px column). A synopsis longer
@@ -171,6 +172,7 @@ export function DetailHero({
   translation = null,
   seasons,
   loadedEpisodes = 0,
+  version,
   synopsis,
   episodeSeason,
 }: {
@@ -185,6 +187,8 @@ export function DetailHero({
   seasons: readonly Season[];
   /** A season's number of loaded episodes, for the chip when the season carries no count. */
   loadedEpisodes?: number;
+  /** The selected file of a movie or episode: its runtime and quality badges are the page's. */
+  version?: FileVersion;
   /** What the synopsis says (the item's description, or the series' for an episode without one). */
   synopsis: HeroSynopsis;
   /** An episode's season from the series' season list, for its label in the breadcrumb. */
@@ -205,9 +209,9 @@ export function DetailHero({
   const episode = isEpisodeDetail(detail);
   const { type, name: studio } = kicker(detail, t);
   const chips = episode
-    ? episodeChips(detail, lang, t)
-    : detailChips(detail, seasons, t, loadedEpisodes);
-  const badges = qualityBadges(detail);
+    ? episodeChips(detail, lang, t, version)
+    : detailChips(detail, seasons, t, loadedEpisodes, version);
+  const badges = qualityBadges(version);
   const ratings = season ? [] : ratingEntries(detail);
   const { credits, genres } = season ? { credits: [], genres: [] } : heroCredits(detail, t);
   // A season page is titled by its series; the season's own title is the line under it.
@@ -244,7 +248,7 @@ export function DetailHero({
 
   return (
     <div className="detail-hero" data-testid="detail-hero">
-      <div className="detail-hero-row">
+      <div className={episode ? 'detail-hero-row' : 'detail-hero-row detail-has-poster'}>
         {episode ? null : (
           <div className="detail-poster" data-testid="detail-poster" data-faded={faded}>
             <Artwork

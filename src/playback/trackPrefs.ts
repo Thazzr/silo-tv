@@ -99,52 +99,65 @@ export function subtitleSeriesSettings(
 }
 
 export interface TrackPrefWriter {
-  audio(prefId: string, index: number, track: S['WatchAudioTrack']): Promise<void>;
+  audio(prefId: string, index: number, track: S['WatchAudioTrack']): Promise<boolean>;
   /** `null` saves "subtitles off". */
-  subtitle(prefId: string, track: S['SubtitleInventoryItemV3'] | null): Promise<void>;
+  subtitle(prefId: string, track: S['SubtitleInventoryItemV3'] | null): Promise<boolean>;
+  /** Forgets the remembered audio track, so the profile's audio settings apply again. */
+  resetAudio(prefId: string): Promise<boolean>;
+  /** Forgets the remembered subtitle, and the series settings rows a pick stored with it. */
+  resetSubtitle(prefId: string): Promise<boolean>;
 }
 
 /**
  * The writer for one signed-in client. A save that fails is tried once more after
  * `SAVE_RETRY_MS`, then dropped without a word: it costs the remembered track, never playback.
  * Saves for one kind and key go one after another, in the order they were made, so the viewer's
- * last pick is the one the server keeps. Resolves when the save is settled; never rejects.
+ * last pick is the one the server keeps. Resolves when the save is settled, with whether the
+ * server kept it (the detail page takes a pick back when it did not); never rejects.
  */
 export function createTrackPrefWriter(
-  client: Pick<SiloClient, 'PUT'>,
+  client: Pick<SiloClient, 'PUT' | 'DELETE'>,
   profileId: () => string,
   retryMs: number = SAVE_RETRY_MS,
 ): TrackPrefWriter {
   // The last save of each key; a new one waits for it. A key is a profile, a kind and a title, so
   // the map stays as small as the titles the viewer picks tracks for.
-  const queues = new Map<string, Promise<void>>();
+  const queues = new Map<string, Promise<boolean>>();
 
-  const enqueue = (profile: string, key: string, send: () => Promise<boolean>): Promise<void> => {
+  const enqueue = (
+    profile: string,
+    key: string,
+    send: () => Promise<boolean>,
+  ): Promise<boolean> => {
     // Without a profile there is nobody to save a choice for.
-    if (profile === '') return Promise.resolve();
-    const run = async () => {
+    if (profile === '') return Promise.resolve(false);
+    const run = async (): Promise<boolean> => {
       try {
-        if (await send()) return;
+        if (await send()) return true;
       } catch {
         // Tried once more below.
       }
       await new Promise((resolve) => setTimeout(resolve, retryMs));
       try {
-        await send();
+        return await send();
       } catch {
         // Dropped: it costs the remembered track, never playback.
+        return false;
       }
     };
-    const settled = (queues.get(key) ?? Promise.resolve()).then(run);
+    const settled = (queues.get(key) ?? Promise.resolve(true)).then(run);
     queues.set(key, settled);
     return settled;
   };
+  const audioKey = (profile: string, prefId: string) => `${profile}\u0000audio\u0000${prefId}`;
+  const subtitleKey = (profile: string, prefId: string) =>
+    `${profile}\u0000subtitle\u0000${prefId}`;
 
   return {
     audio(prefId, index, track) {
       const profile = profileId();
       const body = audioPreferenceBody(index, track);
-      return enqueue(profile, `${profile}\u0000audio\u0000${prefId}`, async () => {
+      return enqueue(profile, audioKey(profile, prefId), async () => {
         const { response } = await client.PUT('/api/v2/audio-prefs/{series_id}', {
           params: { path: { series_id: prefId } },
           body,
@@ -155,7 +168,7 @@ export function createTrackPrefWriter(
     subtitle(prefId, track) {
       const profile = profileId();
       const body = subtitlePreferenceBody(track);
-      return enqueue(profile, `${profile}\u0000subtitle\u0000${prefId}`, async () => {
+      return enqueue(profile, subtitleKey(profile, prefId), async () => {
         // The settings rows and the track row are independent writes, as in the web client: one
         // that fails must not cost the other. A retry sends all of them again, which is harmless.
         const settings = subtitleSeriesSettings(track).map(async ({ key, value }) => {
@@ -172,6 +185,38 @@ export function createTrackPrefWriter(
           const { response } = await client.PUT('/api/v2/subtitle-prefs/{series_id}', {
             params: { path: { series_id: prefId } },
             body,
+          });
+          return response.ok;
+        })();
+        const sent = await Promise.allSettled([...settings, prefs]);
+        return sent.every((one) => one.status === 'fulfilled' && one.value);
+      });
+    },
+    resetAudio(prefId) {
+      const profile = profileId();
+      return enqueue(profile, audioKey(profile, prefId), async () => {
+        const { response } = await client.DELETE('/api/v2/audio-prefs/{series_id}', {
+          params: { path: { series_id: prefId } },
+        });
+        return response.ok;
+      });
+    },
+    resetSubtitle(prefId) {
+      const profile = profileId();
+      return enqueue(profile, subtitleKey(profile, prefId), async () => {
+        const settings = subtitleSeriesSettings(null).map(async ({ key }) => {
+          const { response } = await client.DELETE('/api/v2/settings/values/{key}', {
+            params: {
+              path: { key },
+              query: { scope: 'profile_series', series_id: prefId },
+            },
+          });
+          // A row that was never stored is the state a reset asks for.
+          return response.ok || response.status === 404;
+        });
+        const prefs = (async () => {
+          const { response } = await client.DELETE('/api/v2/subtitle-prefs/{series_id}', {
+            params: { path: { series_id: prefId } },
           });
           return response.ok;
         })();

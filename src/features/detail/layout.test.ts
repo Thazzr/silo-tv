@@ -12,6 +12,7 @@ import {
   SEASON_STRIP_HEIGHT,
   detailScrollOffset,
   isAbove,
+  pillsScrollOffset,
   seasonsVisible,
   zoneOrder,
 } from './layout';
@@ -39,6 +40,19 @@ describe('detailScrollOffset', () => {
     expect(detailScrollOffset('similar', { cast: 760 })).toBe(0);
     // Never above the origin, even for a block that starts within the safe area.
     expect(detailScrollOffset('cast', { cast: 20 })).toBe(0);
+  });
+});
+
+describe('pillsScrollOffset', () => {
+  it('scrolls just far enough that the pills row ends on the bottom safe line', () => {
+    expect(pillsScrollOffset(1100, 1080)).toBe(74);
+    expect(pillsScrollOffset(1040, 1080)).toBe(14);
+    expect(pillsScrollOffset(1100, 720)).toBe(434);
+  });
+
+  it('does not scroll a row that already ends inside the safe area', () => {
+    expect(pillsScrollOffset(1026, 1080)).toBe(0);
+    expect(pillsScrollOffset(900, 1080)).toBe(0);
   });
 });
 

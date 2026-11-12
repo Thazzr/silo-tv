@@ -201,6 +201,8 @@ describe('DetailScreen: Extras', () => {
     await ready();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:extras-trailer:local-1');
     await pressKey(KEY.enter);
     expect(onPlay).toHaveBeenCalledTimes(1);
@@ -218,6 +220,8 @@ describe('DetailScreen: Extras', () => {
     await ready();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await focusKeyIs('card:extras-behind_the_scenes:local-2');
     await pressKey(KEY.enter);
@@ -233,6 +237,8 @@ describe('DetailScreen: Extras', () => {
     setup({ itemId: 'm1' });
     await ready();
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await pressKey(KEY.right);
     await focusKeyIs('card:extras-trailer:local-3');
@@ -338,6 +344,8 @@ describe('DetailScreen: Trailers & More', () => {
     await trailers();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:trailers:dQw4w9WgXcQ');
     await pressKey(KEY.right);
     await focusKeyIs('card:trailers:abcdefghijk');
@@ -362,6 +370,8 @@ describe('DetailScreen: Extras and Trailers & More as zones of the page', () => 
     await screen.findByRole('button', { name: /Similar One/ });
     expect(zones()).toEqual(['cast', 'extras', 'trailers', 'similar']);
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:0-First Actor');
     await pressKey(KEY.down);

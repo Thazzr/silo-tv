@@ -365,6 +365,41 @@
   padding: 0;
 }
 
+/* The pills under the action row (Edition, Version, Audio, Subtitles): a label and what it says
+   now. Like the action row they may be wider than the text column, but they wrap onto a second
+   line rather than run past the right safe margin (the page's left edge is the poster's right
+   edge, or the inset when the page has no poster). */
+.detail-pills {
+  flex-wrap: wrap;
+  gap: 14px;
+  width: max-content;
+  max-width: calc(95vw - 100px);
+}
+
+.detail-has-poster .detail-pills {
+  max-width: calc(95vw - 440px);
+}
+
+.detail-pills .detail-track {
+  gap: 12px;
+  padding: 0 28px;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.detail-pills .detail-track > svg {
+  margin-right: 0;
+}
+
+.detail-track-value {
+  max-width: 460px;
+  overflow: hidden;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}
+
 .detail-pill {
   display: inline-flex;
   align-items: center;
@@ -505,6 +540,33 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* A longer list (the subtitles of a film with many languages) scrolls inside the dialog. */
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.dialog-choice-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* The heading over a run of choices (the subtitle list: Embedded, External, Downloaded). */
+.dialog-choice-section {
+  margin: 12px 8px 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* A line under the list: the downloaded subtitles are loading, or there are none. */
+.dialog-choice-note {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 8px 0;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
 }
 
 .detail-choice {
@@ -517,6 +579,46 @@
   margin: 0;
   font-size: var(--fs-body);
   text-align: left;
+}
+
+/* A row of a pill's list: the label with its badges, a quieter line under it, a check at the end. */
+.detail-choice-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detail-choice-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.detail-choice-badge {
+  padding: 0 12px;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  line-height: 32px;
+  text-transform: uppercase;
+  background: rgba(127, 127, 127, 0.3);
+  border: 2px solid transparent;
+  border-radius: 8px;
+}
+
+.detail-choice-badge[data-outlined='true'] {
+  background: none;
+  border-color: currentColor;
+}
+
+.detail-choice-description {
+  font-size: var(--fs-small);
+  opacity: 0.7;
+}
+
+.detail-choice-check {
+  flex: none;
 }
 
 /* ---- Seasons and episodes ---- */

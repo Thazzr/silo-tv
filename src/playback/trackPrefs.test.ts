@@ -37,15 +37,28 @@ interface Call {
   body: unknown;
 }
 
-/** A client whose PUT records the call and answers from `answers` (the last one repeats). */
-function fakeClient(answers: boolean[] = [true]) {
+/**
+ * A client whose PUT records the call and answers from `answers` (the last one repeats); its DELETE
+ * records into `deleted` and answers with `status` for the settings rows and 204 for the rest.
+ */
+function fakeClient(answers: boolean[] = [true], status = 204, prefsStatus = 204) {
   const calls: Call[] = [];
+  const deleted: Omit<Call, 'body'>[] = [];
   const put = vi.fn(async (path: string, init: Omit<Call, 'path'>) => {
     calls.push({ path, ...init });
     const ok = answers[Math.min(calls.length - 1, answers.length - 1)]!;
     return { response: { ok } as Response, data: undefined, error: undefined };
   });
-  return { client: { PUT: put } as unknown as Pick<SiloClient, 'PUT'>, calls };
+  const del = vi.fn(async (path: string, init: Omit<Call, 'path' | 'body'>) => {
+    deleted.push({ path, ...init });
+    const answer = path.includes('settings') ? status : prefsStatus;
+    return { response: { ok: answer < 300, status: answer } as Response };
+  });
+  return {
+    client: { PUT: put, DELETE: del } as unknown as Pick<SiloClient, 'PUT' | 'DELETE'>,
+    calls,
+    deleted,
+  };
 }
 
 describe('trackPrefKey', () => {
@@ -270,10 +283,10 @@ describe('createTrackPrefWriter', () => {
         if (calls.length === 1) throw new TypeError('offline');
         return { response: { ok: true } as Response };
       }),
-    } as unknown as Pick<SiloClient, 'PUT'>;
+    } as unknown as Pick<SiloClient, 'PUT' | 'DELETE'>;
     const settled = createTrackPrefWriter(failing, () => 'p1').audio('s1', 0, { default: false });
     await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
-    await expect(settled).resolves.toBeUndefined();
+    await expect(settled).resolves.toBe(true);
     expect(calls).toHaveLength(2);
   });
 
@@ -288,7 +301,7 @@ describe('createTrackPrefWriter', () => {
         order.push(`end ${init.body.audio_track_index}`);
         return { response: { ok: true } as Response };
       }),
-    } as unknown as Pick<SiloClient, 'PUT'>;
+    } as unknown as Pick<SiloClient, 'PUT' | 'DELETE'>;
     const writer = createTrackPrefWriter(client, () => 'p1');
     const first = writer.audio('s1', 0, { default: false });
     const second = writer.audio('s1', 1, { default: false });
@@ -324,7 +337,7 @@ describe('createTrackPrefWriter', () => {
             return { response: { ok: true } as Response };
           },
         ),
-      } as unknown as Pick<SiloClient, 'PUT'>;
+      } as unknown as Pick<SiloClient, 'PUT' | 'DELETE'>;
       return { client, starts, release };
     }
     const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
@@ -390,11 +403,111 @@ describe('createTrackPrefWriter', () => {
     });
   });
 
-  it('saves nothing without a profile', async () => {
+  it('saves nothing without a profile, and says so', async () => {
     const { client, calls } = fakeClient();
     const writer = createTrackPrefWriter(client, () => '');
-    await writer.audio('s1', 0, { default: false });
-    await writer.subtitle('s1', null);
+    await expect(writer.audio('s1', 0, { default: false })).resolves.toBe(false);
+    await expect(writer.subtitle('s1', null)).resolves.toBe(false);
+    await expect(writer.resetAudio('s1')).resolves.toBe(false);
     expect(calls).toHaveLength(0);
+  });
+
+  it('says whether the server kept a save: yes at once, yes on the retry, no after it', async () => {
+    vi.useFakeTimers();
+    const first = createTrackPrefWriter(fakeClient([true]).client, () => 'p1');
+    await expect(first.audio('s1', 0, { default: false })).resolves.toBe(true);
+    const retried = createTrackPrefWriter(fakeClient([false, true]).client, () => 'p1');
+    const second = retried.audio('s1', 0, { default: false });
+    await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
+    await expect(second).resolves.toBe(true);
+    const dropped = createTrackPrefWriter(fakeClient([false]).client, () => 'p1');
+    const third = dropped.audio('s1', 0, { default: false });
+    await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
+    await expect(third).resolves.toBe(false);
+  });
+
+  describe('forgetting a pick', () => {
+    it('deletes the remembered audio track under the key', async () => {
+      const { client, calls, deleted } = fakeClient();
+      await expect(createTrackPrefWriter(client, () => 'p1').resetAudio('s1')).resolves.toBe(true);
+      expect(deleted).toEqual([
+        { path: '/api/v2/audio-prefs/{series_id}', params: { path: { series_id: 's1' } } },
+      ]);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('deletes the remembered subtitle and the series settings rows that went with it', async () => {
+      const { client, deleted } = fakeClient();
+      await expect(
+        createTrackPrefWriter(client, () => 'p1').resetSubtitle('series-1'),
+      ).resolves.toBe(true);
+      const row = (key: string) => ({
+        path: '/api/v2/settings/values/{key}',
+        params: { path: { key }, query: { scope: 'profile_series', series_id: 'series-1' } },
+      });
+      expect(deleted).toEqual([
+        row('playback.subtitle_language'),
+        row('playback.subtitle_mode'),
+        { path: '/api/v2/subtitle-prefs/{series_id}', params: { path: { series_id: 'series-1' } } },
+      ]);
+    });
+
+    it('counts a settings row that was never stored as forgotten', async () => {
+      const { client } = fakeClient([true], 404);
+      await expect(createTrackPrefWriter(client, () => 'p1').resetSubtitle('s1')).resolves.toBe(
+        true,
+      );
+    });
+
+    it('retries a failed settings row once, then reports that it was not forgotten', async () => {
+      vi.useFakeTimers();
+      const { client, deleted } = fakeClient([true], 500);
+      const settled = createTrackPrefWriter(client, () => 'p1').resetSubtitle('s1');
+      await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
+      await expect(settled).resolves.toBe(false);
+      expect(deleted).toHaveLength(6);
+    });
+
+    it('reports a failed delete of the remembered subtitle, whatever the settings rows did', async () => {
+      vi.useFakeTimers();
+      const { client } = fakeClient([true], 204, 500);
+      const settled = createTrackPrefWriter(client, () => 'p1').resetSubtitle('s1');
+      await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
+      await expect(settled).resolves.toBe(false);
+    });
+
+    it('reports a failed delete of the remembered audio track', async () => {
+      vi.useFakeTimers();
+      const { client, deleted } = fakeClient([true], 204, 500);
+      const settled = createTrackPrefWriter(client, () => 'p1').resetAudio('s1');
+      await vi.advanceTimersByTimeAsync(SAVE_RETRY_MS);
+      await expect(settled).resolves.toBe(false);
+      expect(deleted).toHaveLength(2);
+    });
+
+    it('goes after the pick made before it, so the last choice is the one kept', async () => {
+      const order: string[] = [];
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const client = {
+        PUT: vi.fn(async () => {
+          order.push('put');
+          await gate;
+          return { response: { ok: true } as Response };
+        }),
+        DELETE: vi.fn(async () => {
+          order.push('delete');
+          return { response: { ok: true } as Response };
+        }),
+      } as unknown as Pick<SiloClient, 'PUT' | 'DELETE'>;
+      const writer = createTrackPrefWriter(client, () => 'p1');
+      const pick = writer.audio('s1', 1, { default: false });
+      const reset = writer.resetAudio('s1');
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(order).toEqual(['put']);
+      release();
+      await Promise.all([pick, reset]);
+      expect(order).toEqual(['put', 'delete']);
+    });
   });
 });

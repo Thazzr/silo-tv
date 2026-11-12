@@ -29,6 +29,32 @@ export function fileVersion(overrides: Partial<S['FileVersion']> = {}): S['FileV
   };
 }
 
+export function audioTrack(overrides: Partial<S['AudioTrack']> = {}): S['AudioTrack'] {
+  return { default: false, ...overrides };
+}
+
+export function subtitleTrack(
+  overrides: Partial<S['VersionSubtitleTrack']> = {},
+): S['VersionSubtitleTrack'] {
+  return { default: false, external: false, forced: false, hearing_impaired: false, ...overrides };
+}
+
+export function storedSubtitle(overrides: Partial<S['StoredSubtitle']> = {}): S['StoredSubtitle'] {
+  return {
+    created_at: '2026-01-01T00:00:00.000Z',
+    format: 'srt',
+    hearing_impaired: false,
+    id: '7',
+    language: 'de',
+    media_file_id: 'file-1',
+    provider: 'opensubtitles',
+    release_name: 'Release.Name',
+    score: 50,
+    timing: { offset_ms: 0, scale: 1 },
+    ...overrides,
+  };
+}
+
 export function itemDetail(
   overrides: Partial<S['CatalogItemDetail']> = {},
 ): S['CatalogItemDetail'] {
@@ -166,6 +192,90 @@ export function serveUserActions(
     );
   }
   return calls;
+}
+
+/** One write of a remembered track: the verb, the endpoint (`audio-prefs`, ...), its id or key, the query and the body. */
+export interface TrackPrefCall {
+  method: 'PUT' | 'DELETE';
+  group: 'audio-prefs' | 'subtitle-prefs' | 'settings';
+  id: string;
+  query: URLSearchParams;
+  body: unknown;
+}
+
+export interface TrackPrefsServe {
+  /** Answers 500 for the writes this returns true for. */
+  fail?: (call: TrackPrefCall) => boolean;
+  /** Answers 404 for a settings row that is deleted (nothing was stored there). */
+  missingSettings?: boolean;
+  /** Held back until this settles, so a test can look at the page while a save is under way. */
+  gate?: Promise<void>;
+  /** Holds back the writes this returns a promise for (the others answer at once). */
+  hold?: (call: TrackPrefCall) => Promise<void> | undefined;
+}
+
+/** Registers the writes of a remembered audio track and subtitle (and the settings rows of a subtitle). */
+export function serveTrackPrefs(
+  server: SetupServer,
+  options: TrackPrefsServe = {},
+): TrackPrefCall[] {
+  const calls: TrackPrefCall[] = [];
+  const answer = async (
+    method: TrackPrefCall['method'],
+    group: TrackPrefCall['group'],
+    request: Request,
+  ) => {
+    const url = new URL(request.url);
+    const text = await request.text();
+    const call: TrackPrefCall = {
+      method,
+      group,
+      id: url.pathname.split('/').pop() ?? '',
+      query: url.searchParams,
+      body: text ? JSON.parse(text) : undefined,
+    };
+    calls.push(call);
+    await options.gate;
+    await options.hold?.(call);
+    if (options.fail?.(call)) return new HttpResponse(null, { status: 500 });
+    const missing = method === 'DELETE' && group === 'settings' && options.missingSettings;
+    return new HttpResponse(null, { status: missing ? 404 : 204 });
+  };
+  for (const group of ['audio-prefs', 'subtitle-prefs'] as const) {
+    const url = `${BASE_URL}/api/v2/${group}/:id`;
+    server.use(
+      http.put(url, ({ request }) => answer('PUT', group, request)),
+      http.delete(url, ({ request }) => answer('DELETE', group, request)),
+    );
+  }
+  const settings = `${BASE_URL}/api/v2/settings/values/:key`;
+  server.use(
+    http.put(settings, ({ request }) => answer('PUT', 'settings', request)),
+    http.delete(settings, ({ request }) => answer('DELETE', 'settings', request)),
+  );
+  return calls;
+}
+
+export interface SubtitlesServe {
+  /** The downloaded subtitles by file id; a file without an entry has none. `fail` is a 500. */
+  byFile?: Record<string, S['StoredSubtitle'][]> | 'fail';
+  /** Held back until this settles, so a test can look at the list while it loads. */
+  gate?: Promise<void>;
+}
+
+/** Registers the read of a file's downloaded subtitles; the returned list holds the file ids asked for. */
+export function serveSubtitles(server: SetupServer, options: SubtitlesServe = {}): string[] {
+  const asked: string[] = [];
+  server.use(
+    http.get(`${BASE_URL}/api/v2/subtitles/:fileId`, async ({ params }) => {
+      const fileId = String(params.fileId);
+      asked.push(fileId);
+      await options.gate;
+      if (options.byFile === 'fail') return new HttpResponse(null, { status: 500 });
+      return HttpResponse.json({ subtitles: options.byFile?.[fileId] ?? [] });
+    }),
+  );
+  return asked;
 }
 
 /** Registers the detail endpoints; the returned object records what the app asked for. */

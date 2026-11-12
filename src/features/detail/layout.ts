@@ -54,6 +54,15 @@ export function detailScrollOffset(zone: DetailZone, tops: DetailBlockTops): num
 }
 
 /**
+ * How far the page scrolls while the focus is on the pills row of the hero: just far enough that
+ * the row's measured bottom (layout position) sits on the bottom safe line, `SAFE_TOP` above the
+ * viewport's bottom edge; 0 when it already does.
+ */
+export function pillsScrollOffset(pillsBottom: number, viewportHeight: number): number {
+  return Math.max(0, pillsBottom - (viewportHeight - SAFE_TOP));
+}
+
+/**
  * The blocks of a page in the order the web draws them (docs/roadmap.md, Detail pages): a movie
  * leads with its cast, a series with its seasons and the extras, a season and an episode end with
  * the cast and the crew. A block that is not on the page is simply never focused.

@@ -128,3 +128,25 @@ export function useSimilar(itemId: string, enabled: boolean) {
     },
   });
 }
+
+/**
+ * The subtitles Silo downloaded for a file (from its subtitle providers). They are not part of the
+ * item, so they are read when the subtitle list opens (or when the saved choice is one of them);
+ * a failure leaves the list without them.
+ */
+export function useStoredSubtitles(fileId: string | undefined, enabled: boolean) {
+  const { client, baseUrl, session } = useSilo();
+  const profileId = session.get()?.profileId ?? '';
+  return useQuery({
+    queryKey: ['detail', 'subtitles', baseUrl, profileId, fileId ?? ''],
+    enabled: enabled && fileId !== undefined,
+    retry: false,
+    queryFn: async () => {
+      const { data, error, response } = await client.GET('/api/v2/subtitles/{media_file_id}', {
+        params: { path: { media_file_id: fileId ?? '' } },
+      });
+      if (!data) throw toApiError(error, response);
+      return data.subtitles;
+    },
+  });
+}

@@ -110,6 +110,13 @@ interface FakeOptions {
    * Replans are recorded with their body.
    */
   buffering?: 'never' | 'ask' | 'always';
+  /**
+   * "Second Title" (m2) and the episodes have two files each (1080p and 2160p HDR, the sharper
+   * one 5 minutes longer) with two audio tracks and three subtitle tracks, so their pages show the
+   * version, audio and subtitle pills. The title's track preferences are accepted (recorded with
+   * their body), and every file has one downloaded subtitle.
+   */
+  pills?: boolean;
 }
 
 interface FakeProfile {
@@ -212,6 +219,64 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const withExtras = options.extras === true;
   const seasonCount = options.seasons ?? 2;
   const withBoxSet = options.boxSet === true;
+  // Two files of a title with their tracks: the 2160p one is the sharper and 5 minutes longer.
+  const trackedFiles = (id: string) =>
+    [
+      { name: 'hd', resolution: '1080p', video: 'h264', audio: 'aac', hdr: false, seconds: 5400 },
+      {
+        name: 'uhd',
+        resolution: '2160p',
+        video: 'hevc',
+        audio: 'truehd',
+        hdr: true,
+        seconds: 5700,
+      },
+    ].map((file) => ({
+      file_id: `${id}-${file.name}`,
+      added_at: '2026-01-01T00:00:00.000Z',
+      resolution: file.resolution,
+      codec_video: file.video,
+      codec_audio: file.audio,
+      container: 'mkv',
+      hdr: file.hdr,
+      duration: file.seconds,
+      file_size: 4_500_000_000,
+      bitrate: 12_300,
+      audio_tracks: [
+        { default: true, language: 'de', codec: 'eac3', channels: 6 },
+        { default: false, language: 'en', codec: 'aac', channels: 2 },
+      ],
+      subtitle_tracks: [
+        {
+          default: false,
+          external: false,
+          forced: false,
+          hearing_impaired: false,
+          language: 'en',
+          codec: 'subrip',
+          index: 0,
+        },
+        {
+          default: false,
+          external: false,
+          forced: true,
+          hearing_impaired: false,
+          language: 'de',
+          codec: 'subrip',
+          index: 1,
+        },
+        {
+          default: false,
+          external: true,
+          forced: false,
+          hearing_impaired: false,
+          language: 'fr',
+          codec: 'ass',
+          file_name: 'film.fr.ass',
+          index: 2,
+        },
+      ],
+    }));
   const settingsUnknown =
     options.titleArt === undefined &&
     options.spoilers === undefined &&
@@ -285,6 +350,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           url.pathname === '/api/v2/playback/e2e-session/replan' ||
           (url.pathname.endsWith('/playback') && url.pathname.includes('/themes/')) ||
           url.pathname.endsWith('/translate-description') ||
+          url.pathname.startsWith('/api/v2/audio-prefs/') ||
           url.pathname === '/api/v2/settings/values/playback.subtitle_appearance'
             ? requestBody
             : '',
@@ -452,6 +518,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   in_progress_count: 1,
                 },
                 ...tallMovie,
+                ...(options.pills ? { versions: trackedFiles('m2') } : {}),
                 ...(options.translation
                   ? translated
                     ? { overview: 'Der übersetzte Text.', machine_translated_fields: ['overview'] }
@@ -555,14 +622,16 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           backdrop_url: `/img/still-${episodePage[1]}${episodePage[2]}.png`,
           backdrop_is_episode_still: true,
           // An episode with a file: its Play button is enabled.
-          versions: [
-            {
-              file_id: `file-e${episodePage[1]}${episodePage[2]}`,
-              resolution: '1080p',
-              codec_audio: 'eac3',
-              duration: 2700,
-            },
-          ],
+          versions: options.pills
+            ? trackedFiles(`e${episodePage[1]}${episodePage[2]}`)
+            : [
+                {
+                  file_id: `file-e${episodePage[1]}${episodePage[2]}`,
+                  resolution: '1080p',
+                  codec_audio: 'eac3',
+                  duration: 2700,
+                },
+              ],
         });
       }
       const episodes = /^\/api\/v2\/catalog\/series\/s1\/seasons\/(\d+)\/episodes$/.exec(
@@ -730,6 +799,30 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               }
             : {}),
         });
+      }
+      // The downloaded subtitles of a file, and the remembered tracks of a title.
+      const stored = /^\/api\/v2\/subtitles\/[\w-]+$/.test(url.pathname);
+      if (options.pills && req.method === 'GET' && stored) {
+        return send(200, {
+          subtitles: [
+            {
+              id: '7',
+              media_file_id: url.pathname.split('/').pop(),
+              language: 'es',
+              format: 'srt',
+              provider: 'opensubtitles',
+              release_name: 'Second.Title.2021.WEB',
+              hearing_impaired: false,
+              score: 90,
+              created_at: '2026-01-01T00:00:00.000Z',
+              timing: { offset_ms: 0, scale: 1 },
+            },
+          ],
+        });
+      }
+      if (options.pills && /^\/api\/v2\/(audio-prefs|subtitle-prefs)\/[\w-]+$/.test(url.pathname)) {
+        res.writeHead(204, cors);
+        return res.end();
       }
       switch (`${req.method} ${url.pathname}`) {
         case 'GET /api/v2/system/info':
@@ -1634,7 +1727,10 @@ test('Season page to an episode page, its More Episodes row, a sibling and Back 
   await expect(page.getByRole('heading', { name: 'Weitere Folgen' })).toBeVisible();
   await expect(page.getByTestId('episode-now')).toHaveText('Aktuell');
 
-  // Down: the current episode's card. Right: the next one. OK opens its page.
+  // Down: the pills row (this file has subtitles only); Down again: the current episode's card.
+  // Right: the next one. OK opens its page.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -2599,6 +2695,9 @@ test('detail page: the poster fades with the text column once the focus has left
       .first()
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
   expect(await opacity('.detail-poster')).toBe('1');
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await expect.poll(() => opacity('.detail-poster')).toBe('0');
@@ -2772,6 +2871,9 @@ test('detail page: a movie scrolls to the similar row, whose top meets the safe 
       .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).opacity);
 
   // Down from the action pills to the cast row, then to the similar row.
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await expect.poll(async () => Math.abs((await top('row-cast')) - 54)).toBeLessThanOrEqual(2);
@@ -2896,6 +2998,9 @@ test('detail page: Cast & Crew leads with the director, a rotated label stands b
   expect(gap.x + gap.width).toBeLessThan(writer.x);
 
   // Down to the director, Right across the "Drehbuch" label to the writer, OK opens the page.
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -3075,6 +3180,9 @@ test('detail page: a cast card opens the person page; Movies, a title, and Back 
 
   // Down to the strip (director, writer, then the cast), Right to the second actor, OK opens the
   // page; the name is there at once.
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -3236,6 +3344,9 @@ test('person page: a 4,000-character biography opens in full; Down scrolls it to
   await second.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -3666,6 +3777,9 @@ test('Magic Remote wheel: a long biography dialog scrolls its text', async ({ pa
   await second.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('detail-title')).toHaveText('Second Title');
+  // The pills row (this file has subtitles only) sits between the buttons and the strip.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -4333,4 +4447,111 @@ test('detail page: scrolled down a long episode grid, no row above the viewport 
     );
   expect(top).toBeGreaterThan(0);
   expect(above).toBe(0);
+});
+
+test('detail page: the version, audio and subtitle pills with the remote, and the focus stays on the pill', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ pills: true });
+  await openSecondTitle(page, origin);
+  const trackWrites = () =>
+    seen.filter((entry) => entry.path.startsWith('/api/v2/audio-prefs/') && entry.method === 'PUT');
+  // The sharpest file is the one the page describes: its runtime and its badges.
+  await expect(page.locator('.detail-chip')).toHaveText(['2021', '1 Std. 35 Min.']);
+  await expect(page.locator('.detail-badge')).toHaveText(['2160P', 'HDR', 'TrueHD']);
+
+  // Down from the far right button of the row (More) and from Play: the pills row, on its first pill.
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Weitere Aktionen' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-version')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-version')).toBeFocused();
+  await expect(page.getByTestId('pill-version')).toContainText('2160p · HEVC · HDR · TrueHD');
+  await expect(page.getByTestId('pill-audio')).toContainText('Automatisch: Deutsch · EAC3 · 5.1');
+  await expect(page.getByTestId('pill-subtitles')).toContainText(
+    'Automatisch: Deutsch (Erzwungen) · SRT',
+  );
+
+  // OK opens the list on the checked file; Down and OK pick the other one. The chips and the
+  // badges follow it, and nothing is written to the server.
+  await page.keyboard.press('Enter');
+  const versions = page.getByTestId('pill-version-dialog');
+  await expect(versions).toBeVisible();
+  await expect(versions.getByRole('radio')).toHaveCount(2);
+  await expect(versions.getByRole('radio').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(versions).toHaveCount(0);
+  await expect(page.locator('.detail-chip')).toHaveText(['2021', '1 Std. 30 Min.']);
+  await expect(page.locator('.detail-badge')).toHaveText(['1080P', 'EAC3']);
+  await expect(page.getByTestId('pill-version')).toContainText('1080p · H264 · AAC');
+  // The screen's focus restore runs after about 300 ms: the focus must still be on the pill.
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('pill-version')).toBeFocused();
+  expect(trackWrites()).toHaveLength(0);
+
+  // Right to Audio: Down twice to the second track, OK picks it and saves it for the title.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('pill-audio')).toBeFocused();
+  await page.keyboard.press('Enter');
+  const audio = page.getByTestId('pill-audio-dialog');
+  await expect(audio.getByRole('radio')).toHaveCount(3);
+  await expect(audio.getByRole('radio').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(audio).toHaveCount(0);
+  await expect(page.getByTestId('pill-audio')).toContainText('Englisch · AAC · Stereo');
+  await expect.poll(() => trackWrites().length).toBe(1);
+  expect(trackWrites()[0]!.path).toBe('/api/v2/audio-prefs/m2');
+  expect(JSON.parse(trackWrites()[0]!.body)).toMatchObject({
+    audio_track_index: 1,
+    audio_language: 'en',
+  });
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('pill-audio')).toBeFocused();
+
+  // Back closes a list onto the same pill, and the focus stays there.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
+  await page.keyboard.press('Enter');
+  const subtitles = page.getByTestId('pill-subtitles-dialog');
+  await expect(subtitles.getByRole('radio', { name: /Second.Title.2021.WEB/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(subtitles).toHaveCount(0);
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
+  // Up leaves the pills for the buttons above them, from any pill.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+});
+
+test('detail page: in the tallest hero the page scrolls the pills row into the safe area, and back', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ tall: true, pills: true });
+  await openSecondTitle(page, origin);
+  const pillsBottom = async () => (await page.locator('.detail-pills').boundingBox())!;
+  const bottom = async () => {
+    const box = await pillsBottom();
+    return box.y + box.height;
+  };
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  // On the buttons the page is at its origin, and the pills end below the 5 % safe line.
+  await expect.poll(bottom).toBeGreaterThan(1026);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-version')).toBeFocused();
+  await expect.poll(bottom).toBeLessThanOrEqual(1026);
+  // The second line of pills is reached by Down, and still sits inside the safe area.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
+  await expect.poll(bottom).toBeLessThanOrEqual(1026);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await expect.poll(bottom).toBeGreaterThan(1026);
 });

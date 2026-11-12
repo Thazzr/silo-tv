@@ -309,6 +309,8 @@ describe('DetailScreen: a movie', () => {
     await ready();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p-1');
     await pressKey(KEY.right);
     await focusKeyIs('card:cast:cast:p-2');
@@ -338,11 +340,15 @@ describe('DetailScreen: a movie', () => {
     await screen.findByRole('button', { name: /Similar One/ });
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:0-First Actor');
     await pressKey(KEY.down);
     await focusKeyIs('card:similar:x1');
     await pressKey(KEY.up);
     await focusKeyIs('card:cast:cast:0-First Actor');
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
   });
@@ -574,6 +580,8 @@ describe('DetailScreen: the hero like the web', () => {
     expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'false');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:0-First Actor');
     await waitFor(() =>
       expect(screen.getByTestId('detail-poster')).toHaveAttribute('data-faded', 'true'),
@@ -656,6 +664,8 @@ describe('DetailScreen: more like this', () => {
     await ready();
     await screen.findByRole('button', { name: /Similar One/ });
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:similar:x1');
     await pressKey(KEY.right);
     await focusKeyIs('card:similar:x2');
@@ -729,6 +739,8 @@ describe('DetailScreen: the box set row of a movie', () => {
     await screen.findByTestId('row-boxset');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:boxset:f0');
     await pressKey(KEY.right);
     await pressKey(KEY.right);
@@ -753,6 +765,8 @@ describe('DetailScreen: the box set row of a movie', () => {
     setup({ itemId: 'm1' });
     await ready();
     await screen.findByTestId('row-boxset');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs('card:boxset:f0');
     await pressKey(KEY.right);
@@ -781,6 +795,8 @@ describe('DetailScreen: the box set row of a movie', () => {
     await screen.findByTestId('row-boxset');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:boxset:g0');
     // Right 20 times from the first film is the Explore all card, and there is nothing beyond it.
     for (let i = 0; i < 20; i += 1) await pressKey(KEY.right);
@@ -798,6 +814,8 @@ describe('DetailScreen: the box set row of a movie', () => {
     await screen.findByTestId('row-boxset');
     const zone = (name: string) => document.querySelector(`[data-zone="${name}"]`)!;
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:0-First Actor');
     expect(zone('boxSet')).toHaveAttribute('data-faded', 'false');

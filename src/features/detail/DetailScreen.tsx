@@ -60,6 +60,7 @@ import {
 import {
   DETAIL_INSET,
   detailScrollOffset,
+  pillsScrollOffset,
   isAbove,
   zoneOrder,
   type DetailBlockTops,
@@ -79,6 +80,7 @@ import { SectionHead } from './SectionHead';
 import { SynopsisDialog } from './SynopsisDialog';
 import { TrailersRow } from './TrailersRow';
 import { useDescriptionTranslation } from './useDescriptionTranslation';
+import { usePicks } from './usePicks';
 import { useThemeMusic } from './useThemeMusic';
 
 /** What the player needs to start a title; an intent other than `ask` skips its resume prompt. */
@@ -236,8 +238,21 @@ function DetailBody({
       playId === undefined &&
       (seasonsQuery.isPending || (primarySeason !== undefined && primaryQuery.isPending));
 
+  // What the pills hold (the file, the audio track, the subtitle) goes with every start from the
+  // action row: the primary button, the resume question and "Play from Beginning".
+  const picks = usePicks(detail, kind);
   const play = (intent: StartIntent) => {
-    if (playId) onPlay({ contentId: playId, title: playTitle, intent });
+    if (!playId) return;
+    const request = {
+      contentId: playId,
+      title: playTitle,
+      intent: { ...intent, ...picks.choices },
+    };
+    // The player reads the saved track preference when it starts: a pick still being saved is
+    // waited for (a few seconds at most).
+    const saving = picks.whenSaved();
+    if (saving) void saving.then(() => onPlay(request));
+    else onPlay(request);
   };
 
   // --- Opening and playing the cards of the seasons row and the episode grid ---------------------
@@ -404,6 +419,10 @@ function DetailBody({
   // of synopsis, credits) pushes them down, and fonts or a longer synopsis change them later.
   const pageRef = useRef<HTMLDivElement>(null);
   const [tops, setTops] = useState<DetailBlockTops>({});
+  // The pills row ends the hero: when it would end below the safe area, the page moves up while
+  // the focus is on it, and comes back when the focus returns to the buttons.
+  const [pillsBottom, setPillsBottom] = useState(0);
+  const [onPills, setOnPills] = useState(false);
   const measure = useCallback(() => {
     const page = pageRef.current;
     if (!page) return;
@@ -412,16 +431,32 @@ function DetailBody({
       const el = page.querySelector<HTMLElement>(`[data-zone="${block}"]`);
       if (el) next[block] = el.offsetTop;
     }
+    const pills = page.querySelector<HTMLElement>('.detail-pills');
+    setPillsBottom(
+      pills ? pills.getBoundingClientRect().bottom - page.getBoundingClientRect().top : 0,
+    );
     setTops((old) => (BLOCK_ZONES.every((block) => old[block] === next[block]) ? old : next));
   }, []);
-  const offset = detailScrollOffset(zone, tops);
+  const offset =
+    zone === 'hero'
+      ? onPills
+        ? pillsScrollOffset(pillsBottom, window.innerHeight)
+        : 0
+      : detailScrollOffset(zone, tops);
   const order = zoneOrder(kind);
   const fade = (block: DetailZone) => (isAbove(block, zone, order) ? 'true' : 'false');
   // A hovered element keeps the page where it is (nav/origin.ts): only keys change the zone.
   const enter = useCallback((next: DetailZone) => {
     if (!focusFromPointer()) setZone(next);
   }, []);
-  const inHero = useCallback(() => enter('hero'), [enter]);
+  const inHero = useCallback(() => {
+    enter('hero');
+    if (!focusFromPointer()) setOnPills(false);
+  }, [enter]);
+  const inPills = useCallback(() => {
+    enter('hero');
+    if (!focusFromPointer()) setOnPills(true);
+  }, [enter]);
   const inSeasons = useCallback(() => enter('seasons'), [enter]);
   const inEpisodes = useCallback(() => enter('episodes'), [enter]);
   const inExtras = useCallback(() => enter('extras'), [enter]);
@@ -715,6 +750,7 @@ function DetailBody({
             translation={translationLine}
             seasons={seasons}
             loadedEpisodes={episodes?.length}
+            version={picks.version}
             synopsis={synopsis}
             episodeSeason={
               episode
@@ -733,7 +769,9 @@ function DetailBody({
                   stateKnown={stateKnown}
                   onPlay={play}
                   onFocused={inHero}
+                  onPillsFocused={inPills}
                   onNotice={setNotice}
+                  pills={picks.pills}
                   onTranslate={
                     translateShown
                       ? () => {

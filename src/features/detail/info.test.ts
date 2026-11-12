@@ -24,15 +24,22 @@ import {
   seasonLabel,
   seasonProgress,
   seasonSubtitle,
-  selectedVersion,
   videoRangeLabel,
+  type ItemDetail,
 } from './info';
+import { selectedVersion } from './versions';
 
 const tFor =
   (lang: Language) =>
   (key: Parameters<typeof translate>[1], params?: Record<string, string | number>) =>
     translate(lang, key, params);
 const t = tFor('en');
+
+// The chips of a movie or episode page: the selected version supplies the runtime.
+const movieChips = (detail: ItemDetail, tr: typeof t) =>
+  detailChips(detail, [], tr, 0, selectedVersion(detail));
+const episodeChipsOf = (detail: ItemDetail, lang: Language, tr: typeof t) =>
+  episodeChips(detail, lang, tr, selectedVersion(detail));
 
 const video = (overrides: object = {}) => ({
   dv_config_present: false,
@@ -66,45 +73,6 @@ describe('kicker', () => {
   });
 });
 
-describe('selectedVersion', () => {
-  const sharp = fileVersion({ file_id: 'uhd', resolution: '2160p', hdr: true });
-  const soft = fileVersion({ file_id: 'hd', resolution: '1080p' });
-
-  it('is the sharpest version when nothing says otherwise', () => {
-    expect(selectedVersion(itemDetail({ versions: [soft, sharp] }))?.file_id).toBe('uhd');
-    expect(selectedVersion(itemDetail({ versions: [] }))).toBeUndefined();
-  });
-
-  it('is the version the profile played last', () => {
-    const detail = itemDetail({
-      versions: [soft, sharp],
-      user_data: rollup({ last_file_id: 'hd' }),
-    });
-    expect(selectedVersion(detail)?.file_id).toBe('hd');
-  });
-
-  it('is the version the server resolved for the profile when none was played', () => {
-    const detail = itemDetail({
-      versions: [sharp, soft],
-      effective_version_resolution: '1080p',
-      effective_version_hdr: false,
-    });
-    expect(selectedVersion(detail)?.file_id).toBe('hd');
-  });
-
-  it('chooses within the edition the profile picked', () => {
-    const cut = fileVersion({ file_id: 'cut', resolution: '720p', edition_key: 'directors' });
-    const detail = itemDetail({
-      versions: [sharp, cut],
-      effective_version_edition_key: 'directors',
-    });
-    expect(selectedVersion(detail)?.file_id).toBe('cut');
-    // An edition no file has narrows nothing.
-    const other = itemDetail({ versions: [sharp, cut], effective_version_edition_key: 'extended' });
-    expect(selectedVersion(other)?.file_id).toBe('uhd');
-  });
-});
-
 describe('detailChips for a movie', () => {
   it('lists year, content rating and the runtime of the selected version, in that order', () => {
     const movie = itemDetail({
@@ -113,8 +81,8 @@ describe('detailChips for a movie', () => {
       runtime: 92,
       versions: [fileVersion({ duration: 6180 })],
     });
-    expect(detailChips(movie, [], t)).toEqual(['2017', 'PG', '1h 43m']);
-    expect(detailChips(movie, [], tFor('de'))).toEqual(['2017', 'PG', '1 Std. 43 Min.']);
+    expect(movieChips(movie, t)).toEqual(['2017', 'PG', '1h 43m']);
+    expect(movieChips(movie, tFor('de'))).toEqual(['2017', 'PG', '1 Std. 43 Min.']);
   });
 
   it.each([
@@ -123,15 +91,15 @@ describe('detailChips for a movie', () => {
     [3660, '1h 1m', '1 Std. 1 Min.'],
   ])('writes a %i second file as %s (de %s)', (duration, en, de) => {
     const movie = itemDetail({ versions: [fileVersion({ duration })] });
-    expect(detailChips(movie, [], t).at(-1)).toBe(en);
-    expect(detailChips(movie, [], tFor('de')).at(-1)).toBe(de);
+    expect(movieChips(movie, t).at(-1)).toBe(en);
+    expect(movieChips(movie, tFor('de')).at(-1)).toBe(de);
   });
 
   it('takes the runtime of the item when the file has no duration, and leaves out what is missing', () => {
     const noFile = itemDetail({ versions: [], runtime: 92, content_rating: undefined });
-    expect(detailChips(noFile, [], t)).toEqual(['2019', '1h 32m']);
+    expect(movieChips(noFile, t)).toEqual(['2019', '1h 32m']);
     const bare = itemDetail({ versions: [], runtime: undefined, year: undefined });
-    expect(detailChips(bare, [], t)).toEqual(['PG-13']);
+    expect(movieChips(bare, t)).toEqual(['PG-13']);
   });
 
   it('shows no genre and no season counts', () => {
@@ -241,6 +209,9 @@ describe('videoRangeLabel', () => {
   });
 });
 
+/** The badges of the version the page would select (the web's rule, no resolution cap). */
+const badgesOf = (detail: ReturnType<typeof itemDetail>) => qualityBadges(selectedVersion(detail));
+
 describe('qualityBadges', () => {
   const audioTrack = (overrides: object = {}) => ({ default: false, ...overrides });
 
@@ -256,15 +227,15 @@ describe('qualityBadges', () => {
         }),
       ],
     });
-    expect(qualityBadges(movie)).toEqual(['2160P', 'HDR10', 'DTS']);
+    expect(badgesOf(movie)).toEqual(['2160P', 'HDR10', 'DTS']);
   });
 
   it('shows no range badge for SDR, and nothing for an item without a file', () => {
     const sdr = itemDetail({
       versions: [fileVersion({ resolution: '1080p', codec_audio: 'eac3' })],
     });
-    expect(qualityBadges(sdr)).toEqual(['1080P', 'EAC3']);
-    expect(qualityBadges(itemDetail({ versions: [] }))).toEqual([]);
+    expect(badgesOf(sdr)).toEqual(['1080P', 'EAC3']);
+    expect(badgesOf(itemDetail({ versions: [] }))).toEqual([]);
   });
 
   it('describes the selected version only, not every file of the item', () => {
@@ -275,16 +246,7 @@ describe('qualityBadges', () => {
       ],
       user_data: rollup({ last_file_id: 'hd' }),
     });
-    expect(qualityBadges(movie)).toEqual(['1080P', 'AAC']);
-  });
-
-  it('has none for a series, whatever its files or summary say', () => {
-    const series = itemDetail({
-      type: 'series',
-      versions: [fileVersion({ resolution: '2160p', hdr: true })],
-      overlay_summary: { resolution: '4K', hdr: 'HDR10', audio_channels: '5.1' },
-    });
-    expect(qualityBadges(series)).toEqual([]);
+    expect(badgesOf(movie)).toEqual(['1080P', 'AAC']);
   });
 
   it('words the audio with the player rule: Atmos only on a codec that can carry it', () => {
@@ -298,7 +260,7 @@ describe('qualityBadges', () => {
         }),
       ],
     });
-    expect(qualityBadges(atmos)).toEqual(['1080P', 'DD+ Atmos']);
+    expect(badgesOf(atmos)).toEqual(['1080P', 'DD+ Atmos']);
     const compat = itemDetail({
       versions: [
         fileVersion({
@@ -307,7 +269,7 @@ describe('qualityBadges', () => {
         }),
       ],
     });
-    expect(qualityBadges(compat)).toEqual(['1080P', 'AAC']);
+    expect(badgesOf(compat)).toEqual(['1080P', 'AAC']);
   });
 
   it('takes the best ranked audio track, and of equal ones the Atmos track', () => {
@@ -319,7 +281,7 @@ describe('qualityBadges', () => {
         }),
       ],
     });
-    expect(qualityBadges(best).at(-1)).toBe('TrueHD');
+    expect(badgesOf(best).at(-1)).toBe('TrueHD');
     const tie = itemDetail({
       versions: [
         fileVersion({
@@ -331,19 +293,19 @@ describe('qualityBadges', () => {
         }),
       ],
     });
-    expect(qualityBadges(tie).at(-1)).toBe('DD+ Atmos');
+    expect(badgesOf(tie).at(-1)).toBe('DD+ Atmos');
   });
 
   it('gives a codec the web does not rank no badge', () => {
     const ac3 = itemDetail({
       versions: [fileVersion({ codec_audio: 'ac3', audio_tracks: [audioTrack({ codec: 'ac3' })] })],
     });
-    expect(qualityBadges(ac3)).toEqual(['1080P']);
+    expect(badgesOf(ac3)).toEqual(['1080P']);
   });
 
   it('reads the file codec when the version lists no tracks', () => {
     const movie = itemDetail({ versions: [fileVersion({ codec_audio: 'flac' })] });
-    expect(qualityBadges(movie)).toEqual(['1080P', 'FLAC']);
+    expect(badgesOf(movie)).toEqual(['1080P', 'FLAC']);
   });
 });
 
@@ -672,9 +634,9 @@ describe('the audio badge ranking', () => {
   });
   // The badges of a version whose file codec says nothing, so only its tracks rank.
   const badge = (...tracks: ReturnType<typeof track>[]) =>
-    qualityBadges(
-      itemDetail({ versions: [fileVersion({ codec_audio: '', audio_tracks: tracks })] }),
-    ).at(-1);
+    badgesOf(itemDetail({ versions: [fileVersion({ codec_audio: '', audio_tracks: tracks })] })).at(
+      -1,
+    );
 
   it.each([
     ['Atmos', [track('truehd'), track('atmos')], 'Atmos'],
@@ -717,55 +679,13 @@ describe('the audio badge ranking', () => {
         }),
       ],
     });
-    expect(qualityBadges(detail).at(-1)).toBe('DD+ Atmos');
+    expect(badgesOf(detail).at(-1)).toBe('DD+ Atmos');
   });
 });
 
 describe('the selected version in detail', () => {
   const at = (resolution: string, extra: object = {}) =>
     fileVersion({ file_id: resolution, resolution, ...extra });
-
-  it('takes the effective edition before the one last played', () => {
-    const detail = itemDetail({
-      versions: [at('1080p', { edition_key: 'b' }), at('720p', { edition_key: 'a' })],
-      effective_version_edition_key: 'a',
-      user_data: rollup({ last_edition_key: 'b' }),
-    });
-    expect(selectedVersion(detail)?.file_id).toBe('720p');
-  });
-
-  it('takes the edition last played when the server resolved none', () => {
-    const detail = itemDetail({
-      versions: [at('2160p', { edition_key: 'a' }), at('720p', { edition_key: 'b' })],
-      user_data: rollup({ last_edition_key: 'b' }),
-    });
-    expect(selectedVersion(detail)?.file_id).toBe('720p');
-  });
-
-  it('matches the resolved version by its resolution and its HDR flag together', () => {
-    const sameResolution = itemDetail({
-      versions: [at('1080p', { file_id: 'hdr', hdr: true }), at('1080p', { file_id: 'sdr' })],
-      effective_version_resolution: '1080p',
-      effective_version_hdr: false,
-    });
-    expect(selectedVersion(sameResolution)?.file_id).toBe('sdr');
-    const sameFlag = itemDetail({
-      versions: [at('2160p'), at('1080p')],
-      effective_version_resolution: '1080p',
-      effective_version_hdr: false,
-    });
-    expect(selectedVersion(sameFlag)?.file_id).toBe('1080p');
-  });
-
-  it('ranks 4K above 1080p, an unknown label below 480p, and ignores the case of a label', () => {
-    expect(selectedVersion(itemDetail({ versions: [at('1080p'), at('4K')] }))?.file_id).toBe('4K');
-    expect(selectedVersion(itemDetail({ versions: [at('weird'), at('480p')] }))?.file_id).toBe(
-      '480p',
-    );
-    expect(selectedVersion(itemDetail({ versions: [at('1080p'), at('2160P')] }))?.file_id).toBe(
-      '2160P',
-    );
-  });
 
   it('describes a version that is not the first one with its badges', () => {
     const detail = itemDetail({
@@ -774,7 +694,7 @@ describe('the selected version in detail', () => {
         at('2160p', { codec_audio: 'truehd', hdr: true }),
       ],
     });
-    expect(qualityBadges(detail)).toEqual(['2160P', 'HDR', 'TrueHD']);
+    expect(badgesOf(detail)).toEqual(['2160P', 'HDR', 'TrueHD']);
   });
 });
 
@@ -789,17 +709,17 @@ describe('details of the hero facts', () => {
 
   it('starts the year range at the first air date, even when the item year differs', () => {
     const detail = series({ first_air_date: '2007-05-01', last_air_date: '2013-01-01' });
-    expect(detailChips(detail, [], t)[0]).toBe('2007–2013');
+    expect(movieChips(detail, t)[0]).toBe('2007–2013');
   });
 
   it('has no year chip for a series without a year and without dates', () => {
     const detail = series({ year: undefined, content_rating: '18' });
-    expect(detailChips(detail, [], t)).toEqual(['18']);
+    expect(movieChips(detail, t)).toEqual(['18']);
   });
 
   it('rounds a duration to the nearest minute', () => {
     const movie = itemDetail({ versions: [fileVersion({ duration: 5370 })] });
-    expect(detailChips(movie, [], tFor('de')).at(-1)).toBe('1 Std. 30 Min.');
+    expect(movieChips(movie, tFor('de')).at(-1)).toBe('1 Std. 30 Min.');
   });
 
   it('adds no episodes for a season that does not say how many it has', () => {
@@ -918,43 +838,43 @@ describe('episodeChips', () => {
     });
 
   it('shows the runtime of the selected version, then the air date in the medium format', () => {
-    expect(episodeChips(episode(), 'en', t)).toEqual(['58m', 'Jan 20, 2008']);
-    expect(episodeChips(episode(), 'de', tFor('de'))).toEqual(['58 Min.', '20. Jan. 2008']);
+    expect(episodeChipsOf(episode(), 'en', t)).toEqual(['58m', 'Jan 20, 2008']);
+    expect(episodeChipsOf(episode(), 'de', tFor('de'))).toEqual(['58 Min.', '20. Jan. 2008']);
   });
 
   it('counts hours and minutes from an hour on', () => {
     const long = episode({ versions: [fileVersion({ duration: 3780 })] });
-    expect(episodeChips(long, 'en', t)[0]).toBe('1h 3m');
-    expect(episodeChips(long, 'de', tFor('de'))[0]).toBe('1 Std. 3 Min.');
+    expect(episodeChipsOf(long, 'en', t)[0]).toBe('1h 3m');
+    expect(episodeChipsOf(long, 'de', tFor('de'))[0]).toBe('1 Std. 3 Min.');
   });
 
   it('rounds the version duration to whole minutes, as a movie does', () => {
     const half = episode({ versions: [fileVersion({ duration: 3510 })] });
-    expect(episodeChips(half, 'en', t)[0]).toBe('59m');
-    expect(
-      detailChips(itemDetail({ versions: [fileVersion({ duration: 3510 })] }), [], t),
-    ).toContain('59m');
+    expect(episodeChipsOf(half, 'en', t)[0]).toBe('59m');
+    expect(movieChips(itemDetail({ versions: [fileVersion({ duration: 3510 })] }), t)).toContain(
+      '59m',
+    );
   });
 
   it("falls back to the item's runtime when the version has no duration", () => {
-    expect(episodeChips(episode({ versions: [fileVersion({ duration: 0 })] }), 'en', t)).toEqual([
+    expect(episodeChipsOf(episode({ versions: [fileVersion({ duration: 0 })] }), 'en', t)).toEqual([
       '45m',
       'Jan 20, 2008',
     ]);
   });
 
   it('leaves out whichever of the two is missing', () => {
-    expect(episodeChips(episode({ air_date: undefined }), 'en', t)).toEqual(['58m']);
-    expect(episodeChips(episode({ runtime: undefined, versions: [] }), 'en', t)).toEqual([
+    expect(episodeChipsOf(episode({ air_date: undefined }), 'en', t)).toEqual(['58m']);
+    expect(episodeChipsOf(episode({ runtime: undefined, versions: [] }), 'en', t)).toEqual([
       'Jan 20, 2008',
     ]);
     expect(
-      episodeChips(episode({ runtime: 0, versions: [], air_date: undefined }), 'en', t),
+      episodeChipsOf(episode({ runtime: 0, versions: [], air_date: undefined }), 'en', t),
     ).toEqual([]);
   });
 
   it('adds no year or content rating: those are the movie and series chips', () => {
-    expect(episodeChips(episode({ year: 2008, content_rating: 'TV-14' }), 'en', t)).toEqual([
+    expect(episodeChipsOf(episode({ year: 2008, content_rating: 'TV-14' }), 'en', t)).toEqual([
       '58m',
       'Jan 20, 2008',
     ]);
@@ -1025,5 +945,34 @@ describe('heroSynopsis', () => {
 
   it('keeps a movie without a description empty: the series fallback is for episodes only', () => {
     expect(heroSynopsis(itemDetail({ overview: undefined }), 'Series.', false).text).toBeNull();
+  });
+});
+
+describe('the chips and badges follow the version they are given', () => {
+  const shortHd = fileVersion({ file_id: 'hd', resolution: '1080p', duration: 3600 });
+  const longUhd = fileVersion({
+    file_id: 'uhd',
+    resolution: '2160p',
+    duration: 7200,
+    codec_audio: 'truehd',
+  });
+  const movie = itemDetail({ versions: [shortHd, longUhd], runtime: 99 });
+
+  it("shows the given version's runtime on a movie and on an episode, not the default one's", () => {
+    expect(detailChips(movie, [], t, 0, longUhd).at(-1)).toBe('2h 0m');
+    expect(detailChips(movie, [], t, 0, shortHd).at(-1)).toBe('1h 0m');
+    const episode = itemDetail({ type: 'episode', versions: [shortHd, longUhd] });
+    expect(episodeChips(episode, 'en', t, longUhd)[0]).toBe('2h 0m');
+    expect(episodeChips(episode, 'en', t, shortHd)[0]).toBe('1h 0m');
+  });
+
+  it("falls back to the item's own runtime when no version is given", () => {
+    expect(detailChips(movie, [], t).at(-1)).toBe('1h 39m');
+  });
+
+  it('draws the badges of the given version, and none without one', () => {
+    expect(qualityBadges(longUhd)).toEqual(['2160P', 'TrueHD']);
+    expect(qualityBadges(shortHd)).toEqual(['1080P', 'AAC']);
+    expect(qualityBadges(undefined)).toEqual([]);
   });
 });

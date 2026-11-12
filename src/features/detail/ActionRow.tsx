@@ -19,7 +19,10 @@ import { playedShare, primaryAction, watchedState } from './actions';
 import { ChoiceDialog, type Choice } from './ChoiceDialog';
 import type { DetailKind, ItemDetail } from './info';
 import { useSetRating, useSetUserFlag, useSetWatched, type UserFlag } from './itemActions';
+import { PillDialog } from './PillDialogs';
+import { PillsRow, type PillKind } from './PillsRow';
 import { MAX_STARS, RATING_KEY, StarRating } from './StarRating';
+import type { Pills } from './usePicks';
 
 export const PLAY_KEY = 'detail-play';
 export const TRANSLATE_KEY = 'detail-translate';
@@ -33,6 +36,9 @@ const MENU_KEY = 'detail-menu';
  * when the page offers it. A season or episode page has no heart, stars or watchlist, and its More
  * menu shows only when it holds something. Left and Right walk the row (the stars take them while a rating is
  * being picked); the dialogs the buttons open hold the focus until they close.
+ *
+ * A movie or episode page also gets the pills row (`pills`) under it, a row of its own with its own
+ * focus order; the lists its pills open share this row's dialog host.
  */
 export function ActionRow({
   detail,
@@ -43,8 +49,10 @@ export function ActionRow({
   stateKnown,
   onPlay,
   onFocused,
+  onPillsFocused,
   onNotice,
   onTranslate,
+  pills,
 }: {
   detail: ItemDetail;
   kind: DetailKind;
@@ -58,13 +66,17 @@ export function ActionRow({
   stateKnown: boolean;
   onPlay: (intent: StartIntent) => void;
   onFocused: () => void;
+  /** The focus moved onto the pills row (the page may need to scroll to show it). */
+  onPillsFocused: () => void;
   /** Shows a short confirmation or failure line on the page. */
   onNotice: (message: string) => void;
   /** Set when the translate pill shows; OK on it calls this. */
   onTranslate?: () => void;
+  /** The version, audio and subtitle pills of a movie or episode page. */
+  pills?: Pills;
 }) {
   const t = useT();
-  const [dialog, setDialog] = useState<'resume' | 'menu' | null>(null);
+  const [dialog, setDialog] = useState<'resume' | 'menu' | PillKind | null>(null);
   const closeDialog = () => setDialog(null);
   const resumeAt = resumeSeconds ?? 0;
   // The star being picked (1 to 5), or null while no rating is being picked.
@@ -300,6 +312,7 @@ export function ActionRow({
           </Button>
         ) : null}
       </FocusGroup>
+      {pills ? <PillsRow pills={pills} onOpen={setDialog} onFocused={onPillsFocused} /> : null}
       {/* The dialogs render on the body: the page moves by a transform, which would make a fixed
           overlay inside it follow the page. Their host group never restores the focus by itself:
           when a dialog goes, the navigation would otherwise move the focus to the screen's first
@@ -337,6 +350,9 @@ export function ActionRow({
               choices={menu}
               onClose={closeDialog}
             />
+          ) : null}
+          {pills && dialog !== null && dialog !== 'resume' && dialog !== 'menu' ? (
+            <PillDialog kind={dialog} pills={pills} onClose={closeDialog} />
           ) : null}
         </FocusGroup>,
         document.body,

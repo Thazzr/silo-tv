@@ -153,6 +153,8 @@ describe('DetailScreen: the Cast & Crew strip of a movie', () => {
     await screen.findByTestId('row-cast');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:cast:lead:d1');
     await pressKey(KEY.right);
     await focusKeyIs('card:cast:writer:w1');
@@ -169,6 +171,8 @@ describe('DetailScreen: the Cast & Crew strip of a movie', () => {
     setup({ itemId: 'm1' });
     await screen.findByTestId('row-cast');
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await pressKey(KEY.right);
     await focusKeyIs('card:cast:writer:w1');
@@ -191,6 +195,8 @@ describe('DetailScreen: the Cast & Crew strip of a movie', () => {
     const row = await screen.findByTestId('row-cast');
     expect(cardTitles(row)).toEqual(['Both', 'Both']);
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:lead:b');
     await pressKey(KEY.right);
@@ -483,6 +489,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
     await screen.findByTestId('crew-box');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
     await pressKey(KEY.down);
     await focusKeyIs('crew:director:d1');
@@ -513,6 +521,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
     setup({ itemId: 'e1' });
     await screen.findByTestId('crew-box');
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await focusKeyIs('crew:director:d1');
@@ -547,6 +557,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
     await screen.findByTestId('crew-box');
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.right);
     await focusKeyIs('crew:director:d2');
@@ -568,6 +580,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
     expect(screen.queryByRole('button', { name: 'Dan Nobody' })).toBeNull();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.right);
     await focusKeyIs('crew:director:d1');
@@ -585,6 +599,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
     setup({ itemId: 'e1' });
     await screen.findByTestId('crew-box');
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await pressKey(KEY.down);
     await pressKey(KEY.right);
@@ -612,6 +628,8 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
       setup({ itemId: 'e1' });
       await screen.findByTestId('crew-box');
       await focusKeyIs('detail-play');
+      await pressKey(KEY.down);
+      await focusKeyIs('detail-pill-subtitles');
       await pressKey(KEY.down);
       await pressKey(KEY.down);
       await focusKeyIs('crew:director:d1');
@@ -684,6 +702,9 @@ describe('DetailScreen: the order of the sections under the hero', () => {
       'card:similar:x1',
     ];
     await focusKeyIs('detail-play');
+    // The pills row sits between the buttons and the first section.
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     for (const key of order) {
       await pressKey(KEY.down);
       await focusKeyIs(key);
@@ -692,6 +713,8 @@ describe('DetailScreen: the order of the sections under the hero', () => {
       await pressKey(KEY.up);
       await focusKeyIs(key);
     }
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
   });
@@ -798,6 +821,8 @@ describe('DetailScreen: the order of the sections under the hero', () => {
     expect(zones()).toEqual(['episodes', 'cast', 'crew']);
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs('card:more-episodes:e1');
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
@@ -903,6 +928,8 @@ describe('DetailScreen: the Crew box keys', () => {
     await screen.findByTestId('crew-box');
     await screen.findByTestId('episode-grid').catch(() => undefined);
     await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
   };

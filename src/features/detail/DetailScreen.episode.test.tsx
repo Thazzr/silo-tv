@@ -904,6 +904,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     expect(screen.queryByTestId('episode-now')).toBeNull();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e1'));
   });
 
@@ -926,12 +928,17 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     await row();
     await focusKeyIs('detail-play');
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e2'));
     await pressKey(KEY.right);
     await focusKeyIs(ROW_KEY('e3'));
     await pressKey(KEY.left);
     await pressKey(KEY.left);
     await focusKeyIs(ROW_KEY('e1'));
+    // Up comes back to the pills, and once more to the actions.
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.up);
     await waitFor(() =>
       expect(screen.getByTestId('detail-actions').contains(document.activeElement)).toBe(true),
@@ -953,6 +960,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     setup({ itemId: 'e5' });
     await row();
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e5'));
   });
 
@@ -960,6 +969,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     const calls = serveEpisode();
     setup({ itemId: 'e2' });
     await row();
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e2'));
     await pressKey(KEY.right);
@@ -986,6 +997,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     );
     setup({ itemId: 'e1' });
     await row();
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e1'));
     // Eleven cards along: far outside the window the row mounts when it is shown afresh.
@@ -1014,6 +1027,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     setup({ itemId: 'e2' });
     await row();
     await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
     await pressKey(KEY.right);
     await focusKeyIs(ROW_KEY('e3'));
     await pressKey(KEY.enter);
@@ -1022,6 +1037,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     // The viewer walks on through the season from there.
     await pressKey(KEY.left);
     await focusKeyIs(ROW_KEY('e2'));
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
   });
@@ -1063,6 +1080,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     const calls = serveEpisode();
     setup({ itemId: 'e2' });
     await row();
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e2'));
     await pressKey(KEY.enter);
@@ -1126,6 +1145,8 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     );
     expect(primary()).toHaveTextContent('Play Episode');
     await row();
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
     await pressKey(KEY.down);
     await focusKeyIs(ROW_KEY('e2'));
     await pressKey(KEY.right);
