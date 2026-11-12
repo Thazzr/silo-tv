@@ -3,6 +3,11 @@ import { FocusIndexMemory } from '../../ui/media/scroll';
 /** What opening a detail page needs: the item whose page it is (a movie, series, season or episode). */
 export interface DetailTarget {
   itemId: string;
+  /**
+   * The page was opened from a "More Episodes" card: it starts with the focus on its own card in
+   * that row, so a viewer can walk through the season. Any other way in starts on the primary button.
+   */
+  startInRow?: boolean;
 }
 
 /** What one visit of a detail page remembers while the player (or another page) covers it. */

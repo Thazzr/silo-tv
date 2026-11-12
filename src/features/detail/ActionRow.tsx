@@ -30,8 +30,8 @@ const MENU_KEY = 'detail-menu';
 /**
  * The action row of a detail page, like Silo's web app: the primary button (Play, Resume, ...), the
  * watched toggle, the favourite heart, the star rating and the More menu, then the translate pill
- * when the page offers it. A season page has no heart, stars or watchlist, and its More menu shows
- * only when it holds something. Left and Right walk the row (the stars take them while a rating is
+ * when the page offers it. A season or episode page has no heart, stars or watchlist, and its More
+ * menu shows only when it holds something. Left and Right walk the row (the stars take them while a rating is
  * being picked); the dialogs the buttons open hold the focus until they close.
  */
 export function ActionRow({
@@ -72,7 +72,8 @@ export function ActionRow({
 
   const action = primaryAction({ detail, kind, playable, resumeSeconds, totalSeconds });
   const watched = watchedState(detail, kind);
-  const season = kind === 'season';
+  // Only a movie and a series are in the viewer's lists; a season and an episode are not.
+  const inLists = kind === 'item' || kind === 'series';
   const setWatched = useSetWatched();
   const setFlag = useSetUserFlag(detail.content_id);
   const setRating = useSetRating(detail.content_id);
@@ -148,7 +149,7 @@ export function ActionRow({
       },
     });
   }
-  if (!season) {
+  if (inLists) {
     menu.push({
       key: 'detail-menu-watchlist',
       label: t(inWatchlist ? 'detail.removeFromWatchlist' : 'detail.addToWatchlist'),
@@ -163,7 +164,7 @@ export function ActionRow({
       },
     });
   }
-  if (!season && detail.user_state) {
+  if (inLists && detail.user_state) {
     menu.push({
       key: 'detail-menu-not-interested',
       label: t(notInterested ? 'detail.showInRecommendations' : 'detail.notInterested'),
@@ -177,7 +178,7 @@ export function ActionRow({
 
   // Which buttons the row mounts. The focus order below and the buttons rendered further down
   // both read these, so the order never names a button that is not there.
-  const hasHeartAndStars = !season;
+  const hasHeartAndStars = inLists;
   const hasMenu = menu.length > 0;
   const hasTranslate = onTranslate !== undefined;
   // The focus order of the row, left to right: what Left and Right walk.

@@ -38,6 +38,48 @@ describe('primaryAction: a movie', () => {
   });
 });
 
+describe('primaryAction: an episode', () => {
+  const episode = (overrides: Parameters<typeof itemDetail>[0] = {}) =>
+    itemDetail({ type: 'episode', ...overrides });
+  const base = { kind: 'episode' as const, playable: true, totalSeconds: 3000 };
+
+  it('says Play Episode and plays from the start without a resume point', () => {
+    expect(primaryAction({ ...base, detail: episode(), resumeSeconds: null })).toEqual({
+      label: 'detail.playEpisode',
+      mode: 'play',
+      fill: null,
+      startOverInMenu: false,
+    });
+  });
+
+  it('says Play with a fill and asks when it has progress and one version', () => {
+    expect(primaryAction({ ...base, detail: episode(), resumeSeconds: 750 })).toEqual({
+      label: 'detail.play',
+      mode: 'ask',
+      fill: 0.25,
+      startOverInMenu: false,
+    });
+  });
+
+  it('says Resume, resumes at once and moves Play from beginning to the menu with several versions', () => {
+    const detail = episode({ versions: [fileVersion(), fileVersion({ file_id: 'file-2' })] });
+    expect(primaryAction({ ...base, detail, resumeSeconds: 750 })).toEqual({
+      label: 'detail.resume',
+      mode: 'resume',
+      fill: 0.25,
+      startOverInMenu: true,
+    });
+  });
+
+  it('is disabled when nothing plays, with or without progress', () => {
+    for (const resumeSeconds of [null, 750]) {
+      expect(
+        primaryAction({ ...base, playable: false, detail: episode(), resumeSeconds }),
+      ).toMatchObject({ label: 'detail.playEpisode', mode: 'none' });
+    }
+  });
+});
+
 describe('primaryAction: a series', () => {
   const base = { kind: 'series' as const, playable: true, resumeSeconds: null, totalSeconds: 0 };
   const label = (user: ReturnType<typeof rollup>) =>
@@ -152,6 +194,35 @@ describe('watchedState', () => {
       watchedState(series(rollup({ played: true, position_seconds: 50 })), 'series').hasProgress,
     ).toBe(false);
     expect(watchedState(series(rollup({ played: true })), 'series').hasProgress).toBe(false);
+  });
+});
+
+describe('watchedState: an episode', () => {
+  const episode = (user?: ReturnType<typeof rollup>) =>
+    itemDetail({ type: 'episode', user_data: user });
+
+  it('labels the toggle by the played state, like a movie', () => {
+    expect(watchedState(episode(), 'episode')).toEqual({
+      played: false,
+      hasProgress: false,
+      label: 'detail.markWatched',
+      unwatchLabel: 'detail.markUnwatched',
+    });
+    expect(watchedState(episode(rollup({ played: true })), 'episode')).toMatchObject({
+      played: true,
+      label: 'detail.markUnwatched',
+    });
+  });
+
+  it('counts an episode with a saved position as not watched and offers to clear it', () => {
+    expect(
+      watchedState(episode(rollup({ played: true, position_seconds: 600 })), 'episode'),
+    ).toEqual({
+      played: false,
+      hasProgress: true,
+      label: 'detail.markWatched',
+      unwatchLabel: 'detail.markUnwatched',
+    });
   });
 });
 

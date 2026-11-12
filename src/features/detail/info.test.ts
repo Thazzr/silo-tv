@@ -6,11 +6,13 @@ import {
   detailChips,
   detailKind,
   episodeCaptionTitle,
+  episodeChips,
   episodeCode,
   episodeMetaLine,
   episodeProgress,
   episodeWatched,
   heroCredits,
+  heroSynopsis,
   initials,
   isSpecials,
   kicker,
@@ -564,7 +566,7 @@ describe('detailKind', () => {
     expect(detailKind(itemDetail({ type: 'series' }))).toBe('series');
     expect(detailKind(itemDetail({ type: ' Season ' }))).toBe('season');
     expect(detailKind(itemDetail({ type: 'movie' }))).toBe('item');
-    expect(detailKind(itemDetail({ type: 'episode' }))).toBe('item');
+    expect(detailKind(itemDetail({ type: ' Episode ' }))).toBe('episode');
   });
 });
 
@@ -902,5 +904,126 @@ describe('an episode card caption', () => {
 
   it('shows a date text it cannot read as sent', () => {
     expect(episodeMetaLine(ep(1, 1, { air_date: '2008', runtime: 0 }), 'en', t)).toBe('2008');
+  });
+});
+
+describe('episodeChips', () => {
+  const episode = (overrides: Parameters<typeof itemDetail>[0] = {}) =>
+    itemDetail({
+      type: 'episode',
+      runtime: 45,
+      air_date: '2008-01-20',
+      versions: [fileVersion({ duration: 3480 })],
+      ...overrides,
+    });
+
+  it('shows the runtime of the selected version, then the air date in the medium format', () => {
+    expect(episodeChips(episode(), 'en', t)).toEqual(['58m', 'Jan 20, 2008']);
+    expect(episodeChips(episode(), 'de', tFor('de'))).toEqual(['58 Min.', '20. Jan. 2008']);
+  });
+
+  it('counts hours and minutes from an hour on', () => {
+    const long = episode({ versions: [fileVersion({ duration: 3780 })] });
+    expect(episodeChips(long, 'en', t)[0]).toBe('1h 3m');
+    expect(episodeChips(long, 'de', tFor('de'))[0]).toBe('1 Std. 3 Min.');
+  });
+
+  it('rounds the version duration to whole minutes, as a movie does', () => {
+    const half = episode({ versions: [fileVersion({ duration: 3510 })] });
+    expect(episodeChips(half, 'en', t)[0]).toBe('59m');
+    expect(
+      detailChips(itemDetail({ versions: [fileVersion({ duration: 3510 })] }), [], t),
+    ).toContain('59m');
+  });
+
+  it("falls back to the item's runtime when the version has no duration", () => {
+    expect(episodeChips(episode({ versions: [fileVersion({ duration: 0 })] }), 'en', t)).toEqual([
+      '45m',
+      'Jan 20, 2008',
+    ]);
+  });
+
+  it('leaves out whichever of the two is missing', () => {
+    expect(episodeChips(episode({ air_date: undefined }), 'en', t)).toEqual(['58m']);
+    expect(episodeChips(episode({ runtime: undefined, versions: [] }), 'en', t)).toEqual([
+      'Jan 20, 2008',
+    ]);
+    expect(
+      episodeChips(episode({ runtime: 0, versions: [], air_date: undefined }), 'en', t),
+    ).toEqual([]);
+  });
+
+  it('adds no year or content rating: those are the movie and series chips', () => {
+    expect(episodeChips(episode({ year: 2008, content_rating: 'TV-14' }), 'en', t)).toEqual([
+      '58m',
+      'Jan 20, 2008',
+    ]);
+  });
+});
+
+describe('heroCredits: an episode', () => {
+  const crew = [
+    { name: 'Dana Director', job: 'Director' },
+    { name: 'Wes Writer', job: 'Writer' },
+  ];
+
+  it('names the director and the writers and has no genres, where a movie lists them', () => {
+    const episode = itemDetail({ type: 'episode', crew, genres: ['Drama', 'Crime'] });
+    expect(heroCredits(episode, t)).toEqual({
+      credits: [
+        { label: 'Directed by', names: 'Dana Director' },
+        { label: 'Written by', names: 'Wes Writer' },
+      ],
+      genres: [],
+    });
+    expect(heroCredits(itemDetail({ crew, genres: ['Drama', 'Crime'] }), t).genres).toEqual([
+      'Drama',
+      'Crime',
+    ]);
+  });
+});
+
+describe('heroSynopsis', () => {
+  const episode = (overview?: string) => itemDetail({ type: 'episode', overview });
+
+  it("shows the episode's own description", () => {
+    expect(heroSynopsis(episode('Own.'), 'Series.', false)).toEqual({
+      text: 'Own.',
+      hidden: false,
+      fromSeries: false,
+    });
+  });
+
+  it('falls back to the series description when the episode has none, and never hides it', () => {
+    expect(heroSynopsis(episode(undefined), 'Series.', false)).toEqual({
+      text: 'Series.',
+      hidden: false,
+      fromSeries: true,
+    });
+    expect(heroSynopsis(episode(''), 'Series.', true)).toEqual({
+      text: 'Series.',
+      hidden: false,
+      fromSeries: true,
+    });
+  });
+
+  it("hides the episode's own description under spoiler protection", () => {
+    expect(heroSynopsis(episode('Own.'), 'Series.', true)).toEqual({
+      text: null,
+      hidden: true,
+      fromSeries: false,
+    });
+  });
+
+  it('has nothing to show when neither has a description', () => {
+    expect(heroSynopsis(episode(undefined), undefined, false)).toEqual({
+      text: null,
+      hidden: false,
+      fromSeries: false,
+    });
+  });
+
+  it('keeps a movie without a description empty: the series fallback is for episodes only', () => {
+    expect(heroSynopsis(itemDetail({ overview: undefined }), 'Series.', false).text).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import {
   rowVisibleCards,
   ROW_INSET,
   STRIP_PADDING,
+  type CardMetrics,
   type CardShape,
 } from './layout';
 import { prefetchImage } from './prefetch';
@@ -56,6 +57,10 @@ export interface RowProps<T> {
   prefetchRow?: boolean;
   /** Cards that fit the row's width; the whole screen's worth unless the row sits in a narrower column. */
   visibleCards?: number;
+  /** The size of the row's cards when they are not the shape's usual ones (the episode row). */
+  metrics?: CardMetrics;
+  /** The card the focus starts on when `memory` holds none (the episode row starts on the current one). */
+  initialIndex?: number;
 }
 
 /**
@@ -81,12 +86,15 @@ function RowImpl<T>({
   artUrl,
   prefetchRow = false,
   visibleCards,
+  metrics,
+  initialIndex = 0,
 }: RowProps<T>) {
   const count = items.length + (onExploreAll ? 1 : 0);
-  const visible = visibleCards ?? rowVisibleCards(shape);
-  const step = rowStep(shape);
+  const size = metrics ?? shape;
+  const visible = visibleCards ?? rowVisibleCards(size);
+  const step = rowStep(size);
   const [focused, setFocused] = useState(() =>
-    Math.min(memory?.get(rowId) ?? 0, Math.max(0, count - 1)),
+    Math.max(0, Math.min(memory?.get(rowId) ?? initialIndex, count - 1)),
   );
   // The card the strip last scrolled to. It follows the focus, except while the pointer moves the
   // focus: a hovered card is focused where it sits, and the strip stays put (see nav/origin.ts).
@@ -141,7 +149,7 @@ function RowImpl<T>({
 
   const focusedItem = items[focused];
   const focusedKey = focusedItem === undefined ? EXPLORE_KEY : getKey(focusedItem);
-  const stripHeight = cardBlockHeight(shape) + 2 * STRIP_PADDING;
+  const stripHeight = cardBlockHeight(size) + 2 * STRIP_PADDING;
   const indices = mounted
     ? mountedIndices(effectiveScroll, focused, visible, count, MOUNT_BEFORE, MOUNT_AFTER)
     : [];
@@ -171,7 +179,7 @@ function RowImpl<T>({
     <section
       className="row-section"
       data-testid={`row-${rowId}`}
-      style={{ height: rowHeight(shape) }}
+      style={{ height: rowHeight(size) }}
       aria-label={title}
     >
       <h2 className="row-title" data-testid="row-title" style={{ paddingLeft: inset }}>
@@ -203,7 +211,7 @@ function RowImpl<T>({
                   className="row-slot"
                   key={key}
                   style={{ left: index * step }}
-                  data-nav-rect={slotRect(index * step, shape)}
+                  data-nav-rect={slotRect(index * step, metrics ?? CARD_SIZE[shape])}
                 >
                   <RowCard
                     rowId={rowId}
@@ -229,8 +237,8 @@ function RowImpl<T>({
 }
 
 /** Where a slot sits in its track and how big its card is, for the navigation (data-nav-rect, see src/app/nav/adapter.ts). */
-const slotRect = (left: number, shape: CardShape) =>
-  `${left},0,${CARD_SIZE[shape].width},${CARD_SIZE[shape].height}`;
+const slotRect = (left: number, card: { width: number; height: number }) =>
+  `${left},0,${card.width},${card.height}`;
 
 interface RowCardProps<T> {
   rowId: string;

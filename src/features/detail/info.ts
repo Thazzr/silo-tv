@@ -15,15 +15,15 @@ type Translate = (key: MessageKey, params?: Record<string, string | number>) => 
 
 export const isSeries = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'series';
 export const isSeason = (detail: ItemDetail) => detail.type.trim().toLowerCase() === 'season';
+export const isEpisodeDetail = (detail: ItemDetail) =>
+  detail.type.trim().toLowerCase() === 'episode';
 
-/**
- * Which page layout an item gets: a series, a season, or the movie layout (a movie, and for now an
- * episode, which has no page of its own yet).
- */
-export type DetailKind = 'series' | 'season' | 'item';
+/** Which page layout an item gets: a series, a season, an episode, or the movie layout. */
+export type DetailKind = 'series' | 'season' | 'episode' | 'item';
 export function detailKind(detail: ItemDetail): DetailKind {
   if (isSeries(detail)) return 'series';
-  return isSeason(detail) ? 'season' : 'item';
+  if (isSeason(detail)) return 'season';
+  return isEpisodeDetail(detail) ? 'episode' : 'item';
 }
 
 type FileVersion = S['FileVersion'];
@@ -77,6 +77,12 @@ function yearChip(detail: ItemDetail): string | null {
   return last !== undefined && last !== first ? `${first}–${last}` : String(first);
 }
 
+/** The runtime chip of an item: the selected version's duration, else the item's own runtime. */
+function itemRuntimeChip(detail: ItemDetail, t: Translate): string | null {
+  const seconds = selectedVersion(detail)?.duration ?? 0;
+  return runtimeChip(seconds > 0 ? Math.round(seconds / 60) : (detail.runtime ?? 0), t);
+}
+
 /** "1 Std. 43 Min." / "43 Min." (en "1h 43m" / "43m"): the web's runtime chip, hours with minutes. */
 function runtimeChip(minutes: number, t: Translate): string | null {
   if (minutes <= 0) return null;
@@ -115,15 +121,55 @@ export function detailChips(
     }
     if (episodes > 0) chips.push(episodeCountText(episodes, t));
   } else {
-    const seconds = selectedVersion(detail)?.duration ?? 0;
-    chips.push(runtimeChip(seconds > 0 ? Math.round(seconds / 60) : (detail.runtime ?? 0), t));
+    chips.push(itemRuntimeChip(detail, t));
   }
   return chips.filter((chip): chip is string => Boolean(chip));
+}
+
+/**
+ * The chips of an episode page: the runtime of the selected version (the item's own runtime when
+ * the version has none), then the air date in the medium format. Either may be missing.
+ */
+export function episodeChips(detail: ItemDetail, lang: Language, t: Translate): string[] {
+  return [itemRuntimeChip(detail, t), mediumDate(detail.air_date, lang)].filter(
+    (chip): chip is string => Boolean(chip),
+  );
 }
 
 /** "1 episode" / "7 episodes" (German "1 Folge" / "7 Folgen"). */
 export function episodeCountText(count: number, t: Translate): string {
   return count === 1 ? t('detail.episodeOne') : t('detail.episodeCount', { count });
+}
+
+export interface HeroSynopsis {
+  /** The text the hero (and "More") shows; null when there is none to show. */
+  text: string | null;
+  /** The profile's spoiler protection leaves the text out: the hero says so instead. */
+  hidden: boolean;
+  /** The text is the series' (the episode has none of its own). */
+  fromSeries: boolean;
+}
+
+/**
+ * What the synopsis of a page says. An episode without a description of its own shows its series'
+ * (never hidden: it gives nothing away); with one, spoiler protection (`protectOwn`) hides it.
+ */
+export function heroSynopsis(
+  detail: ItemDetail,
+  seriesOverview: string | undefined,
+  protectOwn: boolean,
+): HeroSynopsis {
+  if (detail.overview) {
+    return {
+      text: protectOwn ? null : detail.overview,
+      hidden: protectOwn,
+      fromSeries: false,
+    };
+  }
+  if (isEpisodeDetail(detail) && seriesOverview) {
+    return { text: seriesOverview, hidden: false, fromSeries: true };
+  }
+  return { text: null, hidden: false, fromSeries: false };
 }
 
 /** The type and, when the item has one, its first studio (movie) or network (series). */
@@ -155,7 +201,7 @@ export interface HeroCredits {
 /**
  * The credit line under the synopsis, as the web draws it: the lead credit (a movie's directors; a
  * series' creators, else its directors; two names at most), the writers (job Writer or Screenplay,
- * two at most) and all genres.
+ * two at most) and all genres (an episode's line has no genres).
  */
 export function heroCredits(detail: ItemDetail, t: Translate): HeroCredits {
   const named = (jobs: readonly string[]) =>
@@ -175,7 +221,8 @@ export function heroCredits(detail: ItemDetail, t: Translate): HeroCredits {
     credits: credits
       .filter((credit) => credit.names.length > 0)
       .map((credit) => ({ label: credit.label, names: credit.names.join(', ') })),
-    genres: detail.genres,
+    // An episode's line names its director and writers only.
+    genres: isEpisodeDetail(detail) ? [] : detail.genres,
   };
 }
 

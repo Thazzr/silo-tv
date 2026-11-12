@@ -1,12 +1,21 @@
 import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Button } from '../../app/ui';
-import { useT } from '../../i18n';
-import { Artwork, useMediaUrl } from '../../ui/media';
+import { useLanguage, useT } from '../../i18n';
+import {
+  Artwork,
+  protectsEpisodeStill,
+  thumbhashColor,
+  thumbhashPreview,
+  useMediaUrl,
+  useSpoilerSettings,
+} from '../../ui/media';
 import { useProfileSetting } from '../settings/profileSettings';
 import {
   detailChips,
+  episodeChips,
   heroCredits,
+  isEpisodeDetail,
   isSeason,
   isSeries,
   kicker,
@@ -14,6 +23,7 @@ import {
   ratingEntries,
   seasonLabel,
   seasonSubtitle,
+  type HeroSynopsis,
   type ItemDetail,
   type Season,
 } from './info';
@@ -76,14 +86,37 @@ export function Synopsis({
 export function BackdropLayer({
   backdrop,
   scrolled,
+  protectedHash,
 }: {
   /** The picture's address (already resolved against the server), or null for none. */
   backdrop: string | null;
   scrolled: boolean;
+  /**
+   * Set when spoiler protection covers the picture: the picture is never requested, and its
+   * ThumbHash (the empty string when it has none) stands in, blurred by the browser's scaling.
+   */
+  protectedHash?: string;
 }) {
+  const preview = protectedHash === undefined ? null : thumbhashPreview(protectedHash);
+  const color = protectedHash === undefined ? null : thumbhashColor(protectedHash);
   return (
     <div className="detail-backdrop-layer" data-testid="detail-backdrop-layer" aria-hidden="true">
-      {backdrop ? (
+      {protectedHash !== undefined ? (
+        preview ? (
+          <img
+            className="detail-backdrop"
+            data-testid="detail-backdrop-protected"
+            src={preview}
+            alt=""
+          />
+        ) : (
+          <div
+            className="detail-backdrop"
+            data-testid="detail-backdrop-protected"
+            style={color ? { backgroundColor: color } : undefined}
+          />
+        )
+      ) : backdrop ? (
         <img
           className="detail-backdrop"
           data-testid="detail-backdrop"
@@ -98,9 +131,27 @@ export function BackdropLayer({
   );
 }
 
+/**
+ * The page's backdrop: the item's own, which for an episode is its still (large). An unwatched
+ * episode's still gives the story away, so spoiler protection swaps it for its ThumbHash.
+ */
 export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrolled: boolean }) {
   const url = useMediaUrl();
-  return <BackdropLayer backdrop={url(detail.backdrop_url)} scrolled={scrolled} />;
+  const spoilers = useSpoilerSettings();
+  const covered =
+    isEpisodeDetail(detail) &&
+    detail.backdrop_url !== undefined &&
+    protectsEpisodeStill(
+      { user_data: detail.user_data, still_is_episode_still: detail.backdrop_is_episode_still },
+      spoilers,
+    );
+  return (
+    <BackdropLayer
+      backdrop={url(detail.backdrop_url)}
+      scrolled={scrolled}
+      protectedHash={covered ? (detail.backdrop_thumbhash ?? '') : undefined}
+    />
+  );
 }
 
 /**
@@ -108,7 +159,9 @@ export function DetailBackdrop({ detail, scrolled }: { detail: ItemDetail; scrol
  * title art or the title, the tagline, the chips and quality badges, the external ratings, the
  * synopsis, the credit line and the action row (`actions`). A season page has a breadcrumb in place
  * of the kicker, the series' title (or its logo) with the season's own title under it, and no
- * ratings or credits; its synopsis is the season's.
+ * ratings or credits; its synopsis is the season's. An episode page has no poster (its still is
+ * the backdrop), a breadcrumb (series, season, episode), the episode's title, its runtime and air
+ * date, ratings, the series' synopsis when the episode has none, and its director and writers.
  */
 export function DetailHero({
   detail,
@@ -118,6 +171,8 @@ export function DetailHero({
   translation = null,
   seasons,
   loadedEpisodes = 0,
+  synopsis,
+  episodeSeason,
 }: {
   detail: ItemDetail;
   actions: ReactNode;
@@ -130,8 +185,13 @@ export function DetailHero({
   seasons: readonly Season[];
   /** A season's number of loaded episodes, for the chip when the season carries no count. */
   loadedEpisodes?: number;
+  /** What the synopsis says (the item's description, or the series' for an episode without one). */
+  synopsis: HeroSynopsis;
+  /** An episode's season from the series' season list, for its label in the breadcrumb. */
+  episodeSeason?: Season;
 }) {
   const t = useT();
+  const lang = useLanguage();
   const url = useMediaUrl();
   const [failed, setFailed] = useState<string | null>(null);
   const logo = url(detail.logo_url);
@@ -142,14 +202,30 @@ export function DetailHero({
   const showLogo = hasLogo && titleArt.known && titleArt.value;
   const reserveLogo = hasLogo && !titleArt.known;
   const season = isSeason(detail);
+  const episode = isEpisodeDetail(detail);
   const { type, name: studio } = kicker(detail, t);
-  const chips = detailChips(detail, seasons, t, loadedEpisodes);
+  const chips = episode
+    ? episodeChips(detail, lang, t)
+    : detailChips(detail, seasons, t, loadedEpisodes);
   const badges = qualityBadges(detail);
   const ratings = season ? [] : ratingEntries(detail);
   const { credits, genres } = season ? { credits: [], genres: [] } : heroCredits(detail, t);
   // A season page is titled by its series; the season's own title is the line under it.
   const heading = season ? (detail.series_title ?? detail.title) : detail.title;
-  const subtitle = season ? seasonSubtitle(detail, t) : (detail.tagline ?? null);
+  const subtitle = season ? seasonSubtitle(detail, t) : episode ? null : (detail.tagline ?? null);
+  // A season page's breadcrumb ends on the season, an episode page's on the episode.
+  let crumbs: string[] | null = null;
+  if (season) crumbs = [heading, seasonLabel(detail, t)];
+  else if (episode) {
+    crumbs = [
+      ...(detail.series_title ? [detail.series_title] : []),
+      seasonLabel(episodeSeason ?? { season_number: detail.season_number }, t),
+      // An episode without a number has no "Episode N" crumb.
+      ...(detail.episode_number === undefined
+        ? []
+        : [t('detail.episodeNumber', { episode: detail.episode_number })]),
+    ];
+  }
   // The credit line's pieces, joined by dots: the credits, then all genres as one piece.
   const creditPieces: ReactNode[] = credits.map((credit) => (
     <Fragment key={credit.label}>
@@ -169,23 +245,30 @@ export function DetailHero({
   return (
     <div className="detail-hero" data-testid="detail-hero">
       <div className="detail-hero-row">
-        <div className="detail-poster" data-testid="detail-poster" data-faded={faded}>
-          <Artwork
-            src={url(detail.poster_url)}
-            thumbhash={detail.poster_thumbhash}
-            title={season ? seasonLabel(detail, t) : detail.title}
-          />
-        </div>
+        {episode ? null : (
+          <div className="detail-poster" data-testid="detail-poster" data-faded={faded}>
+            <Artwork
+              src={url(detail.poster_url)}
+              thumbhash={detail.poster_thumbhash}
+              title={season ? seasonLabel(detail, t) : detail.title}
+            />
+          </div>
+        )}
         <div className="detail-text" data-faded={faded}>
-          {season ? (
+          {crumbs ? (
             <nav
               className="detail-breadcrumb"
               aria-label={t('detail.breadcrumb')}
               data-testid="detail-breadcrumb"
             >
-              <span>{heading}</span>
-              <ChevronRight size={22} aria-hidden="true" />
-              <span aria-current="page">{seasonLabel(detail, t)}</span>
+              {crumbs.map((crumb, index) => (
+                <Fragment key={index}>
+                  {index > 0 ? <ChevronRight size={22} aria-hidden="true" /> : null}
+                  <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>
+                    {crumb}
+                  </span>
+                </Fragment>
+              ))}
             </nav>
           ) : (
             <p className="detail-kicker" data-testid="detail-kicker">
@@ -255,13 +338,21 @@ export function DetailHero({
               ))}
             </ul>
           ) : null}
-          {detail.overview ? (
+          {synopsis.text ? (
             <Synopsis
-              text={detail.overview}
+              text={synopsis.text}
               onMore={onMore}
-              lines={series || season ? 3 : 6}
+              lines={series || season || episode ? 3 : 6}
               dimmed={translation === 'translating'}
             />
+          ) : null}
+          {synopsis.hidden ? (
+            <p
+              className="detail-synopsis detail-synopsis-hidden"
+              data-testid="detail-synopsis-hidden"
+            >
+              {t('detail.descriptionHidden')}
+            </p>
           ) : null}
           {translation ? (
             <p className="detail-translation" data-testid="detail-translation">

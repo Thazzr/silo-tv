@@ -53,7 +53,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - 🟨 the primary button as in the web app: "Start from Episode 1", "Play Next", "Resume", "Play First Episode", "Play Episode"; with progress, one Play button with a progress fill that asks "Resume playback?" (resume or start over), replacing the Resume and Start over pair
   - 🟨 the actions: mark watched or unwatched, favourite, a star rating (one focus stop: OK starts, Left/Right picks 1–5, OK saves, Back cancels, the set star again clears it), and a More menu with watchlist, not interested, mark unwatched and start over (shuffle joins with Shuffle)
   - 🟨 the series page: a row of season posters with the watched check and progress, specials first (a series with one season lists its episodes directly); the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis)
-  - the episode page: "More Episodes" with the current one marked
+  - 🟨 the episode page: the still as the backdrop, "Series › Season 1 › Episode 3", runtime and air date with the quality badges, "Play Episode", and "More Episodes" with the current one marked (a sibling's page starts on its card in that row)
   - cast and crew as in the web app: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels; on seasons and episodes the cast and a crew box
   - quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`)
   - left out: media locations (curators only in the web app), download, marker editing, adding to a collection (see *Deliberately not planned*); Watch Party comes in Phase 5

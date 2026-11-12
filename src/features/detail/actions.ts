@@ -32,7 +32,9 @@ export function playedShare(seconds: number, totalSeconds: number): number {
  * progress fill and asks what to do when it has one version; with several versions it says
  * "Resume" and resumes at once (the web puts "Play from beginning" into the More menu then). A
  * series says what its play target is: the episode in progress, the next one, or the first. A
- * season plays its first listed episode from the start, as the web does. `resumeSeconds` is the app's own resume point (`resumePoint`), so the button resumes exactly
+ * season plays its first listed episode from the start, as the web does. An episode is worded
+ * like a movie, but "Play Episode" without a resume point, and it is disabled when it has no file.
+ * `resumeSeconds` is the app's own resume point (`resumePoint`), so the button resumes exactly
  * when the player would.
  */
 export function primaryAction(input: {
@@ -65,8 +67,16 @@ export function primaryAction(input: {
       startOverInMenu: false,
     };
   }
+  if (kind === 'episode' && !playable) {
+    return { label: 'detail.playEpisode', mode: 'none', fill: null, startOverInMenu: false };
+  }
   if (resumeSeconds === null) {
-    return { label: 'detail.play', mode: 'play', fill: null, startOverInMenu: false };
+    return {
+      label: kind === 'episode' ? 'detail.playEpisode' : 'detail.play',
+      mode: 'play',
+      fill: null,
+      startOverInMenu: false,
+    };
   }
   const fill = playedShare(resumeSeconds, totalSeconds);
   return detail.versions.length > 1
@@ -96,7 +106,7 @@ export function watchedState(
       unwatchLabel: 'detail.markSeasonUnwatched',
     };
   }
-  const hasProgress = kind === 'item' && (state?.position_seconds ?? 0) > 0;
+  const hasProgress = (kind === 'item' || kind === 'episode') && (state?.position_seconds ?? 0) > 0;
   const played = !hasProgress && (state?.played ?? false);
   let label: MessageKey;
   if (kind === 'series') label = played ? 'detail.markSeriesUnwatched' : 'detail.markSeriesWatched';

@@ -31,15 +31,36 @@ export const ROW_TITLE_HEIGHT = 48;
 export const STRIP_PADDING = 14;
 export const ROW_SPACING = 10;
 
+/**
+ * The size of a row's cards: the art, the space under it and the caption. A shape stands for its
+ * usual numbers; a row of other cards (the episode row of an episode's page) passes its own.
+ */
+export interface CardMetrics {
+  width: number;
+  height: number;
+  /** Space between the art and its caption. */
+  captionOffset: number;
+  captionHeight: number;
+}
+
+function metricsOf(shape: CardShape | CardMetrics): CardMetrics {
+  if (typeof shape !== 'string') return shape;
+  return {
+    ...CARD_SIZE[shape],
+    captionOffset: CAPTION_OFFSET[shape],
+    captionHeight: shape === 'person' ? PERSON_CAPTION_HEIGHT : CAPTION_HEIGHT,
+  };
+}
+
 /** Cards that fit across the screen between the insets, the next one only partly. */
-export function rowVisibleCards(shape: CardShape): number {
-  const step = CARD_SIZE[shape].width + CARD_GAP;
+export function rowVisibleCards(shape: CardShape | CardMetrics): number {
+  const step = metricsOf(shape).width + CARD_GAP;
   return Math.floor((SCREEN_WIDTH - 2 * ROW_INSET + CARD_GAP) / step);
 }
 
 /** Distance between the left edges of two neighbouring cards. */
-export function rowStep(shape: CardShape): number {
-  return CARD_SIZE[shape].width + CARD_GAP;
+export function rowStep(shape: CardShape | CardMetrics): number {
+  return metricsOf(shape).width + CARD_GAP;
 }
 
 export function captionOffset(shape: CardShape): number {
@@ -47,13 +68,13 @@ export function captionOffset(shape: CardShape): number {
 }
 
 /** Art plus caption: what a card needs in height. */
-export function cardBlockHeight(shape: CardShape): number {
-  const caption = shape === 'person' ? PERSON_CAPTION_HEIGHT : CAPTION_HEIGHT;
-  return CARD_SIZE[shape].height + CAPTION_OFFSET[shape] + caption;
+export function cardBlockHeight(shape: CardShape | CardMetrics): number {
+  const m = metricsOf(shape);
+  return m.height + m.captionOffset + m.captionHeight;
 }
 
 /** The whole row: header, padded strip and the space to the next row. */
-export function rowHeight(shape: CardShape): number {
+export function rowHeight(shape: CardShape | CardMetrics): number {
   return ROW_TITLE_HEIGHT + 2 * STRIP_PADDING + cardBlockHeight(shape) + ROW_SPACING;
 }
 

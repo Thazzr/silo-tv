@@ -4,7 +4,16 @@ import { focusFromPointer, getCurrentFocusKey, moveFocusTo, useBackHandler } fro
 import { Button } from '../../app/ui';
 import { useT } from '../../i18n';
 import { getPlatform } from '../../platform';
-import { PersonCard, PosterCard, Row, keepAtOrigin, type CatalogItem } from '../../ui/media';
+import {
+  PersonCard,
+  PosterCard,
+  Row,
+  cardFocusKey,
+  keepAtOrigin,
+  protectsEpisodeOverview,
+  useSpoilerSettings,
+  type CatalogItem,
+} from '../../ui/media';
 import type { BoxSetTarget } from '../boxset/boxSetMemory';
 import { useBoxSetsAvailable } from '../library/queries';
 import { resumePoint, type StartIntent } from '../../playback/resume';
@@ -15,11 +24,13 @@ import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import type { DetailEntryMemory, DetailTarget } from './detailMemory';
 import { EpisodeGrid, EpisodeGridSkeleton } from './EpisodeGrid';
+import { EPISODE_ROW_ID, EpisodeRow } from './EpisodeRow';
 import { extraEntries } from './extras';
 import { ExtrasRow } from './ExtrasRow';
 import {
   defaultSeason,
   detailKind,
+  heroSynopsis,
   initials,
   orderSeasons,
   seasonLabel,
@@ -140,11 +151,13 @@ function DetailBody({
   const kind = detailKind(detail);
   const series = kind === 'series';
   const season = kind === 'season';
+  const episode = kind === 'episode';
   // The title the player shows for any episode played from this page: the series'.
-  const playTitle = season ? (detail.series_title ?? detail.title) : detail.title;
-  // A season page lists the episodes of its own season of its series.
+  const playTitle = season || episode ? (detail.series_title ?? detail.title) : detail.title;
+  // A season page lists the episodes of its own season of its series; an episode page lists the
+  // same ones as its siblings ("More Episodes").
   const parent =
-    season && detail.series_id !== undefined && detail.season_number !== undefined
+    (season || episode) && detail.series_id !== undefined && detail.season_number !== undefined
       ? { seriesId: detail.series_id, number: detail.season_number }
       : undefined;
   const seriesId = parent?.seriesId ?? detail.content_id;
@@ -156,7 +169,8 @@ function DetailBody({
   useBackHandler(synopsisOpen ? () => setSynopsisOpen(false) : undefined);
 
   // --- Seasons and episodes --------------------------------------------------------------------
-  const seasonsQuery = useSeasons(seriesId, series);
+  // An episode page reads the season list for its season's label in the breadcrumb.
+  const seasonsQuery = useSeasons(seriesId, series || (episode && parent !== undefined));
   const seasons = useMemo(() => orderSeasons(seasonsQuery.data ?? []), [seasonsQuery.data]);
   // A series with exactly one season has no seasons row: its episodes are listed on its own page.
   const singleSeason: Season | undefined = series && seasons.length === 1 ? seasons[0] : undefined;
@@ -179,7 +193,8 @@ function DetailBody({
     primaryEpisode = episodes?.[0];
   }
 
-  const playId = kind === 'item' ? detail.content_id : (targetId ?? primaryEpisode?.content_id);
+  const playId =
+    kind === 'item' || episode ? detail.content_id : (targetId ?? primaryEpisode?.content_id);
   // Whether the watch state of what plays is known; before that the player asks itself. A season
   // always plays from the start, so it needs none.
   const stateKnown = series ? primaryEpisode !== undefined : true;
@@ -190,6 +205,8 @@ function DetailBody({
   const totalSeconds = watchState?.duration_seconds || fallbackSeconds;
   // A series whose target episode is still being looked up has no action row yet (the primary
   // button would flicker from "Browse series" to its label); a season waits for its first episode.
+  // An episode without a file has nothing to play.
+  const playable = episode ? detail.versions.length > 0 : playId !== undefined;
   const resolvingTarget = season
     ? episodesQuery.isLoading
     : series &&
@@ -217,10 +234,37 @@ function DetailBody({
     (episode: Episode) => onOpenDetail({ itemId: episode.content_id }),
     [onOpenDetail],
   );
+  // OK on the card of the episode on screen does nothing, as on a box set's "this film" card.
+  const openSibling = useCallback(
+    (card: Episode) => {
+      // The page of a sibling starts in the row, so the viewer can walk on through the season.
+      if (card.content_id !== detail.content_id) {
+        onOpenDetail({ itemId: card.content_id, startInRow: true });
+      }
+    },
+    [detail.content_id, onOpenDetail],
+  );
   const playEpisode = useCallback(
     (episode: Episode) =>
       onPlay({ contentId: episode.content_id, title: playTitle, intent: { kind: 'ask' } }),
     [onPlay, playTitle],
+  );
+
+  // --- The synopsis -------------------------------------------------------------------------------
+  // An episode without a description of its own shows its series': the series is read for that.
+  const spoilers = useSpoilerSettings();
+  const seriesQuery = useItemDetail(
+    detail.series_id ?? '',
+    episode && !detail.overview && detail.series_id !== undefined,
+  );
+  const synopsis = useMemo(
+    () =>
+      heroSynopsis(
+        detail,
+        seriesQuery.data?.overview,
+        episode && protectsEpisodeOverview(detail, spoilers),
+      ),
+    [detail, episode, seriesQuery.data?.overview, spoilers],
   );
 
   // --- AI translation of the descriptions ----------------------------------------------------------
@@ -243,15 +287,18 @@ function DetailBody({
   useEffect(() => {
     if (!translateShown && getCurrentFocusKey() === TRANSLATE_KEY) moveFocusTo(PLAY_KEY);
   }, [translateShown]);
-  const translationLine = translation.itemRunning
-    ? 'translating'
-    : detail.machine_translated_fields?.includes('overview')
-      ? 'ai'
-      : null;
+  // The series' description (shown for an episode without one) is not what was translated here.
+  const translationLine = synopsis.fromSeries
+    ? null
+    : translation.itemRunning
+      ? 'translating'
+      : detail.machine_translated_fields?.includes('overview')
+        ? 'ai'
+        : null;
 
   // --- More like this ---------------------------------------------------------------------------
-  // A season page has no such row, as on the web.
-  const similar = useSimilar(detail.content_id, !season);
+  // Only a movie and a series have such a row, as on the web.
+  const similar = useSimilar(detail.content_id, kind === 'item' || series);
   const playItem = useCallback(
     (item: CatalogItem, intent?: StartIntent) =>
       onPlay({ contentId: item.content_id, title: item.title, intent }),
@@ -299,7 +346,7 @@ function DetailBody({
   // Only a movie, and only on a server that has box sets; a movie in none (or a failed read) has
   // no row. The detail carries no library, so the server picks the movie's own.
   const boxSetsAvailable = useBoxSetsAvailable();
-  // Only a movie has a box set: an episode's page (movie layout for now) asks nothing.
+  // Only a movie has a box set.
   const isMovie = detail.type.trim().toLowerCase() === 'movie';
   const boxSetQuery = useItemBoxSet(detail.content_id, undefined, isMovie && boxSetsAvailable);
   const boxSet = boxSetQuery.data ?? null;
@@ -351,7 +398,17 @@ function DetailBody({
   const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
   const inSimilar = useCallback(() => enter('similar'), [enter]);
 
-  // --- The block under the hero: the seasons row, or the episode grid --------------------------
+  // A page opened from a "More Episodes" card puts the focus on its own card in that row, once.
+  const showsSiblings = episode && episodes !== undefined && episodes.length > 1;
+  const startedInRow = useRef(false);
+  const startInRow = target.startInRow === true;
+  useEffect(() => {
+    if (!startInRow || !showsSiblings || startedInRow.current) return;
+    startedInRow.current = true;
+    moveFocusTo(cardFocusKey(EPISODE_ROW_ID, detail.content_id));
+  }, [startInRow, showsSiblings, detail.content_id]);
+
+  // --- The block under the hero: the seasons row, the episode grid, or "More Episodes" ----------
   // A series with several seasons shows them as a row of cards (a failed or pending read shows its
   // own stand-in there); a season, and a series with exactly one season, list the episodes.
   let seasonsBlock = null;
@@ -429,6 +486,25 @@ function DetailBody({
         {grid}
       </section>
     );
+  } else if (showsSiblings) {
+    // The siblings of an episode: only a season with several episodes has such a row.
+    episodesBlock = (
+      <div
+        className="detail-episode-row"
+        data-testid="detail-more-episodes"
+        data-zone="episodes"
+        data-faded={fade('episodes')}
+      >
+        <EpisodeRow
+          episodes={episodes}
+          currentId={detail.content_id}
+          memory={memory.rows}
+          onOpen={openSibling}
+          onPlay={playEpisode}
+          onRowFocused={inEpisodes}
+        />
+      </div>
+    );
   }
 
   // Which blocks exist below the hero: the observer is attached once per such set, and the tops
@@ -473,13 +549,19 @@ function DetailBody({
             translation={translationLine}
             seasons={seasons}
             loadedEpisodes={episodes?.length}
+            synopsis={synopsis}
+            episodeSeason={
+              episode
+                ? seasons.find((one) => one.season_number === detail.season_number)
+                : undefined
+            }
             onMore={() => setSynopsisOpen(true)}
             actions={
               resolvingTarget ? null : (
                 <ActionRow
                   detail={detail}
                   kind={kind}
-                  playable={playId !== undefined}
+                  playable={playable}
                   resumeSeconds={resumeSeconds}
                   totalSeconds={totalSeconds}
                   stateKnown={stateKnown}
@@ -605,10 +687,10 @@ function DetailBody({
             {notice}
           </p>
         ) : null}
-        {synopsisOpen && detail.overview ? (
+        {synopsisOpen && synopsis.text ? (
           <SynopsisDialog
             title={season ? seasonLabel(detail, t) : detail.title}
-            text={detail.overview}
+            text={synopsis.text}
             onClose={() => setSynopsisOpen(false)}
           />
         ) : null}

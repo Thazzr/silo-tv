@@ -40,11 +40,12 @@ export const seasonEpisodesKey = (
   season: number | undefined,
 ) => ['detail', 'episodes', baseUrl, profileId, seriesId, season ?? -1] as const;
 
-export function useItemDetail(itemId: string) {
+export function useItemDetail(itemId: string, enabled = true) {
   const { client, baseUrl, session } = useSilo();
   const profileId = session.get()?.profileId ?? '';
   return useQuery({
     queryKey: itemDetailKey(baseUrl, profileId, itemId),
+    enabled,
     // The page comes back after the player: the watch state must be read again, not reused.
     refetchOnMount: 'always',
     retry: retryUnlessMissing,

@@ -616,7 +616,8 @@
   height: 182px;
 }
 
-.detail-episode-grid .card-caption {
+.detail-episode-grid .card-caption,
+.detail-episode-row .card-caption {
   /* EPISODE_CAPTION_HEIGHT */
   height: 135px;
 }
@@ -624,8 +625,60 @@
 .detail-episode-grid .card-art,
 .detail-episode-grid .art,
 .detail-episode-grid .card-shadow,
-.detail-episode-grid .card-ring {
+.detail-episode-grid .card-ring,
+.detail-episode-row .card-art,
+.detail-episode-row .art,
+.detail-episode-row .card-shadow,
+.detail-episode-row .card-ring,
+.detail-episode-row .episode-current-ring {
   border-radius: var(--radius-still);
+}
+
+/* The "More Episodes" row of an episode's page (EPISODE_ROW_CARD in layout.ts): 330 x 186 stills. */
+.detail-episode-row .card-landscape {
+  width: 330px;
+}
+
+.detail-episode-row .card-art {
+  height: 186px;
+}
+
+/* The episode whose page it is: a ring in the text colour (the focus ring stays on top of it), the
+   title in the text colour and a "Now Viewing" badge on the still. Nothing animates. */
+.episode-current-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-shadow: inset 0 0 0 3px var(--text);
+  pointer-events: none;
+}
+
+.card-episode-current .episode-title {
+  color: var(--text);
+}
+
+.episode-now {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  font-size: var(--fs-small);
+  font-weight: 700;
+  line-height: 26px;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 14px;
+}
+
+.episode-now-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--bg);
+  border-radius: 50%;
 }
 
 /* The code and title with the watched mark at the right end of the line. */
@@ -670,6 +723,12 @@
 
 /* A description that is left out of an unwatched episode's card. */
 .card-episode .episode-synopsis-hidden {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* The hero's stand-in for a description that spoiler protection leaves out. */
+.detail-synopsis-hidden {
   color: var(--text-secondary);
   font-style: italic;
 }

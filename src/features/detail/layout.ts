@@ -1,7 +1,13 @@
 // Sizes of the detail page (docs/design.md). All values are CSS pixels on the 1920x1080 layout and
 // must match src/styles/detail.css. The page scrolls in steps from one section to the next; the
 // offsets come from the measured block tops, not from heights kept here.
-import { CARD_GAP, SCREEN_WIDTH, STRIP_PADDING, type GridMetrics } from '../../ui/media';
+import {
+  CARD_GAP,
+  SCREEN_WIDTH,
+  STRIP_PADDING,
+  type CardMetrics,
+  type GridMetrics,
+} from '../../ui/media';
 
 /** Side inset of the detail pages. */
 export const DETAIL_INSET = 100;
@@ -93,4 +99,15 @@ export const EPISODE_GRID: GridMetrics = {
   gap: 25,
   inset: DETAIL_INSET,
   rowPitch: EPISODE_CARD.height + EPISODE_CAPTION_OFFSET + EPISODE_CAPTION_HEIGHT + EPISODE_ROW_GAP,
+};
+
+/**
+ * The cards of the "More Episodes" row on an episode's page: the web's 240 px stills scaled up to
+ * 330 x 186 (16:9), with the grid's caption under them. src/styles/detail.css draws the same numbers.
+ */
+export const EPISODE_ROW_CARD: CardMetrics = {
+  width: 330,
+  height: 186,
+  captionOffset: EPISODE_CAPTION_OFFSET,
+  captionHeight: EPISODE_CAPTION_HEIGHT,
 };

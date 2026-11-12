@@ -48,5 +48,5 @@ export {
   useSpoilerSettings,
 } from './spoilers';
 export type { SpoilerSettings } from './spoilers';
-export { thumbhashColor } from './thumbhash';
+export { thumbhashColor, thumbhashPreview } from './thumbhash';
 export { useMediaUrl } from './useMediaUrl';

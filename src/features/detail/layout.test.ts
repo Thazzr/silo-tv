@@ -5,6 +5,7 @@ import {
   DETAIL_SHADE_MIN_ALPHA,
   DETAIL_TEXT_WIDTH,
   EPISODE_GRID,
+  EPISODE_ROW_CARD,
   SAFE_TOP,
   SEASON_CARD,
   SEASON_STEP,
@@ -13,7 +14,7 @@ import {
   isAbove,
   seasonsVisible,
 } from './layout';
-import { SCREEN_WIDTH } from '../../ui/media';
+import { SCREEN_WIDTH, rowVisibleCards } from '../../ui/media';
 
 describe('detailScrollOffset', () => {
   it('scrolls a block to the safe line: its measured top minus 54', () => {
@@ -69,6 +70,17 @@ describe('the seasons row and the episode grid', () => {
     expect(Math.abs(card.width / card.height - 16 / 9)).toBeLessThan(0.01);
     // Still, 14 px, three caption lines of 31 + 26 + 78 px, a 40 px gap between the rows.
     expect(rowPitch).toBe(182 + 14 + 135 + 40);
+  });
+});
+
+describe('the More Episodes row', () => {
+  it('draws 330 x 186 stills (16:9) with the grid caption under them, four and a bit across', () => {
+    expect(EPISODE_ROW_CARD.width).toBe(330);
+    expect(EPISODE_ROW_CARD.height).toBe(186);
+    expect(EPISODE_ROW_CARD.captionHeight).toBe(
+      EPISODE_GRID.rowPitch - EPISODE_GRID.card.height - EPISODE_ROW_CARD.captionOffset - 40,
+    );
+    expect(rowVisibleCards(EPISODE_ROW_CARD)).toBe(4);
   });
 });
 

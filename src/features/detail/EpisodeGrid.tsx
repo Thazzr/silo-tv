@@ -1,117 +1,22 @@
 import { useCallback, type CSSProperties } from 'react';
-import { CircleCheck } from 'lucide-react';
-import { useLanguage, useT } from '../../i18n';
 import {
-  Artwork,
-  CardFrame,
   CardSkeleton,
   Grid,
-  protectsEpisodeOverview,
   protectsEpisodeStill,
   useMediaUrl,
   useSpoilerSettings,
   type FocusIndexMemory,
   type GridCardContext,
 } from '../../ui/media';
-import {
-  episodeCaptionTitle,
-  episodeMetaLine,
-  episodeProgress,
-  episodeWatched,
-  type Episode,
-} from './info';
+import { EpisodeCard } from './EpisodeCard';
+import type { Episode } from './info';
 import { EPISODE_GRID } from './layout';
-import { onPlayKey } from './playKey';
 
 const noop = () => undefined;
 const episodeId = (episode: Episode) => episode.content_id;
 
 /** Rows the loading stand-in draws. */
 const SKELETON_ROWS = 2;
-
-function EpisodeCard({
-  episode,
-  focusKey,
-  onOpen,
-  onPlay,
-  onFocused,
-}: {
-  episode: Episode;
-  focusKey: string;
-  onOpen: (episode: Episode) => void;
-  onPlay: (episode: Episode) => void;
-  onFocused: () => void;
-}) {
-  const t = useT();
-  const lang = useLanguage();
-  const url = useMediaUrl();
-  const spoilers = useSpoilerSettings();
-  const progress = episodeProgress(episode);
-  const title = episodeCaptionTitle(episode, t);
-  return (
-    <CardFrame
-      focusKey={focusKey}
-      variant="landscape"
-      className="card-episode"
-      onClick={() => onOpen(episode)}
-      onFocused={onFocused}
-      onKeyDown={onPlayKey(() => onPlay(episode))}
-      art={
-        <>
-          <Artwork
-            src={url(episode.still_url)}
-            thumbhash={episode.still_thumbhash}
-            title={title}
-            protect={protectsEpisodeStill(episode, spoilers)}
-          />
-          {progress !== null ? (
-            <span className="card-progress" aria-hidden="true">
-              <span
-                className="card-progress-fill"
-                data-testid="card-progress"
-                style={{ width: `${Math.round(progress * 1000) / 10}%` }}
-              />
-            </span>
-          ) : null}
-        </>
-      }
-      caption={
-        <>
-          <span className="card-title episode-heading">
-            <span className="episode-title" data-testid="episode-title">
-              {title}
-            </span>
-            {episodeWatched(episode) ? (
-              <span
-                className="episode-check"
-                data-testid="episode-watched"
-                role="img"
-                aria-label={t('detail.watched')}
-              >
-                <CircleCheck size={24} aria-hidden="true" />
-              </span>
-            ) : null}
-          </span>
-          <span className="card-sub" data-testid="episode-meta">
-            {episodeMetaLine(episode, lang, t)}
-          </span>
-          {protectsEpisodeOverview(episode, spoilers) ? (
-            <span
-              className="episode-synopsis episode-synopsis-hidden"
-              data-testid="episode-synopsis-hidden"
-            >
-              {t('detail.descriptionHidden')}
-            </span>
-          ) : (
-            <span className="episode-synopsis" data-testid="episode-synopsis">
-              {episode.overview ?? ''}
-            </span>
-          )}
-        </>
-      }
-    />
-  );
-}
 
 /** The loading stand-in of the episode grid: stills of the same size, in the same slots. */
 export function EpisodeGridSkeleton() {

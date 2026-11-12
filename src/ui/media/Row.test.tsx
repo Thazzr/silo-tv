@@ -6,7 +6,8 @@ import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { renderWithSilo } from '../../test/renderFlow';
 import { PosterCard } from './Cards';
-import { cardFocusKey, EXPLORE_KEY, Row } from './Row';
+import { rowHeight } from './layout';
+import { cardFocusKey, EXPLORE_KEY, Row, rowFocusKey, type RowProps } from './Row';
 import { FocusIndexMemory } from './scroll';
 
 const items = (count: number, prefix = 'i') =>
@@ -21,11 +22,15 @@ function TestRow({
   data = items(20),
   onExploreAll,
   memory,
+  initialIndex,
+  metrics,
 }: {
   rowId?: string;
   data?: Item[];
   onExploreAll?: () => void;
   memory?: FocusIndexMemory;
+  initialIndex?: number;
+  metrics?: RowProps<Item>['metrics'];
 }) {
   return (
     <Row
@@ -35,6 +40,8 @@ function TestRow({
       items={data}
       getKey={(item) => item.content_id}
       memory={memory}
+      initialIndex={initialIndex}
+      metrics={metrics}
       onExploreAll={onExploreAll}
       renderCard={(item, ctx) => (
         <PosterCard
@@ -205,6 +212,80 @@ describe('Row', () => {
     await pressKey(KEY.right);
     await pressKey(KEY.right);
     expect(memory.get('r')).toBe(2);
+  });
+});
+
+describe('Row initialIndex', () => {
+  it('starts on that card, scrolled into view, when the memory holds none', () => {
+    renderWithSilo(<TestRow data={items(20)} initialIndex={12} />);
+    expect(document.querySelector(`[data-focus-key="${key('r', 'i13')}"]`)).not.toBeNull();
+    expect(track().style.transform).toBe('translateX(-1080px)');
+  });
+
+  it('is entered on that card when the focus comes into the row', async () => {
+    renderWithSilo(<TestRow data={items(20)} initialIndex={12} />);
+    await focusAt(rowFocusKey('r'));
+    expect(getCurrentFocusKey()).toBe(key('r', 'i13'));
+  });
+
+  it('gives way to the remembered card', async () => {
+    const memory = new FocusIndexMemory();
+    memory.set('r', 2);
+    renderWithSilo(<TestRow data={items(20)} initialIndex={12} memory={memory} />);
+    expect(track().style.transform).toBe('translateX(0px)');
+    await focusAt(rowFocusKey('r'));
+    expect(getCurrentFocusKey()).toBe(key('r', 'i3'));
+  });
+
+  it('starts on the first card for a negative index, with an Explore all card at the end', async () => {
+    renderWithSilo(<TestRow data={items(3)} initialIndex={-1} onExploreAll={() => {}} />);
+    await focusAt(rowFocusKey('r'));
+    expect(getCurrentFocusKey()).toBe(key('r', 'i1'));
+  });
+
+  it('clamps an index past the end to the last card', async () => {
+    renderWithSilo(<TestRow data={items(5)} initialIndex={40} />);
+    await focusAt(rowFocusKey('r'));
+    expect(getCurrentFocusKey()).toBe(key('r', 'i5'));
+  });
+
+  it('clamps a remembered index past the end to the last card, and one just past it too', async () => {
+    const memory = new FocusIndexMemory();
+    memory.set('r', 5);
+    renderWithSilo(<TestRow data={items(5)} memory={memory} />);
+    await focusAt(rowFocusKey('r'));
+    expect(getCurrentFocusKey()).toBe(key('r', 'i5'));
+  });
+});
+
+describe('Row metrics', () => {
+  const metrics = { width: 330, height: 186, captionOffset: 14, captionHeight: 135 };
+
+  it('steps by the card width plus the gap and fits as many cards as that leaves room for', async () => {
+    renderWithSilo(<TestRow data={items(12)} metrics={metrics} />);
+    await focusAt(key('r', 'i1'));
+    // 1920 - 2 x 80 insets + 40 gap, over 370 px a card: four whole cards.
+    for (let i = 0; i < 3; i += 1) await pressKey(KEY.right);
+    expect(track().style.transform).toBe('translateX(0px)');
+    await pressKey(KEY.right);
+    expect(getCurrentFocusKey()).toBe(key('r', 'i5'));
+    expect(track().style.transform).toBe('translateX(-370px)');
+    const slot = document.querySelector<HTMLElement>('[data-testid="row-r"] .row-slot')!;
+    expect(slot.style.left).toBe('0px');
+    expect(slot.getAttribute('data-nav-rect')).toBe('0,0,330,186');
+  });
+
+  it('sizes the strip from the metrics, not from the shape', () => {
+    renderWithSilo(<TestRow data={items(3)} metrics={metrics} />);
+    const strip = document.querySelector<HTMLElement>('[data-testid="row-r"] .row-strip')!;
+    // 186 + 14 + 135 of card block and 14 px padding above and below.
+    expect(strip.style.height).toBe(`${186 + 14 + 135 + 28}px`);
+  });
+
+  it('is as tall as its cards need', () => {
+    renderWithSilo(<TestRow data={items(3)} metrics={metrics} />);
+    expect(screen.getByTestId('row-r').style.height).toBe(`${rowHeight(metrics)}px`);
+    expect(rowHeight(metrics)).toBeGreaterThan(rowHeight('landscape'));
   });
 });
 
