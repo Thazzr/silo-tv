@@ -26,6 +26,7 @@ You test the tests of one change. The main session gives you:
    - run the test command and record the result: KILLED (a test failed, good) or SURVIVED (no test failed);
    - in a `finally`, write the original bytes back.
    Run Python with `PYTHONIOENCODING=utf-8`. Never leave a mutated file behind, even when a run crashes.
+   From Python on Windows, start the tests as a list with the input closed and the first failure ending the run: `subprocess.Popen(["npx.cmd", "vitest", "run", "--bail=1", *paths], stdin=subprocess.DEVNULL, ...)` with a timeout, and kill the whole process tree on a timeout (`taskkill /T /F /PID <pid>`). A mutant that breaks a screen can make every test wait for its timeout, so a run without `--bail=1` may take minutes with no output: that is slow, not hung. Never kill the runner while a file is mutated; if you must, restore that file from its saved bytes at once.
 4. At the end, run `git status --short` and `git diff --stat` again. Both must match step 1. If they do not, restore the files from your saved bytes and say so in the report.
 
 A type error is not a finding: a mutation that no longer type-checks proves nothing, so rewrite it. A survivor is a finding only if the behaviour matters. Say why it matters, or why it is an equivalent mutant.
