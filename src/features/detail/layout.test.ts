@@ -6,17 +6,72 @@ import {
   DETAIL_TEXT_WIDTH,
   EPISODE_GRID,
   EPISODE_ROW_CARD,
+  MORE_BLOCK_HEIGHT,
   SAFE_TOP,
   SEASON_CARD,
   SEASON_STEP,
   SEASON_STRIP_HEIGHT,
+  SYNOPSIS_MIN_LINES,
   detailScrollOffset,
+  fitSynopsisLines,
   isAbove,
   pillsScrollOffset,
   seasonsVisible,
   zoneOrder,
 } from './layout';
 import { SCREEN_WIDTH, rowVisibleCards } from '../../ui/media';
+
+describe('fitSynopsisLines', () => {
+  // A movie: six lines of 36 px drawn out of ten the text needs, "More" on the page.
+  const six = { max: 6, rendered: 6, content: 10, lineHeight: 36, moreShown: true };
+
+  it('keeps the most lines when the hero ends on or above the safe line', () => {
+    expect(fitSynopsisLines({ ...six, overflow: -40 })).toBe(6);
+    expect(fitSynopsisLines({ ...six, overflow: 0 })).toBe(6);
+  });
+
+  it('takes one line off for an overflow of one line, and a line for each 36 px more', () => {
+    expect(fitSynopsisLines({ ...six, overflow: 1 })).toBe(5);
+    expect(fitSynopsisLines({ ...six, overflow: 36 })).toBe(5);
+    expect(fitSynopsisLines({ ...six, overflow: 37 })).toBe(4);
+    expect(fitSynopsisLines({ ...six, overflow: 100 })).toBe(3);
+  });
+
+  it('counts the button "More" that a cut brings in', () => {
+    // The text needs exactly six lines: at six there is no button. One line less frees 36 px but
+    // brings in the 91 px button, so a 20 px overflow takes more than one line to cure.
+    const exact = { max: 6, rendered: 6, content: 6, lineHeight: 36, moreShown: false };
+    expect(fitSynopsisLines({ ...exact, overflow: 0 })).toBe(6);
+    expect(fitSynopsisLines({ ...exact, overflow: 20 })).toBe(2);
+    expect(MORE_BLOCK_HEIGHT).toBe(91);
+  });
+
+  it('does not count the button twice once it is on the page', () => {
+    // Cutting from 6 to 4 lines with the button already shown frees 72 px.
+    expect(fitSynopsisLines({ ...six, overflow: 72 })).toBe(4);
+  });
+
+  it('gives the button back when the whole text fits again', () => {
+    // Three lines drawn with the button shown, a text of three lines: the button was stale, and
+    // with it gone (91 px) the hero fits at the maximum.
+    const stale = { max: 6, rendered: 3, content: 3, lineHeight: 36, moreShown: true };
+    expect(fitSynopsisLines({ ...stale, overflow: 50 })).toBe(6);
+  });
+
+  it('never goes below the least, and never above the most', () => {
+    expect(SYNOPSIS_MIN_LINES).toBe(2);
+    expect(fitSynopsisLines({ ...six, overflow: 5000 })).toBe(2);
+    expect(fitSynopsisLines({ ...six, max: 3, rendered: 3, overflow: -500 })).toBe(3);
+  });
+
+  it('measures a text shorter than the most by its own line count', () => {
+    // Two lines of text drawn: nothing to cut, so a small overflow still leaves the maximum
+    // (the caller never draws more lines than the text has).
+    const short = { max: 6, rendered: 2, content: 2, lineHeight: 36, moreShown: false };
+    expect(fitSynopsisLines({ ...short, overflow: -10 })).toBe(6);
+    expect(fitSynopsisLines({ ...short, overflow: 10 })).toBe(2);
+  });
+});
 
 describe('detailScrollOffset', () => {
   it('scrolls a block to the safe line: its measured top minus 54', () => {

@@ -232,6 +232,7 @@ The app follows the web app wherever a TV allows it (user decision 2026-11-11). 
 - **"Alle entdecken" is the last card of a row**, not a link beside the row title: a header link would need a focus stop of its own in every row.
 - **Breadcrumbs are text:** Back is the way back, so the crumbs on season and episode pages are not focusable.
 - **The episode grid scrolls** inside the page instead of showing at most four rows first; a long season stays one grid.
+- **A movie's synopsis is cut to the lines that fit** (at most six, at least two, the rest under "Mehr"): the web shows a movie's whole overview and lets the page scroll, but on the TV the hero's buttons and pills must stay on screen. Series, seasons and episodes keep the web's three lines.
 - **Translation of episode overviews** starts from the translate pill in the action row, not from a chip in the grid's heading.
 - **Sizes:** text is at least 20 px and targets at least 75 px at 1080p, so captions, badges and chips are larger than the web's, and section headings keep the app's TV type scale.
 - **No blur or filters:** glass surfaces are opaque; spoiler protection blurs with a ThumbHash picture instead of a CSS filter.

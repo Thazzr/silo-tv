@@ -62,6 +62,41 @@ export function pillsScrollOffset(pillsBottom: number, viewportHeight: number): 
   return Math.max(0, pillsBottom - (viewportHeight - SAFE_TOP));
 }
 
+/** The fewest synopsis lines the hero keeps when it has to give way (the rest is under "More"). */
+export const SYNOPSIS_MIN_LINES = 2;
+/** The "More" button (75 px) and the 16 px gap above it, as src/styles/detail.css draws them. */
+export const MORE_BLOCK_HEIGHT = 91;
+
+/** What the hero measured of its synopsis and of the bottom of its text column. */
+export interface SynopsisFit {
+  /** The most lines the page kind shows (6 for an item, 3 for a series, season or episode). */
+  max: number;
+  /** Lines drawn now. */
+  rendered: number;
+  /** Lines the whole text needs. */
+  content: number;
+  /** How far the last row of the hero ends below the bottom safe line (negative: above it). */
+  overflow: number;
+  lineHeight: number;
+  /** Whether the "More" button is on the page now (it is part of `overflow`). */
+  moreShown: boolean;
+}
+
+/**
+ * How many synopsis lines let the hero end on or above the bottom safe line: the most the page
+ * shows, or fewer, never below `SYNOPSIS_MIN_LINES`. The button "More" appears as soon as the text
+ * is cut, so a cut can cost more height than the lines it frees; every count is checked with it.
+ */
+export function fitSynopsisLines(fit: SynopsisFit): number {
+  for (let lines = fit.max; lines > SYNOPSIS_MIN_LINES; lines -= 1) {
+    const textChange = (Math.min(lines, fit.content) - fit.rendered) * fit.lineHeight;
+    const moreChange =
+      (fit.content > lines ? MORE_BLOCK_HEIGHT : 0) - (fit.moreShown ? MORE_BLOCK_HEIGHT : 0);
+    if (fit.overflow + textChange + moreChange <= 0) return lines;
+  }
+  return SYNOPSIS_MIN_LINES;
+}
+
 /**
  * The blocks of a page in the order the web draws them (docs/roadmap.md, Detail pages): a movie
  * leads with its cast, a series with its seasons and the extras, a season and an episode end with

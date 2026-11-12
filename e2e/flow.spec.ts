@@ -47,6 +47,11 @@ interface FakeOptions {
    * taller than 760 px), the movie gets a cast and a "More like this" row.
    */
   tall?: boolean;
+  /**
+   * The movie "Second Title" is a long hero like a real film's page: a logo (with `titleArt`), a
+   * two-line tagline, a synopsis of about nine lines, a two-line credit line and the ratings.
+   */
+  longMovie?: boolean;
   /** "Weiterschauen" holds twelve more titles ("Extra 1" to "Extra 12"): the row reaches past the screen's right edge. */
   longRow?: boolean;
   /**
@@ -494,6 +499,29 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
           },
         ],
       };
+      const longMovie = options.longMovie
+        ? {
+            logo_url: '/img/logo.png',
+            poster_url: '/img/poster-m2.png',
+            tagline:
+              'Two patrol officers answer one more call, and the night turns out to be longer than the shift they signed up for.',
+            studios: ['Studio Ponoc'],
+            genres: ['Drama', 'Crime', 'Thriller'],
+            overview: `${'A long evening in a quiet town, a patrol car with two tired officers and one call that does not end where the radio said it would. '.repeat(4)}Nobody who was there remembers the night the same way, and the last line of this text says THE END.`,
+            ratings: [
+              { source: 'imdb', name: 'IMDb', display: '6.1' },
+              { source: 'tmdb', name: 'TMDB', display: '6.4' },
+            ],
+            // One file: the Audio and Subtitles pills fit one line; `pills` adds the Version pill.
+            versions: trackedFiles('m2').slice(0, 1),
+            crew: [
+              { person_id: 'c1', name: 'Dana Director', job: 'Director' },
+              { person_id: 'c2', name: 'Wen Writer', job: 'Writer' },
+              { person_id: 'c3', name: 'Ines Writer', job: 'Writer' },
+              { person_id: 'c4', name: 'Tom Writer', job: 'Writer' },
+            ],
+          }
+        : {};
       const tallSeries = tall
         ? {
             logo_url: '/img/logo.png',
@@ -557,6 +585,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   in_progress_count: 1,
                 },
                 ...tallMovie,
+                ...longMovie,
                 ...(options.pills ? { versions: trackedFiles('m2') } : {}),
                 ...(options.translation
                   ? translated
@@ -2758,9 +2787,10 @@ for (const size of [
     await expect(page.getByTestId('detail-credits')).toHaveText(
       'Regie: Dana Director · Drehbuch: Wen Writer · Drama · Crime',
     );
-    // The long synopsis is cut at six lines (36 px each), and Mehr appears.
+    // The long synopsis is cut at six lines (36 px each), and Mehr appears. A 720 px window has
+    // no room for them: the hero keeps the least, two lines.
     const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
-    expect(Math.round(synopsis.height)).toBe(216);
+    expect(Math.round(synopsis.height)).toBe(size.height === 1080 ? 216 : 72);
     await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
   });
 
@@ -2783,8 +2813,9 @@ for (const size of [
     await expect(page.getByTestId('detail-credits')).toHaveText(
       'Erstellt von Vince Creator · Drama · Crime · Thriller',
     );
+    // Three lines, or the least (two) in a 720 px window, which has no room for the third.
     const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
-    expect(Math.round(synopsis.height)).toBe(108);
+    expect(Math.round(synopsis.height)).toBe(size.height === 1080 ? 108 : 72);
     await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
   });
 }
@@ -4634,30 +4665,102 @@ test('detail page: the version, audio and subtitle pills with the remote, and th
   await expect(page.getByTestId('detail-primary')).toBeFocused();
 });
 
-test('detail page: in the tallest hero the page scrolls the pills row into the safe area, and back', async ({
+const pageOffset = (page: Page) =>
+  page.locator('.detail-page').evaluate((el) => {
+    const w = el.ownerDocument.defaultView!;
+    return new w.DOMMatrix(w.getComputedStyle(el).transform).f;
+  });
+
+async function openLongMovie(page: Page, options: FakeOptions) {
+  const { origin } = await startFakeSilo({ longMovie: true, titleArt: true, ...options });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  const second = page.getByRole('button', { name: /Second Title/ }).first();
+  await second.waitFor({ timeout: 10_000 });
+  await second.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-logo')).toBeVisible();
+  await expect(page.getByTestId('pill-subtitles')).toBeVisible();
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+}
+
+/** The lines the synopsis draws and needs, and the bottom of the pills row in the window. */
+async function heroFit(page: Page) {
+  const synopsis = await page.getByTestId('detail-synopsis').evaluate((el) => {
+    const lineHeight = parseFloat(el.ownerDocument.defaultView!.getComputedStyle(el).lineHeight);
+    return {
+      lines: Math.round(el.clientHeight / lineHeight),
+      contentLines: Math.round(el.scrollHeight / lineHeight),
+    };
+  });
+  const pills = (await page.locator('.detail-pills').boundingBox())!;
+  return { ...synopsis, pillsBottom: pills.y + pills.height };
+}
+
+test('detail page: a long movie hero gives its synopsis lines up so the pills end in the safe area, and More opens the rest', async ({
   page,
 }) => {
-  const { origin } = await startFakeSilo({ tall: true, pills: true });
-  await openSecondTitle(page, origin);
-  const pillsBottom = async () => (await page.locator('.detail-pills').boundingBox())!;
-  const bottom = async () => {
-    const box = await pillsBottom();
-    return box.y + box.height;
-  };
+  await openLongMovie(page, {});
+  // Ten lines of text, six at the most on a movie: four are drawn, and the pills end above the
+  // 5 % bottom safe line (1080 - 54 = 1026) with the page at its origin.
+  const fit = await heroFit(page);
+  expect(fit.contentLines).toBeGreaterThanOrEqual(9);
+  expect(fit.lines).toBeGreaterThanOrEqual(2);
+  expect(fit.lines).toBeLessThan(6);
+  expect(fit.pillsBottom).toBeLessThanOrEqual(1026);
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeVisible();
+  expect(await pageOffset(page)).toBe(0);
+
+  // Down to the pills and Up again do not move the page.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-audio')).toBeFocused();
+  await page.waitForTimeout(500);
+  expect(await pageOffset(page)).toBe(0);
+  await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
-  // On the buttons the page is at its origin, and the pills end below the 5 % safe line.
-  await expect.poll(bottom).toBeGreaterThan(1026);
+  await page.waitForTimeout(500);
+  expect(await pageOffset(page)).toBe(0);
+
+  // What the lines cut is one OK away: Up to Mehr, and the dialog has the whole text.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Mehr' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('synopsis-full')).toContainText('THE END');
+});
+
+test('detail page: a long movie hero with a wrapping pills row keeps two synopsis lines and scrolls the pills in, and back', async ({
+  page,
+}) => {
+  // Two files make a Version pill too, so the pills wrap onto a second line: even two synopsis
+  // lines (the least) leave the hero ending below the safe line.
+  await openLongMovie(page, { pills: true });
+  const fit = await heroFit(page);
+  expect(fit.lines).toBe(2);
+  expect(fit.pillsBottom).toBeGreaterThan(1026);
+  expect(await pageOffset(page)).toBe(0);
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('pill-version')).toBeFocused();
-  await expect.poll(bottom).toBeLessThanOrEqual(1026);
-  // The second line of pills is reached by Down, and still sits inside the safe area.
+  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeLessThanOrEqual(1026);
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('pill-subtitles')).toBeFocused();
-  await expect.poll(bottom).toBeLessThanOrEqual(1026);
+  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeLessThanOrEqual(1026);
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   await expect(page.getByTestId('detail-primary')).toBeFocused();
-  await expect.poll(bottom).toBeGreaterThan(1026);
+  await expect.poll(async () => (await heroFit(page)).pillsBottom).toBeGreaterThan(1026);
+});
+
+test('detail page: a movie with a short synopsis shows all of it and no More', async ({ page }) => {
+  const { origin } = await startFakeSilo({ pills: true, titleArt: true });
+  await openSecondTitle(page, origin);
+  await expect(page.getByTestId('detail-synopsis')).toHaveText(
+    'The second title, half way through.',
+  );
+  await expect(page.getByRole('button', { name: 'Mehr' })).toHaveCount(0);
+  const synopsis = (await page.getByTestId('detail-synopsis').boundingBox())!;
+  expect(Math.round(synopsis.height)).toBe(36);
 });
 
 test('cards: a Home row card shows the profile badges top left and the watch state top right, 16 px round, 20 px text', async ({

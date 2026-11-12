@@ -27,6 +27,7 @@ import {
   type ItemDetail,
   type Season,
 } from './info';
+import { fitSynopsisLines, SAFE_TOP } from './layout';
 import type { FileVersion } from './versions';
 
 /**
@@ -246,6 +247,39 @@ export function DetailHero({
   }
   const series = isSeries(detail);
 
+  // The synopsis gives way so the hero's last row (the pills, or the buttons) ends inside the
+  // safe area; the text it cuts stays under "More". The web clamps a series, a season and an
+  // episode to 3 lines and shows a movie's whole text on a page that scrolls; a TV page cannot
+  // scroll that way, so a movie has at most 6 lines.
+  const maxLines = series || season || episode ? 3 : 6;
+  const [fitted, setFitted] = useState(maxLines);
+  const textRef = useRef<HTMLDivElement>(null);
+  // After every render, before the paint: the pills, the logo and the text all arrive by props.
+  // The window is fixed at launch, the logo box has a fixed size and the fonts are bundled, so no
+  // other event changes the layout. A fit that gives the same count sets the same state, which
+  // ends the chain of renders.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const text = textRef.current;
+    const para = text?.querySelector<HTMLElement>('.detail-synopsis:not(.detail-synopsis-hidden)');
+    const last = text?.lastElementChild;
+    const page = text?.closest('.detail-page');
+    // Without a layout (the unit tests) every box is 0 px high: the full count stands.
+    if (!text || !para || !last || !page || para.clientHeight === 0) return;
+    const lineHeight = parseFloat(getComputedStyle(para).lineHeight);
+    const bottom = last.getBoundingClientRect().bottom - page.getBoundingClientRect().top;
+    setFitted(
+      fitSynopsisLines({
+        max: maxLines,
+        rendered: Math.round(para.clientHeight / lineHeight),
+        content: Math.round(para.scrollHeight / lineHeight),
+        overflow: bottom - (window.innerHeight - SAFE_TOP),
+        lineHeight,
+        moreShown: text.querySelector('.detail-more') !== null,
+      }),
+    );
+  });
+
   return (
     <div className="detail-hero" data-testid="detail-hero">
       <div className={episode ? 'detail-hero-row' : 'detail-hero-row detail-has-poster'}>
@@ -258,7 +292,7 @@ export function DetailHero({
             />
           </div>
         )}
-        <div className="detail-text" data-faded={faded}>
+        <div ref={textRef} className="detail-text" data-faded={faded}>
           {crumbs ? (
             <nav
               className="detail-breadcrumb"
@@ -346,7 +380,7 @@ export function DetailHero({
             <Synopsis
               text={synopsis.text}
               onMore={onMore}
-              lines={series || season || episode ? 3 : 6}
+              lines={fitted}
               dimmed={translation === 'translating'}
             />
           ) : null}
