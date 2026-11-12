@@ -4341,6 +4341,48 @@ test('the Magic Remote pointer focuses a half-visible card at the right edge of 
     .not.toBe(before);
 });
 
+test('the Magic Remote pointer over the Movies tab does not lift Home back to its carousel; keys still move the rows', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ longRow: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  const second = page.getByRole('button', { name: /Second Title/ });
+  await expect(second).toBeFocused();
+  const stage = page.locator('.home-stage');
+  await expect(stage).toHaveAttribute('data-rows', 'true');
+  const stageTransform = () =>
+    page.evaluate("getComputedStyle(document.querySelector('.home-stage')).transform");
+  const rows = '.home-rows-inner';
+  // Let the stage's own move settle before taking its position.
+  await page.waitForTimeout(700);
+  const lifted = await stageTransform();
+  const rowsAt = await transformOf(page, rows);
+
+  // The pointer over the Movies tab highlights it and moves nothing.
+  const tab = page.getByRole('button', { name: 'Filme', exact: true });
+  await tab.hover();
+  await expect(tab).toBeFocused();
+  await page.waitForTimeout(700);
+  await expect(stage).toHaveAttribute('data-rows', 'true');
+  expect(await stageTransform()).toBe(lifted);
+  expect(await transformOf(page, rows)).toBe(rowsAt);
+
+  // Back over a card, then a key: the rows move by keys as before.
+  await second.hover();
+  await expect(second).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(second).not.toBeFocused();
+  await expect(stage).toHaveAttribute('data-rows', 'true');
+});
+
 test('the Magic Remote pointer focuses a card of a lower block on the detail page without scrolling the page', async ({
   page,
 }) => {

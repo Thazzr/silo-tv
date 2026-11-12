@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { useContentBack } from '../../app/shell/ShellBack';
 import { Button } from '../../app/ui';
-import { FocusGroup, focusFromPointer, getCurrentFocusKey, stackArrows } from '../../app/nav';
+import {
+  FocusGroup,
+  focusFromPointer,
+  getCurrentFocusKey,
+  stackArrows,
+  useKeyFocusWithin,
+} from '../../app/nav';
 import { useT } from '../../i18n';
 import { useSectionTitle } from '../../i18n/sectionTitle';
 import { getPlatform } from '../../platform';
@@ -174,6 +180,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   );
   // Whether the focus is on something in the rows (not in the hero or above it).
   const [inRows, setInRows] = useState(false);
+  const focusWithin = useKeyFocusWithin(setInRows);
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
   const card = useMemo(() => {
     if (focusedCard) return focusedCard;
@@ -385,7 +392,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
             saveLastFocusedChild
             preferredChildFocusKey={rows[activeRow] ? rowFocusKey(rows[activeRow].id) : undefined}
             className="home-rows-inner"
-            onFocusWithin={setInRows}
+            onFocusWithin={focusWithin}
             style={{ transform: `translateY(${-offset}px)` }}
           >
             {rows.map((row, index) => {

@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
@@ -191,6 +191,47 @@ describe('Recommended: the two modes of the hero', () => {
     await waitFor(() => expect(getCurrentFocusKey()).toBe(HERO_PLAY_KEY));
     expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'true');
     expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'false');
+  });
+
+  it('keeps the carousel when the pointer hovers a card of the first row; the next key in the row switches to the rows', async () => {
+    serve([featuredSection(), homeSection('first', 3, { title: 'First' })]);
+    setup();
+    await carousel();
+    await screen.findByText('First');
+    const first = cardFocusKey('lib-1/first', 'first-1');
+    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${first}"]`)!);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(first));
+    await act(async () => {});
+    expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'false');
+    expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'true');
+    await pressKey(KEY.right);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-1/first', 'first-2')));
+    await waitFor(() =>
+      expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'true'),
+    );
+  });
+
+  it('keeps the rows mode when the pointer leaves the rows for the carousel button, until a key is pressed', async () => {
+    serve([featuredSection(), homeSection('first', 3, { title: 'First' })]);
+    setup();
+    await carousel();
+    await screen.findByText('First');
+    await focus(HERO_PLAY_KEY);
+    await pressKey(KEY.down);
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(cardFocusKey('lib-1/first', 'first-1')));
+    await waitFor(() =>
+      expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'true'),
+    );
+    fireEvent.mouseEnter(
+      screen.getByTestId('hero-carousel').querySelector(`[data-focus-key="${HERO_PLAY_KEY}"]`)!,
+    );
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(HERO_PLAY_KEY));
+    await act(async () => {});
+    expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'true');
+    await pressKey(KEY.left);
+    await waitFor(() =>
+      expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'false'),
+    );
   });
 
   it('shows the episode line and the time left over a Continue Watching card, "Next Episode" over a Next Up card, and neither over a poster', async () => {

@@ -7,7 +7,7 @@ import { Focusable, getCurrentFocusKey, setFocus } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
 import { account, BASE_URL } from '../../test/apiFixtures';
 import { catalogItem } from '../../test/flowFixtures';
-import { homeSection, serveHome } from '../../test/homeFixtures';
+import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { cardFocusKey, FocusIndexMemory, type CatalogItem } from '../../ui/media';
@@ -284,6 +284,68 @@ describe('Home: the two modes of the hero', () => {
     await pressKey(KEY.up);
     await focusKeyIs(HERO_PLAY_KEY);
     expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'true');
+  });
+
+  const hover = async (element: Element, focusKey: string) => {
+    fireEvent.mouseEnter(element);
+    await focusKeyIs(focusKey);
+    await act(async () => {});
+  };
+  const stage = () => document.querySelector('.home-stage');
+  const rowsOffset = () => document.querySelector<HTMLElement>('.home-rows-inner')!.style.transform;
+
+  it('keeps the rows where they are when the pointer hovers the bar; the next key brings the mode in line', async () => {
+    serveHome(server, { sections: sections() });
+    setup();
+    await carousel();
+    await focus(HERO_PLAY_KEY);
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await focusKeyIs(cardFocusKey('later', 'later-1'));
+    await waitFor(() => expect(rowsOffset()).not.toBe('translateY(0px)'));
+    const lifted = rowsOffset();
+    await hover(screen.getByText('bar'), 'bar');
+    expect(stage()).toHaveAttribute('data-rows', 'true');
+    expect(rowsOffset()).toBe(lifted);
+    // A key on the bar (here one that goes nowhere) brings the mode to where the focus is.
+    await pressKey(KEY.left);
+    await waitFor(() => expect(stage()).toHaveAttribute('data-rows', 'false'));
+    expect(rowsOffset()).toBe('translateY(0px)');
+  });
+
+  it('keeps the carousel when the pointer hovers a card of the first row; the next key in the row switches to the rows', async () => {
+    serveHome(server, { sections: sections() });
+    setup();
+    await carousel();
+    await screen.findByTestId('row-recent');
+    await hover(
+      document.querySelector(`[data-focus-key="${rowCard('recent-1')}"]`)!,
+      rowCard('recent-1'),
+    );
+    expect(stage()).toHaveAttribute('data-rows', 'false');
+    expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'true');
+    await pressKey(KEY.right);
+    await focusKeyIs(rowCard('recent-2'));
+    await waitFor(() => expect(stage()).toHaveAttribute('data-rows', 'true'));
+    expect(screen.getByTestId('hero-carousel')).toHaveAttribute('data-shown', 'false');
+  });
+
+  it('brings the mode in line also for a key that the card menu swallows (OK held on a card)', async () => {
+    serveHome(server, {
+      sections: [
+        featuredSection(),
+        homeSection('cw', 2, { section_type: 'continue_watching', items: [resumeEpisode('e1')] }),
+      ],
+    });
+    setup();
+    await carousel();
+    const card = cardFocusKey('cw', 'e1');
+    await screen.findByTestId('row-cw');
+    await hover(document.querySelector(`[data-focus-key="${card}"]`)!, card);
+    expect(stage()).toHaveAttribute('data-rows', 'false');
+    // Home's capture handler stops this press for good; the mode must have been set before that.
+    fireEvent.keyDown(window, { keyCode: KEY.enter });
+    await waitFor(() => expect(stage()).toHaveAttribute('data-rows', 'true'));
   });
 
   const manyRows = () => [
