@@ -4700,6 +4700,8 @@ test('cards: a Home row card shows the profile badges top left and the watch sta
 
   // The art's corners are 16 px round.
   await expect(first.locator('.card-art')).toHaveCSS('border-radius', '16px');
+  // Each card's art has its own compositor layer, so a focus move does not re-raster the row.
+  await expect(first.locator('.card-art')).toHaveCSS('will-change', 'transform');
   await expect(first.locator('.art')).toHaveCSS('border-radius', '16px');
 
   // A started series shows how many episodes it has left, and has no file data for badges.
@@ -4728,6 +4730,7 @@ test('cards: the library grid draws badges on its posters', async ({ page }) => 
   const grid = page.getByTestId('browse').locator('.card-grid');
   await expect(grid.first().locator('.badge-stack-top-left .badge')).toHaveText('4K');
   await expect(grid.first().locator('.card-art')).toHaveCSS('border-radius', '16px');
+  await expect(grid.first().locator('.card-art')).toHaveCSS('will-change', 'transform');
 });
 
 test('cards: the seasons of a started series show the check and the episodes left', async ({
@@ -4806,12 +4809,18 @@ test('Home: the featured carousel turns every 8 s, stands still on its buttons, 
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
   await expect(carousel).toHaveCSS('opacity', '0');
+  // Out of sight it also paints and animates nothing: no slide pictures, no running rail, so it
+  // keeps no compositor layer (the card over it would need one too).
+  await expect(page.getByTestId('hero-slide').first()).toHaveCSS('visibility', 'hidden');
+  await expect(page.getByTestId('hero-rail-fill')).toHaveCSS('animation-name', 'none');
   await expect(page.getByTestId('hero-card').getByTestId('hero-title')).toHaveText('Second Title');
 
   // Up returns to the indicator it left, and the carousel to the slide it showed.
   await page.keyboard.press('ArrowUp');
   await expect(page.getByRole('button', { name: 'Diashow pausieren' })).toBeFocused();
   await expect(carousel).toHaveCSS('opacity', '1');
+  await expect(page.getByTestId('hero-slide').first()).toHaveCSS('visibility', 'visible');
+  await expect(page.getByTestId('hero-rail-fill')).toHaveCSS('animation-name', 'hero-rail');
   await expect(slideNumber).toHaveText('03');
   await expect(page.getByTestId('hero-title')).toHaveText('Third Title');
 

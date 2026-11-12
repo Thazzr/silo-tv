@@ -8,8 +8,11 @@ import type { AddressInfo } from 'node:net';
 // pictures arrive after the cards, the way they do over a network.
 
 export const BROWSE_TOTAL = 240;
-const ROWS = 8;
+const ROWS = Number(process.env.PERF_ROWS ?? 7);
 const PER_ROW = 20;
+// A featured section (the hero carousel) comes with Home's carousel; an older commit under
+// comparison has no carousel, so PERF_FEATURED=0 leaves it out.
+const FEATURED = process.env.PERF_FEATURED !== '0';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
@@ -24,6 +27,19 @@ const card = (id: string, i: number, landscape = false) => ({
   overview: `Synopsis of ${id}. A story that is long enough to need a line or two on the hero.`,
   poster_url: `/img/poster-${id}.png`,
   backdrop_url: `/img/backdrop-${id}.png`,
+  // What the real server sends on a card: the badges of the best file and the watch state.
+  overlay_summary: {
+    resolution: i % 3 === 0 ? '2160p' : '1080p',
+    hdr: i % 2 === 0 ? 'HDR10' : undefined,
+    audio: i % 4 === 0 ? 'Atmos' : 'DTS',
+    audio_channels: '5.1',
+    video_codec: 'HEVC',
+    multi_audio: i % 5 === 0,
+    multi_sub: true,
+  },
+  content_rating: 'PG-13',
+  rating_imdb: 6 + (i % 4),
+  user_state: i % 6 === 0 ? { played: true } : undefined,
   ...(landscape
     ? { position_seconds: 600 + i * 30, duration_seconds: 5400, item_source: 'in_progress' }
     : {}),
@@ -42,7 +58,15 @@ const section = (id: string, title: string, type: string, landscape = false) => 
   items: Array.from({ length: PER_ROW }, (_, i) => card(`${id}-${i}`, i, landscape)),
 });
 
+const featuredSection = () => ({
+  ...section('hero', 'Featured', 'featured'),
+  featured: true,
+  item_limit: 8,
+  items: section('hero', 'Featured', 'featured').items.slice(0, 8),
+});
+
 export const homeSections = () => [
+  ...(FEATURED ? [featuredSection()] : []),
   section('cw', 'Continue Watching', 'continue_watching', true),
   ...Array.from({ length: ROWS }, (_, r) => section(`row${r}`, `Row ${r + 1}`, 'recently_added')),
 ];
@@ -133,6 +157,38 @@ export async function startPerfServer(): Promise<{ origin: string; close: () => 
           });
         case 'GET /api/v2/home/sections':
           return send(200, { sections: homeSections() });
+        case 'GET /api/v2/settings/contract/capabilities':
+          return send(200, {
+            api_version: 1,
+            client_families: ['tv', 'web'],
+            contract_etag: '"etag"',
+            definition_count: 40,
+            manifest_revision: 40,
+            revision: 'r1',
+            scopes: ['account', 'profile'],
+            state: 'available',
+            allowed: true,
+            supports_atomic_shortcuts: true,
+            supports_batched_effective: true,
+            supports_device_rename: true,
+            supports_idempotent_writes: true,
+            supports_overlay_images: false,
+          });
+        case 'GET /api/v2/settings/overlay-config':
+          return send(200, {
+            enabled: true,
+            image_uploads_available: false,
+            images: [],
+            quick_actions_default: 'both',
+            quick_actions_enabled: false,
+          });
+        case 'GET /api/v2/settings/values/effective':
+          return send(200, {
+            items: url.searchParams
+              .getAll('keys')
+              .map((key) => ({ key, source: 'default', definition_revision: 1 })),
+            revision: 40,
+          });
         case 'GET /api/v2/library/lib-1/sections':
           return send(200, { sections: homeSections().slice(1) });
         case 'GET /api/v2/catalog/search/capabilities':
@@ -168,8 +224,11 @@ export async function startPerfServer(): Promise<{ origin: string; close: () => 
             page: { has_more: end < BROWSE_TOTAL, next_cursor: String(end) },
           });
         }
-        default:
+        default: {
+          const items = /^\/api\/v2\/home\/sections\/([^/]+)\/items$/.exec(url.pathname);
+          if (req.method === 'GET' && items?.[1] === 'hero') return send(200, featuredSection());
           return send(404, { title: 'not found', status: 404 });
+        }
       }
     });
   });

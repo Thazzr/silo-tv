@@ -16,6 +16,7 @@ import type { PersonTarget } from '../person/personMemory';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
 import type { ItemDetail } from './info';
+import { CardPrefsProvider } from '../../ui/media';
 
 // The people and the sections under the hero, in the web's order for each type of page.
 const server = setupServer();
@@ -62,7 +63,9 @@ function setup(target: DetailTarget, lang: Language = 'en') {
     <QueryClientProvider client={newQueryClient()}>
       <I18nProvider lang={lang}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

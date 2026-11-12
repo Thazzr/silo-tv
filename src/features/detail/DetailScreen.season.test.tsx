@@ -21,6 +21,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 // The page of a season (the web's season page) and the grid of its episodes.
 const server = setupServer();
@@ -65,7 +66,9 @@ function setup(target: DetailTarget, options: { lang?: Language; queryClient?: Q
     <QueryClientProvider client={options.queryClient ?? newQueryClient()}>
       <I18nProvider lang={options.lang ?? 'en'}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

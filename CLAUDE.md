@@ -127,6 +127,8 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
   - Virtualize long rows and grids.
   - Request images at a fitting width (`poster_width`, `backdrop_width`, …).
   - No `backdrop-filter`, no large shadow animations, no layout animations; animate only `transform`/`opacity`.
+  - Whatever moves or scales over pictures sits on a permanent compositor layer (`will-change`), e.g. every card's art. The TV rasters at 4K (device pixel ratio 2): without the layer, a focus move re-rasters the whole row with its pictures (Home walk on the TV, 2026-11-12: 11 instead of 37 frames per second).
+  - A hidden element that stays mounted (the carousel under the focused card) runs no animation and paints nothing (`visibility: hidden`), or it keeps compositor layers.
 - **Screen:** The layout is designed for 1920×1080 and scales to 1280×720. Safe area: 5 % margin.
 
 ## Silo API rules

@@ -20,6 +20,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen } from './DetailScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -43,20 +44,22 @@ function setup(target: DetailTarget, queryClient: QueryClient = newQueryClient()
     <QueryClientProvider client={queryClient}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator
-            initial={{ name: 'detail', target }}
-            renderScreen={(current, nav) => (
-              <DetailScreen
-                target={current.target}
-                memory={memory.of(current)}
-                onPlay={() => undefined}
-                onOpenDetail={() => undefined}
-                onOpenPerson={() => undefined}
-                onOpenBoxSet={() => undefined}
-                onBack={() => nav.pop()}
-              />
-            )}
-          />
+          <CardPrefsProvider>
+            <Navigator
+              initial={{ name: 'detail', target }}
+              renderScreen={(current, nav) => (
+                <DetailScreen
+                  target={current.target}
+                  memory={memory.of(current)}
+                  onPlay={() => undefined}
+                  onOpenDetail={() => undefined}
+                  onOpenPerson={() => undefined}
+                  onOpenBoxSet={() => undefined}
+                  onBack={() => nav.pop()}
+                />
+              )}
+            />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

@@ -19,6 +19,7 @@ import { getCurrentFocusKey, Navigator, type NavApi } from '../nav';
 import { SiloProvider } from '../SiloContext';
 import { ShellScreen } from './ShellScreen';
 import { ShellMemory } from './tabs';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -73,7 +74,9 @@ function renderHome({ strict = false }: { strict?: boolean } = {}) {
     <QueryClientProvider client={newQueryClient()}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'shell' }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'shell' }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>

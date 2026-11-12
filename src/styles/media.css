@@ -36,6 +36,10 @@
   isolation: isolate;
   border-radius: var(--radius-card);
   transition: transform var(--transition);
+  /* A permanent layer per card's art, so a focus move (the art's scale, the row's movement) does
+     not re-raster the row with its pictures. Measured on the TV, the Home walk went from 11 to
+     42 frames per second. */
+  will-change: transform;
 }
 
 .card-poster .card-art {
@@ -566,6 +570,17 @@
 .hero-carousel[data-shown='false'] {
   pointer-events: none;
   opacity: 0;
+}
+
+.hero-carousel[data-shown='false']
+  :is(.hero-slide, .hero-dim, .hero-fade-bottom, .hero-fade-left, .hero-vignette, .hero-top-scrim) {
+  visibility: hidden;
+}
+
+/* The rail restarts with every turn anyway (its key changes), so a hidden carousel needs no
+   running animation: it would keep a compositor layer, and the card over it a second one. */
+.hero-carousel[data-shown='false'] .hero-rail > span {
+  animation: none;
 }
 
 /* The crossfade of the slides: the active one fades in over the one fading out (1 s, opacity only). */

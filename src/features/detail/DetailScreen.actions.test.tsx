@@ -23,6 +23,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, testDevice } from '../../test/renderFlow';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -87,7 +88,9 @@ function setup(
     <QueryClientProvider client={client}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

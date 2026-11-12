@@ -86,7 +86,7 @@ Between releases, every CI run keeps the package it built as the artifact `ipk` 
 | `PROBE=1 npm run tv:deploy` | opens the probe: the codecs, containers, HDR flags and network checks of this TV |
 | `npm run tv:eval` | reads the probe report, or any expression, from the running app through the webOS Web Inspector |
 | `npm run tv:profile` | records a sampling CPU profile of the running app into `perf-results/*.cpuprofile` and prints the most expensive functions (`--seconds`, `--interval`, `--out`). Deploy with `PERF_BUILD=1 npm run tv:deploy` first for readable function names. |
-| `npm run perf:scroll` | local scroll profiling: an unminified build, CPU throttle 6, long tasks, slow frames and renders per key press (not part of the gate) |
+| `npm run perf:scroll` | local scroll profiling against a fake server: an unminified build, CPU throttle 6, task time per key, long tasks, slow frames, React commits and renders per key press, and the compositor layers at rest (not part of the gate). Scenarios `homewalk`, `home`, `recommended`, `browse`; pick one with `-- -g homewalk`. `PERF_THROTTLE`, `PERF_ROWS` (Home rows, default 7), `PERF_FEATURED=0` (no carousel, for commits before it) and `PERF_LABEL` (names `perf-results/scroll-<label>.json`) adjust a run. |
 
 ## Commands
 

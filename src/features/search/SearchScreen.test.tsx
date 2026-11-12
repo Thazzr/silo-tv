@@ -37,6 +37,7 @@ import { SEARCH_GRID } from './layout';
 import { keyFocusKey } from './keys';
 import { SearchMemory } from './searchMemory';
 import { SearchScreen } from './SearchScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -138,7 +139,9 @@ function setup(
     <QueryClientProvider client={queryClient ?? newQueryClient()}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'search' }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'search' }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

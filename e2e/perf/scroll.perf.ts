@@ -17,7 +17,7 @@ const appUrl = pathToFileURL(distPerf).href;
 const SPACING_MS = 180;
 const THROTTLE = Number(process.env.PERF_THROTTLE ?? 6);
 
-type Key = 'ArrowRight' | 'ArrowDown' | 'ArrowUp' | 'Enter';
+type Key = 'ArrowRight' | 'ArrowLeft' | 'ArrowDown' | 'ArrowUp' | 'Enter';
 type Press = (key: Key) => Promise<void>;
 
 interface Scenario {
@@ -42,6 +42,21 @@ async function focusCard(press: Press, page: Page) {
 }
 
 const scenarios: Scenario[] = [
+  {
+    // The walk of the 2026-11-12 report: down through the rows, along two of them and back, then
+    // up again (to the carousel where there is one).
+    name: 'homewalk',
+    enter: (press, page) => focusCard(press, page),
+    keys: [
+      ...repeat('ArrowDown', 3),
+      ...repeat('ArrowRight', 10),
+      ...repeat('ArrowLeft', 10),
+      'ArrowDown',
+      ...repeat('ArrowRight', 10),
+      ...repeat('ArrowLeft', 10),
+      ...repeat('ArrowUp', 5),
+    ],
+  },
   {
     name: 'home',
     enter: (press, page) => focusCard(press, page),
@@ -79,7 +94,7 @@ const scenarios: Scenario[] = [
 
 const initScript = `
 (() => {
-  const perf = { longtasks: [], frames: [], keys: [], running: false, counting: false, renders: {} };
+  const perf = { longtasks: [], frames: [], keys: [], running: false, counting: false, renders: {}, commits: 0 };
   window.__perf = perf;
   new PerformanceObserver((list) => {
     if (!perf.running) return;
@@ -118,7 +133,7 @@ const initScript = `
     isDisabled: false,
     renderers: new Map(),
     inject(r) { ids += 1; this.renderers.set(ids, r); return ids; },
-    onCommitFiberRoot(id, root) { if (perf.counting) count(root.current, root.current.alternate); },
+    onCommitFiberRoot(id, root) { if (perf.counting) { perf.commits += 1; count(root.current, root.current.alternate); } },
     onCommitFiberUnmount() {},
     onPostCommitFiberRoot() {},
     checkDCE() {},
@@ -135,6 +150,8 @@ interface Timing {
   busyMsPerPress: number;
   /** Chrome's own counters over the run, per press (throttled time): where the main thread went. */
   metricsPerPress: Record<string, number>;
+  /** Main-thread task time per press (throttled), averaged by the key pressed. */
+  taskMsByKey: Record<string, number>;
   profile: { fn: string; selfMs: number }[];
 }
 
@@ -155,6 +172,7 @@ interface PerfWindow {
     frames: number[];
     keys: number[];
     renders: Record<string, number>;
+    commits: number;
   };
 }
 
@@ -222,7 +240,49 @@ async function openScenario(page: Page, origin: string, scenario: Scenario) {
   await page.waitForTimeout(1500);
 }
 
+/** The compositor layers at rest: how many, how many screens of pixels they hold, and which. */
+async function layerStats(cdp: CDPSession) {
+  interface Layer {
+    width: number;
+    height: number;
+    drawsContent: boolean;
+    backendNodeId?: number;
+  }
+  let layers: Layer[] = [];
+  cdp.on('LayerTree.layerTreeDidChange', (e) => {
+    if (e.layers) layers = e.layers as Layer[];
+  });
+  await cdp.send('DOM.enable');
+  await cdp.send('LayerTree.enable');
+  // The tree comes with the next frame.
+  await new Promise((done) => setTimeout(done, 1500));
+  const drawn = layers.filter((l) => l.drawsContent);
+  const pixels = drawn.reduce((sum, l) => sum + l.width * l.height, 0);
+  const which: string[] = [];
+  for (const layer of drawn) {
+    let name = '?';
+    try {
+      if (layer.backendNodeId !== undefined) {
+        const { node } = await cdp.send('DOM.describeNode', { backendNodeId: layer.backendNodeId });
+        const attrs = node.attributes ?? [];
+        name = `${node.localName}.${attrs[attrs.indexOf('class') + 1] ?? ''}`;
+      }
+    } catch {
+      // A node that is gone again is only a gap in the list.
+    }
+    which.push(`${name} ${layer.width}x${layer.height}`);
+  }
+  await cdp.send('LayerTree.disable');
+  return {
+    layers: layers.length,
+    drawn: drawn.length,
+    screens: Math.round((pixels / (1920 * 1080)) * 100) / 100,
+    which,
+  };
+}
+
 async function measureTiming(page: Page, cdp: CDPSession, keys: Key[]): Promise<Timing> {
+  console.log('layers at rest:', JSON.stringify(await layerStats(cdp)));
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
   await cdp.send('Profiler.enable');
   await cdp.send('Profiler.setSamplingInterval', { interval: 500 });
@@ -233,10 +293,17 @@ async function measureTiming(page: Page, cdp: CDPSession, keys: Key[]): Promise<
   const before = await metrics(cdp);
   await cdp.send('Profiler.start');
   const t0 = Date.now();
+  const taskByKey: Record<string, number[]> = {};
   for (const [i, key] of keys.entries()) {
     const wait = t0 + i * SPACING_MS - Date.now();
     if (wait > 0) await page.waitForTimeout(wait);
+    const start = (await metrics(cdp)).TaskDuration ?? 0;
     await page.keyboard.press(key);
+    // The press has settled well before the next one (the spacing is 180 ms, throttled work may
+    // take longer; the next loop then starts at once).
+    await page.waitForTimeout(100);
+    const end = (await metrics(cdp)).TaskDuration ?? 0;
+    (taskByKey[key] ??= []).push(end - start);
   }
   await page.waitForTimeout(600);
   const { profile } = await cdp.send('Profiler.stop');
@@ -271,6 +338,12 @@ async function measureTiming(page: Page, cdp: CDPSession, keys: Key[]): Promise<
         Math.round((((after[name] ?? 0) - (before[name] ?? 0)) / keys.length) * 100) / 100,
       ]),
     ),
+    taskMsByKey: Object.fromEntries(
+      Object.entries(taskByKey).map(([key, list]) => [
+        key,
+        Math.round((sum(list) / list.length) * 10) / 10,
+      ]),
+    ),
     busyMsPerPress: busyMs(profile as unknown as Profile) / keys.length,
     profile: topSelfTime(profile as unknown as Profile, 15),
   };
@@ -290,9 +363,19 @@ async function measureRenders(page: Page, keys: Key[]) {
   await take();
   const total: Record<string, number> = {};
   const perPress: number[] = [];
+  const commitsOf = () =>
+    page.evaluate(() => {
+      const p = (globalThis as unknown as PerfWindow).__perf;
+      const n = p.commits;
+      p.commits = 0;
+      return n;
+    });
+  await commitsOf();
+  let commits = 0;
   for (const key of keys) {
     await page.keyboard.press(key);
     await page.waitForTimeout(SPACING_MS + 120);
+    commits += await commitsOf();
     const r = await take();
     perPress.push(Object.values(r).reduce((a, b) => a + b, 0));
     for (const [name, n] of Object.entries(r)) total[name] = (total[name] ?? 0) + n;
@@ -305,6 +388,7 @@ async function measureRenders(page: Page, keys: Key[]) {
       .map(([name, n]) => [name, Math.round((n / keys.length) * 10) / 10]),
   );
   return {
+    commitsPerPress: Math.round((commits / keys.length) * 10) / 10,
     avgPerPress: Math.round(avg * 10) / 10,
     maxPerPress: Math.max(...perPress),
     byComponent,
@@ -343,6 +427,9 @@ for (const scenario of scenarios) {
       const kf = timing.keyToFrame;
       console.log(
         `key to frame (>=16 ms reported): ${kf.reported} of ${scenario.keys.length}, over 50 ms: ${kf.over50}, max ${kf.maxMs} ms; busy ${timing.busyMsPerPress.toFixed(1)} ms per press`,
+      );
+      console.log(
+        `task ms per press by key (throttled): ${JSON.stringify(timing.taskMsByKey)}; commits per press ${renders.commitsPerPress}`,
       );
       console.log(
         `renders per press: avg ${renders.avgPerPress}, max ${renders.maxPerPress}; by component per press:`,

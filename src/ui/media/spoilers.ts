@@ -1,8 +1,8 @@
 // Spoiler protection for unwatched episodes (settings `catalog.hide_unwatched_episode_images` and
 // `catalog.hide_unwatched_episode_overviews`). The server never changes its answers for them; the
 // client hides an episode's own still and description. Series and season artwork always shows.
-import { useCallback, useMemo } from 'react';
-import { useProfileSettings } from '../../features/settings/profileSettings';
+import { useCallback } from 'react';
+import { useSpoilerSettings } from './CardPrefs';
 import { isEpisode, landscapeArt, posterArt, type CatalogItem } from './cardInfo';
 import { useMediaUrl } from './useMediaUrl';
 
@@ -12,17 +12,6 @@ export interface SpoilerSettings {
 }
 
 export const NO_SPOILER_PROTECTION: SpoilerSettings = { images: false, overviews: false };
-
-/**
- * Both settings, live. They count as off until the server has answered, and when it cannot: the
- * registry default of both keys is off, which is what `useProfileSettings` returns until then.
- */
-export function useSpoilerSettings(): SpoilerSettings {
-  const { values } = useProfileSettings();
-  const images = values['catalog.hide_unwatched_episode_images'];
-  const overviews = values['catalog.hide_unwatched_episode_overviews'];
-  return useMemo(() => ({ images, overviews }), [images, overviews]);
-}
 
 /** The watch data of an episode row. */
 export interface EpisodeWatchData {

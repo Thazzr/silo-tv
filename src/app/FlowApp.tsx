@@ -23,7 +23,7 @@ import type { CollectionTarget } from '../features/library/targets';
 import { PlayerScreen } from '../playback/PlayerScreen';
 import type { StartIntent } from '../playback/resume';
 import { SettingsScreen } from '../features/settings/SettingsScreen';
-import { FocusIndexMemory } from '../ui/media';
+import { CardPrefsProvider, FocusIndexMemory } from '../ui/media';
 import type { Launch } from './launch';
 import { Navigator, useNavigator, type NavApi } from './nav';
 import { ServerRegistry } from './servers';
@@ -212,6 +212,9 @@ export function FlowApp({
         content
       );
 
+    // The screens that draw cards read the card preferences (badges, spoiler protection) once.
+    const provideCards = (content: ReactNode) =>
+      provide(<CardPrefsProvider>{content}</CardPrefsProvider>);
     switch (screen.name) {
       case 'servers':
         return (
@@ -289,7 +292,7 @@ export function FlowApp({
           />,
         );
       case 'shell':
-        return provide(
+        return provideCards(
           <ShellScreen
             memory={shellMemory}
             launchMode={launchRecord.mode}
@@ -342,7 +345,7 @@ export function FlowApp({
           />,
         );
       case 'sectionGrid':
-        return provide(
+        return provideCards(
           <SectionGridScreen
             sectionId={screen.sectionId}
             title={screen.title}
@@ -356,7 +359,7 @@ export function FlowApp({
           />,
         );
       case 'collection':
-        return provide(
+        return provideCards(
           <CollectionScreen
             target={screen}
             memory={gridMemory}
@@ -368,7 +371,7 @@ export function FlowApp({
           />,
         );
       case 'detail':
-        return provide(
+        return provideCards(
           <DetailScreen
             target={screen}
             memory={detailMemory.of(screen)}
@@ -387,7 +390,7 @@ export function FlowApp({
           />,
         );
       case 'person':
-        return provide(
+        return provideCards(
           <PersonScreen
             target={screen}
             memory={personMemory.of(screen)}
@@ -399,7 +402,7 @@ export function FlowApp({
           />,
         );
       case 'boxSet':
-        return provide(
+        return provideCards(
           <BoxSetScreen
             target={screen}
             memory={boxSetMemory.of(screen)}

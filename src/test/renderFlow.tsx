@@ -7,6 +7,7 @@ import type { DeviceIdentity } from '../api/deviceIdentity';
 import { Session } from '../api/session';
 import type { KeyValueStore } from '../platform';
 import { I18nProvider } from '../i18n';
+import { CardPrefsProvider } from '../ui/media';
 import { BASE_URL } from './apiFixtures';
 
 export const testDevice: DeviceIdentity = { id: 'a'.repeat(32), name: 'LG webOS TV' };
@@ -27,13 +28,23 @@ export function newQueryClient(): QueryClient {
   });
 }
 
+function Prefs({ on, children }: { on: boolean; children: ReactNode }) {
+  return on ? <CardPrefsProvider>{children}</CardPrefsProvider> : children;
+}
+
 /**
  * Renders a screen with i18n (English), React Query and a Silo client for the test server, as the
  * only (root) entry of a screen stack: Back on it opens the exit popup unless the screen handles it.
  */
 export function renderWithSilo(
   ui: ReactNode,
-  options: { session?: Session; queryClient?: QueryClient; lang?: 'de' | 'en' } = {},
+  options: {
+    session?: Session;
+    queryClient?: QueryClient;
+    lang?: 'de' | 'en';
+    /** Off for a screen without cards, so no settings are read for it. */
+    cardPrefs?: boolean;
+  } = {},
 ) {
   const session = options.session ?? new Session(memoryStorage());
   const queryClient = options.queryClient ?? newQueryClient();
@@ -41,7 +52,9 @@ export function renderWithSilo(
     <QueryClientProvider client={queryClient}>
       <I18nProvider lang={'lang' in options ? options.lang : 'en'}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator initial={null} renderScreen={() => ui} />
+          <Prefs on={options.cardPrefs ?? true}>
+            <Navigator initial={null} renderScreen={() => ui} />
+          </Prefs>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

@@ -1,7 +1,7 @@
 // The card overlay badges ("1080p", "DV", "EAC3", "BluRay", ...) the profile chose to see on its
 // cards: the registry of the ids Silo knows, the parser of the stored document
 // (`ui.card_overlays`, version 2) and the layout rules. Pure functions; the settings reads are in
-// `useCardBadges.ts`. The TV draws every document in one look, so presets, styles, icons and
+// `CardPrefs.tsx`. The TV draws every document in one look, so presets, styles, icons and
 // uploaded images in the document are ignored, and so is any id this registry does not draw.
 import type { Language, MessageKey } from '../../i18n';
 import { languageName } from '../../i18n/languages';

@@ -16,7 +16,8 @@ import {
   type CatalogItem,
 } from './cardInfo';
 import type { CardShape } from './layout';
-import { protectsCardArt, useSpoilerSettings } from './spoilers';
+import { useSpoilerSettings } from './CardPrefs';
+import { protectsCardArt } from './spoilers';
 import { useMediaUrl } from './useMediaUrl';
 
 export interface CardProps {

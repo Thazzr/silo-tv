@@ -62,9 +62,8 @@ describe('the focus claim of a popover', () => {
     try {
       const mounted = renderWithSilo(
         popover(() => null),
-        {
-          session: new Session(memoryStorage()),
-        },
+        // No card preferences: their queries keep timers of their own, and the count is the popover's.
+        { session: new Session(memoryStorage()), cardPrefs: false },
       );
       mounted.unmount();
       expect(vi.getTimerCount()).toBe(0);

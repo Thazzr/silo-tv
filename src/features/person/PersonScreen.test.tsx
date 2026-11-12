@@ -14,6 +14,7 @@ import { gridCardKey } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { PersonMemory, type PersonEntryMemory, type PersonTarget } from './personMemory';
 import { PersonScreen } from './PersonScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -72,7 +73,9 @@ function setup(
     <QueryClientProvider client={options.queryClient ?? newQueryClient()}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'person', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'person', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

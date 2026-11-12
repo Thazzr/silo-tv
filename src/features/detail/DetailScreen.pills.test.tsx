@@ -25,6 +25,7 @@ import { KEY, pressKey } from '../../test/keys';
 import { memoryStorage, testDevice } from '../../test/renderFlow';
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 // The version, audio and subtitle pills of a movie and an episode page.
 const server = setupServer();
@@ -72,7 +73,9 @@ function setup(target: DetailTarget = { itemId: 'm1' }, lang: Language = 'en') {
     <QueryClientProvider client={client}>
       <I18nProvider lang={lang}>
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

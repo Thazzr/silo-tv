@@ -15,6 +15,7 @@ import { gridCardKey } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { BoxSetMemory, type BoxSetTarget } from './boxSetMemory';
 import { BoxSetScreen } from './BoxSetScreen';
+import { CardPrefsProvider } from '../../ui/media';
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
@@ -73,7 +74,9 @@ function setup(
     <QueryClientProvider client={options.queryClient ?? newQueryClient()}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'boxSet', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'boxSet', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

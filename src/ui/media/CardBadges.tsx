@@ -17,7 +17,7 @@ import {
 import { useLanguage, useT } from '../../i18n';
 import { BADGE_POSITIONS, cardBadges, type BadgeGlyph, type BadgePosition } from './badges';
 import type { CatalogItem } from './cardInfo';
-import { useCardBadgePrefs } from './useCardBadges';
+import { useCardBadgePrefs } from './CardPrefs';
 
 const GLYPH_ICONS: Record<BadgeGlyph, LucideIcon> = {
   monitor: Monitor,

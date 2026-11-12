@@ -48,8 +48,8 @@ export {
   protectsEpisodeOverview,
   protectsEpisodeStill,
   useArtUrl,
-  useSpoilerSettings,
 } from './spoilers';
+export { CardPrefsProvider, useSpoilerSettings } from './CardPrefs';
 export type { SpoilerSettings } from './spoilers';
 export { thumbhashColor, thumbhashPreview } from './thumbhash';
 export { useMediaUrl } from './useMediaUrl';

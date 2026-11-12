@@ -16,6 +16,7 @@ import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow
 import { DetailMemory, type DetailTarget } from './detailMemory';
 import { DetailScreen, type PlayRequest } from './DetailScreen';
 import { setThemeMusicForTests, ThemeMusicController } from './themeMusic';
+import { CardPrefsProvider } from '../../ui/media';
 
 type S = components['schemas'];
 
@@ -150,7 +151,9 @@ function setup(target: DetailTarget = { itemId: 'm1' }) {
     <QueryClientProvider client={queryClient}>
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
-          <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          <CardPrefsProvider>
+            <Navigator<Screen> initial={{ name: 'detail', target }} renderScreen={renderScreen} />
+          </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
     </QueryClientProvider>,

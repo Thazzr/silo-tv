@@ -16,7 +16,23 @@ import { HomeScreen } from './HomeScreen';
 // card (the hero follows the focus), so without stable row props and memoised rows every row and
 // card is drawn again per key press, which is what made held arrow keys stutter on the TV.
 
-const { commits } = vi.hoisted(() => ({ commits: new Map<string, number>() }));
+const { commits, metaItems } = vi.hoisted(() => ({
+  commits: new Map<string, number>(),
+  metaItems: [] as string[],
+}));
+
+// The carousel builds its meta line on every render of its own: which items it was built for says
+// whether the carousel was drawn again.
+vi.mock('./heroMeta', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./heroMeta')>();
+  return {
+    ...actual,
+    heroMeta: (...args: Parameters<typeof actual.heroMeta>) => {
+      metaItems.push(args[0].content_id);
+      return actual.heroMeta(...args);
+    },
+  };
+});
 
 vi.mock('../../ui/media/Row', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../ui/media/Row')>();
@@ -34,7 +50,10 @@ const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
-beforeEach(() => commits.clear());
+beforeEach(() => {
+  commits.clear();
+  metaItems.length = 0;
+});
 
 function signedIn() {
   const session = new Session(memoryStorage());
@@ -83,5 +102,66 @@ describe('HomeScreen: focus moves', () => {
     // Row a lost the focus and row b got it; row c is as it was.
     expect(commits.get('c') ?? 0).toBe(0);
     expect(commits.get('b') ?? 0).toBeGreaterThan(0);
+  });
+
+  it('does not draw the hidden carousel again when the focus moves from card to card', async () => {
+    serveHome(server, {
+      sections: [
+        homeSection('feat', 4, { featured: true, item_limit: 4 }),
+        homeSection('a', 5),
+        homeSection('b', 5),
+      ],
+    });
+    const view = renderWithSilo(
+      <HomeScreen
+        rowMemory={new FocusIndexMemory()}
+        onPlay={() => {}}
+        onOpenDetail={() => {}}
+        onExploreSection={() => {}}
+      />,
+      { session: signedIn() },
+    );
+    await screen.findByTestId('hero-carousel');
+    await screen.findByTestId('row-b');
+    await waitFor(() => expect(view.queryClient.isFetching()).toBe(0));
+    await act(async () => {
+      await setFocus(cardFocusKey('a', 'a-1'));
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('hero')).toHaveAttribute('data-content-id', 'a-1'),
+    );
+    metaItems.length = 0;
+
+    await pressKey(KEY.right);
+    await waitFor(() =>
+      expect(screen.getByTestId('hero')).toHaveAttribute('data-content-id', 'a-2'),
+    );
+    // The hero drew the card that has the focus; the carousel under it was not asked for a slide.
+    expect(metaItems).toContain('a-2');
+    expect(metaItems.filter((id) => id.startsWith('feat-'))).toEqual([]);
+  });
+
+  it('reads the settings once for all cards, not once per card', async () => {
+    serveHome(server, {
+      sections: [homeSection('a', 6), homeSection('b', 6), homeSection('c', 6)],
+    });
+    const view = renderWithSilo(
+      <HomeScreen
+        rowMemory={new FocusIndexMemory()}
+        onPlay={() => {}}
+        onOpenDetail={() => {}}
+        onExploreSection={() => {}}
+      />,
+      { session: signedIn() },
+    );
+    await screen.findByTestId('row-c');
+    await waitFor(() => expect(view.queryClient.isFetching()).toBe(0));
+    expect(document.querySelectorAll('.card').length).toBeGreaterThanOrEqual(18);
+    // The provider and the hero's title art read them; a card that did too would add one each.
+    const observers = view.queryClient
+      .getQueryCache()
+      .findAll({ queryKey: ['settings'] })
+      .map((query) => query.getObserversCount());
+    expect(Math.max(...observers)).toBeLessThanOrEqual(3);
   });
 });

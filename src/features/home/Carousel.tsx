@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { Info, Pause, Play } from 'lucide-react';
 import { FocusGroup, Focusable, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { Button } from '../../app/ui';
@@ -76,9 +76,10 @@ function Slide({ src, active }: { src: string | null; active: boolean }) {
  * the one shown, "Play" and "More Info", and the slide indicator. A slide turns after 8 s while
  * the carousel is `shown` and the focus is not on its two buttons; the indicator pages with
  * Left and Right and pauses with OK. Only the backdrops of the active, the fading out and the
- * next slide are loaded.
+ * next slide are loaded. It is memoised: while the focus runs along the rows below, the hero
+ * re-renders on every card, and the carousel (hidden then) must not follow.
  */
-export function Carousel({
+export const Carousel = memo(function Carousel({
   slides,
   shown,
   onPlay,
@@ -253,7 +254,7 @@ export function Carousel({
       </FocusGroup>
     </div>
   );
-}
+});
 
 /** The panel in the hero's place when the featured section could not be read: "Retry section". */
 export function HeroError({ text, onRetry }: { text: MessageKey; onRetry: () => void }) {
