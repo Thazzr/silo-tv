@@ -207,6 +207,21 @@ describe('the appearance dialog over the player', () => {
     expect(screen.getByText('Early cue')).toBeInTheDocument();
   });
 
+  it('a click on its backdrop closes the dialog only: no play or pause, the menu stays', async () => {
+    const { state } = await mount();
+    await toAppearanceRow();
+    await pressKey(KEY.enter);
+    const dialog = await screen.findByTestId('subtitle-dialog');
+    // A click on the dialog itself is the dialog's.
+    fireEvent.click(dialog);
+    expect(screen.getByTestId('subtitle-dialog')).toBeInTheDocument();
+    fireEvent.click(dialog.parentElement!);
+    await waitFor(() => expect(screen.queryByTestId('subtitle-dialog')).toBeNull());
+    expect(screen.getByTestId('player-menu-subtitles')).toBeInTheDocument();
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+  });
+
   it('Back closes only the dialog and returns the focus to the row; the next Back closes the menu', async () => {
     await mount();
     await toAppearanceRow();

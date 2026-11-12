@@ -81,8 +81,11 @@ export interface PlayerControls {
   menuSide(direction: 'left' | 'right'): void;
   /** Pointer movement over the player. */
   pointerMoved(): void;
-  /** A click on the video itself: it closes an open menu, else toggles play. */
-  videoClicked(): void;
+  /**
+   * A click on the picture (the video, or an overlay area without a control of its own): it closes
+   * an open menu, else toggles play and shows the overlay.
+   */
+  pictureClicked(): void;
 }
 
 /** A direction key that is still down: its repeats are a hold, not new presses. */
@@ -347,11 +350,22 @@ export function usePlayerControls(args: Args): PlayerControls {
         default:
           break;
       }
-      // OK on a pill that holds the focus acts; Left and Right move between a prompt's buttons;
-      // any other key only opens the overlay.
+      // OK on a pill that holds the focus acts; otherwise OK toggles play at once and shows the
+      // overlay on Play/Pause. Left and Right move between a prompt's buttons; any other key only
+      // opens the overlay.
       if (!wasVisible) {
-        if (key === 'enter' && current === 'pill') a.pill.activate();
-        else if ((key === 'left' || key === 'right') && current === 'pill' && a.pill.move?.(key)) {
+        if (key === 'enter') {
+          if (current === 'pill') a.pill.activate();
+          else {
+            setFocusState('playPause');
+            o.show();
+            togglePlay();
+          }
+        } else if (
+          (key === 'left' || key === 'right') &&
+          current === 'pill' &&
+          a.pill.move?.(key)
+        ) {
           return;
         } else openOsd();
         return;
@@ -491,14 +505,18 @@ export function usePlayerControls(args: Args): PlayerControls {
     else openOsd();
   }, [openOsd]);
 
-  const videoClicked = useCallback(() => {
+  const pictureClicked = useCallback(() => {
     const { started: playing, panel } = latest.current.args;
     // A click outside the menu closes it, and is not also a play or pause.
     if (panel.open) {
       closeMenu();
       return;
     }
-    if (!playing || visibleRef.current) return;
+    if (!playing) return;
+    // The pointer has opened the overlay by the time it clicks, so this does not wait for it to
+    // be hidden. The click shows it with the focus on Play/Pause, like OK does.
+    setFocusState('playPause');
+    latest.current.osd.show();
     togglePlay();
   }, [togglePlay, closeMenu]);
 
@@ -515,6 +533,6 @@ export function usePlayerControls(args: Args): PlayerControls {
     closeMenu,
     menuSide,
     pointerMoved,
-    videoClicked,
+    pictureClicked,
   };
 }

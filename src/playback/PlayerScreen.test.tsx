@@ -181,17 +181,17 @@ describe('PlayerScreen playback', () => {
 
   it('toggles play and pause with OK and with the Play/Pause key', async () => {
     const { video, state } = await playing();
-    // The first key only opens the overlay.
-    key(OK);
-    expect(state.play).not.toHaveBeenCalled();
+    // OK with the overlay hidden acts at once; with the focus on Play/Pause it toggles again.
     key(OK);
     expect(state.play).toHaveBeenCalledTimes(1);
     expect(state.paused).toBe(false);
-    key(PLAY_PAUSE);
+    key(OK);
     expect(state.pause).toHaveBeenCalledTimes(1);
     expect(state.paused).toBe(true);
     key(PLAY_PAUSE);
     expect(state.play).toHaveBeenCalledTimes(2);
+    key(PLAY_PAUSE);
+    expect(state.pause).toHaveBeenCalledTimes(2);
     expect(video).toBeInTheDocument();
   });
 
@@ -215,12 +215,27 @@ describe('PlayerScreen playback', () => {
     expect(state.pause).toHaveBeenCalledTimes(1);
   });
 
-  it('does not toggle with a click on the video while the overlay is open', async () => {
+  it('toggles with a pointer click on the video while the overlay is open', async () => {
     const { video, state } = await playing();
     key(UP);
     fireEvent.click(video);
-    expect(state.play).not.toHaveBeenCalled();
-    expect(state.pause).not.toHaveBeenCalled();
+    expect(state.play).toHaveBeenCalledTimes(1);
+    fireEvent.click(video);
+    expect(state.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('toggles with a click on an overlay area that has no control, and not on a control', async () => {
+    const { state } = await playing();
+    key(UP);
+    fireEvent.click(screen.getByTestId('player-osd'));
+    expect(state.play).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('heading', { level: 1 }));
+    expect(state.pause).toHaveBeenCalledTimes(1);
+    // A control does what it does and is not also a toggle.
+    fireEvent.click(screen.getByRole('button', { name: '30 seconds forward' }));
+    fireEvent.click(screen.getByTestId('player-scrubber'));
+    expect(state.play).toHaveBeenCalledTimes(1);
+    expect(state.pause).toHaveBeenCalledTimes(1);
   });
 
   it('seeks by the profile defaults (10 s back, 30 s forward) and never past the ends', async () => {

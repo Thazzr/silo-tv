@@ -441,6 +441,27 @@ describe('keys while a menu is open', () => {
     expect(overlayOpen()).toBe(true);
   });
 
+  it('a click on an overlay area without a control closes the menu, one inside the menu does not', async () => {
+    const { state } = await mount();
+    await openMenu('settings');
+    fireEvent.click(menu('settings')!);
+    expect(menu('settings')).not.toBeNull();
+    fireEvent.click(screen.getByTestId('player-osd'));
+    expect(menu('settings')).toBeNull();
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+  });
+
+  it('a click inside the open Info column neither closes it nor toggles play', async () => {
+    const { state } = await mount();
+    await openMenu('info');
+    fireEvent.click(screen.getByTestId('player-info-now'));
+    fireEvent.click(screen.getByRole('heading', { name: 'Now' }));
+    expect(info()).not.toBeNull();
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+  });
+
   it('let the wheel move the focus in the menu, and leave it alone once it is closed', async () => {
     await mount();
     await openMenu('settings');

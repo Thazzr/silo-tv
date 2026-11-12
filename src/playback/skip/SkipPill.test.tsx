@@ -134,11 +134,14 @@ describe('the skip pill in ask mode', () => {
     expect(screen.getByTestId('player-skip-fill')).toBeInTheDocument();
     tap(K.ok);
     expect(state.seeks).toEqual([60]);
+    // OK on the pill is the pill's, not a play or pause.
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
     expect(pill()).toBeNull();
     expect(isOpen()).toBe(false);
   });
 
-  it('leaves the pill visible but gives the focus back to the video after 5 s; OK opens the overlay', async () => {
+  it('leaves the pill visible but gives the focus back to the video after 5 s; OK then toggles play', async () => {
     const { state, at } = await mount({ list: [INTRO] });
     at(10);
     advance(4999);
@@ -149,6 +152,7 @@ describe('the skip pill in ask mode', () => {
     expect(screen.queryByTestId('player-skip-fill')).toBeNull();
     tap(K.ok);
     expect(isOpen()).toBe(true);
+    expect(state.play).toHaveBeenCalledTimes(1);
     expect(state.seeks).toEqual([]);
     expect(pill()).toBeInTheDocument();
   });

@@ -4384,6 +4384,67 @@ test('player controls: a key opens the overlay on the scrubber, Up reaches Exit,
   await expect(page.getByTestId('player')).toHaveCount(0);
 });
 
+test('player: OK with the overlay hidden and a click on the picture pause and resume', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  // No media plays here: the element is given a play state of its own, which the events follow.
+  await page.evaluate(`(() => {
+    const video = document.querySelector('video');
+    let paused = false;
+    Object.defineProperty(video, 'paused', { get: () => paused });
+    video.play = () => {
+      paused = false;
+      video.dispatchEvent(new Event('play'));
+      video.dispatchEvent(new Event('playing'));
+      return Promise.resolve();
+    };
+    video.pause = () => {
+      paused = true;
+      video.dispatchEvent(new Event('pause'));
+    };
+    video.dispatchEvent(new Event('playing'));
+  })()`);
+
+  const osd = page.getByTestId('player-osd');
+  await expect(page.getByRole('button', { name: 'Pause', includeHidden: true })).toHaveCount(1);
+  await expect(osd).toHaveAttribute('data-visible', 'false');
+
+  // OK with the overlay hidden pauses at once and shows the overlay on Play/Pause; OK again resumes.
+  await page.keyboard.press('Enter');
+  await expect(osd).toHaveAttribute('data-visible', 'true');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeFocused();
+
+  // The pointer opens the overlay by moving; a click in the middle of the picture then pauses, and
+  // another click resumes. The overlay stays up throughout.
+  await page.mouse.move(960, 400);
+  await page.mouse.move(970, 420);
+  await expect(osd).toHaveAttribute('data-visible', 'true');
+  await page.mouse.click(960, 400);
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+  await expect(osd).toHaveAttribute('data-visible', 'true');
+  await page.mouse.click(960, 400);
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect(osd).toHaveAttribute('data-visible', 'true');
+  // The bottom part of the overlay is no control either: its empty space is the picture.
+  await page.mouse.click(960, 1050);
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+});
+
 test('player: Next episode stops the session, opens the next episode in its place, and Back leaves to where the first one was started, keyboard only', async ({
   page,
 }) => {

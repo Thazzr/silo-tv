@@ -213,18 +213,41 @@ describe('overlay visibility', () => {
     expect(focused('scrubber')).toBe(true);
   });
 
-  it('the first key while hidden only shows it: no skip, no toggle', async () => {
+  it('the first arrow key while hidden only shows it: no skip, no toggle', async () => {
     const { state } = await mount();
     tap(K.right);
     advance(1000);
     expect(state.seeks).toEqual([]);
+    expect(state.play).not.toHaveBeenCalled();
     expect(isOpen()).toBe(true);
+  });
+
+  it('OK while hidden pauses a playing video and resumes a paused one, with the focus on Play/Pause', async () => {
+    const { state, video } = await mount();
+    tap(K.play);
+    fireEvent.playing(video);
     advance(5000);
     expect(isOpen()).toBe(false);
     tap(K.ok);
-    expect(state.play).not.toHaveBeenCalled();
-    expect(state.pause).not.toHaveBeenCalled();
+    expect(state.pause).toHaveBeenCalledTimes(1);
     expect(isOpen()).toBe(true);
+    expect(focused('playPause')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Play' })).toHaveFocus();
+    // Paused, the overlay stays; OK on Play/Pause now resumes.
+    tap(K.ok);
+    expect(state.play).toHaveBeenCalledTimes(2);
+  });
+
+  it('OK while hidden and paused resumes at once, and the overlay hides 5 s after playing', async () => {
+    const { state, video } = await mount();
+    expect(isOpen()).toBe(false);
+    tap(K.ok);
+    expect(state.play).toHaveBeenCalledTimes(1);
+    expect(isOpen()).toBe(true);
+    expect(focused('playPause')).toBe(true);
+    fireEvent.playing(video);
+    advance(5000);
+    expect(isOpen()).toBe(false);
   });
 
   it('Play, Pause and PlayPause act at once while hidden, and open the overlay', async () => {
@@ -264,6 +287,15 @@ describe('before the first frame', () => {
     expect(isOpen()).toBe(false);
     tap(K.back);
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a click on the picture', async () => {
+    const { state, video } = await mount({ firstFrame: false });
+    fireEvent.click(video);
+    fireEvent.click(screen.getByTestId('player'));
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+    expect(isOpen()).toBe(false);
   });
 });
 
@@ -848,6 +880,28 @@ describe('Magic Remote pointer', () => {
     expect(isOpen()).toBe(true);
     advance(1000);
     expect(isOpen()).toBe(false);
+  });
+});
+
+describe('a click on the picture', () => {
+  it('moves the focus to Play/Pause, so OK toggles again', async () => {
+    const { state, video } = await mount();
+    tap(K.up);
+    expect(focused('scrubber')).toBe(true);
+    fireEvent.click(video);
+    expect(state.play).toHaveBeenCalledTimes(1);
+    expect(focused('playPause')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Pause' })).toHaveFocus();
+    tap(K.ok);
+    expect(state.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a hidden overlay, also without a pointer move before it', async () => {
+    const { state, video } = await mount();
+    expect(isOpen()).toBe(false);
+    fireEvent.click(video);
+    expect(state.play).toHaveBeenCalledTimes(1);
+    expect(isOpen()).toBe(true);
   });
 });
 

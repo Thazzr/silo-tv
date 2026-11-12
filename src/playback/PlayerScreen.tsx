@@ -246,6 +246,13 @@ export function PlayerScreen({
   );
 }
 
+/**
+ * What answers a click itself: the controls, the open panels and the prompts. Any other click
+ * inside the player lands on the picture, whichever layer of the overlay it hit.
+ */
+const OWN_CLICK =
+  'button, [role="slider"], .player-popover, .player-info, .player-buffering, .dialog-backdrop';
+
 /** The centred spinner both loading views show, so the hand-over from one to the other is invisible. */
 function LoadingCue() {
   const t = useT();
@@ -648,14 +655,16 @@ function PlayingView({
   }
 
   return (
-    <div className="player" data-testid="player" onMouseMove={controls.pointerMoved}>
-      <video
-        ref={setRef}
-        className="player-video"
-        preload="auto"
-        autoPlay={autoplay}
-        onClick={controls.videoClicked}
-      />
+    <div
+      className="player"
+      data-testid="player"
+      onMouseMove={controls.pointerMoved}
+      onClick={(e) => {
+        if (!(e.target instanceof Element) || e.target.closest(OWN_CLICK)) return;
+        controls.pictureClicked();
+      }}
+    >
+      <video ref={setRef} className="player-video" preload="auto" autoPlay={autoplay} />
       {cue ? <LoadingCue /> : null}
       <PlayerSubtitles
         plan={plan}

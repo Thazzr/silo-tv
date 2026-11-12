@@ -174,6 +174,16 @@ describe('the prompt (ask mode)', () => {
     expect(calls.replan).toHaveLength(0);
   });
 
+  it('a click on its title or its line is not a click on the picture', async () => {
+    const { state, twoStalls } = await mount();
+    twoStalls();
+    fireEvent.click(screen.getByText('Playback keeps buffering'));
+    fireEvent.click(screen.getByTestId('player-buffering-line'));
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+    expect(prompt()).not.toBeNull();
+  });
+
   it('moves between the buttons with Left and Right, and OK on Keep closes it for good', async () => {
     const { calls, twoStalls, stall } = await mount();
     twoStalls();
