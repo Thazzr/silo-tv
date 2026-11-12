@@ -1057,7 +1057,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               {
                 id: 'continue_watching',
                 section_type: 'continue_watching',
-                title: 'Weiterschauen',
+                title: 'Continue Watching',
+                title_key: 'home.section.continueWatching',
                 items: [
                   {
                     content_id: 'm2',
@@ -1101,7 +1102,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               {
                 id: 'recently_added',
                 section_type: 'recently_added',
-                title: 'Neu hinzugefügt',
+                title: 'Recently Added',
+                title_key: 'home.section.recentlyAdded',
                 items: [
                   ...(withSeries
                     ? [
@@ -1246,7 +1248,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               {
                 id: 'rec',
                 section_type: 'recently_added',
-                title: 'Empfohlen für dich',
+                title: 'Recommended for You',
+                title_key: 'home.section.recommendedForYou',
                 featured: false,
                 item_limit: 20,
                 is_custom: false,
@@ -1368,7 +1371,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   // Approved on the second poll: the single profile is selected and the shell shows, on Home.
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('button', { name: /First Title/ })).toBeVisible();
-  await expect(page.getByTestId('row-title')).toHaveText(['Weiterschauen', 'Neu hinzugefügt']);
+  await expect(page.getByTestId('row-title')).toHaveText(['Weiterschauen', 'Kürzlich hinzugefügt']);
   // The hero shows the first card; the landscape card has a progress bar of a quarter.
   await expect(page.getByTestId('hero-title')).toHaveText('Second Title');
   await expect(page.getByTestId('hero-synopsis')).toHaveText('The second title, half way through.');
@@ -1416,7 +1419,7 @@ test('server entry, code sign-in, single profile and the first list, keyboard on
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Alle ansehen/ })).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('section-grid-title')).toHaveText('Neu hinzugefügt');
+  await expect(page.getByTestId('section-grid-title')).toHaveText('Kürzlich hinzugefügt');
   await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /Third Title/ })).toBeFocused();

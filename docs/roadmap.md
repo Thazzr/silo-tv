@@ -37,6 +37,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 ## Phase 2 – Browse (target v0.3.0)
 
 - ✅ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures (TV 2026-11-09)
+- 🟨 Row titles in the viewer's language: the server's built-in sections carry a title key, which the app shows in German as the web app does ("Diese Woche im Trend"); a title an admin typed shows as typed
 - 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
 - 🟨 Library tabs for Movies and Series (the browse grid with its filters checked on the TV, 2026-11-09):
   - Recommended rows

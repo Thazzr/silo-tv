@@ -3,6 +3,7 @@ import type { StartIntent } from '../../playback/resume';
 import { Button } from '../../app/ui';
 import { FocusGroup, focusFromPointer, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
+import { useSectionTitle, type SectionTitleSource } from '../../i18n/sectionTitle';
 import {
   CatalogRow,
   isLandscapeSection,
@@ -41,6 +42,8 @@ export function libraryRows(
   sections: readonly {
     id: string;
     title: string;
+    title_key?: string;
+    title_args?: Record<string, string>;
     section_type: string;
     featured: boolean;
     has_more?: boolean;
@@ -49,6 +52,7 @@ export function libraryRows(
   }[],
   library: UserLibrary,
   kind: LibraryKind,
+  titleOf: (section: SectionTitleSource) => string,
 ): RowModel[] {
   const mixed = isMixed(library);
   return sections.flatMap((section) => {
@@ -62,7 +66,7 @@ export function libraryRows(
     return [
       {
         id: `${library.id}/${section.id}`,
-        title: section.title,
+        title: titleOf(section),
         shape: isLandscapeSection(section.section_type)
           ? ('landscape' as const)
           : ('poster' as const),
@@ -99,11 +103,12 @@ export function RecommendedView({
   onExploreSection: (section: ExploreTarget) => void;
 }) {
   const t = useT();
+  const titleOf = useSectionTitle();
   const query = useLibrarySections(library.id);
   const { open } = useItemOpener({ onPlay, onOpenDetail });
   const rows = useMemo(
-    () => (query.data ? libraryRows(query.data, library, kind) : []),
-    [query.data, library, kind],
+    () => (query.data ? libraryRows(query.data, library, kind, titleOf) : []),
+    [query.data, library, kind, titleOf],
   );
   const [focusedRow, setFocusedRow] = useState(
     () => memory.indices.get(lastRowKey(library, kind)) ?? 0,

@@ -548,12 +548,13 @@ describe('libraryRows', () => {
       ],
       lib,
       'movie',
+      (s) => s.title,
     );
     expect(rows.map((row) => row.shape)).toEqual(['landscape', 'poster']);
   });
 
   it('prefixes the row id with the library, so two libraries never share a focus memory', () => {
-    expect(libraryRows([section()], lib, 'movie')[0]!.id).toBe('lib-1/s');
+    expect(libraryRows([section()], lib, 'movie', (s) => s.title)[0]!.id).toBe('lib-1/s');
   });
 
   it('marks a row with more than it shows', () => {
@@ -565,6 +566,7 @@ describe('libraryRows', () => {
       ],
       lib,
       'movie',
+      (s) => s.title,
     );
     expect(rows.map((row) => row.hasMore)).toEqual([false, true, true]);
   });

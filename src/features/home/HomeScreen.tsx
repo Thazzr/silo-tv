@@ -4,6 +4,7 @@ import { useContentBack } from '../../app/shell/ShellBack';
 import { Button } from '../../app/ui';
 import { FocusGroup, focusFromPointer, getCurrentFocusKey, stackArrows } from '../../app/nav';
 import { useT } from '../../i18n';
+import { useSectionTitle } from '../../i18n/sectionTitle';
 import { getPlatform } from '../../platform';
 import {
   cardFocusKey,
@@ -61,10 +62,14 @@ function surfaceOf(sectionType: string): DismissSurface | null {
   return null;
 }
 
-function rowFrom(section: HomeSection, override: Override | undefined): RowModel | null {
+function rowFrom(
+  section: HomeSection,
+  override: Override | undefined,
+  titleOf: (section: HomeSection) => string,
+): RowModel | null {
   const base = {
     id: section.id,
-    title: section.title,
+    title: titleOf(section),
     shape: isLandscapeSection(section.section_type) ? ('landscape' as const) : ('poster' as const),
     surface: surfaceOf(section.section_type),
   };
@@ -103,6 +108,7 @@ export interface HomeScreenProps {
  */
 export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }: HomeScreenProps) {
   const t = useT();
+  const titleOf = useSectionTitle();
   const { query, rowLimit } = useHomeSections();
   const readSection = useSectionReader(rowLimit);
   const dismiss = useDismissItem();
@@ -128,10 +134,10 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   const rows = useMemo(
     () =>
       (query.data ?? []).flatMap((section) => {
-        const row = rowFrom(section, activeOverrides[section.id]);
+        const row = rowFrom(section, activeOverrides[section.id], titleOf);
         return row ? [row] : [];
       }),
-    [query.data, activeOverrides],
+    [query.data, activeOverrides, titleOf],
   );
 
   const [focusedRow, setFocusedRow] = useState(() => rowMemory.get(LAST_ROW_KEY) ?? 0);
