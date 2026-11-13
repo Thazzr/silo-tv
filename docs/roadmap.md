@@ -29,6 +29,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Profile at launch: automatic, every time, after 1 hour, after 12 hours (TV 2026-11-11)
 - ✅ Switch profile and server (the profile switch on the TV 2026-11-09, both 2026-11-11)
 - ✅ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu; For You and Calendar show "Coming soon" until Phase 4 fills them (TV 2026-11-09)
+- 🟨 The top bar floats over the content (user decision 2026-11-12): no band, the hero picture reaches the top edge, a gradient keeps the tabs readable (4.5:1 over white); the bar leaves with the content when it scrolls or goes into its rows and comes back at the top, on key focus, or with the pointer in the top edge
 - ✅ Focus navigation with arrows, OK and Back; focus memory; Magic Remote pointer; exit popup on the entry screen (TV 2026-11-09)
 - ✅ Server branding from `GET /api/v2/theme/branding`: the server's name, its mark (icon) in the server list and top bar, its wordmark on the sign-in and server screens, its sign-in background and subtitle, and its accent colour for highlights (only when it stays readable on the dark UI; otherwise the default). The app's own launcher icon stays fixed, because webOS reads it from the package (TV 2026-11-11)
 - 🟨 Loading, empty and error states
@@ -227,6 +228,7 @@ LG Content Store:
 
 The app follows the web app wherever a TV allows it (user decision 2026-11-11). These differences are forced by the remote, the distance or the TV's engine:
 
+- **A top bar, not a sidebar:** the web navigates through a left sidebar; the TV keeps its tabs in a bar that floats over the top of the content and leaves with it, since a remote reaches a row of tabs above the content in one press.
 - **No hover:** cards have no play disc and no More button (whether a remote key should offer the web's card actions is still open); OK on a card opens its page and the remote's Play key plays it. Rows have no scroll arrows; the focus moves them.
 - **Popovers become list dialogs** with 75 px rows (the More menu, the resume question, later the track pickers); Back closes them.
 - **"Alle entdecken" is the last card of a row**, not a link beside the row title: a header link would need a focus stop of its own in every row.

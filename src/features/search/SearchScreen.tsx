@@ -9,6 +9,7 @@ import {
   type ArrowHandler,
 } from '../../app/nav';
 import { useContentBack } from '../../app/shell/ShellBack';
+import { useBarAway } from '../../app/shell/ShellBar';
 import { useT } from '../../i18n';
 import {
   BoxSetCard,
@@ -274,6 +275,7 @@ export function SearchScreen({
   // --- The results column -----------------------------------------------------------------------
   const requestKey = `${query}|${segment}`;
   const offset = searchScrollOffset(zone, boxSets.items.length > 0, people.items.length > 0);
+  useBarAway(offset > 0);
   let count = '';
   if (searching) count = t('search.searching');
   else if (lastPage && items.length > 0) {

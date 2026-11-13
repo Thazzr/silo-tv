@@ -1586,10 +1586,10 @@ h3 {
   margin: auto -96px 0;
 }
 
-/* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the
-   avatar menu. Focus is always a fill or a ring; --accent only adds a small underline. */
+/* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content, and the avatar menu.
+   Focus is always a fill or a ring; --accent only adds a small underline. */
 html {
-  /* Focus scrolling keeps the focused element clear of the sticky top bar. */
+  /* A document-scrolled page keeps the focused element this far from the top edge. */
   scroll-padding-top: 160px;
 }
 
@@ -1597,16 +1597,61 @@ html {
   min-height: 100vh;
 }
 
+/* The bar floats over the content: no band and no background of its own, a static gradient behind
+   its items for legibility. It leaves with the content (up and out, transform and opacity on a
+   layer of its own) once the content has left its top, and comes back with it. */
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  right: 0;
+  left: 0;
   z-index: 5;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 32px;
   padding: var(--safe-y) 88px 12px;
-  background: var(--bg);
+  transition:
+    transform var(--transition),
+    opacity var(--transition);
+  will-change: transform, opacity;
+}
+
+.topbar[data-hidden='true'] {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+/* Black at 72 % at the top edge, still 56 % just below the text of the tabs and the server name
+   (glyphs from about y 75 to 108, so 54 % at least over all of it: 4.5:1 over a white picture),
+   nothing at the foot. It belongs to the bar, so it moves with it; 240 px reach past the bar's own
+   141 px, which is why the bar also fades. */
+.topbar::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: -1;
+  height: 240px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.72) 0,
+    rgba(0, 0, 0, 0.56) 112px,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+/* While the bar is away, the top edge of the window brings it back for a resting pointer. */
+.topbar-reveal {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 5;
+  height: var(--safe-y);
 }
 
 .topbar-brand,
@@ -1629,6 +1674,7 @@ html {
   color: var(--text-secondary);
   white-space: nowrap;
   text-overflow: ellipsis;
+  text-shadow: var(--bar-text-shadow);
 }
 
 .server-mark {
@@ -1661,7 +1707,8 @@ html {
   font: inherit;
   font-size: var(--fs-tab);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: var(--bar-text-shadow);
   cursor: pointer;
   background: transparent;
   border: 2px solid transparent;
@@ -1685,6 +1732,7 @@ html {
 
 .tab:focus {
   color: var(--focus-content);
+  text-shadow: none;
   background: var(--focus-fill);
   border-color: var(--focus-fill);
 }
@@ -1720,7 +1768,7 @@ html {
 }
 
 .shell-content {
-  padding: 24px 88px 120px;
+  padding: calc(var(--bar-h) + 24px) 88px 120px;
 }
 
 .section-title {

@@ -504,8 +504,8 @@
 /* ---- Home ---- */
 .shell-content.shell-content-home {
   position: relative;
-  /* The window minus the top bar (54 px safe margin, 75 px bar, 12 px below). */
-  height: calc(100vh - 141px);
+  /* The whole window: the hero reaches the top edge, behind the floating top bar. */
+  height: 100vh;
   padding: 0;
   overflow: hidden;
 }
@@ -513,10 +513,12 @@
 .home {
   position: relative;
   height: 100%;
-  /* The hero is 520 px high; with a featured carousel it is the web's 66 % of the window, 760 px at
-     most (713 px at 1080 p). While the focus is in the rows the whole stage moves up by the
-     difference, so the visible part of the hero and the rows below it are what they were. */
-  --hero-h: 520px;
+  /* Below the top bar the hero is 520 px high; with a featured carousel it is the web's 66 % of the
+     window, 760 px at most (713 px at 1080 p). It starts at the window's top edge, so it is the
+     height of the bar taller than that, and its text, buttons and pager stay where they were below
+     a bar-high band. While the focus is in the rows the whole stage moves up by the difference to
+     520 px, so the visible part of the hero and the rows below it are what they were. */
+  --hero-h: calc(520px + var(--bar-h));
   --hero-shift: 0px;
   /* While the focus is in the rows the stage also moves up by this much, so a poster row's last
      caption line ends at the safe area's bottom edge (1026 px at 1080 p) instead of at 1080 px. */
@@ -524,8 +526,8 @@
 }
 
 .home[data-featured='true'] {
-  --hero-h: max(520px, min(66vh, 760px));
-  --hero-shift: calc(var(--hero-h) - 520px);
+  --hero-h: calc(max(520px, min(66vh, 760px)) + var(--bar-h));
+  --hero-shift: calc(var(--hero-h) - var(--bar-h) - 520px);
 }
 
 /* The hero and the rows move together (transform only). */
@@ -821,14 +823,15 @@
   );
 }
 
-/* Only the library's hero, which bleeds under the pills: a scrim there and a stronger bottom fade. */
+/* Only the library's hero, which bleeds under the pills (below the floating top bar, which has its
+   own scrim): a scrim there and a stronger bottom fade. */
 .hero-top-scrim {
   display: none;
 }
 
 .library-stage .hero-top-scrim {
   display: block;
-  inset: 0 0 auto;
+  inset: var(--bar-h) 0 auto;
   height: 180px;
   background: linear-gradient(
     180deg,

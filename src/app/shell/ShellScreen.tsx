@@ -27,8 +27,17 @@ import { ComingSoon } from './ComingSoon';
 import { SignOutDialog } from '../../features/profiles/SignOutDialog';
 import { LaunchOfferDialog } from './LaunchOfferDialog';
 import { ShellBackContext, type ContentBack } from './ShellBack';
+import { BarAwayStore, ShellBarContext } from './ShellBar';
 import { TopBar } from './TopBar';
-import { AVATAR_KEY, MENU_KEY_PREFIX, ShellMemory, tabKey, tabOfKey, type TabId } from './tabs';
+import {
+  AVATAR_KEY,
+  BAR_HEIGHT,
+  MENU_KEY_PREFIX,
+  ShellMemory,
+  tabKey,
+  tabOfKey,
+  type TabId,
+} from './tabs';
 
 export interface ShellScreenProps {
   memory: ShellMemory;
@@ -178,6 +187,19 @@ export function ShellScreen({
     contentBack.current = handler;
   }, []);
 
+  // The floating top bar leaves while any part of the content reports that it is away from its top.
+  const [barStore] = useState(() => new BarAwayStore());
+  // A page that scrolls natively (the placeholder tabs) is away from its top once it has scrolled.
+  useEffect(() => {
+    const page = {};
+    const onScroll = () => barStore.report(page, window.scrollY > 0);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      barStore.report(page, false);
+    };
+  }, [barStore]);
+
   const select = useCallback(
     (tab: TabId) => {
       selectedRef.current = tab;
@@ -235,87 +257,91 @@ export function ShellScreen({
 
   return (
     <ShellBackContext.Provider value={registerContentBack}>
-      <FocusTrackerContext.Provider value={report}>
-        <main className="shell" data-testid="shell">
-          <TopBar
-            selected={selected}
-            initialTab={initialTab}
-            focusAvatar={avatarFirst}
-            profileName={profileName}
-            onTabPick={select}
-            onAvatar={() => setMenu('main')}
-          />
-          {/* Keyed by tab: the content of another tab is a new group that starts at its memory. */}
-          <FocusGroup
-            key={selected}
-            focusKey={`shell-content-${selected}`}
-            enterable
-            className={CONTENT_CLASS[selected] ?? 'shell-content'}
-            // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
-            onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
-            // Search always opens on its keyboard (it remembers its last key itself); the others
-            // reopen where the focus was.
-            saveLastFocusedChild={selected !== 'search'}
-            // Home clips its content; focus must not scroll that box (the rows scroll by transform).
-            onScroll={keepAtOrigin}
-            data-transform-scrolled={CONTENT_CLASS[selected] ? 'page' : undefined}
-            preferredChildFocusKey={
-              selected === 'search' ? SEARCH_KEYBOARD_KEY : memory.focusOf(selected)
-            }
-            data-testid={`tab-${selected}`}
-          >
-            <TabContent
-              tab={selected}
-              memory={memory}
-              onPlay={onPlay}
-              onOpenDetail={onOpenDetail}
-              onExploreSection={onExploreSection}
-              onOpenCollection={onOpenCollection}
-              onOpenPerson={onOpenPerson}
-              onOpenBoxSet={onOpenBoxSet}
-              onHome={goHome}
-            />
-          </FocusGroup>
-          {menu ? (
-            <AvatarMenu
-              view={menu}
+      <ShellBarContext.Provider value={barStore}>
+        <FocusTrackerContext.Provider value={report}>
+          <main className="shell" data-testid="shell">
+            <TopBar
+              selected={selected}
+              initialTab={initialTab}
+              focusAvatar={avatarFirst}
               profileName={profileName}
-              serverName={branding.serverName}
-              restricted={restricted}
-              launchMode={launchMode}
-              signingOut={signOut.isPending}
-              onClose={() => setMenu(null)}
-              onSwitchProfile={onSwitchProfile}
-              onSwitchServer={onSwitchServer}
-              onSignOut={() => setSignOutOpen(true)}
-              onOpenLaunch={() => setMenu('launch')}
-              onOpenSettings={() => {
-                memory.expectAvatarReturn();
-                onOpenSettings();
-              }}
-              onChooseLaunch={(mode) => {
-                onLaunchMode(mode);
-                setMenu('main');
-              }}
+              onTabPick={select}
+              onAvatar={() => setMenu('main')}
             />
-          ) : null}
-          {signOutOpen ? (
-            <SignOutDialog
-              server={branding.serverName}
-              busy={signOut.isPending}
-              onCancel={() => setSignOutOpen(false)}
-              onConfirm={() => signOut.mutate()}
-            />
-          ) : null}
-          {offer && rendered ? (
-            <LaunchOfferDialog
-              name={offer.name}
-              fallbackFocusKey={tabKey(selected)}
-              onAnswer={offer.onAnswer}
-            />
-          ) : null}
-        </main>
-      </FocusTrackerContext.Provider>
+            {/* Keyed by tab: the content of another tab is a new group that starts at its memory. */}
+            <FocusGroup
+              key={selected}
+              focusKey={`shell-content-${selected}`}
+              enterable
+              className={CONTENT_CLASS[selected] ?? 'shell-content'}
+              // A group with nothing focusable in it (still loading) takes no focus: the bar keeps it.
+              onFocusSelf={() => void setFocus(tabKey(selectedRef.current))}
+              // Search always opens on its keyboard (it remembers its last key itself); the others
+              // reopen where the focus was.
+              saveLastFocusedChild={selected !== 'search'}
+              // Home clips its content; focus must not scroll that box (the rows scroll by transform).
+              onScroll={keepAtOrigin}
+              data-transform-scrolled={CONTENT_CLASS[selected] ? 'page' : undefined}
+              // The bar floats over the top of this group: the navigation measures it from below the bar.
+              data-nav-inset-top={BAR_HEIGHT}
+              preferredChildFocusKey={
+                selected === 'search' ? SEARCH_KEYBOARD_KEY : memory.focusOf(selected)
+              }
+              data-testid={`tab-${selected}`}
+            >
+              <TabContent
+                tab={selected}
+                memory={memory}
+                onPlay={onPlay}
+                onOpenDetail={onOpenDetail}
+                onExploreSection={onExploreSection}
+                onOpenCollection={onOpenCollection}
+                onOpenPerson={onOpenPerson}
+                onOpenBoxSet={onOpenBoxSet}
+                onHome={goHome}
+              />
+            </FocusGroup>
+            {menu ? (
+              <AvatarMenu
+                view={menu}
+                profileName={profileName}
+                serverName={branding.serverName}
+                restricted={restricted}
+                launchMode={launchMode}
+                signingOut={signOut.isPending}
+                onClose={() => setMenu(null)}
+                onSwitchProfile={onSwitchProfile}
+                onSwitchServer={onSwitchServer}
+                onSignOut={() => setSignOutOpen(true)}
+                onOpenLaunch={() => setMenu('launch')}
+                onOpenSettings={() => {
+                  memory.expectAvatarReturn();
+                  onOpenSettings();
+                }}
+                onChooseLaunch={(mode) => {
+                  onLaunchMode(mode);
+                  setMenu('main');
+                }}
+              />
+            ) : null}
+            {signOutOpen ? (
+              <SignOutDialog
+                server={branding.serverName}
+                busy={signOut.isPending}
+                onCancel={() => setSignOutOpen(false)}
+                onConfirm={() => signOut.mutate()}
+              />
+            ) : null}
+            {offer && rendered ? (
+              <LaunchOfferDialog
+                name={offer.name}
+                fallbackFocusKey={tabKey(selected)}
+                onAnswer={offer.onAnswer}
+              />
+            ) : null}
+          </main>
+        </FocusTrackerContext.Provider>
+      </ShellBarContext.Provider>
     </ShellBackContext.Provider>
   );
 }

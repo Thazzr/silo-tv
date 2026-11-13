@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useBarAway } from '../../app/shell/ShellBar';
 import { FocusGroup, focusFromPointer, moveFocusTo, type ArrowDirection } from '../../app/nav';
 import { CardSkeleton } from './Skeletons';
 import { DEFAULT_GRID, type GridMetrics } from './layout';
@@ -112,6 +113,8 @@ export function Grid<T>({
   const [scrolledRow, setScrolledRow] = useState(() => focusedRow);
   const [scrollRow, setScrollRow] = useState(() => focusedRow);
   const effectiveScroll = nextScrollIndex(scrollRow, scrolledRow, 1, totalRows);
+  // A grid scrolled off its first row has left the top of the page, so the shell's top bar leaves.
+  useBarAway(effectiveScroll > 0);
 
   // A jump scrolls to the row of its index; it is not a focus move, so the focused card stays put.
   // The scroll is set while rendering (the new jump is told apart from the one handled), so the

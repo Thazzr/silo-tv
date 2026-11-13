@@ -23,6 +23,12 @@ export const NAV_RECT_ATTR = 'data-nav-rect';
  * element between the focused one and the box, such as a row of season pills, still scrolls.
  */
 export const TRANSFORM_SCROLLED_ATTR = 'data-transform-scrolled';
+/**
+ * On a group: how many px at the top of its box the navigation leaves out when it measures it. A
+ * floating bar lies over the top of the shell's content group, and Down and Up between the bar and
+ * the content are found by the two boxes lying one above the other; overlapping boxes would not.
+ */
+export const NAV_INSET_TOP_ATTR = 'data-nav-inset-top';
 
 interface Box {
   x: number;
@@ -176,9 +182,13 @@ export class NavAdapter extends BaseWebAdapter {
   constructor(...args: ConstructorParameters<typeof BaseWebAdapter>) {
     super(...args);
     const measureDom = this.measureLayout;
-    this.measureLayout = (component) => {
+    this.measureLayout = async (component) => {
       const box = slotBox(component.node);
-      return box ? Promise.resolve({ ...box, node: component.node }) : measureDom(component);
+      const layout = box ? { ...box, node: component.node } : await measureDom(component);
+      const inset = Number(component.node?.getAttribute(NAV_INSET_TOP_ATTR));
+      return inset > 0
+        ? { ...layout, y: layout.y + inset, top: layout.top + inset, height: layout.height - inset }
+        : layout;
     };
     const focusDom = this.focusNode;
     this.focusNode = (component) => {

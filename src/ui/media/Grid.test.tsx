@@ -5,6 +5,7 @@ import { getCurrentFocusKey, setFocus } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { BarAwayStore, ShellBarContext } from '../../app/shell/ShellBar';
 import { renderWithSilo } from '../../test/renderFlow';
 import { PosterCard } from './Cards';
 import { Grid, gridCardKey } from './Grid';
@@ -85,6 +86,21 @@ const focusAt = async (focusKey: string) => {
 };
 
 describe('Grid', () => {
+  it("tells the shell's top bar that it is away while scrolled off its first row, and back at the top", async () => {
+    const store = new BarAwayStore();
+    renderWithSilo(
+      <ShellBarContext.Provider value={store}>
+        <TestGrid items={makeItems(0, 60)} />
+      </ShellBarContext.Provider>,
+    );
+    await act(async () => {});
+    expect(store.isAway()).toBe(false);
+    await down(5);
+    expect(store.isAway()).toBe(true);
+    for (let i = 0; i < 5; i += 1) await pressKey(KEY.up);
+    expect(store.isAway()).toBe(false);
+  });
+
   it('lands on the last card when Down leaves a short last row, without the library searching', async () => {
     // 8 cards: a full row and a last row of two.
     renderWithSilo(<TestGrid items={makeItems(0, 8)} />);

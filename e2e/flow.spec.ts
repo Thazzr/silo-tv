@@ -66,6 +66,11 @@ interface FakeOptions {
    */
   boxSet?: boolean;
   /**
+   * Thirty more films, "Saga Crowd 01" to "Saga Crowd 30": the Movies library lists them after its
+   * six (a grid of six rows, which scrolls) and a search for "sag" finds them too.
+   */
+  crowded?: boolean;
+  /**
    * "Second Title" (m2) and the series (s1) have two local extras (a trailer with a title, a
    * featurette without one) and one YouTube video; the first extra's file answers the playback
    * calls like any title.
@@ -333,6 +338,14 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
     options.buffering === undefined &&
     options.badges === undefined &&
     options.upNext === undefined;
+  const crowd = options.crowded
+    ? Array.from({ length: 30 }, (_, i) => ({
+        content_id: `c${i + 1}`,
+        title: `Saga Crowd ${String(i + 1).padStart(2, '0')}`,
+        type: 'movie',
+        year: 2000,
+      }))
+    : [];
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -1286,6 +1299,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 type: film.type,
                 year: film.year,
               })),
+              ...crowd,
             ]
               .filter((card) => card.title.toLowerCase().includes(text))
               .filter(
@@ -1341,9 +1355,10 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               (url.searchParams.get('groups') ?? '').includes('"watched"')
             )
               return send(422, { type: 'about:blank', title: 'Unprocessable', status: 422 });
-            const items = browseTitles(url.searchParams).map((movie) =>
-              asCard(movie, options.badges),
-            );
+            const items = [
+              ...browseTitles(url.searchParams).map((movie) => asCard(movie, options.badges)),
+              ...crowd,
+            ];
             return send(200, {
               items,
               total: items.length,
@@ -4590,7 +4605,9 @@ test('the Magic Remote pointer over the Movies tab does not lift Home back to it
   const lifted = await stageTransform();
   const rowsAt = await transformOf(page, rows);
 
-  // The pointer over the Movies tab highlights it and moves nothing.
+  // The pointer over the Movies tab highlights it and moves nothing. The bar is away with the rows:
+  // the pointer reaches it through the top edge.
+  await page.mouse.move(960, 20);
   const tab = page.getByRole('button', { name: 'Filme', exact: true });
   await tab.hover();
   await expect(tab).toBeFocused();
@@ -5377,10 +5394,12 @@ test('Home: the featured carousel turns every 8 s, stands still on its buttons, 
   await expect(page.getByRole('button', { name: 'Mehr Infos' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Diashow pausieren' })).toBeVisible();
 
-  // The hero is 66 % of the window (713 px at 1080 p) and the first row shows its title below it,
-  // inside the safe area.
+  // The hero is 66 % of the window (713 px at 1080 p) below the top bar's 141 px, and it reaches the
+  // top edge behind the bar, so it is 854 px high. The first row shows its title below it, inside
+  // the safe area.
   const hero = await page.getByTestId('hero').boundingBox();
-  expect(hero!.height).toBeCloseTo(712.8, 0);
+  expect(hero!.y).toBe(0);
+  expect(hero!.height).toBeCloseTo(712.8 + 141, 0);
   const rowTitle = await page.getByTestId('row-title').first().boundingBox();
   expect(rowTitle!.y).toBeGreaterThanOrEqual(hero!.y + hero!.height - 1);
   expect(rowTitle!.y + rowTitle!.height).toBeLessThanOrEqual(1080 - 54);
@@ -5446,14 +5465,15 @@ test('Movies: Recommended opens with the carousel under the pills, Down reaches 
   await expect(page.getByTestId('hero-slide-number')).toHaveText('01');
   await expect(page.getByTestId('row-title')).toHaveText(['Empfohlen für dich']);
 
-  // The hero starts at the top of the content, under the pills; the pills stay on top of it.
+  // The hero reaches the top edge of the window, behind the top bar and the pills (which stay on top
+  // of it); below the bar it is what it was, 760 px.
   const hero = await page.getByTestId('hero').boundingBox();
-  expect(hero!.y).toBeCloseTo(141, 0);
-  expect(hero!.height).toBeCloseTo(760, 0);
+  expect(hero!.y).toBeCloseTo(0, 0);
+  expect(hero!.height).toBeCloseTo(760 + 141, 0);
   const pill = page.getByRole('tab', { name: 'Empfohlen' });
   const box = await pill.boundingBox();
-  expect(box!.y).toBeGreaterThanOrEqual(hero!.y);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(hero!.y + 200);
+  expect(box!.y).toBeGreaterThanOrEqual(hero!.y + 141);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(hero!.y + 141 + 200);
   const topmost = await page.evaluate(
     `document.elementFromPoint(${box!.x + box!.width / 2}, ${box!.y + box!.height / 2})?.closest('[role="tab"]')?.textContent ?? null`,
   );
@@ -5500,8 +5520,10 @@ test("Home: the carousel's picture is as bright as the web's, only the left thir
       })()`,
     ) as Promise<number>;
   };
-  // The right half, above the copy: the picture (200) at 90 % brightness is 180; at least 85 % of it.
-  await expect.poll(() => brightnessAt(1300, 400), { timeout: 10_000 }).toBeGreaterThanOrEqual(170);
+  // The right half, above the copy and below the top bar's gradient (240 px): the picture (200) at
+  // 90 % brightness is 180; at least 85 % of it. The hero reaches the top edge, so the bottom fade
+  // starts 141 px lower than it did under a band.
+  await expect.poll(() => brightnessAt(1300, 300), { timeout: 10_000 }).toBeGreaterThanOrEqual(170);
   // The left third under the text is shaded.
   expect(await brightnessAt(100, 400)).toBeLessThan(100);
 });
@@ -5604,6 +5626,218 @@ test('rows mode keeps the focused row inside the safe area: its last caption lin
   expect(await captionEnd()).toBeLessThanOrEqual(1026);
 });
 
+/** The floating top bar: shown (fully opaque, on screen) or away (invisible and up out of the screen). */
+async function expectBarShown(page: Page, shown: boolean) {
+  const bar = page.getByTestId('topbar');
+  await expect(bar).toHaveCSS('opacity', shown ? '1' : '0');
+  await expect
+    .poll(async () => {
+      const box = (await bar.boundingBox())!;
+      return box.y + box.height;
+    })
+    .toBe(shown ? 141 : 0);
+}
+
+/** Opens the app on Home with the carousel showing, signed in as the fake server's one profile. */
+async function openHome(page: Page, options: FakeOptions) {
+  const { origin } = await startFakeSilo(options);
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+}
+
+test('floating top bar on Home: no band, the hero behind it from the top edge, the bar leaves with the rows and returns with the carousel, keyboard only', async ({
+  page,
+}) => {
+  await openHome(page, { featured: true });
+  await expect(page.getByTestId('hero-carousel')).toBeVisible();
+  const bar = page.getByTestId('topbar');
+  const at = async (loc: ReturnType<Page['locator']>) => (await loc.boundingBox())!;
+
+  // At rest: nothing of its own behind the tabs but a gradient (black 72 % at the top, 56 % under the text,
+  // nothing at the foot) that belongs to the bar; the hero starts at the top edge of the window.
+  await expect(bar).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const gradient = await page.evaluate(
+    `getComputedStyle(document.querySelector('[data-testid="topbar"]'), '::before').backgroundImage`,
+  );
+  expect(gradient).toContain('linear-gradient');
+  expect(gradient).toContain('rgba(0, 0, 0, 0.72) 0px');
+  expect(gradient).toContain('rgba(0, 0, 0, 0.56) 112px');
+  expect(gradient).toContain('rgba(0, 0, 0, 0) 100%');
+  await expectBarShown(page, true);
+  const hero = await at(page.getByTestId('hero'));
+  expect(hero.y).toBe(0);
+  expect(hero.height).toBeCloseTo(712.8 + 141, 0);
+  // The bar's items sit where they did with a band: tabs on the 54 px safe line, 75 px high.
+  const tab = await at(page.getByRole('button', { name: 'Start', exact: true }));
+  expect([tab.y, tab.height]).toEqual([54, 75]);
+  // The hero's text, buttons and pager stay at the screen positions they had below the band.
+  expect((await at(page.getByTestId('hero-title'))).y).toBeCloseTo(557.2, 0);
+  expect((await at(page.getByTestId('hero-synopsis'))).y).toBeCloseTo(687.8, 0);
+  expect((await at(page.getByRole('button', { name: 'Abspielen' }))).y).toBeCloseTo(742.8, 0);
+  expect((await at(page.getByRole('button', { name: 'Diashow pausieren' }))).y).toBeCloseTo(
+    742.8,
+    0,
+  );
+
+  // Down through the carousel's buttons into the rows: the bar leaves with the page, and the
+  // focused row stays inside the safe area, with the rows where they were under the band.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await expectBarShown(page, true);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-landscape:focus')).toBeFocused();
+  await expectBarShown(page, false);
+  await page.waitForTimeout(600);
+  const caption = await page.locator('.card:focus .card-caption').boundingBox();
+  expect(caption!.y + caption!.height).toBeLessThanOrEqual(1026);
+  expect((await at(page.getByTestId('row-title').first())).y).toBeCloseTo(605, 0);
+
+  // Up to the carousel brings it back, Up again focuses the tab.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await expectBarShown(page, true);
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await expectBarShown(page, true);
+});
+
+test('floating top bar on Home: a resting pointer in the top edge brings the bar back, hovering a tab moves nothing, and the bar leaves with the pointer', async ({
+  page,
+}) => {
+  await openHome(page, { featured: true });
+  await expect(page.getByTestId('hero-carousel')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-landscape:focus')).toBeFocused();
+  await expectBarShown(page, false);
+  await page.waitForTimeout(600);
+  const rowTitle = page.getByTestId('row-title').first();
+  const rowsAt = (await rowTitle.boundingBox())!.y;
+
+  // The pointer rests in the top edge: the bar returns; the content does not move.
+  await page.mouse.move(960, 20);
+  await expectBarShown(page, true);
+  expect((await rowTitle.boundingBox())!.y).toBe(rowsAt);
+
+  // Hover on a tab focuses it, and still nothing moves: the rows stay where the keys left them.
+  const movies = page.getByRole('button', { name: 'Filme', exact: true });
+  const movieBox = (await movies.boundingBox())!;
+  await page.mouse.move(movieBox.x + movieBox.width / 2, movieBox.y + movieBox.height / 2);
+  await expect(movies).toBeFocused();
+  await page.waitForTimeout(600);
+  expect((await rowTitle.boundingBox())!.y).toBe(rowsAt);
+  await expectBarShown(page, true);
+
+  // The pointer leaves the bar: it goes again, though the hovered tab still has the focus.
+  await page.mouse.move(960, 600);
+  await expectBarShown(page, false);
+  expect((await rowTitle.boundingBox())!.y).toBe(rowsAt);
+
+  // A key press that moves the focus back into the content leaves the bar away.
+  await page.keyboard.press('ArrowDown');
+  await expectBarShown(page, false);
+});
+
+test('floating top bar on Movies: it stays over the carousel, leaves with the rows and with a scrolled Browse grid, and comes back at the top, keyboard only', async ({
+  page,
+}) => {
+  await openHome(page, { featured: true, crowded: true });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('tab-movies')).toBeVisible();
+  await expect(page.getByTestId('hero-carousel')).toBeVisible();
+  await expectBarShown(page, true);
+
+  // Recommended: the pills lie where they did under the band, the hero reaches the top edge.
+  const pills = (await page.getByRole('tab', { name: 'Empfohlen' }).boundingBox())!;
+  expect(pills.y).toBe(141);
+  expect((await page.getByTestId('hero').boundingBox())!.y).toBe(0);
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Abspielen' })).toBeFocused();
+  await expectBarShown(page, true);
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card-poster:focus')).toBeFocused();
+  await expectBarShown(page, false);
+  await page.keyboard.press('ArrowUp');
+  await expectBarShown(page, true);
+
+  // Browse: six titles and thirty more. At the top the bar is shown and the pills are below it.
+  await page.keyboard.press('ArrowUp');
+  await expect(
+    page.getByTestId('library-screen').getByRole('tab', { name: 'Empfohlen' }),
+  ).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('browse')).toBeVisible();
+  await expect(page.getByTestId('grid-track')).toBeVisible();
+  await expectBarShown(page, true);
+  // Down from the pills passes the toolbar into the grid.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card:focus')).toBeFocused();
+  await expectBarShown(page, true);
+  // Down the rows of the grid: once it has scrolled, the bar is gone.
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowDown');
+  await expectBarShown(page, false);
+  // Back leaves the scrolled grid for its pill and then for the tab: the grid stays scrolled, but a
+  // key has put the focus on the bar, so the bar is shown (an invisible tab must never have it).
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tab', { name: 'Mediathek' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Filme', exact: true })).toBeFocused();
+  await expectBarShown(page, true);
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.card:focus')).toBeFocused();
+  // Back up to the first row, the bar returns; Up again reaches the pills and the tabs.
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowUp');
+  await expectBarShown(page, true);
+});
+
+test('floating top bar on Search: nothing of the page lies under the tabs at rest, and the bar leaves when the results scroll', async ({
+  page,
+}) => {
+  await openHome(page, { crowded: true });
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-hint')).toBeVisible();
+  await expectBarShown(page, true);
+  // At rest the field starts below the bar's band and the hint under it.
+  expect((await page.getByTestId('search-field').boundingBox())!.y).toBeGreaterThanOrEqual(141);
+
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('osk-a')).toBeFocused();
+  const press = async (key: string, times = 1) => {
+    for (let i = 0; i < times; i += 1) await page.keyboard.press(key);
+  };
+  // "sag": s is in the third row, fifth column of the keyboard.
+  await press('ArrowDown', 2);
+  await press('ArrowRight', 4);
+  await page.keyboard.press('Enter');
+  await press('ArrowUp', 2);
+  await press('ArrowLeft', 4);
+  await page.keyboard.press('Enter');
+  await press('ArrowRight', 6);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('search-text')).toHaveText('sag');
+  await expect(page.getByTestId('search-count')).toHaveText('32 Ergebnisse');
+  await expectBarShown(page, true);
+
+  // Into the titles and down their rows: the page scrolls, and the bar leaves.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.card:focus')).toBeFocused();
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowDown');
+  await expectBarShown(page, false);
+  // Back to the first row of the results: the bar comes back.
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press('ArrowUp');
+  await expectBarShown(page, true);
+});
+
 /**
  * No media plays in the fake server: the video element gets a playhead of its own, which the test
  * moves, and the events the player listens to are sent by hand. Call it once per episode that
@@ -5693,6 +5927,8 @@ test('player: the credits card counts down in the credits and starts the next ep
   await armVideo(page);
   await moveTo(page, 2400);
   await expect(page.getByTestId('player-upnext')).toBeVisible();
+  // The card takes the focus a moment after it shows; arrow keys before that miss it.
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
   await page.keyboard.press('Enter');

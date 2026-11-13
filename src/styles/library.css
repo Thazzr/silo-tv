@@ -3,9 +3,10 @@
 /* Like Home, the library tabs clip their content and scroll it themselves. */
 .shell-content.shell-content-library {
   position: relative;
-  /* The window minus the top bar (54 px safe margin, 75 px bar, 12 px below). */
-  height: calc(100vh - 141px);
-  padding: 0;
+  box-sizing: border-box;
+  height: 100vh;
+  /* The content starts below the floating top bar; only the Recommended hero reaches up behind it. */
+  padding: var(--bar-h) 0 0;
   overflow: hidden;
 }
 
@@ -105,8 +106,11 @@
   transform: translateY(calc(-1 * (var(--hero-shift) + var(--rows-lift))));
 }
 
+/* From the top edge of the window (behind the top bar and the pills) down to where the hero ended
+   when the bar still had a band of its own. */
 .library-stage .hero {
-  top: calc(-1 * var(--library-head));
+  top: calc(-1 * (var(--library-head) + var(--bar-h)));
+  height: calc(var(--hero-h) + var(--bar-h));
 }
 
 .library-rows {

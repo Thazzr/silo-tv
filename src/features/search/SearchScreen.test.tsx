@@ -13,6 +13,7 @@ import {
 } from '../../app/nav';
 import { spySpatialSearch } from '../../app/nav/testing';
 import { ShellBackContext, type ContentBack } from '../../app/shell/ShellBack';
+import { BarAwayStore, ShellBarContext } from '../../app/shell/ShellBar';
 import { SiloProvider } from '../../app/SiloContext';
 import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
@@ -100,9 +101,17 @@ function setup(
     memory?: SearchMemory;
     queryClient?: QueryClient;
     onShellBack?: () => void;
+    /** Where the screen tells the shell's top bar that it has left its top. */
+    barStore?: BarAwayStore;
   } = {},
 ) {
-  const { memory = new SearchMemory(), queryClient, onShellBack = vi.fn(), ...serve } = options;
+  const {
+    memory = new SearchMemory(),
+    queryClient,
+    onShellBack = vi.fn(),
+    barStore = new BarAwayStore(),
+    ...serve
+  } = options;
   const calls = serveSearch(server, serve);
   server.use(http.get(`${BASE_URL}/api/v2/theme/branding`, () => HttpResponse.json(branding())));
   const session = new Session(memoryStorage());
@@ -141,7 +150,9 @@ function setup(
       <I18nProvider lang="en">
         <SiloProvider baseUrl={BASE_URL} session={session} device={testDevice}>
           <CardPrefsProvider>
-            <Navigator<Screen> initial={{ name: 'search' }} renderScreen={renderScreen} />
+            <ShellBarContext.Provider value={barStore}>
+              <Navigator<Screen> initial={{ name: 'search' }} renderScreen={renderScreen} />
+            </ShellBarContext.Provider>
           </CardPrefsProvider>
         </SiloProvider>
       </I18nProvider>
@@ -744,6 +755,19 @@ describe('SearchScreen: moving between the keyboard and the results', () => {
     );
     await focusOn(boxSetCard('bs-1'));
     await waitFor(() => expect(page.style.transform).toBe('translateY(0px)'));
+  });
+
+  it("tells the shell's top bar that the page has moved up, though the grid itself is at its first row", async () => {
+    const barStore = new BarAwayStore();
+    setup({ ...FULL, barStore });
+    type('sag');
+    await found('Title 1');
+    expect(barStore.isAway()).toBe(false);
+    // Six titles are one grid row: the grid is not scrolled, only the page above it is.
+    await focusOn(titleCard('title-1'));
+    await waitFor(() => expect(barStore.isAway()).toBe(true));
+    await focusOn(boxSetCard('bs-1'));
+    await waitFor(() => expect(barStore.isAway()).toBe(false));
   });
 
   describe('and the pointer', () => {

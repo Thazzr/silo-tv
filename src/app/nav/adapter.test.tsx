@@ -55,6 +55,30 @@ function fakeRoot() {
 describe('NavAdapter measuring', () => {
   const service = { options: {} } as ConstructorParameters<typeof NavAdapter>[0];
 
+  it('measures a group from below the part that a floating bar covers', async () => {
+    const host = html(
+      '<div id="g" data-nav-rect="0,0,1920,1080" data-nav-inset-top="141"><button>c</button></div>',
+    );
+    const node = host.querySelector<HTMLElement>('#g')!;
+    const layout = await new NavAdapter(service).measureLayout({ node } as never);
+    expect(layout).toMatchObject({
+      y: 141,
+      top: 141,
+      height: 939,
+      bottom: 1080,
+      x: 0,
+      width: 1920,
+    });
+    // Without the attribute the box is whole.
+    const plain = html(
+      '<div id="p" data-nav-rect="0,0,1920,1080"></div>',
+    ).querySelector<HTMLElement>('#p')!;
+    expect(await new NavAdapter(service).measureLayout({ node: plain } as never)).toMatchObject({
+      y: 0,
+      height: 1080,
+    });
+  });
+
   it('reads the box of a card from its slot without touching layout', async () => {
     const host = html('<div data-nav-rect="360,0,176,264"><button id="c">c</button></div>');
     const reads = vi.fn();

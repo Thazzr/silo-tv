@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import { useContentBack } from '../../app/shell/ShellBack';
+import { useBarAway } from '../../app/shell/ShellBar';
 import { Button } from '../../app/ui';
 import {
   FocusGroup,
@@ -181,6 +182,8 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   // Whether the focus is on something in the rows (not in the hero or above it).
   const [inRows, setInRows] = useState(false);
   const focusWithin = useKeyFocusWithin(setInRows);
+  // The stage moves up while the focus is in the rows, so the top bar leaves with it.
+  useBarAway(inRows);
   const activeRow = Math.min(focusedRow, Math.max(0, rows.length - 1));
   const card = useMemo(() => {
     if (focusedCard) return focusedCard;

@@ -20,6 +20,9 @@ export const TAB_KEY_PREFIX = 'shell-tab-';
 export const AVATAR_KEY = 'shell-avatar';
 export const MENU_KEY_PREFIX = 'avatar-menu-';
 
+/** The floating top bar's height in px: --bar-h in src/styles/tokens.css (a test keeps them equal). */
+export const BAR_HEIGHT = 141;
+
 export const tabKey = (tab: TabId): string => `${TAB_KEY_PREFIX}${tab}`;
 
 export function tabOfKey(focusKey: string): TabId | null {

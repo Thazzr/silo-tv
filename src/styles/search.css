@@ -5,7 +5,7 @@
 
 .search {
   position: absolute;
-  inset: 0;
+  inset: var(--bar-h) 0 0;
 }
 
 /* ---- Query field and keyboard ---- */
@@ -160,7 +160,7 @@
 }
 
 /* The titles take what is left of the content under the count: the content is the window minus
-   141 px (top bar), 12 px padding, the pills (87 px) and the count line (48 px). */
+   141 px (the band the top bar floats over), 12 px padding, the pills (87 px) and the count line (48 px). */
 .search-results .grid-viewport {
   height: calc(100vh - 288px);
 }

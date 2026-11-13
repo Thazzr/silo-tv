@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StartIntent } from '../../playback/resume';
+import { useBarAway } from '../../app/shell/ShellBar';
 import { Button } from '../../app/ui';
 import { FocusGroup, focusFromPointer, stackArrows, useKeyFocusWithin } from '../../app/nav';
 import { useT } from '../../i18n';
@@ -158,6 +159,9 @@ export function RecommendedView({
   const offset = carouselMode
     ? 0
     : rows.slice(0, activeRow).reduce((sum, row) => sum + rowHeight(row.shape), 0);
+  // With a hero the stage moves up while the focus is in the rows; without one only the rows scroll,
+  // and the first row is still where it starts. The top bar leaves with what moved.
+  useBarAway(inRows && (featured !== null || offset > 0));
 
   // The rows are skipped while their props are the same, so what they get must not change when
   // the focus moves: these handlers are stable and read the latest props when called.

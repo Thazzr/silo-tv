@@ -984,3 +984,108 @@ describe('ShellScreen search tab', () => {
     expect(await screen.findByTestId('search-text')).toHaveTextContent('sa');
   });
 });
+
+describe('ShellScreen floating top bar', () => {
+  const bar = () => screen.getByTestId('topbar');
+  const inRowsMode = () => document.querySelector('[data-rows="true"]') !== null;
+
+  it('stays while the content is at its top and leaves with the rows, which move the page up', async () => {
+    serve();
+    setup();
+    await ready();
+    expect(bar()).toHaveAttribute('data-hidden', 'false');
+    await move(KEY.down);
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'true'));
+    await move(KEY.up);
+    expect(tab('Home')).toHaveFocus();
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'false'));
+  });
+
+  it('comes back when a key moves the focus onto it, wherever the content is', async () => {
+    serve();
+    setup();
+    await ready();
+    await move(KEY.down);
+    await move(KEY.down);
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'true'));
+    await move(KEY.back);
+    expect(tab('Home')).toHaveFocus();
+    expect(bar()).toHaveAttribute('data-hidden', 'false');
+  });
+
+  it('leaves a natively scrolled page once it has scrolled, and returns when it is back at the top', async () => {
+    serve();
+    setup();
+    await ready();
+    await goToTab(KEY.right, 3, 'forYou');
+    await move(KEY.down);
+    expect(getCurrentFocusKey()).toBe('shell-placeholder');
+    const scrollTo = (y: number) => {
+      Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+    };
+    try {
+      scrollTo(300);
+      expect(bar()).toHaveAttribute('data-hidden', 'true');
+      scrollTo(0);
+      expect(bar()).toHaveAttribute('data-hidden', 'false');
+    } finally {
+      Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+    }
+  });
+
+  it('shows the bar while a key has the focus on it, though the content is still away, and hides it when a key leaves for the content', async () => {
+    serve();
+    setup();
+    await ready();
+    await goToTab(KEY.right, 3, 'forYou');
+    await move(KEY.down);
+    expect(getCurrentFocusKey()).toBe('shell-placeholder');
+    try {
+      Object.defineProperty(window, 'scrollY', { value: 300, configurable: true });
+      act(() => {
+        window.dispatchEvent(new Event('scroll'));
+      });
+      expect(bar()).toHaveAttribute('data-hidden', 'true');
+      await move(KEY.up);
+      expect(tab('For You')).toHaveFocus();
+      expect(bar()).toHaveAttribute('data-hidden', 'false');
+      await move(KEY.down);
+      expect(getCurrentFocusKey()).toBe('shell-placeholder');
+      expect(bar()).toHaveAttribute('data-hidden', 'true');
+    } finally {
+      Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
+    }
+  });
+
+  it('is brought back by a pointer in the top edge, and hover on a tab leaves the content where it is', async () => {
+    serve();
+    setup();
+    await ready();
+    await move(KEY.down);
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'true'));
+    expect(inRowsMode()).toBe(true);
+
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByTestId('topbar-reveal'));
+    });
+    expect(bar()).toHaveAttribute('data-hidden', 'false');
+    expect(screen.queryByTestId('topbar-reveal')).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.mouseEnter(tab('Movies'));
+      for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    });
+    // The hovered tab has the focus, and the content is still in its rows mode.
+    expect(tab('Movies')).toHaveFocus();
+    expect(inRowsMode()).toBe(true);
+
+    // The pointer leaves: the focus stays on the tab, but it was the pointer's, so the bar goes.
+    await act(async () => {
+      fireEvent.mouseLeave(bar());
+    });
+    expect(bar()).toHaveAttribute('data-hidden', 'true');
+    expect(inRowsMode()).toBe(true);
+  });
+});
