@@ -491,19 +491,24 @@ describe('SettingsScreen playback section (auto-play next)', () => {
   const puts: { key: string; scope: string | null; value: unknown }[] = [];
   const deletes: { key: string; scope: string | null }[] = [];
   let putStatus = 200;
+  // What the server holds for the profile: a successful profile-scope write lands here, and the
+  // test serves it as the effective values, so a read after the write answers what the server would.
+  let stored: Record<string, unknown> = {};
+  // The effective reads so far, and how many there were when the delete came in.
+  let effectiveReads: Request[] = [];
+  let readsAtDelete = 0;
   beforeEach(() => {
     puts.length = 0;
     deletes.length = 0;
     putStatus = 200;
+    stored = {};
     server.use(
       http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
         const body = (await request.json()) as { value: unknown };
-        puts.push({
-          key: String(params.key),
-          scope: new URL(request.url).searchParams.get('scope'),
-          value: body.value,
-        });
+        const scope = new URL(request.url).searchParams.get('scope');
+        puts.push({ key: String(params.key), scope, value: body.value });
         if (putStatus !== 200) return new HttpResponse(null, { status: putStatus });
+        if (scope === 'profile') stored[String(params.key)] = body.value;
         return HttpResponse.json({
           key: params.key,
           scope: 'profile',
@@ -512,6 +517,7 @@ describe('SettingsScreen playback section (auto-play next)', () => {
         });
       }),
       http.delete(`${BASE_URL}/api/v2/settings/values/:key`, ({ request, params }) => {
+        readsAtDelete = effectiveReads.length;
         deletes.push({
           key: String(params.key),
           scope: new URL(request.url).searchParams.get('scope'),
@@ -579,7 +585,9 @@ describe('SettingsScreen playback section (auto-play next)', () => {
   });
 
   it("writes the key at the profile scope on a click, then drops this TV's own value", async () => {
-    serveSettings(server);
+    // The server stores the write, so the effective read after the delete answers what it wrote.
+    const calls = serveSettings(server, { values: stored });
+    effectiveReads = calls.effective;
     open();
     const row = await screen.findByTestId('settings-autoplay');
     fireEvent.click(within(row).getByRole('radio', { name: 'Off' }));
@@ -588,6 +596,8 @@ describe('SettingsScreen playback section (auto-play next)', () => {
     // The device row would outrank the profile's: it goes, as in the web app.
     await waitFor(() => expect(deletes).toHaveLength(1));
     expect(deletes[0]).toEqual({ key: 'playback.auto_play_next', scope: 'profile_device' });
+    // The delete is followed by a refetch of the effective values; the row must survive it.
+    await waitFor(() => expect(calls.effective.length).toBeGreaterThan(readsAtDelete));
     await waitFor(() =>
       expect(within(row).getByRole('radio', { name: 'Off' })).toHaveAttribute(
         'aria-checked',
