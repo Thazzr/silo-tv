@@ -18,6 +18,7 @@ function setup(overrides: Partial<Parameters<typeof UpNextCard>[0]> = {}) {
     entry: null,
     protectStill: false,
     seconds: 7,
+    counting: true,
     focused: true,
     choice: 'play' as const,
     raised: false,
@@ -36,6 +37,30 @@ describe('UpNextCard', () => {
     expect(screen.getByTestId('player-upnext-in')).toHaveTextContent('Up next in 7s');
     expect(screen.getByTestId('player-upnext-episode')).toHaveTextContent('S2:E4 — Ganz unten');
     expect(screen.getByRole('group', { name: 'Up next' })).toBeInTheDocument();
+    expect(document.querySelector('.player-upnext-line')).not.toBeNull();
+  });
+
+  it('without a countdown it reads a plain heading and has no line', () => {
+    const { container } = renderWithSilo(
+      <UpNextCard
+        next={NEXT}
+        entry={null}
+        protectStill={false}
+        seconds={10}
+        counting={false}
+        focused
+        choice="play"
+        raised={false}
+        onPlay={vi.fn()}
+        onCancel={vi.fn()}
+        onFocus={vi.fn()}
+      />,
+      { cardPrefs: false },
+    );
+    expect(screen.getByTestId('player-upnext-in')).toHaveTextContent(/^Up next$/);
+    expect(container.querySelector('.player-upnext-line')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play now' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
   it('has Play now and Cancel, and a click on each calls its handler', () => {

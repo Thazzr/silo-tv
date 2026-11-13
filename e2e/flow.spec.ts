@@ -149,8 +149,9 @@ interface FakeOptions {
    * The Continue Watching rewatch (e9, the first of two episodes; use it with `rewatch`) is 2700 s
    * long, as its plan says, and the server speaks the settings contract with auto-play on. With
    * `credits` its file has a credits marker from 2400 s to the end; the second episode has none.
+   * With `autoPlay: false` the profile's auto-play is off.
    */
-  upNext?: { credits: boolean };
+  upNext?: { credits: boolean; autoPlay?: boolean };
 }
 
 interface FakeProfile {
@@ -984,7 +985,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   : key.startsWith('catalog.hide_unwatched')
                     ? (options.spoilers ?? false)
                     : key === 'playback.auto_play_next'
-                      ? options.upNext !== undefined
+                      ? options.upNext !== undefined && options.upNext.autoPlay !== false
                       : key === 'ui.theme_music_enabled'
                         ? (options.themeMusic ?? false)
                         : key === 'playback.buffering_quality_mode'
@@ -5941,6 +5942,90 @@ test('player: the credits card counts down in the credits and starts the next ep
   await page.waitForTimeout(11_000);
   expect(starts()).toHaveLength(3);
   await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+});
+
+test('player: with auto-play off the credits card shows without a countdown and nothing starts by itself, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    rewatch: true,
+    seasons: 1,
+    upNext: { credits: true, autoPlay: false },
+  });
+  const starts = () =>
+    seen.filter((e) => e.method === 'POST' && e.path === '/api/v2/playback/start');
+  await playRewatchFromHome(page, origin);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+
+  await moveTo(page, 2400);
+  await expect(page.getByTestId('player-upnext')).toBeVisible();
+  await expect(page.getByTestId('player-upnext-in')).toHaveText('Als Nächstes');
+  await expect(page.locator('.player-upnext-line')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeVisible();
+
+  // Past the 10 s of a countdown the episode plays on and the card stays.
+  await page.waitForTimeout(11_000);
+  expect(starts()).toHaveLength(1);
+  await expect(page.getByTestId('player-upnext')).toBeVisible();
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+
+  // OK on Jetzt abspielen is the viewer's start.
+  await page.keyboard.press('Enter');
+  await expect.poll(() => starts().length).toBe(2);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');
+});
+
+test('player: the credits card keeps the screen when the last 30 s begin under it, and the end screen comes only at the end, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    rewatch: true,
+    seasons: 1,
+    upNext: { credits: true },
+  });
+  const starts = () =>
+    seen.filter((e) => e.method === 'POST' && e.path === '/api/v2/playback/start');
+  await playRewatchFromHome(page, origin);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+
+  // The credits run into the last 30 s: the card stays up and no end screen covers it, until its
+  // countdown starts the next episode.
+  await moveTo(page, 2400);
+  await expect(page.getByTestId('player-upnext')).toBeVisible();
+  await moveTo(page, 2675);
+  await expect(page.getByTestId('player-upnext')).toBeVisible();
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  await expect.poll(() => starts().length, { timeout: 20_000 }).toBe(2);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
+
+  // A second run cancels inside the last 30 s: the clock brings no end screen, the end of the
+  // stream does.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => starts().length).toBe(3);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+  await moveTo(page, 2400);
+  await moveTo(page, 2675);
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player-upnext')).toHaveCount(0);
+  await moveTo(page, 2690);
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
+  await page.evaluate('window.__endVideo()');
+  await expect(page.getByTestId('player-end')).toBeVisible();
+  await expect(page.locator('.player')).toHaveAttribute('data-end', 'ended');
 });
 
 test('player: without a credits marker the end screen comes 30 s before the end, counts down after it and plays the next episode, and the last episode shows the finished state, keyboard only', async ({

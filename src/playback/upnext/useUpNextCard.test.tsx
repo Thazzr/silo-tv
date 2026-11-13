@@ -26,6 +26,7 @@ function setup(overrides: Partial<Parameters<typeof useUpNextCard>[0]> = {}) {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2400,
       cancelled: false,
       cancel,
@@ -44,6 +45,7 @@ describe('the credits card trigger', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2400,
       cancelled: false,
       cancel,
@@ -60,6 +62,7 @@ describe('the credits card trigger', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2700,
       cancelled: false,
       cancel,
@@ -114,6 +117,7 @@ describe('the credits card countdown', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 100,
       cancelled: false,
       cancel,
@@ -125,6 +129,7 @@ describe('the credits card countdown', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2500,
       cancelled: false,
       cancel,
@@ -140,6 +145,7 @@ describe('the credits card countdown', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2500,
       cancelled: true,
       cancel,
@@ -205,6 +211,7 @@ describe('the credits card buttons', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 0,
       cancelled: false,
       cancel,
@@ -214,11 +221,71 @@ describe('the credits card buttons', () => {
       enabled: true,
       region: REGION,
       next: NEXT,
+      autoPlay: true,
       position: 2500,
       cancelled: false,
       cancel,
       start,
     });
     expect(result.current.choice).toBe('play');
+  });
+});
+
+describe('the credits card without auto-play', () => {
+  it('shows, but counts nothing and starts nothing by itself', () => {
+    const { result, start } = setup({ autoPlay: false });
+    expect(result.current.shown).toBe(true);
+    expect(result.current.counting).toBe(false);
+    advance(30_000);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('OK on Play now is still the viewer’s start', () => {
+    const { result, start } = setup({ autoPlay: false });
+    act(() => result.current.activate());
+    expect(start).toHaveBeenCalledWith(false);
+  });
+
+  it('with auto-play on, it counts', () => {
+    const { result } = setup();
+    expect(result.current.counting).toBe(true);
+  });
+
+  it('turning auto-play off while it shows stops the countdown', () => {
+    const { result, rerender, start, cancel } = setup();
+    advance(5000);
+    rerender({
+      enabled: true,
+      region: REGION,
+      next: NEXT,
+      autoPlay: false,
+      position: 2500,
+      cancelled: false,
+      cancel,
+      start,
+    });
+    expect(result.current.shown).toBe(true);
+    advance(30_000);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('turning auto-play on while it shows starts a fresh 10 s countdown', () => {
+    const { result, rerender, start, cancel } = setup({ autoPlay: false });
+    advance(20_000);
+    rerender({
+      enabled: true,
+      region: REGION,
+      next: NEXT,
+      autoPlay: true,
+      position: 2500,
+      cancelled: false,
+      cancel,
+      start,
+    });
+    expect(result.current.seconds).toBe(10);
+    advance(9000);
+    expect(start).not.toHaveBeenCalled();
+    advance(1000);
+    expect(start).toHaveBeenCalledWith(true);
   });
 });

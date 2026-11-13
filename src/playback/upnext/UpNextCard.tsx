@@ -13,6 +13,8 @@ interface Props {
   /** Spoiler protection covers the still of this unwatched episode. */
   protectStill: boolean;
   seconds: number;
+  /** The countdown runs; without it (auto-play off) the card shows a plain heading and no line. */
+  counting: boolean;
   /** The controls' focus is on the card. */
   focused: boolean;
   /** The focused button. */
@@ -27,10 +29,10 @@ interface Props {
 /**
  * The card at the bottom right while the credits play: "Up next in 10s", the next episode, and
  * Play now / Cancel. The line at its bottom is the countdown (a transform, started when the card
- * appears).
+ * appears). Without a countdown it reads "Up next" and has no line.
  */
 export function UpNextCard(props: Props) {
-  const { next, entry, protectStill, seconds, focused, choice, raised } = props;
+  const { next, entry, protectStill, seconds, counting, focused, choice, raised } = props;
   const t = useT();
   const url = useMediaUrl();
   const play = useRef<HTMLButtonElement>(null);
@@ -67,7 +69,7 @@ export function UpNextCard(props: Props) {
         ) : null}
         <div className="player-upnext-text">
           <p className="player-upnext-in" aria-live="polite" data-testid="player-upnext-in">
-            {t('player.upNext.in', { seconds })}
+            {counting ? t('player.upNext.in', { seconds }) : t('player.upNext.heading')}
           </p>
           <p className="player-upnext-episode" data-testid="player-upnext-episode">
             {episodeLine(next, t)}
@@ -100,11 +102,13 @@ export function UpNextCard(props: Props) {
           {t('player.upNext.cancel')}
         </button>
       </div>
-      <span
-        className="player-upnext-line"
-        aria-hidden="true"
-        style={{ animationDuration: `${UP_NEXT_SECONDS}s` }}
-      />
+      {counting ? (
+        <span
+          className="player-upnext-line"
+          aria-hidden="true"
+          style={{ animationDuration: `${UP_NEXT_SECONDS}s` }}
+        />
+      ) : null}
     </div>
   );
 }

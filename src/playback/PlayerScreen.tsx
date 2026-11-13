@@ -164,10 +164,13 @@ export function PlayerScreen({
   // The end screen: from 30 s before the end, or when the stream ended before that was noticed.
   const [postRollEntered, setPostRollEntered] = useState(false);
   const enterPostRoll = useCallback(() => setPostRollEntered(true), []);
-  // A viewer who went back from the mini player to the picture is not taken to the end screen by
-  // the 30 s again; the end of the stream still brings it up.
-  const [returned, setReturned] = useState(false);
-  const postRoll = ended || (postRollEntered && !returned);
+  // The 30 s bring the end screen up once at most. The trigger is used up when the viewer went
+  // back from the mini player to the picture, or when the credits card was open as the 30 s began
+  // (the card gives the end screen no room, unlike the web, whose post-roll cancels the card); the
+  // end of the stream still brings the end screen up.
+  const [triggerUsed, setTriggerUsed] = useState(false);
+  const spendTrigger = useCallback(() => setTriggerUsed(true), []);
+  const postRoll = ended || (postRollEntered && !triggerUsed);
   // The player has its own keys; the wheel would only press Up and Down there. An open menu is a
   // list like any other, and so is the end screen, so the wheel moves their focus while they show.
   const wheelFree = popoverOpen || postRoll;
@@ -178,7 +181,7 @@ export function PlayerScreen({
   // Going back to the picture also holds the credits card off: it would start the next episode
   // by itself under a viewer who just chose to keep watching this one.
   const returnToPicture = useCallback(() => {
-    setReturned(true);
+    setTriggerUsed(true);
     setCancelled(true);
   }, []);
   // The next and previous episode, read here so a reloaded stream and the end screen share them.
@@ -299,6 +302,7 @@ export function PlayerScreen({
         postRoll={postRoll}
         ended={ended}
         onPostRoll={enterPostRoll}
+        onPostRollBlocked={spendTrigger}
         cardCancelled={cancelled}
         onCardCancel={cancelCard}
         leave={leave}
@@ -390,6 +394,7 @@ function PlayingView({
   postRoll,
   ended,
   onPostRoll,
+  onPostRollBlocked,
   cardCancelled,
   onCardCancel,
   leave,
@@ -419,6 +424,8 @@ function PlayingView({
   ended: boolean;
   /** The last 30 s of an episode began. */
   onPostRoll(): void;
+  /** The last 30 s began while the credits card was open: the card keeps the screen, no end screen by time. */
+  onPostRollBlocked(): void;
   /** The viewer cancelled the credits card for this episode. */
   cardCancelled: boolean;
   onCardCancel(): void;
@@ -557,6 +564,7 @@ function PlayingView({
     enabled: started && !postRoll && !popoverOpen,
     region,
     next: neighbours.next,
+    autoPlay: settings.values['playback.auto_play_next'],
     position,
     cancelled: cardCancelled,
     cancel: onCardCancel,
@@ -581,9 +589,16 @@ function PlayingView({
     duration > 0 &&
     position > 0 &&
     duration - position <= POST_ROLL_SECONDS;
+  // The credits card keeps the screen while it is open: its trigger is used up instead.
+  const cardShown = useRef(false);
   useEffect(() => {
-    if (lastStretch) onPostRoll();
-  }, [lastStretch, onPostRoll]);
+    cardShown.current = card.shown;
+  });
+  useEffect(() => {
+    if (!lastStretch) return;
+    if (cardShown.current) onPostRollBlocked();
+    else onPostRoll();
+  }, [lastStretch, onPostRoll, onPostRollBlocked]);
   const controls = usePlayerControls({
     engine,
     started,
@@ -901,6 +916,7 @@ function PlayingView({
             })
           }
           seconds={card.seconds}
+          counting={card.counting}
           focused={controls.focus === 'pill'}
           choice={card.choice}
           raised={controls.visible}

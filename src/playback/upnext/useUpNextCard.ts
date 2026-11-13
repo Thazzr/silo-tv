@@ -15,6 +15,8 @@ interface Args {
   /** Where the next episode may start by itself (the credits); null without one. */
   region: TimeRange | null;
   next: EpisodeRef | null;
+  /** The profile's "Auto-play next episode": off, the card waits for the viewer and counts nothing. */
+  autoPlay: boolean;
   /** The reported position on the source timeline. */
   position: number;
   /** The viewer cancelled the card for this episode. */
@@ -26,6 +28,8 @@ interface Args {
 
 export interface UpNextCardControl {
   shown: boolean;
+  /** The countdown runs: the card shows and the profile's auto-play is on. */
+  counting: boolean;
   /** Whole seconds left. */
   seconds: number;
   /** The focused button. */
@@ -43,12 +47,13 @@ export interface UpNextCardControl {
 
 /**
  * The corner card of an episode's credits: while the playhead is inside the region, a next episode
- * exists, the viewer has not cancelled it and the still-watching gate is open, it counts down from
- * 10 and then starts the next episode by itself. It does not ask for the profile's auto-play
- * setting: the web's card does not either.
+ * exists, the viewer has not cancelled it and the still-watching gate is open, it shows. With the
+ * profile's auto-play on it counts down from 10 and then starts the next episode by itself; with it
+ * off it stays up without a countdown until the viewer decides. The web's card counts down either
+ * way; this deviates because the setting promises that nothing starts by itself.
  */
 export function useUpNextCard(args: Args): UpNextCardControl {
-  const { enabled, region, next, position, cancelled } = args;
+  const { enabled, region, next, autoPlay, position, cancelled } = args;
   const latest = useRef(args);
   useEffect(() => {
     latest.current = args;
@@ -56,7 +61,8 @@ export function useUpNextCard(args: Args): UpNextCardControl {
   const inRegion = region !== null && position >= region.start && position < region.end;
   const shown = enabled && inRegion && next !== null && !cancelled && !isStillWatchingGated();
 
-  const seconds = useCountdown(shown, UP_NEXT_SECONDS, () => latest.current.start(true));
+  const counting = shown && autoPlay;
+  const seconds = useCountdown(counting, UP_NEXT_SECONDS, () => latest.current.start(true));
 
   const [choice, setChoice] = useState<UpNextChoice>('play');
   const choiceRef = useRef<UpNextChoice>('play');
@@ -90,5 +96,16 @@ export function useUpNextCard(args: Args): UpNextCardControl {
     return true;
   }, []);
 
-  return { shown, seconds, choice, setChoice, activate, dismiss, move, playNow, cancelCard };
+  return {
+    shown,
+    counting,
+    seconds,
+    choice,
+    setChoice,
+    activate,
+    dismiss,
+    move,
+    playNow,
+    cancelCard,
+  };
 }

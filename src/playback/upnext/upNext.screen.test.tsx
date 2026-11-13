@@ -58,6 +58,8 @@ const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
 /** 5400 s long, the credits run to the end. */
 const CREDITS = { start_seconds: 5100, end_seconds: 5400 } as const;
+/** Credits that stop short of the last 30 s: the end screen, not the card, owns them. */
+const SHORT_CREDITS = { start_seconds: 5100, end_seconds: 5300 } as const;
 const PREVIEW = { start_seconds: 5300, end_seconds: 5400 } as const;
 
 const episodeWatch = (
@@ -187,6 +189,8 @@ async function mount(options: Options = {}) {
   return { calls, video, state, onExit, onEpisode, at, view };
 }
 
+/** An episode without markers, so no credits card stands in the way of the end screen. */
+const mountPlain = (options: Options = {}) => mount({ watch: episodeWatch(1, 1), ...options });
 const card = () => screen.queryByTestId('player-upnext');
 const endScreen = () => screen.queryByTestId('player-end');
 
@@ -325,10 +329,18 @@ describe('the credits card', () => {
     expect(card()).toBeNull();
   });
 
-  it('shows even with auto-play off: the web’s card does not ask for that setting', async () => {
-    const { at } = await mount({ values: { 'playback.auto_play_next': false } });
+  it('with auto-play off it shows without a countdown, and nothing starts by itself', async () => {
+    const { at, onEpisode } = await mount({ values: { 'playback.auto_play_next': false } });
     at(5100);
     expect(card()).not.toBeNull();
+    expect(screen.getByTestId('player-upnext-in')).toHaveTextContent(/^Up next$/);
+    expect(screen.getByTestId('player-upnext-play')).toBeInTheDocument();
+    expect(screen.getByTestId('player-upnext-cancel')).toBeInTheDocument();
+    advance(20_000);
+    expect(card()).not.toBeNull();
+    expect(onEpisode).not.toHaveBeenCalled();
+    key(KEY.enter);
+    expect(onEpisode).toHaveBeenCalledWith({ contentId: 'e12', title: 'Episode 1.2' });
   });
 
   it('is held back once the still-watching gate is closed', async () => {
@@ -369,7 +381,7 @@ describe('the credits card', () => {
 
 describe('the end screen', () => {
   it('comes up 30 s before the end over the playing picture, and not a second earlier', async () => {
-    const { at, state } = await mount();
+    const { at, state } = await mountPlain();
     at(5369);
     expect(endScreen()).toBeNull();
     at(5370);
@@ -384,17 +396,63 @@ describe('the end screen', () => {
     expect(screen.getByTestId('player-osd')).toHaveAttribute('data-visible', 'false');
   });
 
-  it('takes over from the credits card', async () => {
-    const { at } = await mount();
+  it('gives the credits card the screen: the last 30 s beginning under an open card bring nothing up', async () => {
+    const { at, video, state } = await mount();
     at(5100);
     expect(card()).not.toBeNull();
     at(5375);
+    expect(card()).not.toBeNull();
+    expect(endScreen()).toBeNull();
+    // The trigger is used up: cancelling the card does not bring the end screen up by the clock.
+    key(KEY.right);
+    key(KEY.enter);
     expect(card()).toBeNull();
+    at(5380);
+    expect(endScreen()).toBeNull();
+    // The end of the stream does.
+    state.ended = true;
+    state.currentTime = 5400;
+    fireEvent.ended(video);
+    await waitFor(() => expect(endScreen()).not.toBeNull());
+  });
+
+  it('is up alone: the keys are the card’s while it shows and the end screen’s once it is gone', async () => {
+    const { at, onEpisode } = await mount();
+    at(5375);
+    expect(card()).not.toBeNull();
+    expect(endScreen()).toBeNull();
+    expect(screen.getByTestId('player-upnext-play')).toHaveFocus();
+    key(KEY.enter);
+    expect(onEpisode).toHaveBeenCalledWith({ contentId: 'e12', title: 'Episode 1.2' });
+  });
+
+  it('comes at 30 s before the end when the card was cancelled before that', async () => {
+    const { at } = await mount();
+    at(5100);
+    key(KEY.right);
+    key(KEY.enter);
+    expect(card()).toBeNull();
+    at(5369);
+    expect(endScreen()).toBeNull();
+    at(5370);
     expect(endScreen()).not.toBeNull();
   });
 
+  it('lets the card’s countdown run out inside the last 30 s: the next episode starts, no end screen', async () => {
+    const { at, onEpisode } = await mount();
+    at(5365);
+    at(5375);
+    advance(10_000);
+    expect(onEpisode).toHaveBeenCalledWith({
+      contentId: 'e12',
+      title: 'Episode 1.2',
+      automatic: true,
+    });
+    expect(endScreen()).toBeNull();
+  });
+
   it('starts its countdown only when the video has ended, then plays the next episode by itself', async () => {
-    const { at, video, state, onEpisode } = await mount();
+    const { at, video, state, onEpisode } = await mountPlain();
     at(5375);
     advance(30_000);
     expect(onEpisode).not.toHaveBeenCalled();
@@ -463,7 +521,7 @@ describe('the end screen', () => {
 
   it('has the keys: OK is Play now (not a pause), and the picture is not clickable through it', async () => {
     vi.useRealTimers();
-    const { at, state, onEpisode } = await mount();
+    const { at, state, onEpisode } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
@@ -476,7 +534,7 @@ describe('the end screen', () => {
   });
 
   it('Back and the close button stop the session and leave the player', async () => {
-    const first = await mount();
+    const first = await mountPlain();
     first.at(5380);
     await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
     vi.useRealTimers();
@@ -485,7 +543,7 @@ describe('the end screen', () => {
     await until(() => first.calls.stop.length === 1);
     cleanup();
 
-    const second = await mount();
+    const second = await mountPlain();
     vi.useRealTimers();
     second.at(5380);
     await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
@@ -495,7 +553,7 @@ describe('the end screen', () => {
 
   it('plays an On Deck item as the viewer’s start, and leaves the current series out of the row', async () => {
     vi.useRealTimers();
-    const { at, onEpisode } = await mount({
+    const { at, onEpisode } = await mountPlain({
       onDeck: [
         resumeEpisode('x1', { series_id: 'ser1', series_title: 'A Show', title: 'Same' }),
         resumeEpisode('x2', { series_id: 'other', series_title: 'Other Show', title: 'Pilot' }),
@@ -521,7 +579,7 @@ describe('the end screen', () => {
 
   it('lets the Magic Remote wheel move its focus, where the playing picture ignores it', async () => {
     vi.useRealTimers();
-    const { at } = await mount();
+    const { at } = await mountPlain();
     vi.useRealTimers();
     const before = new WheelEvent('wheel', { deltaY: 100, cancelable: true });
     window.dispatchEvent(before);
@@ -539,7 +597,7 @@ describe('the end screen', () => {
 
   it('does not let the controls act on a key while it shows', async () => {
     vi.useRealTimers();
-    const { at, state } = await mount({
+    const { at, state } = await mountPlain({
       onDeck: [],
     });
     vi.useRealTimers();
@@ -571,7 +629,7 @@ async function realPress() {
 
 describe('the mini player', () => {
   it('shrinks the picture into the mini player while the stream plays, and takes it back full size', async () => {
-    const { at } = await mount();
+    const { at } = await mountPlain();
     expect(player()).not.toHaveAttribute('data-end');
     at(5380);
     expect(player()).toHaveAttribute('data-end', 'mini');
@@ -580,7 +638,7 @@ describe('the mini player', () => {
 
   it('fades the picture out when the stream ends, and the mini player leaves the focus', async () => {
     vi.useRealTimers();
-    const { at, video, state } = await mount();
+    const { at, video, state } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
@@ -595,7 +653,7 @@ describe('the mini player', () => {
 
   it('OK on it closes the end screen, gives the full picture back and the keys work again', async () => {
     vi.useRealTimers();
-    const { at, state, onEpisode } = await mount();
+    const { at, state, onEpisode } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
@@ -639,7 +697,7 @@ describe('the mini player', () => {
 
   it('a click on it does the same', async () => {
     vi.useRealTimers();
-    const { at } = await mount();
+    const { at } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     fireEvent.click(await screen.findByTestId('player-end-mini'));
@@ -649,7 +707,7 @@ describe('the mini player', () => {
 
   it('is not entered by the last 30 s again after the return, but by the stream’s end', async () => {
     vi.useRealTimers();
-    const { at, video, state } = await mount();
+    const { at, video, state } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     fireEvent.click(await screen.findByTestId('player-end-mini'));
@@ -667,7 +725,7 @@ describe('the mini player', () => {
 
   it('holds the credits card off after the return: it would start the next episode under the viewer', async () => {
     vi.useRealTimers();
-    const { at } = await mount();
+    const { at } = await mount({ watch: episodeWatch(1, 1, { credits: SHORT_CREDITS }) });
     vi.useRealTimers();
     at(5380);
     fireEvent.click(await screen.findByTestId('player-end-mini'));
@@ -687,7 +745,7 @@ describe('the mini player', () => {
           }),
       ),
     );
-    const { at } = await mount({
+    const { at } = await mountPlain({
       plan: playbackPlan({
         subtitle: {
           mode: 'render',
@@ -714,7 +772,7 @@ describe('the mini player', () => {
 
   it('keeps the player’s own layers away while the end screen shows: no buffering spinner', async () => {
     vi.useRealTimers();
-    const { at, video } = await mount();
+    const { at, video } = await mountPlain();
     vi.useRealTimers();
     at(5380);
     fireEvent.waiting(video);
@@ -728,7 +786,7 @@ describe('the mini player', () => {
   it('has the next episode’s ThumbHash picture as the background, plain without one', async () => {
     const canvas = stubCanvas();
     vi.useRealTimers();
-    const hashed = await mount({
+    const hashed = await mountPlain({
       episodes: [
         episodeOf(1, 1),
         episodeOf(1, 2, { still_url: '/img/still-12.png', still_thumbhash: PORTRAIT_HASH }),
@@ -743,7 +801,7 @@ describe('the mini player', () => {
     );
     cleanup();
 
-    const plain = await mount();
+    const plain = await mountPlain();
     vi.useRealTimers();
     plain.at(5380);
     const bare = await screen.findByTestId('player-end-backdrop');
@@ -754,7 +812,7 @@ describe('the mini player', () => {
   it('keeps the picture of an unwatched episode out of the background when spoilers are hidden', async () => {
     stubCanvas();
     vi.useRealTimers();
-    const { at } = await mount({
+    const { at } = await mountPlain({
       episodes: [
         episodeOf(1, 1),
         episodeOf(1, 2, { still_url: '/img/still-12.png', still_thumbhash: PORTRAIT_HASH }),
