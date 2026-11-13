@@ -7,6 +7,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 generated automatically from the commit messages with [git-cliff](https://git-cliff.org) –
 **do not edit it by hand**.
 
+## [0.4.0] - 2026-11-13
+
+### Added
+
+- **player**: Audio and subtitle menus, saved per series or movie, and a subtitle delay
+- **player**: Start subtitles from the profile's subtitle settings, as Silo's web app does
+- **player**: A slimmer bar with episode buttons, Lucide icons and the web player's seek preview
+- **player**: Menus like Silo's web player, and auto-play next in the settings
+- **player**: The subtitle appearance as Silo's web dialog, for the profile on all devices
+- **detail**: The movie and series hero like Silo's web app
+- **detail**: Play, watched, favourite, stars and a More menu like Silo's web app
+- **detail**: Season posters, season pages and the episode grid like Silo's web app
+- **detail**: The episode page with "More Episodes" like Silo's web app
+- **detail**: Cast and crew, extras and "Trailer & mehr" like Silo's web app
+- **detail**: Version, audio and subtitle pills like Silo's web app
+- **cards**: Quality badges and the watch status on cards like Silo's web app
+- **home**: Section titles in the viewer's language like Silo's web app
+- **home**: The featured hero carousel on Home and the library tabs like Silo's web app
+- **home**: Rows and card captions like Silo's web app
+- **detail**: The cover beside the title, the text below at full width
+- **nav**: Cards open their page, Play plays, and episode hops do not stack
+- **player**: "Als Nächstes" at the credits and at the end, like Silo's web player
+- **shell**: The top bar floats over the content
+- **detail**: The crew of a season or an episode is a row of person cards
+- **player**: The end screen keeps the episode playing in a mini player, as on the web
+- **player**: The credits card follows the autoplay setting and keeps the screen while it is open
+- **player**: The end screen's "Laufend" row reads the watch progress, as on the web
+- **home**: A row drops the cards a row above already shows, where the server marks it
+
+### Changed
+
+- The app behaves like Silo's web app, with every viewer setting
+- Only web settings that mean something on a TV; the web client is the reference
+- Install guide for users, with Developer Mode and webOS Dev Manager
+- No playback speed on the TV, Lucide icons, and the player like the web's
+- No aspect ratio choice in the TV app
+- **roadmap**: Detail pages like Silo's web app
+- **api**: Set the profile headers in one place, and add the detail pages' API paths
+- Mark the flows checked on the TV on 2026-11-11
+- **api**: Pin the card overlay config, the catalog query and the facet search
+- **agents**: Run mutants with --bail and a closed input from Python
+- **settings**: Wait for the whole auto-play save before a test ends
+- **home**: Smooth focus moves on the TV again
+- Two flaky tests no longer race the server's answer
+- **api**: Pin the watch progress and the section recipe catalogue
+- Close Phase 3; shuffle and the subtitle search move to Phase 4
+- **release**: 0.4.0
+
+### Fixed
+
+- **release**: Publish normal releases as the latest; only -rc style tags are pre-releases
+- **player**: Subtitles sit just above the controls, and keep the web player's gap at rest
+- **library**: The letter rail jumps to a letter instead of filtering by it
+- **library**: Call the middle tab "Library" ("Mediathek"), as Silo's web app does
+- **build**: Type-check the track menu screen test on Windows too
+- **player**: Draw subtitle shadows, outlines and boxes exactly as Silo's web player
+- **detail**: The synopsis gives way so the hero's buttons stay on screen
+- **nav**: Scrolling back up shows the titles and headings above the focus
+- **player**: OK and a click on the picture pause and resume
+- **home**: The pointer no longer scrolls Home back to its top
+- **shell**: A pointer resting on the top bar no longer keeps it shown
+- **nav**: A resting pointer no longer takes the focus when the page moves under it
+- **nav**: The first or remembered focus no longer lands wrong when content arrives late
+- **profiles**: A profile the server no longer accepts is locked and picked again
+
 ## [0.3.0] - 2026-11-11
 
 ### Added
