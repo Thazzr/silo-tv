@@ -84,5 +84,8 @@
   { "path": "/api/v2/subtitles/{media_file_id}", "method": "get" },
   { "path": "/api/v2/settings/overlay-config", "method": "get" },
   { "path": "/api/v2/catalog/query", "method": "post" },
-  { "path": "/api/v2/catalog/filters/search", "method": "get" }
+  { "path": "/api/v2/catalog/filters/search", "method": "get" },
+  { "path": "/api/v2/progress", "method": "get" },
+  { "path": "/api/v2/progress/capabilities", "method": "get" },
+  { "path": "/api/v2/sections/recipes", "method": "get" }
 ]

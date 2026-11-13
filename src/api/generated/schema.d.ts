@@ -831,6 +831,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the acting profile's watch progress, newest change first. */
+        get: operations["listProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/progress/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The watch progress features this server supports, such as clearing a resume position. */
+        get: operations["getProgressCapabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/ratings/{item_id}": {
         parameters: {
             query?: never;
@@ -858,6 +892,23 @@ export interface paths {
         };
         /** Cards similar to the item by content; personalised only by the acting profile's access and by leaving out the titles it marked Not interested. */
         get: operations["listSimilar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/sections/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The section recipe gallery: every visible recipe with its presets, grouped by category. */
+        get: operations["listSectionRecipes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3208,6 +3259,7 @@ export interface components {
              * @example 120
              */
             file_id: string;
+            /** @description Absent for viewers without file-path visibility, except on audiobooks and ebooks */
             file_name?: string;
             /** @description Absent for viewers without file-path visibility */
             file_path?: string;
@@ -4379,6 +4431,63 @@ export interface components {
              */
             valid: boolean;
         };
+        ProgressCapabilities: {
+            /** @description Whether the current principal may use the capability */
+            allowed: boolean;
+            /**
+             * @description Whether clearResumePosition is served: it clears a movie or episode's resume position and keeps its watched state and watch history
+             * @example true
+             */
+            clear_resume_position: boolean;
+            /**
+             * @description Whether markWatched on a watched movie, episode or audiobook that has a resume position (a rewatch in progress) records another play and clears the position; otherwise that mark is a no-op
+             * @example true
+             */
+            mark_watched_records_rewatch: boolean;
+            /** @description Opaque revision of this document */
+            revision: string;
+            /**
+             * @description Support and configuration state, not health
+             * @enum {string}
+             */
+            state: "available" | "disabled" | "not_configured" | "unsupported";
+        };
+        ProgressCollection: {
+            /** @description The page's items; empty, never null */
+            items: components["schemas"]["ProgressEntry"][];
+            /** @description Cursor state; absent for bounded unpaginated collections */
+            page?: components["schemas"]["PageInfo"];
+        };
+        ProgressEntry: {
+            /**
+             * @description Whether the item counts as watched
+             * @example false
+             */
+            completed: boolean;
+            /**
+             * Format: double
+             * @description Known runtime; 0 when unknown
+             * @example 5400
+             */
+            duration_seconds: number;
+            /**
+             * @description The catalog item
+             * @example movie-8f2c1a
+             */
+            media_item_id: string;
+            /**
+             * Format: double
+             * @description Playback position
+             * @example 1325.5
+             */
+            position_seconds: number;
+            /**
+             * Format: date-time
+             * @description When the position last changed
+             * @example 2026-01-02T03:04:05.000Z
+             */
+            updated_at: string;
+        };
         RatingSet: {
             /**
              * Format: int64
@@ -4386,6 +4495,64 @@ export interface components {
              * @example 4
              */
             rating: number;
+        };
+        RecipeCatalog: {
+            /** @description Empty, never null */
+            categories: components["schemas"]["RecipeCategory"][];
+        };
+        RecipeCategory: {
+            /** @example library_staples */
+            category: string;
+            /** @description Empty, never null */
+            recipes: components["schemas"]["RecipeDefinition"][];
+        };
+        RecipeDefinition: {
+            /**
+             * @description Only an admin may add a new section of this recipe; a profile keeps and changes the ones it already has
+             * @example false
+             */
+            admin_only: boolean;
+            /** @example true */
+            avoid_duplicates: boolean;
+            /** @example library_staples */
+            category: string;
+            /** @description Empty, never null */
+            presets: components["schemas"]["RecipePreset"][];
+            /** @example false */
+            supports_rotation: boolean;
+            /** @example recently_added */
+            type: string;
+        };
+        RecipePreset: {
+            /** @description The config the preset starts from; empty, never null */
+            default_params: {
+                [key: string]: unknown;
+            };
+            /** @description Empty when the preset has none */
+            description_long: string;
+            /**
+             * @description Key of the shared translation catalog message whose English is description_long; absent when the preset has no description_long
+             * @example home.recipe.seAuto.details
+             */
+            description_long_key?: string;
+            /** @example Items added in the last seven days */
+            description_short: string;
+            /**
+             * @description Key of the shared translation catalog message whose English is description_short, with the same fallback
+             * @example home.recipe.mwWeek.description
+             */
+            description_short_key?: string;
+            /** @example New this week */
+            display_name: string;
+            /**
+             * @description Key of the shared translation catalog message whose English is display_name. A client that has the key shows its translation and otherwise display_name
+             * @example home.recipe.mwWeek.name
+             */
+            display_name_key?: string;
+            /** @example sparkles */
+            icon: string;
+            /** @example new_this_week */
+            key: string;
         };
         RefreshSessionInputBody: {
             /**
@@ -5342,6 +5509,7 @@ export interface components {
             default: boolean;
             embedded_title?: string;
             external: boolean;
+            /** @description An external track's file name; absent for viewers without file-path visibility, except on audiobooks and ebooks */
             file_name?: string;
             forced: boolean;
             hearing_impaired: boolean;
@@ -5548,8 +5716,9 @@ export interface components {
              * @example 42
              */
             file_id: string;
+            /** @description Absent for viewers without file-path visibility, except on audiobooks and ebooks */
             file_name?: string;
-            /** @description Only for accounts allowed to see paths */
+            /** @description Absent for viewers without file-path visibility */
             file_path?: string;
             /**
              * Format: int64
@@ -5684,6 +5853,7 @@ export interface components {
             default: boolean;
             embedded_title?: string;
             external: boolean;
+            /** @description An external track's file name; absent for viewers without file-path visibility, except on audiobooks and ebooks */
             file_name?: string;
             forced: boolean;
             hearing_impaired: boolean;
@@ -12340,6 +12510,244 @@ export interface operations {
             };
         };
     };
+    listProgress: {
+        parameters: {
+            query?: {
+                /** @description Only entries in this state; absent lists every entry */
+                status?: "in_progress" | "completed";
+                /** @description Only entries whose item is in this library */
+                library_id?: string;
+                /** @description Page size; default 50, maximum 200 */
+                limit?: number;
+                /** @description Opaque cursor from page.next_cursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProgressCapabilities: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional first precondition, evaluated before If-None-Match: a tag that does not match the current representation is 412 precondition_failed. */
+                "If-Match"?: string;
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressCapabilities"];
+                };
+            };
+            /** @description The representation named by If-None-Match is current; no body. */
+            304: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Precondition Failed */
+            412: {
+                headers: {
+                    /** @description The strong, opaque validator of the representation; send it back in If-Match on a guarded mutation or If-None-Match on a conditional read. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     setRating: {
         parameters: {
             query?: never;
@@ -12609,6 +13017,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogItemCollection"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Acceptable */
+            406: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSectionRecipes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeCatalog"];
                 };
             };
             /** @description Bad Request */
