@@ -366,6 +366,7 @@
   "player.upNext.endOfPlayback": "Ende der Wiedergabe",
   "player.upNext.noMoreEpisodes": "Keine weiteren Folgen verfügbar.",
   "player.upNext.noPreview": "Keine Vorschau",
+  "player.upNext.stillPlaying": "Läuft noch · OK zum Zurückkehren",
   "player.error.unsupported": "Dieser Server unterstützt dieses Wiedergabeprotokoll nicht.",
   "player.error.noFile": "Für diesen Titel gibt es keine abspielbare Datei.",
   "player.error.terminal": "Der Server kann diesen Titel nicht abspielen.",

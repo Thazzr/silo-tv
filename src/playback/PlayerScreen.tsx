@@ -41,6 +41,7 @@ import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
 import { autoplayRegion } from './upnext/autoplayRegion';
+import { EndBackdrop } from './upnext/EndBackdrop';
 import { EndScreen } from './upnext/EndScreen';
 import { recordAutoAdvance, resetStillWatchingStreak } from './upnext/stillWatching';
 import { UpNextCard } from './upnext/UpNextCard';
@@ -163,7 +164,10 @@ export function PlayerScreen({
   // The end screen: from 30 s before the end, or when the stream ended before that was noticed.
   const [postRollEntered, setPostRollEntered] = useState(false);
   const enterPostRoll = useCallback(() => setPostRollEntered(true), []);
-  const postRoll = ended || postRollEntered;
+  // A viewer who went back from the mini player to the picture is not taken to the end screen by
+  // the 30 s again; the end of the stream still brings it up.
+  const [returned, setReturned] = useState(false);
+  const postRoll = ended || (postRollEntered && !returned);
   // The player has its own keys; the wheel would only press Up and Down there. An open menu is a
   // list like any other, and so is the end screen, so the wheel moves their focus while they show.
   const wheelFree = popoverOpen || postRoll;
@@ -171,6 +175,12 @@ export function PlayerScreen({
   // The viewer's cancel of the credits card holds for the rest of the episode.
   const [cancelled, setCancelled] = useState(false);
   const cancelCard = useCallback(() => setCancelled(true), []);
+  // Going back to the picture also holds the credits card off: it would start the next episode
+  // by itself under a viewer who just chose to keep watching this one.
+  const returnToPicture = useCallback(() => {
+    setReturned(true);
+    setCancelled(true);
+  }, []);
   // The next and previous episode, read here so a reloaded stream and the end screen share them.
   const neighbours = useEpisodeNeighbours(
     ready?.media.isEpisode ? ready.media.seriesId : undefined,
@@ -287,18 +297,19 @@ export function PlayerScreen({
         playback={playback}
         neighbours={neighbours}
         postRoll={postRoll}
+        ended={ended}
         onPostRoll={enterPostRoll}
         cardCancelled={cancelled}
         onCardCancel={cancelCard}
         leave={leave}
         startEpisode={startEpisode}
       />
-      {notice ? (
+      {notice && !postRoll ? (
         <p className="player-notice" role="status" data-testid="player-quality-notice">
           {t('player.menu.quality.unavailable')}
         </p>
       ) : null}
-      {shownNotice ? (
+      {shownNotice && !postRoll ? (
         <p className="player-notice" role="status" data-testid="player-buffering-notice">
           {t(
             shownNotice.kind === 'cantLower'
@@ -320,6 +331,7 @@ export function PlayerScreen({
           onPlayItem={(item) =>
             startEpisode({ contentId: item.content_id, title: item.title }, false)
           }
+          onReturn={returnToPicture}
           onClose={leave}
         />
       ) : null}
@@ -376,6 +388,7 @@ function PlayingView({
   playback,
   neighbours,
   postRoll,
+  ended,
   onPostRoll,
   cardCancelled,
   onCardCancel,
@@ -402,6 +415,8 @@ function PlayingView({
   neighbours: EpisodeNeighbours;
   /** The end screen is up: it has the keys, and the corner card and pills give way. */
   postRoll: boolean;
+  /** The stream has played to its end: the mini player of the end screen fades out. */
+  ended: boolean;
   /** The last 30 s of an episode began. */
   onPostRoll(): void;
   /** The viewer cancelled the credits card for this episode. */
@@ -781,20 +796,37 @@ function PlayingView({
     <div
       className="player"
       data-testid="player"
+      // The end screen shrinks the picture into its mini player; the stream's end fades it out.
+      data-end={postRoll ? (ended ? 'ended' : 'mini') : undefined}
       onMouseMove={controls.pointerMoved}
       onClick={(e) => {
         if (!(e.target instanceof Element) || e.target.closest(OWN_CLICK)) return;
         controls.pictureClicked();
       }}
     >
+      {postRoll ? (
+        <EndBackdrop
+          thumbhash={
+            neighbours.nextEntry !== null &&
+            !protectsEpisodeStill(neighbours.nextEntry, {
+              images: settings.values['catalog.hide_unwatched_episode_images'],
+              overviews: settings.values['catalog.hide_unwatched_episode_overviews'],
+            })
+              ? neighbours.nextEntry.still_thumbhash
+              : undefined
+          }
+        />
+      ) : null}
       <video ref={setRef} className="player-video" preload="auto" autoPlay={autoplay} />
-      {cue ? <LoadingCue /> : null}
-      <PlayerSubtitles
-        plan={plan}
-        position={position}
-        lifted={controls.visible}
-        offsetMs={subtitleDelay.delayMs}
-      />
+      {cue && !postRoll ? <LoadingCue /> : null}
+      {postRoll ? null : (
+        <PlayerSubtitles
+          plan={plan}
+          position={position}
+          lifted={controls.visible}
+          offsetMs={subtitleDelay.delayMs}
+        />
+      )}
       <PlayerOsd
         visible={controls.visible && !postRoll}
         title={block.title}

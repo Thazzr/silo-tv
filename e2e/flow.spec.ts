@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { distIndexUrl } from './paths.ts';
 
 // A fake Silo server on 127.0.0.1 with permissive CORS (like probe.spec.ts, a real server instead
@@ -5975,6 +5975,51 @@ test('player: without a credits marker the end screen comes 30 s before the end,
   const covered = (await end.boundingBox())!;
   expect([covered.x, covered.y, covered.width, covered.height]).toEqual([0, 0, 1920, 1080]);
 
+  // The layout of the web's wide end screen inside the safe area: the finishing episode plays in a
+  // mini player on the left, one column of 800 px sits right of it, and nothing leaves 54..1026.
+  const boxOf = async (locator: Locator) => {
+    const box = (await locator.boundingBox())!;
+    return [box.x, box.y, box.width, box.height].map(Math.round);
+  };
+  expect(await boxOf(page.locator('.player-video'))).toEqual([96, 306, 832, 468]);
+  expect(await boxOf(page.getByTestId('player-end-mini'))).toEqual([96, 306, 832, 468]);
+  await expect(page.getByTestId('player-end-mini')).toContainText(
+    'Läuft noch · OK zum Zurückkehren',
+  );
+  const column = await boxOf(page.locator('.player-end-column'));
+  expect(column[0]).toBeGreaterThanOrEqual(1024);
+  expect(column[0]! + column[2]!).toBeLessThanOrEqual(1824);
+  expect(await boxOf(page.getByTestId('player-end-still'))).toEqual([
+    1024,
+    expect.any(Number),
+    427,
+    240,
+  ]);
+  const ondeck = page.getByTestId('player-end-ondeck');
+  const cards = ondeck.locator('.card-landscape');
+  expect((await boxOf(cards.first()))[2]).toBe(240);
+  await expect(ondeck.getByTestId('card-badge')).toHaveCount(0);
+  await expect(ondeck.getByTestId('card-progress').first()).toBeVisible();
+  const heading = page.locator('.player-end-heading');
+  const top = (await boxOf(heading))[1]!;
+  expect(top).toBeGreaterThanOrEqual(54);
+  // The last thing in the column is the On Deck row's captions: the bottom of each card's last
+  // line is inside the row's visible box and inside the safe area, nothing is cut.
+  const rowBox = await boxOf(ondeck.locator('.row-strip'));
+  const rowBottom = rowBox[1]! + rowBox[3]!;
+  const lines = ondeck.locator('.card-caption > :last-child');
+  expect(await lines.count()).toBeGreaterThan(0);
+  for (let i = 0; i < (await lines.count()); i += 1) {
+    const line = await boxOf(lines.nth(i));
+    expect(line[1]! + line[3]!).toBeLessThanOrEqual(rowBottom);
+    expect(line[1]! + line[3]!).toBeLessThanOrEqual(1026);
+  }
+  // The row is as tall as its captions need: the card's art is 135 px, not the wide card's 177.
+  expect((await boxOf(ondeck.locator('.card-art').first()))[3]).toBe(135);
+  expect(await page.evaluate('document.documentElement.scrollHeight > window.innerHeight')).toBe(
+    false,
+  );
+
   // Down reaches the switch, Down again the On Deck row ("Laufend"), Up returns.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('player-end-autoplay')).toBeFocused();
@@ -5992,8 +6037,36 @@ test('player: without a credits marker the end screen comes 30 s before the end,
   await page.waitForTimeout(1500);
   expect(starts()).toHaveLength(1);
 
-  // The stream ends: the countdown runs and the next episode starts by itself.
+  // Left reaches the mini player and Right goes back; OK on it returns to the full picture, the
+  // 30 s do not bring the end screen back, and the stream's end does.
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('player-end-mini')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByTestId('player-end-mini')).toBeFocused();
+  // The video has no media here; its play and pause are counted. One OK is one action: the return
+  // must not also toggle the playback it returns to.
+  await page.evaluate(`(() => {
+    const video = document.querySelector('video');
+    window.__toggles = 0;
+    video.play = () => { window.__toggles += 1; return Promise.resolve(); };
+    video.pause = () => { window.__toggles += 1; };
+  })()`);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate('window.__toggles')).toBe(0);
+  expect(await boxOf(page.locator('.player-video'))).toEqual([0, 0, 1920, 1080]);
+  await moveTo(page, 2600);
+  await moveTo(page, 2680);
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
   await page.evaluate('window.__endVideo()');
+  await expect(page.getByTestId('player-end')).toBeVisible();
+  await expect(page.getByTestId('player-end-mini')).toBeDisabled();
+  await expect(page.locator('.player')).toHaveAttribute('data-end', 'ended');
+
+  // The countdown runs and the next episode starts by itself.
   await expect(page.getByTestId('player-end-startsin')).toContainText('Startet in');
   await expect.poll(() => starts().length, { timeout: 20_000 }).toBe(2);
   await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');

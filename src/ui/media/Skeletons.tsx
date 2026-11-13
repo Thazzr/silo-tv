@@ -8,6 +8,7 @@ import {
   rowVisibleCards,
   ROW_INSET,
   STRIP_PADDING,
+  type CardMetrics,
   type CardShape,
 } from './layout';
 
@@ -32,21 +33,35 @@ export function CardSkeleton({ shape }: { shape: CardShape | 'grid' }) {
   );
 }
 
-/** The loading stand-in of a row: a header bar and cards of the row's shape. */
-export function RowSkeleton({ shape }: { shape: CardShape }) {
-  const cards = rowVisibleCards(shape) + 1;
-  const step = rowStep(shape);
+/**
+ * The loading stand-in of a row: a header bar and cards of the row's shape. A row that is not as
+ * wide as the screen (the end screen's) passes its own card size, inset and the cards that fit.
+ */
+export function RowSkeleton({
+  shape,
+  metrics,
+  inset = ROW_INSET,
+  visibleCards,
+}: {
+  shape: CardShape;
+  metrics?: CardMetrics;
+  inset?: number;
+  visibleCards?: number;
+}) {
+  const size = metrics ?? shape;
+  const cards = (visibleCards ?? rowVisibleCards(size)) + 1;
+  const step = rowStep(size);
   return (
     <section
       className="row-section row-skeleton"
       data-testid="row-skeleton"
       data-shape={shape}
       aria-hidden="true"
-      style={{ height: rowHeight(shape) }}
+      style={{ height: rowHeight(size) }}
     >
-      <div className="row-title skeleton-title" />
-      <div className="row-strip" style={{ height: cardBlockHeight(shape) + 2 * STRIP_PADDING }}>
-        <div className="row-track" style={{ left: ROW_INSET }}>
+      <div className="row-title skeleton-title" style={{ marginLeft: inset }} />
+      <div className="row-strip" style={{ height: cardBlockHeight(size) + 2 * STRIP_PADDING }}>
+        <div className="row-track" style={{ left: inset }}>
           {Array.from({ length: cards }, (_, i) => (
             <div className="row-slot" key={i} style={{ left: i * step }}>
               <CardSkeleton shape={shape} />

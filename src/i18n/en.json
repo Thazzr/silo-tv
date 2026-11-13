@@ -366,6 +366,7 @@
   "player.upNext.endOfPlayback": "End of playback",
   "player.upNext.noMoreEpisodes": "No more episodes available.",
   "player.upNext.noPreview": "No preview",
+  "player.upNext.stillPlaying": "Still playing · Press OK to return",
   "player.error.unsupported": "This server does not support this playback protocol.",
   "player.error.noFile": "This title has no playable file.",
   "player.error.terminal": "The server cannot play this title.",

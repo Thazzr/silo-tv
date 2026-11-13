@@ -57,6 +57,7 @@ interface Options {
   onDeck?: ReturnType<typeof resumeEpisode>[];
   /** The server does not know the settings contract. */
   noSettings?: boolean;
+  lang?: 'de' | 'en';
 }
 
 interface Writes {
@@ -68,7 +69,7 @@ function setup(options: Options = {}) {
   const writes: Writes = { put: [], del: [] };
   // What the server holds: a write changes it, as the re-read after it must find.
   const stored: Record<string, unknown> = { ...options.values };
-  serveSettings(server, {
+  const settings = serveSettings(server, {
     values: stored,
     ...(options.noSettings ? { capabilities: 'fail' as const } : {}),
   });
@@ -115,6 +116,7 @@ function setup(options: Options = {}) {
   const handlers = {
     onPlayNext: vi.fn(),
     onPlayItem: vi.fn(),
+    onReturn: vi.fn(),
     onClose: vi.fn(),
   };
   renderWithSilo(
@@ -125,9 +127,9 @@ function setup(options: Options = {}) {
       ended={options.ended ?? false}
       {...handlers}
     />,
-    { session, cardPrefs: false },
+    { session, ...(options.lang ? { lang: options.lang } : {}), cardPrefs: false },
   );
-  return { ...handlers, writes };
+  return { ...handlers, writes, settings };
 }
 
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
@@ -173,6 +175,7 @@ describe('the next episode block', () => {
         ended={false}
         onPlayNext={vi.fn()}
         onPlayItem={vi.fn()}
+        onReturn={vi.fn()}
         onClose={vi.fn()}
       />,
       { session, lang: 'de', cardPrefs: false },
@@ -474,6 +477,7 @@ describe('the On Deck row', () => {
         ended={false}
         onPlayNext={vi.fn()}
         onPlayItem={vi.fn()}
+        onReturn={vi.fn()}
         onClose={vi.fn()}
       />,
       { session, cardPrefs: false },
@@ -481,5 +485,171 @@ describe('the On Deck row', () => {
     expect(await screen.findByTestId('row-skeleton')).toBeInTheDocument();
     release();
     await waitFor(() => expect(screen.queryByTestId('row-skeleton')).toBeNull());
+  });
+
+  it('shows the skeleton in the row’s own card size, three cards and a fourth', async () => {
+    serveSettings(server, {});
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/capabilities`, () =>
+        HttpResponse.json({ allowed: true, revision: 'r', state: 'available' }),
+      ),
+      http.get(`${BASE_URL}/api/v2/home/sections`, () => new Promise(() => undefined)),
+    );
+    const session = new Session(memoryStorage());
+    session.set({
+      accessToken: 'tok',
+      refreshToken: 'r',
+      expiresAt: Date.now() + 3600_000,
+      user: account,
+      profileId: 'p1',
+    });
+    renderWithSilo(
+      <EndScreen
+        seriesId="ser1"
+        seriesTitle="A Show"
+        neighbours={WITH_NEXT}
+        ended={false}
+        onPlayNext={vi.fn()}
+        onPlayItem={vi.fn()}
+        onReturn={vi.fn()}
+        onClose={vi.fn()}
+      />,
+      { session, cardPrefs: false },
+    );
+    const skeleton = await screen.findByTestId('row-skeleton');
+    const slots = skeleton.querySelectorAll<HTMLElement>('.row-slot');
+    expect(Array.from(slots, (slot) => slot.style.left)).toEqual([
+      '0px',
+      '256px',
+      '512px',
+      '768px',
+    ]);
+    expect(skeleton.querySelector<HTMLElement>('.row-track')!.style.left).toBe('12px');
+  });
+});
+
+describe('the mini player', () => {
+  it('is a button with the caption, in English', async () => {
+    setup();
+    await ready();
+    const mini = screen.getByTestId('player-end-mini');
+    expect(mini.tagName).toBe('BUTTON');
+    expect(mini).toHaveTextContent('Still playing · Press OK to return');
+    expect(mini).toHaveAttribute('data-ended', 'false');
+    expect(mini).toBeEnabled();
+  });
+
+  it('has the caption in German', async () => {
+    setup({ lang: 'de' });
+    await ready();
+    expect(screen.getByTestId('player-end-mini')).toHaveTextContent(
+      'Läuft noch · OK zum Zurückkehren',
+    );
+  });
+
+  it('OK on it and a click on it return to the picture', async () => {
+    const { onReturn } = setup();
+    await ready();
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    await pressKey(KEY.enter);
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('player-end-mini'));
+    expect(onReturn).toHaveBeenCalledTimes(2);
+  });
+
+  it('is reached with Left from Play now, and Right goes back to it', async () => {
+    setup();
+    await ready();
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    await pressKey(KEY.right);
+    await waitFor(() => expect(playButton()).toHaveFocus());
+  });
+
+  it('is reached with Left from the auto-play switch', async () => {
+    setup();
+    await ready();
+    await pressKey(KEY.down);
+    await waitFor(() => expect(screen.getByTestId('player-end-autoplay')).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+  });
+
+  it('is reached with Left from the first On Deck card but not from the second', async () => {
+    setup({
+      onDeck: [
+        resumeEpisode('x2', { series_id: 'other', series_title: 'Other', title: 'Pilot' }),
+        resumeEpisode('x3', { series_id: 'third', series_title: 'Third', title: 'Pilot' }),
+      ],
+    });
+    const row = await screen.findByTestId('player-end-ondeck');
+    await ready();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    const first = within(row).getByRole('button', { name: /Other/ });
+    const second = within(row).getByRole('button', { name: /Third/ });
+    await waitFor(() => expect(first).toHaveFocus());
+    await pressKey(KEY.right);
+    await waitFor(() => expect(second).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(first).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+  });
+
+  it('is reached from the Back button of the finished state, and Right returns to it', async () => {
+    setup({ neighbours: LAST });
+    await ready('player-end-back');
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    await pressKey(KEY.right);
+    await waitFor(() => expect(screen.getByTestId('player-end-back')).toHaveFocus());
+  });
+
+  it('keeps the focus on itself for Up and Down', async () => {
+    setup();
+    await ready();
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    await pressKey(KEY.up);
+    await pressKey(KEY.down);
+    expect(screen.getByTestId('player-end-mini')).toHaveFocus();
+  });
+
+  it('fades out and leaves the navigation once the stream has ended', async () => {
+    setup({ ended: true });
+    await ready();
+    const mini = screen.getByTestId('player-end-mini');
+    expect(mini).toHaveAttribute('data-ended', 'true');
+    expect(mini).toBeDisabled();
+    await pressKey(KEY.left);
+    expect(playButton()).toHaveFocus();
+  });
+});
+
+describe('the On Deck cards in the column', () => {
+  it('has a progress bar on its cards and no quality or audio badges', async () => {
+    const { settings } = setup({
+      onDeck: [
+        resumeEpisode('x2', {
+          series_id: 'other',
+          series_title: 'Other',
+          title: 'Pilot',
+          overlay_summary: {
+            resolution: '1080p',
+            hdr: 'DV',
+            audio: 'EAC3',
+            release_type: 'BluRay',
+          },
+        }),
+      ],
+    });
+    const row = await screen.findByTestId('player-end-ondeck');
+    expect(within(row).getByTestId('card-progress')).toBeInTheDocument();
+    // The badges would come once the profile's settings and the server's defaults are in.
+    await waitFor(() => expect(settings.overlayConfig.length).toBeGreaterThan(0));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(within(row).queryAllByTestId('card-badge')).toHaveLength(0);
   });
 });

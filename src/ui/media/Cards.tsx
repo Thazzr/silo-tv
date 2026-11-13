@@ -241,7 +241,8 @@ export const LandscapeCard = memo(function LandscapeCard({
   onPlay,
   onFocused,
   autoFocus,
-}: CardProps) {
+  badges = true,
+}: CardProps & { badges?: boolean }) {
   const url = useMediaUrl();
   const spoilers = useSpoilerSettings();
   const art = landscapeArt(item);
@@ -262,7 +263,7 @@ export const LandscapeCard = memo(function LandscapeCard({
             title={cardTitle(item)}
             protect={protectsCardArt(item, 'landscape', spoilers)}
           />
-          <CardBadges item={item} raised={fraction !== null} />
+          {badges ? <CardBadges item={item} raised={fraction !== null} /> : null}
           <ItemWatchStatus item={item} />
           {fraction !== null ? (
             <span className="card-progress" aria-hidden="true">

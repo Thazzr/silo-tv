@@ -132,6 +132,21 @@ export function usePlayerControls(args: Args): PlayerControls {
   useEffect(() => {
     latest.current = { args, skip, scrub, osd, focus };
   });
+  // The press that unlocks the controls (OK on the end screen's mini player) is still being
+  // delivered to the window when React has already re-rendered them: it must not act a second
+  // time. Keys count again from the next task on.
+  const justUnlocked = useRef(false);
+  const wasLocked = useRef(args.locked);
+  useEffect(() => {
+    const unlocked = wasLocked.current && !args.locked;
+    wasLocked.current = args.locked;
+    if (!unlocked) return undefined;
+    justUnlocked.current = true;
+    const timer = setTimeout(() => {
+      justUnlocked.current = false;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [args.locked]);
   const held = useRef<Held | null>(null);
   // Tap or hold on the scrubber. Once any keyup has been seen since the player opened, the remote
   // delivers keyups and a direction key is decided by them (KEYUP RULE): a keyup within HOLD_MS
@@ -288,7 +303,7 @@ export function usePlayerControls(args: Args): PlayerControls {
       if (!key || key === 'back') return;
       const { args: a, skip: s, scrub: sc, osd: o, focus: current } = latest.current;
       // Left alone entirely: the arrows and OK are the navigation's, the Play key the screen's.
-      if (a.locked) return;
+      if (a.locked || justUnlocked.current) return;
       if (isPopover(a.panel.open)) {
         // The menu's own keys (arrows, OK) are left alone; the media keys act as ever, without
         // touching the overlay.

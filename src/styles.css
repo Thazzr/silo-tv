@@ -421,6 +421,42 @@ h3 {
   object-fit: contain;
 }
 
+/* The end screen shrinks the picture into its mini player (EndScreen draws the frame and the
+   caption over it). Plain top, left, width and height, no transform: the TV's video plane gets a
+   plain rectangle, and the size changes at once. 96 px safe margin, 306 px = the safe area's
+   centre (540) less half the height; 832 x 468 is 16:9. */
+.player[data-end] .player-video {
+  position: absolute;
+  top: 306px;
+  left: 96px;
+  width: 832px;
+  height: 468px;
+  border-radius: 16px;
+  /* Its own layer for the fade at the stream's end. */
+  will-change: opacity;
+}
+
+.player[data-end='ended'] .player-video {
+  opacity: 0;
+  transition: opacity 700ms ease-out;
+}
+
+/* The end screen's opaque background under the mini player: the dark colour, or the next
+   episode's ThumbHash picture (inline style) scaled over the screen under a 90 % scrim. No CSS
+   filter: the browser's smoothing of the tiny picture is the blur. */
+.player-end-backdrop {
+  position: absolute;
+  inset: 0;
+  background: #08090c center / cover no-repeat;
+}
+
+.player-end-backdrop::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: rgba(8, 9, 12, 0.9);
+}
+
 .player-cue {
   position: absolute;
   top: 50%;
@@ -1309,9 +1345,11 @@ h3 {
   }
 }
 
-/* The end screen over the picture: the next episode, Play now with its countdown, the auto-play
-   switch and the On Deck row. Nearly opaque (97 % black): the picture shimmers through only
-   faintly, and the video stays on its own plane underneath. */
+/* The end screen, like the web's on a wide screen: the finishing episode in a mini player on the
+   left (the player's own video, moved by `.player[data-end]` above; the opaque backdrop is
+   `.player-end-backdrop`) and one column on the right, from x = 1024 (96 + 832 + 96) to the right
+   safe edge. This layer has no background of its own: nothing semi-transparent is drawn over a
+   full-size video. */
 .player-end {
   position: fixed;
   inset: 0;
@@ -1319,35 +1357,89 @@ h3 {
   box-sizing: border-box;
   overflow: hidden;
   color: var(--text);
-  background: rgba(8, 9, 12, 0.97);
 }
 
 .player-end-body {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+  position: relative;
   height: 100%;
-  padding: var(--safe-y) var(--safe-x) 0;
 }
 
-.player-end-top {
+/* The frame and the caption over the mini player's picture; the button is the focus target. The
+   ring is a shadow, so it follows the radius, and it never scales. */
+.player-end-mini {
+  position: absolute;
+  top: 306px;
+  left: 96px;
+  box-sizing: border-box;
   display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--target);
+  align-items: flex-end;
+  width: 832px;
+  height: 468px;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 16px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  /* Fades with the picture when the stream ends; then it leaves the pointer too. */
+  transition:
+    opacity 700ms ease-out,
+    visibility 0s linear 700ms;
+  will-change: opacity;
+}
+
+.player-end-mini:focus {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 var(--focus-ring-width) var(--focus-ring);
+}
+
+.player-end-mini[data-ended='true'] {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.player-end-mini-caption {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 56px 24px 20px;
+  font-size: var(--fs-small);
+  line-height: 28px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+  border-radius: 0 0 16px 16px;
+}
+
+/* The column: top to bottom the kicker, the next episode, Play now, the switch and the On Deck row,
+   centred in the safe area (54 px top and bottom). */
+.player-end-column {
+  position: absolute;
+  top: var(--safe-y);
+  bottom: var(--safe-y);
+  left: 1024px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 800px;
 }
 
 .player-end-heading {
-  margin: 0;
-  font-size: var(--fs-body);
+  margin: 0 0 8px;
+  font-size: var(--fs-small);
   font-weight: 600;
+  line-height: 28px;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.18em;
 }
 
 .player-end-close {
+  position: absolute;
+  top: var(--safe-y);
+  right: var(--safe-x);
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -1367,18 +1459,20 @@ h3 {
 .player-end-next {
   display: flex;
   flex: none;
-  gap: 48px;
-  margin-top: 20px;
+  flex-direction: column;
+  gap: 12px;
 }
 
+/* The still, 16:9 with a faint ring. */
 .player-end-still {
   position: relative;
   flex: none;
-  width: 480px;
-  height: 270px;
+  width: 427px;
+  height: 240px;
   overflow: hidden;
   background: var(--surface-raised);
   border-radius: var(--radius-card);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .player-end-nostill {
@@ -1394,36 +1488,38 @@ h3 {
 .player-end-info {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   justify-content: center;
   min-width: 0;
 }
 
 .player-end-series {
   margin: 0;
-  font-size: var(--fs-row-title);
+  font-size: 28px;
   font-weight: 600;
+  line-height: 36px;
 }
 
 .player-end-episode {
   margin: 0;
-  font-size: var(--fs-body);
+  font-size: var(--fs-card-title);
   font-weight: 600;
+  line-height: 32px;
 }
 
 .player-end-meta {
   margin: 0;
-  font-size: var(--fs-card-title);
+  font-size: var(--fs-small);
+  line-height: 26px;
   color: var(--text-secondary);
 }
 
 .player-end-overview {
   display: -webkit-box;
-  max-width: 1000px;
-  margin: 6px 0 0;
+  margin: 0;
   overflow: hidden;
-  font-size: var(--fs-card-title);
-  line-height: 1.35;
+  font-size: var(--fs-small);
+  line-height: 27px;
   color: var(--text-secondary);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -1442,22 +1538,23 @@ h3 {
 .player-end-actions {
   display: flex;
   flex: none;
-  gap: 32px;
+  gap: 24px;
   align-items: center;
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .player-end-play {
   box-sizing: border-box;
   display: flex;
+  flex: none;
   gap: 16px;
   align-items: center;
   justify-content: center;
-  min-width: 340px;
-  height: 88px;
-  padding: 0 48px;
+  min-width: 300px;
+  height: 80px;
+  padding: 0 40px;
   font: inherit;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -1472,7 +1569,8 @@ h3 {
   display: flex;
   gap: 16px;
   align-items: center;
-  font-size: var(--fs-body);
+  min-width: 0;
+  font-size: var(--fs-card-title);
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -1505,7 +1603,7 @@ h3 {
   align-self: flex-start;
   height: var(--target);
   padding: 0 28px;
-  margin: 12px 0 0 -28px;
+  margin: 4px 0 0 -28px;
   font: inherit;
   font-size: var(--fs-body);
   font-weight: 600;
@@ -1573,17 +1671,37 @@ h3 {
   flex-direction: column;
   gap: 12px;
   align-items: flex-start;
-  margin-top: 40px;
 }
 
 .player-end-finished .player-end-play {
   margin-top: 20px;
 }
 
-/* The row sits at the bottom, edge to edge: its own inset lines the cards up with the text. */
+/* The On Deck row in the column: it clips at the column's right edge (a row scrolls, it does not
+   wrap). It starts 12 px left of the column and its first card 12 px inside (ROW_INSET in
+   EndScreen.tsx), so the focused card's scale and ring are not clipped at the left. The cards are
+   240 x 135 with 16 px between them (ROW_CARDS), three in view. The title is a small label. */
 .player-end-row {
   flex: none;
-  margin: auto -96px 0;
+  width: 812px;
+  margin: 0 0 0 -12px;
+  overflow: hidden;
+}
+
+.player-end-row .row-title {
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.player-end-row .card-landscape {
+  width: 240px;
+}
+
+.player-end-row .card-landscape .card-art {
+  height: 135px;
 }
 
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content, and the avatar menu.

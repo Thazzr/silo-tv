@@ -14,6 +14,7 @@ import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
 import {
   ACCESS_TOKEN,
+  SESSION_ID,
   playableDecision,
   playbackCapabilities,
   playbackPlan,
@@ -24,6 +25,7 @@ import {
 } from '../../test/playbackFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
+import { PORTRAIT_HASH, stubCanvas } from '../../test/thumbhashFixtures';
 import { PlayerScreen } from '../PlayerScreen';
 import { clearInstallationCache } from '../session/startSession';
 import { isStillWatchingGated, recordAutoAdvance, resetStillWatchingStreak } from './stillWatching';
@@ -35,6 +37,7 @@ beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterAll(() => server.close());
 
 let restoreMedia: () => void;
+const onTestEnd: (() => void)[] = [];
 beforeEach(() => {
   window.localStorage.clear();
   resetStillWatchingStreak();
@@ -42,6 +45,7 @@ beforeEach(() => {
   restoreMedia = installFakeMedia();
 });
 afterEach(async () => {
+  for (const undo of onTestEnd.splice(0)) undo();
   vi.useRealTimers();
   restoreMedia();
   cleanup();
@@ -86,6 +90,10 @@ interface Options {
   automatic?: boolean;
   /** The settings answer is awaited before the profile's skip label appears (always, here). */
   threshold?: string;
+  /** The playback plan of the episode. */
+  plan?: S['PlaybackPlan'];
+  /** The button an OK keydown presses before the player's own key handling sees that keydown. */
+  pressedOn?: string;
 }
 
 const STILLS = [
@@ -96,7 +104,7 @@ const STILLS = [
 async function mount(options: Options = {}) {
   const watch = options.watch ?? episodeWatch(1, 1, { credits: CREDITS });
   const calls = servePlayback(server, {
-    start: [playableDecision(playbackPlan())],
+    start: [playableDecision(options.plan ?? playbackPlan())],
     watch,
     capabilities: playbackCapabilities({
       features: ['playback_plan_v3', 'sequenced_progress_v1'],
@@ -147,6 +155,18 @@ async function mount(options: Options = {}) {
     />,
     { session, cardPrefs: false },
   );
+  if (options.pressedOn) {
+    // Registered before the player's own key listener: the end screen's button acts on the
+    // keydown and React renders it (effects included) before the next listener gets the same
+    // event. A browser does that between two listeners of a real event (it runs the microtasks
+    // there); jsdom, dispatching from a script, does not, so the test does it by hand.
+    const testId = options.pressedOn;
+    const press = (e: KeyboardEvent) => {
+      if (e.keyCode === KEY.enter) act(() => screen.queryByTestId(testId)?.click());
+    };
+    window.addEventListener('keydown', press);
+    onTestEnd.push(() => window.removeEventListener('keydown', press));
+  }
   await screen.findByTestId('player');
   const video = view.container.querySelector('video')!;
   const state = fakeVideo(video);
@@ -529,5 +549,223 @@ describe('the end screen', () => {
     expect(screen.getByTestId('player-end-close')).toHaveFocus();
     expect(screen.getByTestId('player-osd')).toHaveAttribute('data-visible', 'false');
     expect(state.pause).not.toHaveBeenCalled();
+  });
+});
+
+// The fake element starts paused, so the remote's Play key starts it: the controls hear it again.
+const PLAY_KEY = 415;
+const player = () => screen.getByTestId('player');
+
+/**
+ * A press as the TV delivers it: the keydown and the keyup reach the window one by one (mount with
+ * `pressedOn`, so the end screen is already gone when the player's own key handling gets the
+ * same keydown).
+ */
+async function realPress() {
+  window.dispatchEvent(new KeyboardEvent('keydown', { keyCode: KEY.enter, bubbles: true }));
+  window.dispatchEvent(new KeyboardEvent('keyup', { keyCode: KEY.enter, bubbles: true }));
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+}
+
+describe('the mini player', () => {
+  it('shrinks the picture into the mini player while the stream plays, and takes it back full size', async () => {
+    const { at } = await mount();
+    expect(player()).not.toHaveAttribute('data-end');
+    at(5380);
+    expect(player()).toHaveAttribute('data-end', 'mini');
+    expect(screen.getByTestId('player-end-mini')).toHaveTextContent('Still playing');
+  });
+
+  it('fades the picture out when the stream ends, and the mini player leaves the focus', async () => {
+    vi.useRealTimers();
+    const { at, video, state } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    state.ended = true;
+    fireEvent.ended(video);
+    await waitFor(() => expect(player()).toHaveAttribute('data-end', 'ended'));
+    expect(screen.getByTestId('player-end-mini')).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
+  });
+
+  it('OK on it closes the end screen, gives the full picture back and the keys work again', async () => {
+    vi.useRealTimers();
+    const { at, state, onEpisode } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    await pressKey(KEY.enter);
+    expect(endScreen()).toBeNull();
+    expect(screen.queryByTestId('player-end-backdrop')).toBeNull();
+    expect(player()).not.toHaveAttribute('data-end');
+    expect(state.play).not.toHaveBeenCalled();
+    // The press that returned is over; the next key is the viewer's.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    key(PLAY_KEY);
+    expect(state.play).toHaveBeenCalledTimes(1);
+    expect(onEpisode).not.toHaveBeenCalled();
+  });
+
+  it('one OK acts once: the same press does not also pause the picture it returns to', async () => {
+    vi.useRealTimers();
+    const { at, state } = await mount({ pressedOn: 'player-end-mini', watch: episodeWatch(1, 1) });
+    vi.useRealTimers();
+    at(5380);
+    await waitFor(() => expect(screen.getByTestId('player-end-play')).toHaveFocus());
+    await pressKey(KEY.left);
+    await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
+    // A real press: the events reach the window one by one, not batched by a test helper, so the
+    // end screen is already gone when the player's own key handling gets the same keydown.
+    await realPress();
+    expect(endScreen()).toBeNull();
+    // The press that returned did not also act as OK on the hidden controls: they stay hidden
+    // and the playback is as it was.
+    expect(screen.getByTestId('player-osd')).toHaveAttribute('data-visible', 'false');
+    expect(state.play).not.toHaveBeenCalled();
+    expect(state.pause).not.toHaveBeenCalled();
+    // The next press is the viewer's again.
+    key(PLAY_KEY);
+    expect(state.play).toHaveBeenCalledTimes(1);
+  });
+
+  it('a click on it does the same', async () => {
+    vi.useRealTimers();
+    const { at } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    fireEvent.click(await screen.findByTestId('player-end-mini'));
+    expect(endScreen()).toBeNull();
+    expect(player()).not.toHaveAttribute('data-end');
+  });
+
+  it('is not entered by the last 30 s again after the return, but by the stream’s end', async () => {
+    vi.useRealTimers();
+    const { at, video, state } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    fireEvent.click(await screen.findByTestId('player-end-mini'));
+    expect(endScreen()).toBeNull();
+    at(100);
+    at(5385);
+    at(5399);
+    expect(endScreen()).toBeNull();
+    state.ended = true;
+    fireEvent.ended(video);
+    await waitFor(() => expect(endScreen()).not.toBeNull());
+    expect(player()).toHaveAttribute('data-end', 'ended');
+    expect(screen.getByTestId('player-end-startsin')).toHaveTextContent('Starts in 10s');
+  });
+
+  it('holds the credits card off after the return: it would start the next episode under the viewer', async () => {
+    vi.useRealTimers();
+    const { at } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    fireEvent.click(await screen.findByTestId('player-end-mini'));
+    expect(card()).toBeNull();
+    at(5200);
+    expect(card()).toBeNull();
+  });
+
+  it('keeps the player’s own layers away while the end screen shows: no subtitles', async () => {
+    vi.useRealTimers();
+    server.use(
+      http.get(
+        `${BASE_URL}/api/v2/stream/${SESSION_ID}/subtitles/:name`,
+        () =>
+          new HttpResponse('WEBVTT\n\n01:28:20.000 --> 01:29:55.000\nLast words', {
+            headers: { 'content-type': 'text/vtt' },
+          }),
+      ),
+    );
+    const { at } = await mount({
+      plan: playbackPlan({
+        subtitle: {
+          mode: 'render',
+          inventory: [],
+          artifact: {
+            url: `/api/v2/stream/${SESSION_ID}/subtitles/0.vtt?file_id=file-1`,
+            mime_type: 'text/vtt',
+            format: 'vtt',
+            timing_origin_seconds: 0,
+          },
+        },
+      }),
+    });
+    vi.useRealTimers();
+    at(5360);
+    expect(await screen.findByText('Last words')).toBeInTheDocument();
+    at(5380);
+    expect(endScreen()).not.toBeNull();
+    expect(screen.queryByText('Last words')).toBeNull();
+    // Back at the picture they are drawn again.
+    fireEvent.click(screen.getByTestId('player-end-mini'));
+    expect(await screen.findByText('Last words')).toBeInTheDocument();
+  });
+
+  it('keeps the player’s own layers away while the end screen shows: no buffering spinner', async () => {
+    vi.useRealTimers();
+    const { at, video } = await mount();
+    vi.useRealTimers();
+    at(5380);
+    fireEvent.waiting(video);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(screen.queryByTestId('player-cue')).toBeNull();
+    // Back at the picture the same wait shows it.
+    fireEvent.click(await screen.findByTestId('player-end-mini'));
+    expect(await screen.findByTestId('player-cue')).toBeInTheDocument();
+  });
+
+  it('has the next episode’s ThumbHash picture as the background, plain without one', async () => {
+    const canvas = stubCanvas();
+    vi.useRealTimers();
+    const hashed = await mount({
+      episodes: [
+        episodeOf(1, 1),
+        episodeOf(1, 2, { still_url: '/img/still-12.png', still_thumbhash: PORTRAIT_HASH }),
+      ],
+    });
+    vi.useRealTimers();
+    hashed.at(5380);
+    const backdrop = await screen.findByTestId('player-end-backdrop');
+    expect(canvas).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(backdrop.getAttribute('style')).toContain('data:image/png;base64,14x32'),
+    );
+    cleanup();
+
+    const plain = await mount();
+    vi.useRealTimers();
+    plain.at(5380);
+    const bare = await screen.findByTestId('player-end-backdrop');
+    expect(bare.getAttribute('style') ?? '').not.toContain('url(');
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the picture of an unwatched episode out of the background when spoilers are hidden', async () => {
+    stubCanvas();
+    vi.useRealTimers();
+    const { at } = await mount({
+      episodes: [
+        episodeOf(1, 1),
+        episodeOf(1, 2, { still_url: '/img/still-12.png', still_thumbhash: PORTRAIT_HASH }),
+      ],
+      values: { 'catalog.hide_unwatched_episode_images': true },
+    });
+    vi.useRealTimers();
+    at(5380);
+    const backdrop = await screen.findByTestId('player-end-backdrop');
+    await waitFor(() => expect(screen.getByTestId('art-protected')).toBeInTheDocument());
+    expect(backdrop.getAttribute('style') ?? '').not.toContain('url(');
+    vi.restoreAllMocks();
   });
 });
