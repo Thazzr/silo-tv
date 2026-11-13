@@ -17,6 +17,7 @@ export {
   doesFocusableExist,
   getCurrentFocusKey,
   initNavigation,
+  isInside,
   isTextField,
   setFocus,
   setFocusFromPointer,

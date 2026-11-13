@@ -17,6 +17,17 @@ export interface DetailTarget {
 export class DetailEntryMemory {
   /** The focused card of the seasons row, the episode grid, the cast row and "More like this". */
   readonly rows = new FocusIndexMemory();
+  private startedInRow = false;
+
+  /**
+   * True the first time it is asked, once per visit: the page opened from a "More Episodes" card
+   * puts the focus on its card in that row, and not again when it comes back from the player.
+   */
+  takeStartInRow(): boolean {
+    if (this.startedInRow) return false;
+    this.startedInRow = true;
+    return true;
+  }
 }
 
 /**

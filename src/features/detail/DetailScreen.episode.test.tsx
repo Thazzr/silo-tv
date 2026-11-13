@@ -1068,6 +1068,38 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     await focusKeyIs('detail-play');
   });
 
+  it('lands on the button that started playback when the page of a sibling comes back from the player', async () => {
+    serveDetail(server, {
+      item: (id) =>
+        id === 's1'
+          ? itemDetail({ content_id: 's1', type: 'series', versions: [], overview: 'x' })
+          : episodePage({
+              content_id: id,
+              title: `Page of ${id}`,
+              episode_number: Number(id.slice(1)),
+            }),
+      seasons: [seasonOf(1)],
+      episodes: siblings,
+    });
+    setup({ itemId: 'e3', fromSibling: { index: 2 } });
+    await row();
+    await focusKeyIs(ROW_KEY('e3'));
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.up);
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('player-stub')).toBeInTheDocument();
+    await pressKey(KEY.back);
+    await row();
+    await focusKeyIs('detail-play');
+    // Nothing pulls the focus to the card afterwards.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    await focusKeyIs('detail-play');
+  });
+
   it('starts a page that is opened from the season grid on its primary button', async () => {
     serveDetail(server, {
       item: (id) =>

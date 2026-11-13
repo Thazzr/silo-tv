@@ -26,7 +26,7 @@ import type { Pills } from './usePicks';
 
 export const PLAY_KEY = 'detail-play';
 export const TRANSLATE_KEY = 'detail-translate';
-const WATCHED_KEY = 'detail-watched';
+export const WATCHED_KEY = 'detail-watched';
 const FAVORITE_KEY = 'detail-favorite';
 const MENU_KEY = 'detail-menu';
 

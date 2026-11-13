@@ -1945,6 +1945,22 @@ test('Season page to an episode page, its More Episodes row, a sibling and Back 
   // A page opened from a sibling card starts on its own card in the row, not on Play.
   await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
 
+  // Playing from that page and coming back: the focus is on the button that started playback,
+  // not on the card the page started on.
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Folge abspielen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.2');
+  await expect(page.getByRole('button', { name: 'Folge abspielen' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('pill-subtitles')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
+
   // The sibling's page replaced the first episode's: one Back leaves for the season page, with
   // the focus on the card of the episode last viewed.
   await page.keyboard.press('Escape');

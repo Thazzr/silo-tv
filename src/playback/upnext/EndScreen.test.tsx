@@ -1,11 +1,13 @@
 // The end screen (post-roll) on its own: the next episode's block, the countdown states, the
 // auto-play switch, the finished state and the On Deck row. The clock is faked for intervals only:
 // the navigation and MSW need the real timeouts.
+import { useState } from 'react';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from '../../api/session';
+import { setFocus } from '../../app/nav';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { episodeOf } from '../../test/detailFixtures';
 import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
@@ -50,6 +52,8 @@ const UNKNOWN: EpisodeNeighbours = { previous: null, next: null, settled: false,
 
 interface Options {
   neighbours?: EpisodeNeighbours;
+  /** The season lists are still loading at first; `settle()` of the result brings these in. */
+  settleLater?: EpisodeNeighbours;
   ended?: boolean;
   /** Stored settings of the profile. */
   values?: Record<string, unknown>;
@@ -119,17 +123,32 @@ function setup(options: Options = {}) {
     onReturn: vi.fn(),
     onClose: vi.fn(),
   };
-  renderWithSilo(
-    <EndScreen
-      seriesId="ser1"
-      seriesTitle={'seriesTitle' in options ? options.seriesTitle : 'A Show'}
-      neighbours={options.neighbours ?? WITH_NEXT}
-      ended={options.ended ?? false}
-      {...handlers}
-    />,
-    { session, ...(options.lang ? { lang: options.lang } : {}), cardPrefs: false },
-  );
-  return { ...handlers, writes, settings };
+  const later = { settle: () => undefined as void };
+  function Screen() {
+    const [settled, setSettled] = useState(false);
+    later.settle = () => setSettled(true);
+    return (
+      <EndScreen
+        seriesId="ser1"
+        seriesTitle={'seriesTitle' in options ? options.seriesTitle : 'A Show'}
+        neighbours={
+          options.settleLater
+            ? settled
+              ? options.settleLater
+              : UNKNOWN
+            : (options.neighbours ?? WITH_NEXT)
+        }
+        ended={options.ended ?? false}
+        {...handlers}
+      />
+    );
+  }
+  renderWithSilo(<Screen />, {
+    session,
+    ...(options.lang ? { lang: options.lang } : {}),
+    cardPrefs: false,
+  });
+  return { ...handlers, writes, settings, settle: () => act(() => later.settle()) };
 }
 
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
@@ -605,6 +624,25 @@ describe('the mini player', () => {
     await waitFor(() => expect(screen.getByTestId('player-end-mini')).toHaveFocus());
     await pressKey(KEY.right);
     await waitFor(() => expect(screen.getByTestId('player-end-back')).toHaveFocus());
+  });
+
+  it('leaves the focus where the viewer moved when the season lists arrive late', async () => {
+    const { settle } = setup({ settleLater: WITH_NEXT });
+    await screen.findByTestId('player-end-loading');
+    // The viewer reaches the close button while the block is still a skeleton.
+    await act(() => setFocus('player-end-close'));
+    await waitFor(() => expect(screen.getByTestId('player-end-close')).toHaveFocus());
+    settle();
+    await screen.findByTestId('player-end-play');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getByTestId('player-end-close')).toHaveFocus();
+  });
+
+  it('takes the focus to the primary button when the season lists arrive late and nothing was chosen', async () => {
+    const { settle } = setup({ settleLater: WITH_NEXT });
+    await screen.findByTestId('player-end-loading');
+    settle();
+    await ready();
   });
 
   it('keeps the focus on itself for Up and Down', async () => {

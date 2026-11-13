@@ -5,6 +5,7 @@ import {
   Focusable,
   SelfFocusing,
   getCurrentFocusKey,
+  isInside,
   moveFocusTo,
   setFocus,
   stackArrows,
@@ -43,6 +44,7 @@ export const END_PLAY_KEY = 'player-end-play';
 export const END_AUTOPLAY_KEY = 'player-end-autoplay';
 export const END_BACK_KEY = 'player-end-back';
 export const END_MINI_KEY = 'player-end-mini';
+const END_SCREEN_KEY = 'player-end';
 const ON_DECK_ROW = 'player-end-ondeck';
 /**
  * The row sits in a column that clips at its right edge. Its first card starts this far inside the
@@ -129,11 +131,14 @@ export function EndScreen(props: Props) {
 
   // The primary control takes the focus once it exists (the season list may still be loading).
   // One task later: the navigation handles a key press asynchronously, and a press that was
-  // under way as the screen opened must not land on it.
+  // under way as the screen opened must not land on it. A viewer who already moved to a control of
+  // the screen while the list loaded keeps the focus there.
   const primary = !settled ? null : hasNext ? END_PLAY_KEY : END_BACK_KEY;
   useEffect(() => {
     if (primary === null) return undefined;
-    const timer = setTimeout(() => void setFocus(primary), 0);
+    const timer = setTimeout(() => {
+      if (!isInside(getCurrentFocusKey(), END_SCREEN_KEY)) void setFocus(primary);
+    }, 0);
     return () => clearTimeout(timer);
   }, [primary]);
 
@@ -178,7 +183,7 @@ export function EndScreen(props: Props) {
   return (
     <SelfFocusing>
       <div className="player-end" role="dialog" aria-label={heading} data-testid="player-end">
-        <FocusGroup focusKey="player-end" boundary className="player-end-body" onArrow={arrows}>
+        <FocusGroup focusKey={END_SCREEN_KEY} boundary className="player-end-body" onArrow={arrows}>
           <Focusable
             focusKey={END_MINI_KEY}
             className="player-end-mini"

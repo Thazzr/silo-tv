@@ -1006,6 +1006,34 @@ describe('DetailScreen: a series', () => {
   const inActions = () =>
     screen.getByTestId('detail-actions').contains(document.activeElement as Node);
 
+  it('keeps the focus in the synopsis dialog when the action row arrives while it is open', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    serveDetail(server, {
+      item: (id) =>
+        id === 's1' ? series({ overview: LONG_TEXT }) : seasonItem(Number(id.split('-')[1])),
+      seasons,
+      // The episode the primary button plays is still being looked up: the action row waits.
+      episodes: async (season, calls) => {
+        await gate;
+        return episodes(season, calls);
+      },
+    });
+    setup({ itemId: 's1' });
+    await ready();
+    // More holds the focus while the action row is missing.
+    await focusKeyIs('detail-more');
+    await pressKey(KEY.enter);
+    const dialog = await screen.findByTestId('synopsis-dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus(),
+    );
+    release();
+    await screen.findByTestId('detail-actions');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 50)));
+    expect(within(dialog).getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
   it('shows the seasons as a row of cards, the specials first, and no episode grid', async () => {
     const calls = serveDetail(server, { item: () => series(), seasons, episodes });
     setup({ itemId: 's1' });

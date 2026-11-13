@@ -182,6 +182,26 @@ describe('ProfilesScreen', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
     });
 
+    it('keeps the focus in the dialog when the profiles arrive while it is open', async () => {
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      server.use(
+        http.get(`${BASE_URL}/api/v2/profiles`, async () => {
+          await gate;
+          return HttpResponse.json(profileCollection(two));
+        }),
+      );
+      setup();
+      // The sign-out button is the only control while the list loads, and holds the focus.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Sign out' })).toHaveFocus());
+      await pressKey(KEY.enter);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
+      release();
+      await screen.findByTestId('profile-list');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    });
+
     it('Cancel keeps the session and sends nothing', async () => {
       const { session, logouts } = await openDialog();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));

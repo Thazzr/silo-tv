@@ -384,10 +384,10 @@ describe('SettingsScreen subtitle appearance row', () => {
     serveSettings(server);
     open();
     const row = await screen.findByTestId('settings-subtitles');
-    // The language row has the focus (the profile section was not there when the screen opened);
-    // the entry is right above it.
-    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
-    await pressKey(KEY.up);
+    // The focus follows to the Auto-play row once the profile section is there; the entry is the
+    // next row down.
+    await waitFor(() => expect(pill('On')).toHaveFocus());
+    await pressKey(KEY.down);
     expect(row).toHaveFocus();
     expect(screen.queryByTestId('subtitle-dialog')).toBeNull();
     await pressKey(KEY.enter);
@@ -612,28 +612,37 @@ describe('SettingsScreen playback section (auto-play next)', () => {
     expect(pill('Automatic (like the TV)')).not.toHaveFocus();
   });
 
-  it('keeps the focus on the language row when the capability arrives after the screen opened', async () => {
-    serveSettings(server);
+  it('moves the focus to the Auto-play row when the capability arrives after the screen opened', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    serveSettings(server, { gate });
     open();
     await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    release();
+    const row = within(await screen.findByTestId('settings-autoplay'));
+    await waitFor(() => expect(row.getByRole('radio', { name: 'On' })).toHaveFocus());
+  });
+
+  it('keeps the focus where the viewer moved when the capability arrives after the screen opened', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    serveSettings(server, { gate });
+    open();
+    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
+    await pressKey(KEY.down);
+    await waitFor(() => expect(pill('Combined')).toHaveFocus());
+    release();
     await screen.findByTestId('settings-autoplay');
     await act(() => new Promise<void>((resolve) => setTimeout(resolve, 150)));
-    expect(pill('Automatic (like the TV)')).toHaveFocus();
-    expect(
-      within(screen.getByTestId('settings-autoplay')).getByRole('radio', { name: 'On' }),
-    ).not.toHaveFocus();
+    expect(pill('Combined')).toHaveFocus();
   });
 
   it('is operated by keyboard: OK on a focused pill saves it', async () => {
     serveSettings(server);
     open();
     await screen.findByTestId('settings-autoplay');
-    // The language row has the focus (the section was not there when the screen opened): Up
-    // passes the subtitle appearance entry and enters the playback row on its selected pill, Right
+    // The focus follows to the first row once the section is there, on its selected pill: Right
     // moves to Off, OK saves.
-    await waitFor(() => expect(pill('Automatic (like the TV)')).toHaveFocus());
-    await pressKey(KEY.up);
-    await pressKey(KEY.up);
     await waitFor(() => expect(pill('On')).toHaveFocus());
     await pressKey(KEY.right);
     await pressKey(KEY.enter);

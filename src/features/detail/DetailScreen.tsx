@@ -36,7 +36,7 @@ import { useBoxSetsAvailable } from '../library/queries';
 import { resumePoint, type StartIntent } from '../../playback/resume';
 import { useItemOpener } from '../home/useItemOpener';
 import type { PersonTarget } from '../person/personMemory';
-import { ActionRow, PLAY_KEY, TRANSLATE_KEY } from './ActionRow';
+import { ActionRow, PLAY_KEY, TRANSLATE_KEY, WATCHED_KEY } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
 import { episodeGridId, type DetailEntryMemory, type DetailTarget } from './detailMemory';
@@ -469,15 +469,18 @@ function DetailBody({
   const inBoxSet = useCallback(() => enter('boxSet'), [enter]);
   const inSimilar = useCallback(() => enter('similar'), [enter]);
 
-  // A page opened from a "More Episodes" card puts the focus on its own card in that row, once.
+  // A page opened from a "More Episodes" card puts the focus on its own card in that row, once per
+  // visit: the flag lives in the entry's memory, because the page mounts again when it comes back
+  // from the player, and the restored button must keep the focus then. A viewer who moved off the
+  // buttons the page landed on before the row arrived keeps the focus too.
   const showsSiblings = episode && episodes !== undefined && episodes.length > 1;
-  const startedInRow = useRef(false);
   const startInRow = target.fromSibling !== undefined;
   useEffect(() => {
-    if (!startInRow || !showsSiblings || startedInRow.current) return;
-    startedInRow.current = true;
+    if (!startInRow || !showsSiblings || !memory.takeStartInRow()) return;
+    const current = getCurrentFocusKey();
+    if (current && current !== PLAY_KEY && current !== WATCHED_KEY) return;
     moveFocusTo(cardFocusKey(EPISODE_ROW_ID, detail.content_id));
-  }, [startInRow, showsSiblings, detail.content_id]);
+  }, [startInRow, showsSiblings, detail.content_id, memory]);
 
   // --- The block under the hero: the seasons row, the episode grid, or "More Episodes" ----------
   // A series with several seasons shows them as a row of cards (a failed or pending read shows its

@@ -18,6 +18,14 @@ describe('DetailMemory', () => {
   });
 });
 
+describe('DetailEntryMemory', () => {
+  it('lets the start in the episode row happen once per visit', () => {
+    const entry = new DetailMemory().of({ name: 'detail' });
+    expect(entry.takeStartInRow()).toBe(true);
+    expect(entry.takeStartInRow()).toBe(false);
+  });
+});
+
 describe('restoreViewedEpisode', () => {
   it("moves the page's episode grid to the viewed episode and names its card", () => {
     const below = new DetailEntryMemory();

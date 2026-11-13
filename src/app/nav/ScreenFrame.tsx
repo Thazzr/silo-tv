@@ -1,6 +1,6 @@
-import { createContext, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FocusGroup } from './FocusGroup';
-import { doesFocusableExist, getCurrentFocusKey, isInside, setFocus } from './init';
+import { NAV_KEYS, doesFocusableExist, getCurrentFocusKey, isInside, setFocus } from './init';
 
 /** What a focusable element tells the screen it sits in. */
 export interface FrameApi {
@@ -20,6 +20,8 @@ export function SelfFocusing({ children }: { children: ReactNode }) {
 }
 
 type Claim = { kind: 'plain' | 'strong'; key: string };
+
+const NAV_KEY_CODES: readonly number[] = Object.values(NAV_KEYS);
 
 /**
  * One screen of the stack. It decides who gets the focus when elements appear:
@@ -44,12 +46,33 @@ export function ScreenFrame({
   const pending = useRef<string | null>(restoreKey);
   const claim = useRef<Claim | null>(null);
   const restored = useRef<string | null>(null);
+  // The viewer pressed a navigation key or clicked since the screen appeared. The focus is not a
+  // sign of it: a page may move the focus between its own buttons while it loads.
+  const acted = useRef(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (NAV_KEY_CODES.includes(e.keyCode)) acted.current = true;
+    };
+    const onPointer = () => (acted.current = true);
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onPointer, true);
+    window.addEventListener('wheel', onPointer, true);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onPointer, true);
+      window.removeEventListener('wheel', onPointer, true);
+    };
+  }, []);
 
   const api = useMemo<FrameApi>(
     () => ({
       onMounted(key, autoFocus) {
         if (pending.current === key) {
           pending.current = null;
+          // The remembered element can mount long after the screen (its data was dropped from the
+          // cache meanwhile). A viewer who has acted since the screen appeared keeps the focus
+          // where it is, in a dialog too.
+          if (acted.current) return;
           claim.current = { kind: 'strong', key };
           void setFocus(key);
           // Remembered until this commit's effects are done (a microtask), not longer: React's
@@ -63,6 +86,11 @@ export function ScreenFrame({
         }
         if (autoFocus) {
           if (claim.current?.kind === 'strong') return;
+          // A late autofocus upgrades a plain claim only while the focus is not elsewhere on the
+          // screen: once the viewer moved, or a dialog of the screen took the focus, it stays
+          // there. Focus outside the screen (the menu that opened it) is no such choice.
+          const current = getCurrentFocusKey();
+          if (claim.current && current !== claim.current.key && isInside(current, frameKey)) return;
           if (pending.current) {
             if (doesFocusableExist(pending.current)) return;
             // The element the viewer came from may mount a moment later in this same commit

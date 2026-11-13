@@ -1,5 +1,5 @@
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
-import { FocusGroup, Focusable } from '../../app/nav';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { FocusGroup, Focusable, getCurrentFocusKey, setFocus } from '../../app/nav';
 import { Button, Screen } from '../../app/ui';
 import { useT, type MessageKey } from '../../i18n';
 import {
@@ -47,8 +47,9 @@ function PillRow<V extends string | number>({
   selected: V;
   onPick(value: V): void;
   /**
-   * The screen focuses the first of its rows that asks for it, and a row that appears later
-   * (the server's answer came after the screen opened) does not take the focus from it.
+   * The screen focuses the first of its rows that asks for it. A row that appears later (the
+   * server's answer came after the screen opened) does not take the focus from the viewer: the
+   * screen moves it there itself, and only while it still sits where the screen put it.
    */
   autoFocus?: boolean;
 }) {
@@ -146,6 +147,27 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [timeMode, setMode] = useState(getTimeMode);
   const language = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+  // The first row of the screen is where the focus lands. The server's capabilities can arrive
+  // after the screen opened, so the focus first lands on the device section; when the first row
+  // shows up and the focus is still on the row it landed on (the viewer has not moved), it follows.
+  const firstRow = knowsAutoPlay ? 'autoplay' : knowsSubtitles ? 'subtitles' : 'language';
+  const startKeyOf = (row: typeof firstRow) =>
+    row === 'autoplay'
+      ? `settings-autoplay-${autoPlay ? 'on' : 'off'}`
+      : row === 'subtitles'
+        ? 'settings-subtitles'
+        : `settings-language-${language}`;
+  const landedRow = useRef<typeof firstRow>(firstRow);
+  useEffect(() => {
+    const landed = landedRow.current;
+    landedRow.current = firstRow;
+    if (landed !== firstRow && getCurrentFocusKey() === startKeyOf(landed)) {
+      void setFocus(startKeyOf(firstRow));
+    }
+    // The start keys are read at the moment the first row changes, not on every selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstRow]);
 
   return (
     <Screen title={t('settings.title')} onBack={onBack} testId="settings-screen">

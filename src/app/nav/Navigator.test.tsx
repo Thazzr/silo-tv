@@ -3,7 +3,15 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import { KEY, pressKey } from '../../test/keys';
-import { Focusable, Navigator, useBackHandler, useNavigator, type NavApi } from '.';
+import {
+  Focusable,
+  Navigator,
+  SelfFocusing,
+  setFocus,
+  useBackHandler,
+  useNavigator,
+  type NavApi,
+} from '.';
 
 type TestScreen = { name: 'home' } | { name: 'list' } | { name: 'detail'; id: string };
 
@@ -224,6 +232,142 @@ describe('Navigator focus memory', () => {
     act(() => nav().pop());
     // The static element mounts first and takes the focus; the remembered one wins once it is there.
     await waitFor(() => expect(screen.getByText('late 1')).toHaveFocus());
+  });
+
+  it('does not pull the focus back to the remembered element that mounts late after the viewer moved', async () => {
+    // The data of the screen is dropped while it is covered: on return the remembered element is
+    // back only after the viewer already moved on.
+    let release: () => void = () => undefined;
+    let held: Promise<void> | null = null;
+    function Late() {
+      const [ready, setReady] = useState(held === null);
+      useEffect(() => {
+        if (held) void held.then(() => setReady(true));
+      }, []);
+      return (
+        <main data-testid="home">
+          <Focusable focusKey="static" autoFocus>
+            static
+          </Focusable>
+          <Focusable focusKey="other">other</Focusable>
+          {ready ? <Focusable focusKey="late">late</Focusable> : null}
+        </main>
+      );
+    }
+    render(
+      <I18nProvider lang="en">
+        <Navigator<TestScreen>
+          initial={{ name: 'home' }}
+          renderScreen={(s) => (s.name === 'home' ? <Late /> : <main data-testid="list" />)}
+        >
+          <Capture />
+        </Navigator>
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('static')).toHaveFocus());
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await waitFor(() => expect(screen.getByText('late')).toHaveFocus());
+    act(() => nav().push({ name: 'list' }));
+    held = new Promise<void>((resolve) => (release = resolve));
+    act(() => nav().pop());
+    await waitFor(() => expect(screen.getByText('static')).toHaveFocus());
+    await pressKey(KEY.down);
+    expect(screen.getByText('other')).toHaveFocus();
+    await act(async () => release());
+    await screen.findByText('late');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 30)));
+    expect(screen.getByText('other')).toHaveFocus();
+  });
+
+  it('gives the focus to the remembered element that mounts late while the viewer has not moved', async () => {
+    let release: () => void = () => undefined;
+    let held: Promise<void> | null = null;
+    function Late() {
+      const [ready, setReady] = useState(held === null);
+      useEffect(() => {
+        if (held) void held.then(() => setReady(true));
+      }, []);
+      return (
+        <main data-testid="home">
+          <Focusable focusKey="static" autoFocus>
+            static
+          </Focusable>
+          <Focusable focusKey="other">other</Focusable>
+          {ready ? <Focusable focusKey="late">late</Focusable> : null}
+        </main>
+      );
+    }
+    render(
+      <I18nProvider lang="en">
+        <Navigator<TestScreen>
+          initial={{ name: 'home' }}
+          renderScreen={(s) => (s.name === 'home' ? <Late /> : <main data-testid="list" />)}
+        >
+          <Capture />
+        </Navigator>
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('static')).toHaveFocus());
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await waitFor(() => expect(screen.getByText('late')).toHaveFocus());
+    act(() => nav().push({ name: 'list' }));
+    held = new Promise<void>((resolve) => (release = resolve));
+    act(() => nav().pop());
+    await waitFor(() => expect(screen.getByText('static')).toHaveFocus());
+    await act(async () => release());
+    await waitFor(() => expect(screen.getByText('late')).toHaveFocus());
+  });
+
+  it('keeps the focus in an open dialog when an autofocus element arrives late over a plain claim', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    // A dialog sets its own focus, as the synopsis dialog does.
+    function DialogClose() {
+      useEffect(() => {
+        void setFocus('dialog-close');
+      }, []);
+      return <Focusable focusKey="dialog-close">close</Focusable>;
+    }
+    function Screen() {
+      const [ready, setReady] = useState(false);
+      const [open, setOpen] = useState(false);
+      useEffect(() => {
+        void held.then(() => setReady(true));
+      }, []);
+      return (
+        <main data-testid="home">
+          <Focusable focusKey="more" onClick={() => setOpen(true)}>
+            more
+          </Focusable>
+          {ready ? (
+            <Focusable focusKey="play" autoFocus>
+              play
+            </Focusable>
+          ) : null}
+          {open ? (
+            <SelfFocusing>
+              <DialogClose />
+            </SelfFocusing>
+          ) : null}
+        </main>
+      );
+    }
+    render(
+      <I18nProvider lang="en">
+        <Navigator<TestScreen> initial={{ name: 'home' }} renderScreen={() => <Screen />}>
+          <Capture />
+        </Navigator>
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('more')).toHaveFocus());
+    await pressKey(KEY.enter);
+    await waitFor(() => expect(screen.getByText('close')).toHaveFocus());
+    await act(async () => release());
+    await screen.findByText('play');
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 30)));
+    expect(screen.getByText('close')).toHaveFocus();
   });
 
   it.each([false, true])(
