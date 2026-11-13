@@ -40,6 +40,11 @@ interface FakeOptions {
   password?: boolean;
   /** The household's profiles; one primary profile without a PIN when omitted. */
   profiles?: FakeProfile[];
+  /**
+   * The first request that carries a profile token is refused with 403 `profile_verification_required`,
+   * as when the profile's PIN changed or the login ended; later ones are served.
+   */
+  rejectProfileTokenOnce?: boolean;
   /** Puts a series ("A Show") first in the Recently Added row. */
   series?: boolean;
   /** Adds a series library with a collection to the library list (the Series tab then has content). */
@@ -390,6 +395,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
   const seen: Seen[] = [];
   let polls = 0;
   let translated = false;
+  let profileTokenRejected = false;
   const server = createServer((req: IncomingMessage, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const cors = {
@@ -961,6 +967,19 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
       if (options.pills && /^\/api\/v2\/(audio-prefs|subtitle-prefs)\/[\w-]+$/.test(url.pathname)) {
         res.writeHead(204, cors);
         return res.end();
+      }
+      if (
+        options.rejectProfileTokenOnce &&
+        !profileTokenRejected &&
+        req.headers['x-profile-token']
+      ) {
+        profileTokenRejected = true;
+        return send(403, {
+          type: 'https://silo.example/problems/profile_verification_required',
+          code: 'profile_verification_required',
+          title: 'Profile verification required',
+          status: 403,
+        });
       }
       switch (`${req.method} ${url.pathname}`) {
         case 'GET /api/v2/system/info':
@@ -2586,6 +2605,62 @@ test('profiles: picker with a PIN profile, create a kids profile, choose it, ope
       return homes[homes.length - 1]?.profileId;
     })
     .toBe('profile-3');
+});
+
+test('profiles: a PIN proof the server no longer accepts leads back to the picker, and the PIN opens Home again', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    profiles: [
+      { id: 'profile-1', name: 'Alex', has_pin: false, is_primary: true, is_child: false },
+      { id: 'profile-2', name: 'Sam', has_pin: true, is_primary: false, is_child: false },
+    ],
+    rejectProfileTokenOnce: true,
+  });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Verbinden' })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // Enters Sam's PIN with the keyboard: the digits, then OK on the pad.
+  const enterPin = async () => {
+    await expect(page.getByTestId('pin-entry')).toBeVisible();
+    await expect(page.getByRole('button', { name: '1', exact: true })).toBeFocused();
+    await page.keyboard.type('1234');
+    await expect(page.getByTestId('pin-dots')).toHaveText('••••');
+    for (const name of ['4', '7', 'Löschen']) {
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByRole('button', { name, exact: true })).toBeFocused();
+    }
+    for (const name of ['0', 'OK']) {
+      await page.keyboard.press('ArrowRight');
+      await expect(page.getByRole('button', { name, exact: true })).toBeFocused();
+    }
+    await page.keyboard.press('Enter');
+  };
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Wer schaut?');
+  const sam = page.getByRole('button', { name: /Sam/ });
+  await expect(page.getByRole('button', { name: /Alex/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(sam).toBeFocused();
+  await page.keyboard.press('Enter');
+  await enterPin();
+
+  // Home's first request carries the proof and is refused: the picker is back, and Sam is asked again.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Wer schaut?');
+  await expect(page.getByRole('button', { name: /Sam/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await enterPin();
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused();
+  await expect
+    .poll(() => {
+      const homes = seen.filter((e) => e.path === '/api/v2/home/sections');
+      return homes[homes.length - 1]?.profileId;
+    })
+    .toBe('profile-2');
+  expect(seen.filter((e) => e.path === '/api/v2/profiles/profile-2/verify-pin')).toHaveLength(2);
 });
 
 test('Back on the server screen (the root) opens the exit popup; Cancel closes it', async ({

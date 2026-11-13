@@ -14,7 +14,7 @@ export interface SessionData {
   profileToken?: string;
 }
 
-export type SessionEvent = 'changed' | 'signedOut';
+export type SessionEvent = 'changed' | 'signedOut' | 'profileLocked';
 
 // Bump when the stored shape changes; an unknown version is treated as "signed out". The storage
 // key keeps its name; the record inside carries its own version (`v`).
@@ -38,6 +38,7 @@ export class Session {
   private readonly listeners: Record<SessionEvent, Set<() => void>> = {
     changed: new Set(),
     signedOut: new Set(),
+    profileLocked: new Set(),
   };
 
   constructor(
@@ -70,6 +71,16 @@ export class Session {
     this.save();
     this.emit('changed');
     this.emit('signedOut');
+  }
+
+  /**
+   * The server no longer accepts the open profile's PIN proof: forgets the profile and the proof
+   * (also from storage) and tells listeners, so the app can ask for the profile again.
+   */
+  lockProfile(): void {
+    if (!this.data) return;
+    this.set({ ...this.data, profileId: undefined, profileToken: undefined });
+    this.emit('profileLocked');
   }
 
   on(event: SessionEvent, listener: () => void): () => void {

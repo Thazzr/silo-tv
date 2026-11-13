@@ -27,6 +27,9 @@ const REFRESH_MARGIN_MS = 60_000;
 
 const REFRESH_CODES = new Set(['invalid_token', 'token_refresh_required']);
 
+/** The server no longer accepts the profile's PIN proof (the PIN changed or the login ended). */
+const PROFILE_LOCKED_CODE = 'profile_verification_required';
+
 // Header values must be ISO-8859-1; keep names printable ASCII so a model name cannot break a call.
 function headerSafe(value: string): string {
   return value.replace(/[^\x20-\x7e]/g, '');
@@ -70,18 +73,20 @@ function authMiddleware(session: Session): Middleware {
   };
 }
 
-async function needsRefresh(response: Response): Promise<boolean> {
-  if (response.status !== 401) return false;
+/** The problem code of an error response, or '' when the body is no problem document. */
+async function responseProblemCode(response: Response): Promise<string> {
   try {
     const body: unknown = JSON.parse(await response.clone().text());
-    return (
-      body !== null &&
-      typeof body === 'object' &&
-      REFRESH_CODES.has(problemCode(body as Record<string, unknown>))
-    );
+    return body !== null && typeof body === 'object'
+      ? problemCode(body as Record<string, unknown>)
+      : '';
   } catch {
-    return false;
+    return '';
   }
+}
+
+async function needsRefresh(response: Response): Promise<boolean> {
+  return response.status === 401 && REFRESH_CODES.has(await responseProblemCode(response));
 }
 
 /**
@@ -193,11 +198,31 @@ export function createSiloClient(options: SiloClientOptions): SiloClient {
     return transport(retryable);
   };
 
+  /**
+   * A 403 `profile_verification_required` for the profile that is still open locks it again. A
+   * request that named no profile, another profile or another proof (or one the viewer has since
+   * left) is ignored; the first rejection clears the profile, so parallel rejections lock only once.
+   */
+  const fetchWithProfileCheck = async (request: Request): Promise<Response> => {
+    const sentId = request.headers.get('X-Profile-Id');
+    const sentToken = request.headers.get('X-Profile-Token');
+    const response = await fetchWithRefresh(request);
+    if (response.status === 403 && (await responseProblemCode(response)) === PROFILE_LOCKED_CODE) {
+      const current = session.get();
+      // A request without X-Profile-Id never equals the open profile. "No proof sent" matches
+      // "no proof held": a profile that gained a PIN elsewhere is refused without ever having had one.
+      if (current?.profileId === sentId && (current.profileToken ?? '') === (sentToken ?? '')) {
+        session.lockProfile();
+      }
+    }
+    return response;
+  };
+
   // Silo wants a list parameter once per value (`keys=a&keys=b`), never comma-separated; that is
   // openapi-fetch's default too, spelled out here because the server rejects the other form.
   const client = createClient<paths>({
     baseUrl,
-    fetch: fetchWithRefresh,
+    fetch: fetchWithProfileCheck,
     querySerializer: { array: { style: 'form', explode: true } },
   });
   client.use(deviceMiddleware(options), authMiddleware(session));

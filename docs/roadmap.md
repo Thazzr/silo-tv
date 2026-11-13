@@ -26,6 +26,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - ✅ Save several servers and switch between them; each keeps its sign-in (TV 2026-11-11)
 - ✅ Sign in by code/QR (offered first) and by password with an on-screen keyboard; sign out (TV 2026-11-09)
 - ✅ Profiles: picker, PIN, child profiles, create a profile (TV 2026-11-10); the PIN entry is centred like the picker and its delete key is a backspace icon
+- 🟨 A profile whose PIN proof the server no longer accepts (its PIN changed or was set elsewhere, the login ended) is locked again and the picker shows, as in the web app
 - ✅ Profile at launch: automatic, every time, after 1 hour, after 12 hours (TV 2026-11-11)
 - ✅ Switch profile and server (the profile switch on the TV 2026-11-09, both 2026-11-11)
 - ✅ App shell with a top bar: Home, Movies, Series, For You, Calendar, Search, avatar menu; For You and Calendar show "Coming soon" until Phase 4 fills them (TV 2026-11-09)

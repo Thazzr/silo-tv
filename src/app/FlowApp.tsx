@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { getDeviceIdentity, type DeviceIdentity } from '../api/deviceIdentity';
 import type { Session } from '../api/session';
 import { getPlatform, type KeyValueStore } from '../platform';
@@ -118,6 +118,45 @@ function startScreen(
   // Several servers always start at the list; a single one needs no list step.
   if (servers.length > 1) return { name: 'servers' };
   return entryScreen(registry, prefs, servers[0]!.origin);
+}
+
+/** Drops everything fetched for the open profile; the next one starts clean. */
+function forgetProfileData(queryClient: QueryClient): void {
+  for (const key of [
+    'libraries',
+    'catalog',
+    'home',
+    'library',
+    'detail',
+    'person',
+    'boxset',
+    'search',
+    'settings',
+  ]) {
+    queryClient.removeQueries({ queryKey: [key] });
+  }
+}
+
+/** The server no longer accepts the open profile's PIN proof: back to the picker, as on the web. */
+function ProfileLockedWatcher({
+  session,
+  onLocked,
+}: {
+  session: Session | null;
+  onLocked: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { reset } = useNavigator<FlowScreen>();
+  useEffect(
+    () =>
+      session?.on('profileLocked', () => {
+        forgetProfileData(queryClient);
+        onLocked();
+        reset({ name: 'profiles', autoSelect: false });
+      }),
+    [session, queryClient, reset, onLocked],
+  );
+  return null;
 }
 
 /** A refused refresh or a sign-out ends the session wherever the user is. */
@@ -354,15 +393,7 @@ export function FlowApp({
             onSwitchProfile={() => {
               setOffer(null);
               session.update({ profileId: undefined, profileToken: undefined });
-              queryClient.removeQueries({ queryKey: ['libraries'] });
-              queryClient.removeQueries({ queryKey: ['catalog'] });
-              queryClient.removeQueries({ queryKey: ['home'] });
-              queryClient.removeQueries({ queryKey: ['library'] });
-              queryClient.removeQueries({ queryKey: ['detail'] });
-              queryClient.removeQueries({ queryKey: ['person'] });
-              queryClient.removeQueries({ queryKey: ['boxset'] });
-              queryClient.removeQueries({ queryKey: ['search'] });
-              queryClient.removeQueries({ queryKey: ['settings'] });
+              forgetProfileData(queryClient);
               nav.reset({ name: 'profiles', autoSelect: false });
             }}
             // Every server keeps its own session; the list only changes which one is shown.
@@ -467,6 +498,7 @@ export function FlowApp({
   return (
     <Navigator initial={initial} renderScreen={renderScreen}>
       <SignedOutWatcher session={session} onEnd={clearOffer} />
+      <ProfileLockedWatcher session={session} onLocked={clearOffer} />
     </Navigator>
   );
 }

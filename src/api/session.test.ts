@@ -604,3 +604,105 @@ describe('Session', () => {
     expect(signedOut).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('profile proof the server no longer accepts', () => {
+  const lockedSession = () => {
+    const session = signedInSession();
+    session.update({ profileId: 'p2', profileToken: 'proof-2' });
+    return session;
+  };
+
+  it('403 profile_verification_required clears the profile and its proof, in storage too, and notifies once for parallel requests', async () => {
+    server.use(http.get(ME, () => problemJson('profile_verification_required', 403)));
+    const { client, session } = setup(lockedSession());
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    const results = await Promise.all([
+      client.GET('/api/v2/account/me'),
+      client.GET('/api/v2/account/me'),
+    ]);
+    expect(results.map((r) => r.response.status)).toEqual([403, 403]);
+    expect(locked).toHaveBeenCalledTimes(1);
+    expect(session.get()).toMatchObject({ refreshToken: 'refresh-old', user: account });
+    expect(session.get()?.profileId).toBeUndefined();
+    expect(session.get()?.profileToken).toBeUndefined();
+    const raw = localStorage.getItem('silo-tv.session.v1')!;
+    expect(raw).not.toContain('proof-2');
+    expect(raw).not.toContain('p2');
+  });
+
+  it('recognises the code in the problem type too', async () => {
+    server.use(
+      http.get(ME, () =>
+        HttpResponse.json(
+          { type: 'https://silo.example/problems/profile_verification_required', status: 403 },
+          { status: 403 },
+        ),
+      ),
+    );
+    const { client, session } = setup(lockedSession());
+    await client.GET('/api/v2/account/me');
+    expect(session.get()?.profileId).toBeUndefined();
+  });
+
+  it('keeps the profile on a 403 with another code', async () => {
+    server.use(http.get(ME, () => problemJson('forbidden', 403)));
+    const { client, session } = setup(lockedSession());
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    await client.GET('/api/v2/account/me');
+    expect(locked).not.toHaveBeenCalled();
+    expect(session.get()).toMatchObject({ profileId: 'p2', profileToken: 'proof-2' });
+  });
+
+  it('keeps the profile on a 403 without a problem body', async () => {
+    server.use(http.get(ME, () => new HttpResponse('nope', { status: 403 })));
+    const { client, session } = setup(lockedSession());
+    await client.GET('/api/v2/account/me');
+    expect(session.get()?.profileToken).toBe('proof-2');
+  });
+
+  it('ignores the code for a request that named another profile or another proof', async () => {
+    server.use(http.get(ME, () => problemJson('profile_verification_required', 403)));
+    const { client, session } = setup(lockedSession());
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    await client.GET('/api/v2/account/me', {
+      headers: { 'X-Profile-Id': 'p1', 'X-Profile-Token': 'proof-1' },
+    });
+    await client.GET('/api/v2/account/me', { headers: { 'X-Profile-Token': 'proof-old' } });
+    await client.GET('/api/v2/account/me', { headers: { 'X-Profile-Id': 'p1' } });
+    expect(locked).not.toHaveBeenCalled();
+    expect(session.get()).toMatchObject({ profileId: 'p2', profileToken: 'proof-2' });
+  });
+
+  it('locks a profile without a PIN whose requests are refused as well, once for parallel requests', async () => {
+    server.use(http.get(ME, () => problemJson('profile_verification_required', 403)));
+    const session = signedInSession();
+    session.update({ profileId: 'p1' });
+    const { client } = setup(session);
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    await Promise.all([client.GET('/api/v2/account/me'), client.GET('/api/v2/account/me')]);
+    expect(locked).toHaveBeenCalledTimes(1);
+    expect(session.get()?.profileId).toBeUndefined();
+  });
+
+  it('ignores the code for a request that named no profile', async () => {
+    server.use(http.get(ME, () => problemJson('profile_verification_required', 403)));
+    const { client, session } = setup(signedInSession());
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    await client.GET('/api/v2/account/me');
+    expect(locked).not.toHaveBeenCalled();
+    expect(session.get()?.refreshToken).toBe('refresh-old');
+  });
+
+  it('lockProfile does nothing when signed out', () => {
+    const session = new Session(getPlatform().storage);
+    const locked = vi.fn();
+    session.on('profileLocked', locked);
+    session.lockProfile();
+    expect(locked).not.toHaveBeenCalled();
+  });
+});

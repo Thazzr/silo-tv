@@ -299,6 +299,53 @@ describe('FlowApp', () => {
     expect(ids).toEqual(['p2', 'p1']);
   });
 
+  it('returns to the profile list when Home is refused for a PIN proof, and the PIN opens Home with the new proof', async () => {
+    serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam', has_pin: true })]);
+    const proofs = ['proof-old', 'proof-new'];
+    const homeProofs: (string | null)[] = [];
+    server.use(
+      http.post(`${BASE_URL}/api/v2/profiles/p2/verify-pin`, () =>
+        HttpResponse.json({ valid: true, expires_at: null, profile_token: proofs.shift() }),
+      ),
+      http.get(`${BASE_URL}/api/v2/home/sections`, ({ request }) => {
+        const proof = request.headers.get('X-Profile-Token');
+        homeProofs.push(proof);
+        if (proof !== 'proof-new') {
+          return problemResponse('profile_verification_required', 403);
+        }
+        return HttpResponse.json({
+          sections: [
+            homeSection('recent', 0, {
+              items: [catalogItem({ title: 'After The PIN' })],
+              total_count: 1,
+            }),
+          ],
+        });
+      }),
+    );
+    const session = signedIn();
+    flow();
+    const enterPin = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: /Sam/ }));
+      await screen.findByTestId('pin-entry');
+      fireEvent.keyDown(window, { key: '1', keyCode: 49 });
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    };
+    await enterPin();
+
+    // The refusal ends the open profile: the list is back, nothing of the profile is kept.
+    await screen.findByTestId('profile-list');
+    await waitFor(() => expect(session.get()?.profileId).toBeUndefined());
+    expect(session.get()?.profileToken).toBeUndefined();
+    // The old proof was sent once; a request the shell made while the profile was clearing has none.
+    expect(homeProofs.filter(Boolean)).toEqual(['proof-old']);
+
+    await enterPin();
+    expect(await screen.findByRole('button', { name: /After The PIN/ })).toBeInTheDocument();
+    expect(homeProofs.at(-1)).toBe('proof-new');
+    expect(session.get()).toMatchObject({ profileId: 'p2', profileToken: 'proof-new' });
+  });
+
   it('Back on the server screen (the root) opens the exit popup; Cancel closes it', async () => {
     flow(BASE_URL);
     await screen.findByTestId('server-screen');
