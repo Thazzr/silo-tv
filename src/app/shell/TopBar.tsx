@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 import { ServerMark } from '../../features/branding/components';
 import { initialOf } from '../../features/branding/branding';
@@ -16,6 +16,10 @@ import { AVATAR_KEY, TAB_IDS, TAB_LABELS, tabKey, type TabId } from './tabs';
  * or comes back, while a key has put the focus on it and while the pointer is on it; the pointer
  * reaches a hidden bar through a strip along the top edge. Neither the pointer's hover nor its
  * focus moves the content (see nav/origin.ts), so a hidden bar's hover focus does not keep it.
+ *
+ * The pointer counts only while it moves: a cursor resting on the bar makes the browser fire
+ * `mouseenter` whenever the layout under it changes, and a key press forgets the pointer, like in
+ * nav/origin.ts. Otherwise a cursor left at the top would keep the bar shown against the keys.
  */
 export function TopBar({
   selected,
@@ -41,6 +45,12 @@ export function TopBar({
   const [pointerOn, setPointerOn] = useState(false);
   const focusWithin = useKeyFocusWithin(setKeyFocused);
   const away = useContentAway();
+  // Capture phase, like the origin tracking: the key press that moves the focus must already see "keys".
+  useEffect(() => {
+    const forgetPointer = () => setPointerOn(false);
+    window.addEventListener('keydown', forgetPointer, true);
+    return () => window.removeEventListener('keydown', forgetPointer, true);
+  }, []);
   const hidden = away && !keyFocused && !pointerOn;
   return (
     <>
@@ -54,7 +64,7 @@ export function TopBar({
         data-testid="topbar"
         data-hidden={hidden}
         onFocusWithin={focusWithin}
-        onMouseEnter={() => setPointerOn(true)}
+        onMouseMove={() => setPointerOn(true)}
         onMouseLeave={() => setPointerOn(false)}
       >
         <div className="topbar-brand">
@@ -98,7 +108,7 @@ export function TopBar({
           className="topbar-reveal"
           data-testid="topbar-reveal"
           aria-hidden="true"
-          onMouseEnter={() => setPointerOn(true)}
+          onMouseMove={() => setPointerOn(true)}
         />
       ) : null}
     </>

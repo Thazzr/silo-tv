@@ -1069,7 +1069,7 @@ describe('ShellScreen floating top bar', () => {
     expect(inRowsMode()).toBe(true);
 
     await act(async () => {
-      fireEvent.mouseEnter(screen.getByTestId('topbar-reveal'));
+      fireEvent.mouseMove(screen.getByTestId('topbar-reveal'));
     });
     expect(bar()).toHaveAttribute('data-hidden', 'false');
     expect(screen.queryByTestId('topbar-reveal')).not.toBeInTheDocument();
@@ -1087,5 +1087,35 @@ describe('ShellScreen floating top bar', () => {
     });
     expect(bar()).toHaveAttribute('data-hidden', 'true');
     expect(inRowsMode()).toBe(true);
+  });
+
+  it('is not kept by a pointer that only rests on it: mouseenter alone does not count, and a key that moves the focus into the rows hides the bar', async () => {
+    serve();
+    setup();
+    await ready();
+    await act(async () => {
+      fireEvent.mouseEnter(bar());
+    });
+    expect(bar()).toHaveAttribute('data-hidden', 'false');
+    await move(KEY.down);
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'true'));
+  });
+
+  it('is shown by a pointer moving over the reveal strip, and the next arrow key hides it again once the focus is in the content', async () => {
+    serve();
+    setup();
+    await ready();
+    await move(KEY.down);
+    await waitFor(() => expect(bar()).toHaveAttribute('data-hidden', 'true'));
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByTestId('topbar-reveal'));
+    });
+    expect(bar()).toHaveAttribute('data-hidden', 'true');
+    await act(async () => {
+      fireEvent.mouseMove(screen.getByTestId('topbar-reveal'));
+    });
+    expect(bar()).toHaveAttribute('data-hidden', 'false');
+    await move(KEY.down);
+    expect(bar()).toHaveAttribute('data-hidden', 'true');
   });
 });

@@ -5638,6 +5638,15 @@ async function expectBarShown(page: Page, shown: boolean) {
     .toBe(shown ? 141 : 0);
 }
 
+/**
+ * Rests the mouse inside the bar, like Playwright's mouse at (0, 0) on CI or a Magic Remote cursor
+ * left at the top: the browser fires `mouseenter` when the layout under it changes, though nothing
+ * moves, and the keys must hide the bar all the same.
+ */
+async function restPointerOnBar(page: Page) {
+  await page.mouse.move(5, 5);
+}
+
 /** Opens the app on Home with the carousel showing, signed in as the fake server's one profile. */
 async function openHome(page: Page, options: FakeOptions) {
   const { origin } = await startFakeSilo(options);
@@ -5654,6 +5663,7 @@ test('floating top bar on Home: no band, the hero behind it from the top edge, t
   page,
 }) => {
   await openHome(page, { featured: true });
+  await restPointerOnBar(page);
   await expect(page.getByTestId('hero-carousel')).toBeVisible();
   const bar = page.getByTestId('topbar');
   const at = async (loc: ReturnType<Page['locator']>) => (await loc.boundingBox())!;
@@ -5710,6 +5720,7 @@ test('floating top bar on Home: a resting pointer in the top edge brings the bar
   page,
 }) => {
   await openHome(page, { featured: true });
+  await restPointerOnBar(page);
   await expect(page.getByTestId('hero-carousel')).toBeVisible();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
@@ -5747,6 +5758,7 @@ test('floating top bar on Movies: it stays over the carousel, leaves with the ro
   page,
 }) => {
   await openHome(page, { featured: true, crowded: true });
+  await restPointerOnBar(page);
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('tab-movies')).toBeVisible();
@@ -5803,6 +5815,7 @@ test('floating top bar on Search: nothing of the page lies under the tabs at res
   page,
 }) => {
   await openHome(page, { crowded: true });
+  await restPointerOnBar(page);
   for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('search-hint')).toBeVisible();
