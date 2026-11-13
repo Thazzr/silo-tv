@@ -39,7 +39,7 @@ import type { PersonTarget } from '../person/personMemory';
 import { ActionRow, PLAY_KEY, TRANSLATE_KEY } from './ActionRow';
 import { DetailBackdrop, DetailHero } from './DetailHero';
 import { DetailSkeleton } from './DetailSkeleton';
-import type { DetailEntryMemory, DetailTarget } from './detailMemory';
+import { episodeGridId, type DetailEntryMemory, type DetailTarget } from './detailMemory';
 import { EpisodeGrid, EpisodeGridSkeleton } from './EpisodeGrid';
 import { EPISODE_ROW_ID, EpisodeRow } from './EpisodeRow';
 import { castCrewStrip, castRow, crewBoxRows } from './credits';
@@ -277,10 +277,11 @@ function DetailBody({
     (card: Episode) => {
       // The page of a sibling starts in the row, so the viewer can walk on through the season.
       if (card.content_id !== detail.content_id) {
-        onOpenDetail({ itemId: card.content_id, startInRow: true });
+        const index = episodes?.findIndex((episode) => episode.content_id === card.content_id);
+        onOpenDetail({ itemId: card.content_id, fromSibling: { index: index ?? 0 } });
       }
     },
-    [detail.content_id, onOpenDetail],
+    [detail.content_id, episodes, onOpenDetail],
   );
   const playEpisode = useCallback(
     (episode: Episode) =>
@@ -342,7 +343,10 @@ function DetailBody({
       onPlay({ contentId: item.content_id, title: item.title, intent }),
     [onPlay],
   );
-  const { open: openSimilar } = useItemOpener({ onPlay: playItem, onOpenDetail });
+  const { open: openSimilar, play: playSimilar } = useItemOpener({
+    onPlay: playItem,
+    onOpenDetail,
+  });
   const similarItems = similar.data ?? [];
 
   // --- Cast and crew ---------------------------------------------------------------------------
@@ -469,7 +473,7 @@ function DetailBody({
   // A page opened from a "More Episodes" card puts the focus on its own card in that row, once.
   const showsSiblings = episode && episodes !== undefined && episodes.length > 1;
   const startedInRow = useRef(false);
-  const startInRow = target.startInRow === true;
+  const startInRow = target.fromSibling !== undefined;
   useEffect(() => {
     if (!startInRow || !showsSiblings || startedInRow.current) return;
     startedInRow.current = true;
@@ -538,10 +542,10 @@ function DetailBody({
         </p>
       );
     } else {
-      episodesStop = gridFocusKey(`episodes:${detail.content_id}`);
+      episodesStop = gridFocusKey(episodeGridId(detail.content_id));
       grid = (
         <EpisodeGrid
-          gridId={`episodes:${detail.content_id}`}
+          gridId={episodeGridId(detail.content_id)}
           episodes={episodes}
           memory={memory.rows}
           onOpen={openEpisode}
@@ -679,6 +683,7 @@ function DetailBody({
                 focusKey={ctx.focusKey}
                 onFocused={ctx.onFocused}
                 onOpen={openBoxSetFilm}
+                onPlay={playSimilar}
                 badge={item.content_id === detail.content_id ? t('boxset.thisFilm') : undefined}
               />
             )}
@@ -703,6 +708,7 @@ function DetailBody({
                 focusKey={ctx.focusKey}
                 onFocused={ctx.onFocused}
                 onOpen={openSimilar}
+                onPlay={playSimilar}
               />
             )}
           />

@@ -1,5 +1,6 @@
 import { memo, type KeyboardEventHandler, type ReactNode } from 'react';
 import { Focusable } from '../../app/nav';
+import { onPlayKey } from '../../features/detail/playKey';
 import { useT } from '../../i18n';
 import { Artwork } from './Artwork';
 import { CardBadges, ItemWatchStatus } from './CardBadges';
@@ -25,6 +26,8 @@ export interface CardProps {
   /** Must be stable: focus memory finds the card by it. */
   focusKey: string;
   onOpen: (item: CatalogItem) => void;
+  /** The remote's Play key on the card; without it the key does nothing. */
+  onPlay?: (item: CatalogItem) => void;
   onFocused?: () => void;
   autoFocus?: boolean;
 }
@@ -127,6 +130,7 @@ export const PosterCard = memo(function PosterCard({
   item,
   focusKey,
   onOpen,
+  onPlay,
   onFocused,
   autoFocus,
   grid = false,
@@ -141,6 +145,7 @@ export const PosterCard = memo(function PosterCard({
       focusKey={focusKey}
       variant={grid ? 'grid' : 'poster'}
       onClick={() => onOpen(item)}
+      onKeyDown={onPlay ? onPlayKey(() => onPlay(item)) : undefined}
       onFocused={onFocused}
       autoFocus={autoFocus}
       art={
@@ -233,6 +238,7 @@ export const LandscapeCard = memo(function LandscapeCard({
   item,
   focusKey,
   onOpen,
+  onPlay,
   onFocused,
   autoFocus,
 }: CardProps) {
@@ -245,6 +251,7 @@ export const LandscapeCard = memo(function LandscapeCard({
       focusKey={focusKey}
       variant="landscape"
       onClick={() => onOpen(item)}
+      onKeyDown={onPlay ? onPlayKey(() => onPlay(item)) : undefined}
       onFocused={onFocused}
       autoFocus={autoFocus}
       art={

@@ -19,6 +19,7 @@ import { BASE_URL, account } from '../../test/apiFixtures';
 import { boxSetSummary } from '../../test/boxSetFixtures';
 import { branding } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { pressPlayKey } from '../../test/playKey';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import {
   episodeMatch,
@@ -876,6 +877,19 @@ describe('SearchScreen: opening a result', () => {
     await focusOn(titleCard('show-1'));
     await pressKey(KEY.enter);
     expect(opened('detail-stub')).toEqual({ name: 'detail', itemId: 'show-1' });
+  });
+
+  it('plays a title result from where it left off on the Play key, without opening its page', async () => {
+    const { onPlay } = setup({ capabilities: {}, titles: () => matches('Film', 2) });
+    type('sag');
+    await found('Film 1');
+    await focusOn(titleCard('film-2'));
+    await pressPlayKey();
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ content_id: 'film-2' }),
+      { kind: 'resume' },
+    );
+    expect(screen.queryByTestId('detail-stub')).toBeNull();
   });
 
   it('opens an episode on its own page', async () => {

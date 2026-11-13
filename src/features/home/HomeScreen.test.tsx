@@ -382,12 +382,11 @@ describe('HomeScreen: removing from Continue Watching', () => {
 
   it('asks when OK is held down, and opens the card when OK is only tapped', async () => {
     serveHome(server, { sections: [cw('e1', 'e2')] });
-    const { onPlay } = setup();
+    const { onPlay, onOpenDetail } = setup();
     await focusKeyIs(key('cw', 'e1'));
     tap(KEY.enter);
-    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'e1' }), {
-      kind: 'resume',
-    });
+    expect(onOpenDetail).toHaveBeenCalledExactlyOnceWith({ itemId: 'e1' });
+    expect(onPlay).not.toHaveBeenCalled();
     expect(screen.queryByTestId('remove-dialog')).toBeNull();
 
     fireEvent.keyDown(window, { keyCode: KEY.enter });
@@ -398,7 +397,7 @@ describe('HomeScreen: removing from Continue Watching', () => {
     fireEvent.keyDown(window, { keyCode: KEY.enter, repeat: true });
     fireEvent.keyUp(window, { keyCode: KEY.enter });
     expect(screen.getByTestId('remove-dialog')).toBeInTheDocument();
-    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onOpenDetail).toHaveBeenCalledTimes(1);
   });
 
   it('names the movie in the question for a movie', async () => {
@@ -427,21 +426,21 @@ describe('HomeScreen: removing from Continue Watching', () => {
 
   it('opens the card when OK is released just before the hold time, and asks at the hold time', async () => {
     serveHome(server, { sections: [cw('e1', 'e2')] });
-    const { onPlay } = setup();
+    const { onOpenDetail } = setup();
     await focusKeyIs(key('cw', 'e1'));
     vi.useFakeTimers();
     try {
       fireEvent.keyDown(window, { keyCode: KEY.enter });
       act(() => void vi.advanceTimersByTime(LONG_PRESS_MS - 1));
       fireEvent.keyUp(window, { keyCode: KEY.enter });
-      expect(onPlay).toHaveBeenCalledTimes(1);
+      expect(onOpenDetail).toHaveBeenCalledTimes(1);
       expect(screen.queryByTestId('remove-dialog')).toBeNull();
 
       fireEvent.keyDown(window, { keyCode: KEY.enter });
       act(() => void vi.advanceTimersByTime(LONG_PRESS_MS));
       expect(screen.getByTestId('remove-dialog')).toBeInTheDocument();
       fireEvent.keyUp(window, { keyCode: KEY.enter });
-      expect(onPlay).toHaveBeenCalledTimes(1);
+      expect(onOpenDetail).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

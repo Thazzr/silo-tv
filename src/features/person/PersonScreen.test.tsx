@@ -8,6 +8,7 @@ import { SiloProvider } from '../../app/SiloContext';
 import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { expectPlayedFromCard, pressPlayKey } from '../../test/playKey';
 import { movies, personOf, servePerson, shows, type PersonServe } from '../../test/personFixtures';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import { gridCardKey } from '../../ui/media';
@@ -50,6 +51,7 @@ function setup(
   const memories = new PersonMemory();
   const onBack = options.onBack ?? vi.fn();
   const onPlay = vi.fn();
+  const onOpenDetail = vi.fn();
   const renderScreen = (current: Screen, nav: NavApi<Screen>) => {
     if (current.name === 'detail') return <div data-testid="detail-stub">{current.itemId}</div>;
     if (current.name === 'player') return <div data-testid="player-stub">{current.contentId}</div>;
@@ -57,11 +59,14 @@ function setup(
       <PersonScreen
         target={current.target}
         memory={options.memory ?? memories.of(current)}
-        onPlay={(item) => {
-          onPlay(item.content_id);
+        onPlay={(item, intent) => {
+          onPlay(item, intent);
           nav.push({ name: 'player', contentId: item.content_id });
         }}
-        onOpenDetail={(next) => nav.push({ name: 'detail', ...next })}
+        onOpenDetail={(next) => {
+          onOpenDetail(next);
+          nav.push({ name: 'detail', ...next });
+        }}
         onBack={() => {
           onBack();
           nav.pop();
@@ -80,7 +85,7 @@ function setup(
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { onBack, onPlay, ...view };
+  return { onBack, onPlay, onOpenDetail, ...view };
 }
 
 const serveMovies = (n = 3, extra: PersonServe = {}) =>
@@ -484,6 +489,18 @@ describe('PersonScreen: the filmography', () => {
     await focusKeyIs(cardKey('mov-11', 'movie'));
     expect(screen.getByRole('tab', { name: 'Movies' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: /Movie 11/ })).toBeInTheDocument();
+  });
+
+  it('plays a title from where it left off on the Play key, without opening its page', async () => {
+    servePerson(server, { titles: { video: movies(3), movie: movies(3) } });
+    const { onPlay, onOpenDetail } = setup();
+    await ready();
+    await focusKeyIs('person-pill:all');
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await pressPlayKey();
+    expect(await screen.findByTestId('player-stub')).toHaveTextContent('mov-2');
+    expectPlayedFromCard(onPlay, onOpenDetail, 'mov-2');
   });
 
   it('opens the detail page of a series card, too', async () => {

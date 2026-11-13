@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { components } from '../../api/generated/schema';
 import { catalogItem } from '../../test/flowFixtures';
-import { openItem, openItemPage, playFeatured } from './openItem';
+import { openItem, playCard } from './openItem';
 
 function open(overrides: Partial<components['schemas']['CatalogItem']>) {
   const play = vi.fn();
@@ -25,17 +25,17 @@ describe('openItem', () => {
   });
 
   it.each(['in_progress', 'next_up'])(
-    'plays an episode card of Continue Watching or Next Up right away, resuming (%s)',
+    'opens the page of an episode card of Continue Watching or Next Up, as the web does (%s)',
     (itemSource) => {
-      const { play, openDetail, item } = open({
+      const { play, openDetail } = open({
         type: 'episode',
         content_id: 'e1',
         series_id: 's1',
         season_number: 2,
         item_source: itemSource,
       });
-      expect(play).toHaveBeenCalledWith(item, { kind: 'resume' });
-      expect(openDetail).not.toHaveBeenCalled();
+      expect(openDetail).toHaveBeenCalledWith({ itemId: 'e1' });
+      expect(play).not.toHaveBeenCalled();
     },
   );
 
@@ -77,16 +77,6 @@ describe('openItem', () => {
     },
   );
 
-  it('counts a source with stray spaces and capitals as a resume card too', () => {
-    const { play, openDetail, item } = open({
-      type: 'episode',
-      content_id: 'e1',
-      item_source: ' In_Progress ',
-    });
-    expect(play).toHaveBeenCalledWith(item, { kind: 'resume' });
-    expect(openDetail).not.toHaveBeenCalled();
-  });
-
   it('plays anything else', () => {
     const { play, openDetail, item } = open({ type: 'audiobook' });
     expect(play).toHaveBeenCalledWith(item, { kind: 'ask' });
@@ -94,42 +84,16 @@ describe('openItem', () => {
   });
 });
 
-describe('openItemPage', () => {
-  it('opens the page of an episode of Continue Watching instead of playing it', () => {
+describe('playCard', () => {
+  function playOnCard(overrides: Partial<components['schemas']['CatalogItem']>) {
     const play = vi.fn();
     const openDetail = vi.fn();
-    openItemPage(catalogItem({ type: 'episode', content_id: 'e1', item_source: 'in_progress' }), {
-      play,
-      openDetail,
-    });
-    expect(openDetail).toHaveBeenCalledWith({ itemId: 'e1' });
-    expect(play).not.toHaveBeenCalled();
-  });
-
-  it.each(['movie', 'series', 'season', 'episode'])('opens the page of a %s', (type) => {
-    const openDetail = vi.fn();
-    openItemPage(catalogItem({ type, content_id: 'x1' }), { play: vi.fn(), openDetail });
-    expect(openDetail).toHaveBeenCalledWith({ itemId: 'x1' });
-  });
-
-  it('plays anything without a page of its own', () => {
-    const play = vi.fn();
-    const item = catalogItem({ type: 'audiobook' });
-    openItemPage(item, { play, openDetail: vi.fn() });
-    expect(play).toHaveBeenCalledWith(item, { kind: 'ask' });
-  });
-});
-
-describe('playFeatured', () => {
-  function playSlide(overrides: Partial<components['schemas']['CatalogItem']>) {
-    const play = vi.fn();
-    const openDetail = vi.fn();
-    playFeatured(catalogItem(overrides), { play, openDetail });
+    playCard(catalogItem(overrides), { play, openDetail });
     return { play, openDetail };
   }
 
   it('plays a movie from where it left off, without asking', () => {
-    const { play, openDetail } = playSlide({ type: 'movie', content_id: 'm1', title: 'Heat' });
+    const { play, openDetail } = playOnCard({ type: 'movie', content_id: 'm1', title: 'Heat' });
     expect(play).toHaveBeenCalledWith(
       expect.objectContaining({ content_id: 'm1', title: 'Heat' }),
       {
@@ -140,7 +104,7 @@ describe('playFeatured', () => {
   });
 
   it("plays a series' target episode under the series' title", () => {
-    const { play } = playSlide({
+    const { play } = playOnCard({
       type: 'series',
       content_id: 's1',
       title: 'Severance',
@@ -153,14 +117,26 @@ describe('playFeatured', () => {
   });
 
   it("plays a season's target episode", () => {
-    const { play } = playSlide({ type: 'season', content_id: 'se1', play_content_id: 'e1' });
+    const { play } = playOnCard({ type: 'season', content_id: 'se1', play_content_id: 'e1' });
     expect(play).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'e1' }), {
       kind: 'resume',
     });
   });
 
+  it('resumes an episode of Continue Watching without asking', () => {
+    const { play, openDetail } = playOnCard({
+      type: 'episode',
+      content_id: 'e1',
+      item_source: 'in_progress',
+    });
+    expect(play).toHaveBeenCalledWith(expect.objectContaining({ content_id: 'e1' }), {
+      kind: 'resume',
+    });
+    expect(openDetail).not.toHaveBeenCalled();
+  });
+
   it.each(['series', 'Season'])('opens the page of a %s that names no episode to play', (type) => {
-    const { play, openDetail } = playSlide({ type, content_id: 's1' });
+    const { play, openDetail } = playOnCard({ type, content_id: 's1' });
     expect(openDetail).toHaveBeenCalledWith({ itemId: 's1' });
     expect(play).not.toHaveBeenCalled();
   });

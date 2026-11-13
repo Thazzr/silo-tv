@@ -87,7 +87,7 @@ export function PersonScreen({ target, memory, onPlay, onOpenDetail, onBack }: P
   const exact = titles.data?.pages[0]?.total_exact ?? true;
   const total = titles.data?.pages[0]?.total ?? 0;
 
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
   const artUrl = useArtUrl('poster');
 
   // --- The biography in full ---------------------------------------------------------------------
@@ -138,9 +138,10 @@ export function PersonScreen({ target, memory, onPlay, onOpenDetail, onBack }: P
           inGrid();
         }}
         onOpen={open}
+        onPlay={play}
       />
     ),
-    [inGrid, open],
+    [inGrid, open, play],
   );
   const offset = personScrollOffset(zone, pillsTop);
   const faded = zone === 'grid';

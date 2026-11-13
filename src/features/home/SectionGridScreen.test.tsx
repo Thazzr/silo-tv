@@ -7,6 +7,7 @@ import { account, problem } from '../../test/apiFixtures';
 import { catalogItem, catalogPage } from '../../test/flowFixtures';
 import { serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { expectPlayedFromCard, pressPlayKey } from '../../test/playKey';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { FocusIndexMemory, gridCardKey, type CatalogItem } from '../../ui/media';
 import { getCurrentFocusKey } from '../../app/nav';
@@ -164,6 +165,15 @@ describe('SectionGridScreen', () => {
     await pressKey(KEY.enter);
     expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 't2' });
     expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it('plays a card from where it left off on the Play key, without opening its page', async () => {
+    serveHome(server, { page: () => catalogPage(titles(0, 12)) });
+    const { onPlay, onOpenDetail } = setup();
+    await waitFor(() => expect(getCurrentFocusKey()).toBe(gridCardKey('trending', 't1')));
+    await pressKey(KEY.right);
+    await pressPlayKey();
+    expectPlayedFromCard(onPlay, onOpenDetail, 't2');
   });
 
   it('opens at the remembered card', async () => {

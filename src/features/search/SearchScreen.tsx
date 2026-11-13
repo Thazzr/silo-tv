@@ -102,7 +102,7 @@ export function SearchScreen({
   const t = useT();
   const branding = useBranding();
   const capabilities = useSearchCapabilities();
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
 
   const [text, setText] = useState(() => memory.query);
   const [segment, setSegment] = useState<Segment>(() => memory.segment);
@@ -205,11 +205,12 @@ export function SearchScreen({
   });
 
   // --- Opening a result --------------------------------------------------------------------------
-  const latest = useRef({ open, onOpenPerson, onOpenBoxSet });
+  const latest = useRef({ open, play, onOpenPerson, onOpenBoxSet });
   useEffect(() => {
-    latest.current = { open, onOpenPerson, onOpenBoxSet };
+    latest.current = { open, play, onOpenPerson, onOpenBoxSet };
   });
   const openTitle = useCallback((item: CatalogItem) => latest.current.open(item), []);
+  const playTitle = useCallback((item: CatalogItem) => latest.current.play(item), []);
   const openBoxSet = useCallback(
     (boxSet: CatalogBoxSet) =>
       latest.current.onOpenBoxSet({
@@ -264,9 +265,10 @@ export function SearchScreen({
           inGrid();
         }}
         onOpen={openTitle}
+        onPlay={playTitle}
       />
     ),
-    [inGrid, openTitle],
+    [inGrid, openTitle, playTitle],
   );
 
   // --- The results column -----------------------------------------------------------------------

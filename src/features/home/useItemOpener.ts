@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import type { StartIntent } from '../../playback/resume';
 import type { CatalogItem } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
-import { openItem, openItemPage, playFeatured } from './openItem';
+import { openItem, playCard } from './openItem';
 
 /** What a screen that shows cards hands over: the player and the detail page. */
 export interface ItemHandlers {
@@ -11,25 +11,21 @@ export interface ItemHandlers {
 }
 
 /**
- * `open` is what a card does on OK (see `openItem`). A featured slide has two buttons: `openPage`
- * for "More Info" and `playSlide` for "Play" (see `playFeatured`).
+ * `open` is what a card does on OK (see `openItem`); a featured slide's "More Info" does the same.
+ * `play` is what the remote's Play key does on a card and what a slide's "Play" does (see
+ * `playCard`).
  */
 export function useItemOpener({ onPlay, onOpenDetail }: ItemHandlers): {
   open: (item: CatalogItem) => void;
-  openPage: (item: CatalogItem) => void;
-  playSlide: (item: CatalogItem) => void;
+  play: (item: CatalogItem) => void;
 } {
   const open = useCallback(
     (item: CatalogItem) => openItem(item, { play: onPlay, openDetail: onOpenDetail }),
     [onPlay, onOpenDetail],
   );
-  const openPage = useCallback(
-    (item: CatalogItem) => openItemPage(item, { play: onPlay, openDetail: onOpenDetail }),
+  const play = useCallback(
+    (item: CatalogItem) => playCard(item, { play: onPlay, openDetail: onOpenDetail }),
     [onPlay, onOpenDetail],
   );
-  const playSlide = useCallback(
-    (item: CatalogItem) => playFeatured(item, { play: onPlay, openDetail: onOpenDetail }),
-    [onPlay, onOpenDetail],
-  );
-  return { open, openPage, playSlide };
+  return { open, play };
 }

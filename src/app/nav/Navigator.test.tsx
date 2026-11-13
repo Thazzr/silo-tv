@@ -107,6 +107,38 @@ describe('Navigator stack', () => {
     expect(shown()).toEqual(['home']);
   });
 
+  it('replace restores the focus key the callback returns instead of the stored one', async () => {
+    setup();
+    await waitFor(() => expect(screen.getByText('home 0')).toHaveFocus());
+    await pressKey(KEY.down);
+    expect(screen.getByText('home 1')).toHaveFocus();
+    act(() => nav().push({ name: 'detail', id: '1' }));
+    await waitFor(() => expect(screen.getByText('detail 0')).toHaveFocus());
+    act(() => nav().replace({ name: 'detail', id: '2' }, () => 'home-3'));
+    await waitFor(() => expect(screen.getByText('detail 0')).toHaveFocus());
+    act(() => nav().pop());
+    await waitFor(() => expect(screen.getByText('home 3')).toHaveFocus());
+  });
+
+  it('replace keeps the stored focus of the screen below when the callback returns null', async () => {
+    setup();
+    await waitFor(() => expect(screen.getByText('home 0')).toHaveFocus());
+    await pressKey(KEY.down);
+    act(() => nav().push({ name: 'detail', id: '1' }));
+    await waitFor(() => expect(screen.getByText('detail 0')).toHaveFocus());
+    act(() => nav().replace({ name: 'detail', id: '2' }, () => null));
+    act(() => nav().pop());
+    await waitFor(() => expect(screen.getByText('home 1')).toHaveFocus());
+  });
+
+  it('replace on the root entry asks nobody', () => {
+    setup();
+    const asked = vi.fn(() => 'x');
+    act(() => nav().replace({ name: 'list' }, asked));
+    expect(asked).not.toHaveBeenCalled();
+    expect(shown()).toEqual(['list']);
+  });
+
   it('reset drops the whole stack', () => {
     setup();
     act(() => nav().push({ name: 'list' }));

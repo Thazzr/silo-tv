@@ -115,7 +115,7 @@ export function RecommendedView({
   const t = useT();
   const titleOf = useSectionTitle();
   const query = useLibrarySections(library.id);
-  const { open, openPage, playSlide } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
   // The first featured section is the hero's carousel, read on its own; it is no row. A mixed
   // library's carousel shows only the tab's kind.
   const featuredId = query.data ? firstFeatured(query.data)?.id : undefined;
@@ -135,7 +135,7 @@ export function RecommendedView({
         onRetry: () => void featuredQuery.refetch(),
       };
     } else if (slides.length > 0) {
-      featured = { kind: 'slides', slides, onPlay: playSlide, onOpen: openPage };
+      featured = { kind: 'slides', slides, onPlay: play, onOpen: open };
     }
   }
   const rows = useMemo(
@@ -161,11 +161,12 @@ export function RecommendedView({
 
   // The rows are skipped while their props are the same, so what they get must not change when
   // the focus moves: these handlers are stable and read the latest props when called.
-  const latest = useRef({ open, onExploreSection, library, kind });
+  const latest = useRef({ open, play, onExploreSection, library, kind });
   useEffect(() => {
-    latest.current = { open, onExploreSection, library, kind };
+    latest.current = { open, play, onExploreSection, library, kind };
   });
   const openCard = useCallback((item: CatalogItem) => latest.current.open(item), []);
+  const playCardKey = useCallback((item: CatalogItem) => latest.current.play(item), []);
   const exploreRow = useCallback((rowId: string, title: string) => {
     const now = latest.current;
     now.onExploreSection({
@@ -269,6 +270,7 @@ export function RecommendedView({
               }
               rowIndex={index}
               onOpen={openCard}
+              onPlay={playCardKey}
               onExploreAll={exploreRow}
               onRowFocused={rowFocused}
               onCardFocused={cardFocused}

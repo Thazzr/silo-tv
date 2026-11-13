@@ -16,6 +16,7 @@ import {
 import { BackdropLayer, Synopsis } from '../detail/DetailHero';
 import type { DetailTarget } from '../detail/detailMemory';
 import { SynopsisDialog } from '../detail/SynopsisDialog';
+import { useItemOpener } from '../home/useItemOpener';
 import type { StartIntent } from '../../playback/resume';
 import { chipLine, playLabel, playTarget, type BoxSetDetail } from './info';
 import { BOXSET_HERO_HEIGHT, boxSetScrollOffset, type BoxSetZone } from './layout';
@@ -130,11 +131,8 @@ function BoxSetBody({
   // --- Play ---------------------------------------------------------------------------------------
   const play = playTarget(box);
 
-  // --- The films: OK opens a film's page ---------------------------------------------------------
-  const open = useCallback(
-    (item: CatalogItem) => onOpenDetail({ itemId: item.content_id }),
-    [onOpenDetail],
-  );
+  // --- The films: OK opens a film's page, the Play key plays it -----------------------------------
+  const { open, play: playFilm } = useItemOpener({ onPlay, onOpenDetail });
   const artUrl = useArtUrl('poster');
 
   // --- Vertical scroll: the page moves once, from the hero to the films --------------------------
@@ -178,9 +176,10 @@ function BoxSetBody({
           inFilms();
         }}
         onOpen={open}
+        onPlay={playFilm}
       />
     ),
-    [inFilms, open],
+    [inFilms, open, playFilm],
   );
   const offset = boxSetScrollOffset(zone, filmsTop);
   const gridId = `boxset:${box.id}`;

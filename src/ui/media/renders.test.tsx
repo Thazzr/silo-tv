@@ -81,6 +81,7 @@ function Screen({ rows }: { rows: { id: string; items: CatalogItem[] }[] }) {
           prefetchRow={false}
           rowIndex={index}
           onOpen={open}
+          onPlay={open}
           onExploreAll={explore}
           onRowFocused={rowFocused}
           onCardFocused={cardFocused}

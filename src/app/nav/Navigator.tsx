@@ -19,8 +19,12 @@ export interface NavApi<S> {
   push(screen: S): void;
   /** Closes the current screen (does nothing on the root entry). */
   pop(): void;
-  /** Swaps the current screen for another one. */
-  replace(screen: S): void;
+  /**
+   * Swaps the current screen for another one. `restoreBelow` is asked about the screen under it
+   * (nothing under the root entry): a focus key it returns is what that screen restores when
+   * Back reaches it, in place of what was focused when it was left; null keeps that.
+   */
+  replace(screen: S, restoreBelow?: (below: S) => string | null): void;
   /** Drops the whole stack; the screen becomes the root entry. */
   reset(screen: S): void;
   /** Opens the exit popup; for a screen that handles Back itself and still is the entry page. */
@@ -131,8 +135,12 @@ export function Navigator<S>({ initial, renderScreen, children }: NavigatorProps
     if (current.length > 1) commit(current.slice(0, -1));
   }, [commit]);
   const replace = useCallback(
-    (screen: S) => {
-      commit([...stackRef.current.slice(0, -1), { id: nextId.current++, screen, lastFocus: null }]);
+    (screen: S, restoreBelow?: (below: S) => string | null) => {
+      const kept = stackRef.current.slice(0, -1);
+      const below = kept[kept.length - 1];
+      const lastFocus = below ? (restoreBelow?.(below.screen) ?? null) : null;
+      if (below && lastFocus !== null) kept[kept.length - 1] = { ...below, lastFocus };
+      commit([...kept, { id: nextId.current++, screen, lastFocus: null }]);
     },
     [commit],
   );

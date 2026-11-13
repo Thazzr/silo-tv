@@ -11,6 +11,7 @@ import { boxSetDetail } from '../../test/boxSetFixtures';
 import { episodeOf, itemDetail, seasonOf, serveDetail } from '../../test/detailFixtures';
 import { catalogItem } from '../../test/flowFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { pressPlayKey } from '../../test/playKey';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import type { PersonTarget } from '../person/personMemory';
 import { DetailMemory, type DetailTarget } from './detailMemory';
@@ -41,6 +42,7 @@ function setup(target: DetailTarget, lang: Language = 'en') {
     profileId: 'p1',
   });
   const memory = new DetailMemory();
+  const played = vi.fn<(request: PlayRequest) => void>();
   const renderScreen = (current: Screen, nav: NavApi<Screen>) =>
     current.name === 'person' ? (
       <div data-testid="person-stub">
@@ -50,7 +52,10 @@ function setup(target: DetailTarget, lang: Language = 'en') {
       <DetailScreen
         target={current.target}
         memory={memory.of(current)}
-        onPlay={(request) => nav.push({ name: 'player', request })}
+        onPlay={(request) => {
+          played(request);
+          nav.push({ name: 'player', request });
+        }}
         onOpenDetail={(next) => nav.push({ name: 'detail', target: next })}
         onOpenPerson={(next) => nav.push({ name: 'person', target: next })}
         onOpenBoxSet={() => undefined}
@@ -70,6 +75,7 @@ function setup(target: DetailTarget, lang: Language = 'en') {
       </I18nProvider>
     </QueryClientProvider>,
   );
+  return { played };
 }
 
 type Overrides = Partial<ItemDetail>;
@@ -721,6 +727,48 @@ describe('DetailScreen: the order of the sections under the hero', () => {
     await pressKey(KEY.up);
     await focusKeyIs('detail-play');
   });
+
+  it.each([
+    ['box set film', 'card:boxset:film-2', 'film-2'],
+    ['similar title', 'card:similar:x1', 'x1'],
+  ])(
+    'plays a %s from where it left off on the Play key, without opening its page',
+    async (_name, focusKey, contentId) => {
+      serveDetail(server, {
+        item: () => movie({ extras, videos }),
+        capabilities: { box_sets: true },
+        boxSet: boxSetDetail(),
+        similar,
+      });
+      const { played } = setup({ itemId: 'm1' });
+      await screen.findByTestId('row-boxset');
+      await screen.findByTestId('row-similar');
+      await focusKeyIs('detail-play');
+      await pressKey(KEY.down);
+      await focusKeyIs('detail-pill-subtitles');
+      // Down through the sections to the box set row; the similar row is one more.
+      for (const key of [
+        'card:cast:lead:d1',
+        'card:extras-trailer:local-1',
+        'card:extras-featurette:local-2',
+        'card:trailers:dQw4w9WgXcQ',
+        'card:boxset:film-1',
+        ...(focusKey === 'card:similar:x1' ? ['card:similar:x1'] : []),
+      ]) {
+        await pressKey(KEY.down);
+        await focusKeyIs(key);
+      }
+      if (focusKey === 'card:boxset:film-2') {
+        await pressKey(KEY.right);
+        await focusKeyIs(focusKey);
+      }
+      await pressPlayKey();
+      expect(await screen.findByTestId('player-stub')).toHaveTextContent(contentId);
+      expect(played).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ contentId, intent: { kind: 'resume' } }),
+      );
+    },
+  );
 
   it("puts a series' seasons first, then extras, trailers, cast and crew, then similar titles", async () => {
     serveDetail(server, {

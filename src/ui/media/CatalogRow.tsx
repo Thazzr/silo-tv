@@ -21,8 +21,9 @@ export interface CatalogRowProps {
   prefetchRow: boolean;
   /** Where the row sits on its screen; handed back to `onRowFocused`. */
   rowIndex: number;
-  /** The three handlers below must be stable (the row is skipped while its props are the same). */
+  /** The four handlers below must be stable (the row is skipped while its props are the same). */
   onOpen: (item: CatalogItem) => void;
+  onPlay: (item: CatalogItem) => void;
   onExploreAll: (rowId: string, title: string) => void;
   onRowFocused: (rowIndex: number) => void;
   onCardFocused?: (item: CatalogItem, shape: CardShape) => void;
@@ -44,6 +45,7 @@ export const CatalogRow = memo(function CatalogRow({
   prefetchRow,
   rowIndex,
   onOpen,
+  onPlay,
   onExploreAll,
   onRowFocused,
   onCardFocused,
@@ -66,11 +68,18 @@ export const CatalogRow = memo(function CatalogRow({
           focusKey={ctx.focusKey}
           onFocused={ctx.onFocused}
           onOpen={onOpen}
+          onPlay={onPlay}
         />
       ) : (
-        <PosterCard item={item} focusKey={ctx.focusKey} onFocused={ctx.onFocused} onOpen={onOpen} />
+        <PosterCard
+          item={item}
+          focusKey={ctx.focusKey}
+          onFocused={ctx.onFocused}
+          onOpen={onOpen}
+          onPlay={onPlay}
+        />
       ),
-    [shape, onOpen],
+    [shape, onOpen, onPlay],
   );
   return (
     <Row

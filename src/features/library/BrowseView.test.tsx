@@ -14,6 +14,7 @@ import {
   type LibraryServe,
 } from '../../test/libraryFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { expectPlayedFromCard, pressPlayKey } from '../../test/playKey';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { gridCardKey, GRID_ROW_PITCH } from '../../ui/media';
 import { DEFAULT_BROWSE } from './browse';
@@ -39,18 +40,19 @@ function setup(memory = new LibraryMemory()) {
     profileId: 'p1',
   });
   const onOpenDetail = vi.fn();
+  const onPlay = vi.fn();
   const view = renderWithSilo(
     <LibraryScreen
       kind="movie"
       memory={memory}
-      onPlay={vi.fn()}
+      onPlay={onPlay}
       onOpenDetail={onOpenDetail}
       onExploreSection={vi.fn()}
       onOpenCollection={vi.fn()}
     />,
     { session },
   );
-  return { memory, onOpenDetail, ...view };
+  return { memory, onOpenDetail, onPlay, ...view };
 }
 
 async function focus(key: string) {
@@ -120,6 +122,16 @@ describe('Browse', () => {
     await focus(card('Title2'));
     await pressKey(KEY.enter);
     expect(onOpenDetail).toHaveBeenCalledWith({ itemId: 'Title2' });
+  });
+
+  it('plays a poster from where it left off on the Play key, without opening its page', async () => {
+    const calls = serveLibrary(server);
+    const { onOpenDetail, onPlay } = setup();
+    await firstRead(calls);
+    await screen.findByRole('button', { name: /Title 2/ });
+    await focus(card('Title2'));
+    await pressPlayKey();
+    expectPlayedFromCard(onPlay, onOpenDetail, 'Title2');
   });
 
   it('follows the cursor when the focus nears the end, and stops at the last page', async () => {

@@ -53,6 +53,7 @@ function setup(target: DetailTarget, options: { lang?: Language; queryClient?: Q
   });
   const memory = new DetailMemory();
   const onPlay = vi.fn<(request: PlayRequest) => void>();
+  const onOpenDetail = vi.fn<(target: DetailTarget) => void>();
   const renderScreen = (current: Screen, nav: NavApi<Screen>) =>
     current.name === 'detail' ? (
       <DetailScreen
@@ -62,7 +63,10 @@ function setup(target: DetailTarget, options: { lang?: Language; queryClient?: Q
           onPlay(request);
           nav.push({ name: 'player', request });
         }}
-        onOpenDetail={(next) => nav.push({ name: 'detail', target: next })}
+        onOpenDetail={(next) => {
+          onOpenDetail(next);
+          nav.push({ name: 'detail', target: next });
+        }}
         onOpenPerson={() => undefined}
         onOpenBoxSet={() => undefined}
         onBack={nav.pop}
@@ -81,7 +85,7 @@ function setup(target: DetailTarget, options: { lang?: Language; queryClient?: Q
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { onPlay, ...view };
+  return { onPlay, onOpenDetail, ...view };
 }
 
 const ready = () => screen.findByTestId('detail-hero');
@@ -983,6 +987,24 @@ describe('DetailScreen: More Episodes on an episode page', () => {
     expect(calls.items).toContain('e3');
     await pressKey(KEY.back);
     await row();
+    await focusKeyIs(ROW_KEY('e3'));
+  });
+
+  it('tells where the sibling sits in the season, so its page replaces this one and the page below can land on it', async () => {
+    serveEpisode();
+    const { onOpenDetail } = setup({ itemId: 'e2' });
+    await row();
+    await pressKey(KEY.down);
+    await pressKey(KEY.down);
+    await focusKeyIs(ROW_KEY('e2'));
+    await pressKey(KEY.right);
+    await focusKeyIs(ROW_KEY('e3'));
+    await pressKey(KEY.enter);
+    expect(onOpenDetail).toHaveBeenCalledExactlyOnceWith({
+      itemId: 'e3',
+      fromSibling: { index: 2 },
+    });
+    // The new page starts on its own card in the row, not on Play.
     await focusKeyIs(ROW_KEY('e3'));
   });
 

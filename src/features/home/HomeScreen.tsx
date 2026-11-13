@@ -124,7 +124,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   const { query, rowLimit } = useHomeSections();
   const readSection = useSectionReader(rowLimit);
   const dismiss = useDismissItem();
-  const { open, openPage, playSlide } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
 
   const [overrides, setOverrides] = useState<{ stamp: number; map: Record<string, Override> }>({
     stamp: 0,
@@ -160,7 +160,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
         onRetry: () => void featuredQuery.refetch(),
       };
     } else if (slides.length > 0) {
-      featured = { kind: 'slides', slides, onPlay: playSlide, onOpen: openPage };
+      featured = { kind: 'slides', slides, onPlay: play, onOpen: open };
     }
   }
 
@@ -252,15 +252,18 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
   // opens the card as usual, but on release: until then it could still be a long press.
   const rowsRef = useRef(rows);
   const openRef = useRef(open);
+  const playRef = useRef(play);
   const exploreRef = useRef(onExploreSection);
   useEffect(() => {
     rowsRef.current = rows;
     openRef.current = open;
+    playRef.current = play;
     exploreRef.current = onExploreSection;
   });
   // The rows are skipped while their props are the same, so what they get must not change when
   // the focus moves: these handlers are stable and read the latest screen state when called.
   const openCard = useCallback((item: CatalogItem) => openRef.current(item), []);
+  const playCardKey = useCallback((item: CatalogItem) => playRef.current(item), []);
   const exploreRow = useCallback(
     (id: string, title: string) => exploreRef.current({ id, title }),
     [],
@@ -442,6 +445,7 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
                   }
                   rowIndex={index}
                   onOpen={openCard}
+                  onPlay={playCardKey}
                   onExploreAll={exploreRow}
                   onRowFocused={rowFocused}
                   onCardFocused={cardFocused}

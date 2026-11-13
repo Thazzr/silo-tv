@@ -13,6 +13,12 @@ import { distIndexUrl } from './paths.ts';
 // stays). Every instance has its own origin (its own port), which is what the
 // app keys servers and sessions by.
 
+/** The remote's Play key (415) on the focused element; the browser has no such key to press. */
+const pressPlayKey = (page: Page) =>
+  page.evaluate(
+    "document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { keyCode: 415, bubbles: true }))",
+  );
+
 interface Seen {
   method: string;
   path: string;
@@ -677,6 +683,37 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             : {}),
         });
       }
+      // The episode of the Continue Watching rewatch: one file, 600 s of 2700 s saved.
+      if (withRewatch && req.method === 'GET' && url.pathname === '/api/v2/catalog/items/e9') {
+        return send(200, {
+          ...baseItem,
+          content_id: 'e9',
+          type: 'episode',
+          title: 'Episode 1.9',
+          series_id: 's1',
+          series_title: 'A Show',
+          season_number: 1,
+          episode_number: 9,
+          runtime: 45,
+          overview: 'Synopsis of 1.9.',
+          versions: [
+            {
+              file_id: 'file-e9',
+              resolution: '1080p',
+              codec_audio: 'eac3',
+              duration: 2700,
+            },
+          ],
+          user_data: {
+            played: true,
+            position_seconds: 600,
+            duration_seconds: 2700,
+            watched_count: 1,
+            unplayed_count: 0,
+            in_progress_count: 1,
+          },
+        });
+      }
       const episodePage = /^\/api\/v2\/catalog\/items\/e(\d+)(\d)$/.exec(url.pathname);
       if (req.method === 'GET' && episodePage) {
         return send(200, {
@@ -1180,6 +1217,7 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                           title: 'A Show',
                           type: 'series',
                           year: 2020,
+                          play_content_id: 'e11',
                           ...(options.badges
                             ? {
                                 user_state: {
@@ -1649,12 +1687,12 @@ test('Settings: rewind 15 s from the avatar menu, then a Continue Watching rewat
   // Home's first row is in; a Down before that has no row to enter (the skeleton takes no focus).
   await expect(page.getByTestId('row-continue_watching')).toBeVisible();
 
-  // The rewatch card of Continue Watching plays at once, 15 s before the saved 600 s.
+  // The Play key on the rewatch card of Continue Watching plays at once, 15 s before the saved 600 s.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Second Title/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
-  await page.keyboard.press('Enter');
+  await pressPlayKey(page);
   await expect(page.getByTestId('player')).toBeVisible();
   await expect(page.getByTestId('resume-prompt')).toHaveCount(0);
   await expect
@@ -1832,7 +1870,7 @@ test('Home to a series, a season, an episode and Back to each card, then play th
   await expect(page.getByRole('button', { name: 'Erste Folge abspielen' })).toBeFocused();
 });
 
-test('Season page to an episode page, its More Episodes row, a sibling and Back to each card, keyboard only', async ({
+test('Season page to an episode page, its More Episodes row, a sibling and Back to the season page, keyboard only', async ({
   page,
 }) => {
   const { origin } = await startFakeSilo({ series: true });
@@ -1878,14 +1916,182 @@ test('Season page to an episode page, its More Episodes row, a sibling and Back 
   // A page opened from a sibling card starts on its own card in the row, not on Play.
   await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
 
-  // Back: the first episode's page with the card we came from focused; Back again: the season
-  // page with the first episode's card focused.
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1Folge 1');
-  await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
+  // The sibling's page replaced the first episode's: one Back leaves for the season page, with
+  // the focus on the card of the episode last viewed.
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
+});
+
+test('Home: OK on a Continue Watching episode opens its page, OK there resumes, Back returns step by step; the Play key plays the card at once', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+
+  // OK opens the episode's page (like the web's card), it does not play.
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.9');
+  expect(seen.some((e) => e.path === '/api/v2/watch/e9')).toBe(false);
+  // The primary button has the focus; OK offers the saved position, OK again resumes 7 s before it.
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Bei 10:00 fortsetzen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect
+    .poll(() => {
+      const start = seen.find((e) => e.path === '/api/v2/playback/start');
+      return start ? (JSON.parse(start.body) as { start_position?: number }).start_position : null;
+    })
+    .toBe(593);
+  // Back from the player: the episode's page; Back again: Home on the card.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.9');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+
+  // The Play key on the card starts the player at once, without a page and without asking.
+  const starts = () => seen.filter((e) => e.path === '/api/v2/playback/start').length;
+  const before = starts();
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('resume-prompt')).toHaveCount(0);
+  await expect.poll(starts).toBe(before + 1);
+  const last = seen.filter((e) => e.path === '/api/v2/playback/start').pop();
+  expect(JSON.parse(last?.body ?? '{}')).toMatchObject({ start_position: 593 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+});
+
+test('Home: the Play key on a movie card and on a series card with a target episode plays them, and Back returns to the card', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({ series: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+
+  // The series' target episode (e11) plays; the series page is never opened.
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/watch/e11')).toBe(true);
+  expect(seen.some((e) => e.path === '/api/v2/catalog/items/s1')).toBe(false);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+
+  // A movie of the same row plays itself.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => seen.some((e) => e.path === '/api/v2/watch/m1')).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: /First Title/ })).toBeFocused();
+});
+
+test('Season page to episode 1, then Weitere Folgen to episodes 2 and 3: Back leaves the walk at once, onto the last episode of the season page, then the season card', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, episodeCount: 3 });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.1');
+
+  // Down to the current card of the row (past the pills), then on to episode 2 and episode 3.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.2');
+  await expect(page.getByRole('button', { name: /Episode 1.2/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Episode 1.3/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.3');
+
+  // One Back: the season page, on the card of the last episode viewed.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('detail-breadcrumb')).toHaveText('A ShowStaffel 1');
+  await expect(page.getByRole('button', { name: /Episode 1.3/ })).toBeFocused();
+  // Another Back: the series page, on the season's card.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('season-rail')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+});
+
+test('Home: a sibling hop from a Continue Watching episode replaces its page, and Back lands on Home on the original card', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ rewatch: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.9');
+
+  // Down to the row (its first card: the page's own episode is not in the season's list).
+  const first = page.getByRole('button', { name: /Episode 1.1/ });
+  for (let i = 0; i < 4; i += 1) {
+    if (await first.evaluate('el => el === document.activeElement')) break;
+    await page.keyboard.press('ArrowDown');
+  }
+  await expect(first).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.2');
+
+  // Home does not show that episode, so its focus stays where it was.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
 });
 
 test('Movies: Browse filtered by watch state with the remote; an older server shows no Status section', async ({
@@ -4625,11 +4831,11 @@ test('player: Next episode stops the session, opens the next episode in its plac
     timeout: 10_000,
   });
   await expect(page.getByTestId('row-continue_watching')).toBeVisible();
-  // The rewatch card of Continue Watching plays at once.
+  // The Play key on the rewatch card of Continue Watching plays at once.
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
-  await page.keyboard.press('Enter');
+  await pressPlayKey(page);
   await expect(page.getByTestId('player')).toBeVisible();
   await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
   await page.evaluate("document.querySelector('video').dispatchEvent(new Event('playing'))");

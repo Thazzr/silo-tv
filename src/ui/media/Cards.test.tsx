@@ -91,6 +91,19 @@ describe('PosterCard', () => {
     expect(onOpen).toHaveBeenCalledWith(movie);
   });
 
+  it('plays on the remote Play key, and on no other key, when the card has a play handler', () => {
+    const onOpen = vi.fn();
+    const onPlay = vi.fn();
+    poster({ onOpen, onPlay });
+    const card = screen.getByRole('button', { name: /Heat/ });
+    fireEvent.keyDown(card, { keyCode: 13 });
+    fireEvent.keyDown(card, { keyCode: 179 });
+    expect(onPlay).not.toHaveBeenCalled();
+    fireEvent.keyDown(card, { keyCode: 415 });
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith(movie);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it('shows an episode under its series with the season and episode label', () => {
     poster({
       item: catalogItem({
@@ -132,6 +145,15 @@ describe('LandscapeCard', () => {
     expect(screen.getByTestId('card-title')).toHaveTextContent('Severance');
     expect(screen.getByTestId('card-episode')).toHaveTextContent('Season 1 Episode 3 • Pilot');
     expect(screen.getByTestId('card-status')).toHaveTextContent('30 min left');
+  });
+
+  it('plays on the remote Play key', () => {
+    const onPlay = vi.fn();
+    renderWithSilo(
+      <LandscapeCard item={resuming} focusKey="l1" onOpen={() => undefined} onPlay={onPlay} />,
+    );
+    fireEvent.keyDown(screen.getByRole('button', { name: /Severance/ }), { keyCode: 415 });
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith(resuming);
   });
 
   it('says "Next Episode" on a Next Up card', () => {

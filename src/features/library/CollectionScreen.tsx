@@ -39,7 +39,7 @@ export function CollectionScreen({
   const pages = useCollectionPages(target.libraryId, target.collectionId);
   // The index of the library is already read for the view that opened this page.
   const collections = useLibraryCollections(target.libraryId);
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
   const description = collections.data?.descriptions.get(target.collectionId);
   const title =
     collections.data?.cards.find((card) => card.id === target.collectionId)?.title ?? target.title;
@@ -97,6 +97,7 @@ export function CollectionScreen({
             autoFocus={ctx.autoFocus}
             onFocused={ctx.onFocused}
             onOpen={open}
+            onPlay={play}
           />
         )}
       />

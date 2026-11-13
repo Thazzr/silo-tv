@@ -78,7 +78,7 @@ export function BrowseView({
   onOpenDetail: (target: DetailTarget) => void;
 }) {
   const t = useT();
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
   const artUrl = useArtUrl('poster');
   const gridId = `browse:${library.id}:${kind}`;
   const [selection, setSelection] = useState<BrowseSelection>(() =>
@@ -224,6 +224,7 @@ export function BrowseView({
             focusKey={ctx.focusKey}
             onFocused={ctx.onFocused}
             onOpen={open}
+            onPlay={play}
           />
         )}
       />

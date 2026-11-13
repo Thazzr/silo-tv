@@ -9,7 +9,11 @@ import { ProfileSettingsSync } from '../features/settings/profileSettings';
 import { AccentTheme, BrandBackdrop, BrandHeader } from '../features/branding/components';
 import { BoxSetMemory, type BoxSetTarget } from '../features/boxset/boxSetMemory';
 import { BoxSetScreen } from '../features/boxset/BoxSetScreen';
-import { DetailMemory, type DetailTarget } from '../features/detail/detailMemory';
+import {
+  DetailMemory,
+  restoreViewedEpisode,
+  type DetailTarget,
+} from '../features/detail/detailMemory';
 import { DetailScreen } from '../features/detail/DetailScreen';
 import { PersonMemory, type PersonTarget } from '../features/person/personMemory';
 import { PersonScreen } from '../features/person/PersonScreen';
@@ -197,7 +201,26 @@ export function FlowApp({
   );
 
   const renderScreen = (screen: FlowScreen, nav: NavApi<FlowScreen>) => {
-    const openDetail = (target: DetailTarget) => nav.push({ name: 'detail', ...target });
+    // An episode opened from a "More Episodes" card replaces the episode page it was opened from,
+    // so walking through a season adds no pages; the page under it, if it shows the episode in a
+    // grid, restores its focus on that episode's card.
+    const openDetail = (target: DetailTarget) => {
+      const { fromSibling } = target;
+      if (fromSibling === undefined) {
+        nav.push({ name: 'detail', ...target });
+        return;
+      }
+      nav.replace({ name: 'detail', ...target }, (below) =>
+        below.name === 'detail'
+          ? restoreViewedEpisode(
+              detailMemory.of(below),
+              below.itemId,
+              target.itemId,
+              fromSibling.index,
+            )
+          : null,
+      );
+    };
     // The server's branding is shown for the active server; without one there is nothing to ask.
     const provide = (content: ReactNode, branded?: 'signIn') =>
       origin && session ? (

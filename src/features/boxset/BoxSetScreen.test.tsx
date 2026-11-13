@@ -9,6 +9,7 @@ import { I18nProvider } from '../../i18n';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { boxSetDetail, serveBoxSet, type BoxSetServe } from '../../test/boxSetFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { pressPlayKey } from '../../test/playKey';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import type { StartIntent } from '../../playback/resume';
 import { gridCardKey } from '../../ui/media';
@@ -318,6 +319,20 @@ describe('BoxSetScreen: the films', () => {
     await pressKey(KEY.back);
     await ready();
     await focusKeyIs(cardKey('film-3'));
+  });
+
+  it('plays a film from where it left off on the Play key, without opening its page', async () => {
+    serve({ boxSet: boxSetDetail({}, 4, 0) });
+    const { onPlay } = setup();
+    await ready();
+    await focusKeyIs('boxset-play');
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await focusKeyIs(cardKey('film-2'));
+    await pressPlayKey();
+    expect(await screen.findByTestId('player-stub')).toHaveTextContent('film-2');
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith('film-2', { kind: 'resume' });
+    expect(screen.queryByTestId('detail-stub')).toBeNull();
   });
 
   it('reads the box set again whenever the page shows again', async () => {

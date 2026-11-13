@@ -231,6 +231,7 @@ The app follows the web app wherever a TV allows it (user decision 2026-11-11). 
 - **Popovers become list dialogs** with 75 px rows (the More menu, the resume question, later the track pickers); Back closes them.
 - **"Alle entdecken" is the last card of a row**, not a link beside the row title: a header link would need a focus stop of its own in every row.
 - **Breadcrumbs are text:** Back is the way back, so the crumbs on season and episode pages are not focusable.
+- **Episode hops do not stack:** moving from an episode to another one of its season through "Weitere Folgen" replaces the page, so one Back leaves the walk and lands on the last episode viewed. The web keeps each hop in the browser history, but a remote has no breadcrumb to jump up with (user, 2026-11-12).
 - **The episode grid scrolls** inside the page instead of showing at most four rows first; a long season stays one grid.
 - **The cover stands beside the title block**, as tall as it, and the synopsis, credits and buttons run below at full width (user decision 2026-11-12). The web bottom-aligns the poster with a narrow text column, which on a TV hero that cannot scroll left the cover far below the title.
 - **A movie's synopsis is cut to the lines that fit** (at most six, at least two, the rest under "Mehr"): the web shows a movie's whole overview and lets the page scroll, but on the TV the hero's buttons and pills must stay on screen. Series, seasons and episodes keep the web's three lines.

@@ -34,6 +34,8 @@ import {
 } from '../test/playbackFixtures';
 import { serveSettings } from '../test/settingsFixtures';
 import { KEY, pressKey } from '../test/keys';
+import { cardFocusKey, gridCardKey } from '../ui/media';
+import { getCurrentFocusKey, setFocus } from './nav';
 import { memoryStorage, renderApp, testDevice } from '../test/renderFlow';
 import { FlowApp } from './FlowApp';
 import { ServerRegistry } from './servers';
@@ -375,7 +377,7 @@ describe('FlowApp', () => {
     expect(await screen.findByTestId('exit-dialog')).toBeInTheDocument();
   });
 
-  it('opens the own page of an episode card, and plays a Continue Watching episode directly', async () => {
+  it('opens the own page of any episode card, a Continue Watching one included, and plays it on the Play key', async () => {
     serveData();
     const plain = catalogItem({
       content_id: 'e23',
@@ -416,10 +418,19 @@ describe('FlowApp', () => {
     flow();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
     await screen.findByTestId('row-added');
-    // The episode of Continue Watching plays right away (OK tapped: opens on release).
+    // OK on the episode of Continue Watching opens its page, as on the web (OK tapped: opens on
+    // release); Back lands on the card again.
     await pressKey(KEY.down);
     fireEvent.keyDown(window, { keyCode: KEY.enter });
     fireEvent.keyUp(window, { keyCode: KEY.enter });
+    expect(await screen.findByTestId('detail-title')).toBeInTheDocument();
+    expect(detailCalls.items).toEqual(['e1']);
+    expect(calls.capabilities).toBe(0);
+    fireEvent.keyDown(window, { keyCode: 461 });
+    await screen.findByTestId('home');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Show e1/ })).toHaveFocus());
+    // The remote's Play key plays it at once.
+    fireEvent.keyDown(document.activeElement!, { keyCode: 415 });
     expect(await screen.findByTestId('player')).toBeInTheDocument();
     await waitFor(() => expect(calls.capabilities).toBe(1));
     fireEvent.keyDown(window, { keyCode: 461 });
@@ -429,7 +440,87 @@ describe('FlowApp', () => {
     await pressKey(KEY.down);
     await pressKey(KEY.enter);
     expect(await screen.findByTestId('detail-title')).toHaveTextContent('Episode 2.3');
-    expect(detailCalls.items).toEqual(['e23']);
+    expect(detailCalls.items).toEqual(['e1', 'e23']);
+  });
+
+  it('replaces the episode page on a Weitere Folgen hop, so Back leaves the walk at once', async () => {
+    serveData();
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/sections`, () =>
+        HttpResponse.json({
+          sections: [
+            homeSection('added', 0, {
+              items: [catalogItem({ content_id: 's1', type: 'series', title: 'A Show' })],
+              total_count: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    serveDetail(server, {
+      item: (id) =>
+        itemDetail({
+          content_id: id,
+          type: id === 's1' ? 'series' : id.startsWith('season') ? 'season' : 'episode',
+          title: id === 's1' ? 'A Show' : `Page of ${id}`,
+          series_id: 's1',
+          season_number: 1,
+          versions: [],
+        }),
+      seasons: [seasonOf(1), seasonOf(2)],
+      episodes: (season) => [1, 2, 3].map((n) => episodeOf(season, n)),
+    });
+    signedIn(BASE_URL, 'p1');
+    flow();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
+    await screen.findByTestId('row-added');
+    await pressKey(KEY.down);
+    fireEvent.keyDown(window, { keyCode: KEY.enter });
+    fireEvent.keyUp(window, { keyCode: KEY.enter });
+    await screen.findByTestId('season-rail');
+    const focusIs = (key: string) => waitFor(() => expect(getCurrentFocusKey()).toBe(key));
+    const focus = (key: string) => act(async () => void (await setFocus(key)));
+
+    // Series page, season 1, its first episode.
+    await waitFor(() =>
+      expect(document.querySelector('[data-focus-key="season:1"]')).not.toBeNull(),
+    );
+    await focus('season:1');
+    await focusIs('season:1');
+    await pressKey(KEY.enter);
+    await screen.findByTestId('episode-grid');
+    const grid = (id: string) => gridCardKey('episodes:season-1', id);
+    await waitFor(() =>
+      expect(document.querySelector(`[data-focus-key="${grid('e11')}"]`)).not.toBeNull(),
+    );
+    await focus(grid('e11'));
+    await focusIs(grid('e11'));
+    await pressKey(KEY.enter);
+    // The hops: episode 1 to 2, then 2 to 3, each from the row of the page it is on.
+    for (const [from, to] of [
+      ['e11', 'e12'],
+      ['e12', 'e13'],
+    ] as const) {
+      await waitFor(() =>
+        expect(screen.getByTestId('detail-title')).toHaveTextContent(`Page of ${from}`),
+      );
+      await focus(cardFocusKey('more-episodes', from));
+      await pressKey(KEY.right);
+      await focusIs(cardFocusKey('more-episodes', to));
+      await pressKey(KEY.enter);
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('detail-title')).toHaveTextContent('Page of e13'),
+    );
+
+    // One Back: the season page, on the card of the last episode viewed.
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    await screen.findByTestId('episode-grid');
+    await focusIs(grid('e13'));
+    // Another Back: the series page (the hops added no page), on the season's card.
+    fireEvent.keyDown(window, { keyCode: KEY.back });
+    await screen.findByTestId('season-rail');
+    await focusIs('season:1');
   });
 
   it('replaces the player with the next episode: the old session stops, the new one starts by the resume rule with no tracks, and Back goes where it would have', async () => {
@@ -482,8 +573,7 @@ describe('FlowApp', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
       await screen.findByTestId('row-cw');
       await pressKey(KEY.down);
-      fireEvent.keyDown(window, { keyCode: KEY.enter });
-      fireEvent.keyUp(window, { keyCode: KEY.enter });
+      fireEvent.keyDown(document.activeElement!, { keyCode: 415 });
       await screen.findByTestId('player');
       fireEvent.playing(document.querySelector('video')!);
       await waitFor(() => expect(watched).toEqual(['e1']));

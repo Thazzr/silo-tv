@@ -41,7 +41,7 @@ export function SectionGridScreen({
 }: SectionGridScreenProps) {
   const t = useT();
   const pages = useSectionPages(sectionId, library);
-  const { open } = useItemOpener({ onPlay, onOpenDetail });
+  const { open, play } = useItemOpener({ onPlay, onOpenDetail });
   const items = useMemo(() => pages.data?.pages.flatMap((page) => page.items) ?? [], [pages.data]);
 
   let body;
@@ -88,6 +88,7 @@ export function SectionGridScreen({
             autoFocus={ctx.autoFocus}
             onFocused={ctx.onFocused}
             onOpen={open}
+            onPlay={play}
           />
         )}
       />

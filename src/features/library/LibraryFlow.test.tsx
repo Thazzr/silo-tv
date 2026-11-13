@@ -27,6 +27,7 @@ import {
   type LibraryServe,
 } from '../../test/libraryFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { pressPlayKey } from '../../test/playKey';
 import { memoryStorage, newQueryClient, testDevice } from '../../test/renderFlow';
 import { cardFocusKey, FocusIndexMemory, gridCardKey } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
@@ -134,7 +135,7 @@ function renderMovies(
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { memory };
+  return { memory, onPlay };
 }
 
 function serve(options: LibraryServe = {}) {
@@ -439,6 +440,41 @@ describe('Collections in the shell', () => {
     await waitFor(() =>
       expect(getCurrentFocusKey()).toBe(gridCardKey('collection:lib-1:c1', 'm2')),
     );
+  });
+
+  it('plays a title of a collection from where it left off, without opening its page', async () => {
+    serve(COLLECTIONS);
+    const { onPlay } = renderMovies({ view: 'collections' });
+    await screen.findByTestId('collections');
+    await waitFor(() =>
+      expect(
+        document.querySelector(`[data-focus-key="${gridCardKey('collections:lib-1', 'c1')}"]`),
+      ).not.toBeNull(),
+    );
+    await focus(gridCardKey('collections:lib-1', 'c1'));
+    await pressKey(KEY.enter);
+    await screen.findByRole('button', { name: /Part Two/ });
+    await focus(gridCardKey('collection:lib-1:c1', 'm2'));
+    await pressPlayKey();
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ content_id: 'm2' }), {
+      kind: 'resume',
+    });
+    expect(screen.queryByTestId('detail-stand-in')).toBeNull();
+  });
+});
+
+describe('the Play key in the shell', () => {
+  it('plays a poster of a Recommended row from where it left off, without opening its page', async () => {
+    serve();
+    const { onPlay } = renderMovies();
+    await screen.findByText('Row lib-1-rec');
+    await focus(cardFocusKey('lib-1/lib-1-rec', 'lib-1-rec-1'));
+    await pressPlayKey();
+    expect(onPlay).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ content_id: 'lib-1-rec-1' }),
+      { kind: 'resume' },
+    );
+    expect(screen.queryByTestId('detail-stand-in')).toBeNull();
   });
 });
 

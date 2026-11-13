@@ -187,6 +187,7 @@ describe('cards: spoiler protection', () => {
         prefetchRow
         rowIndex={0}
         onOpen={open}
+        onPlay={open}
         onExploreAll={open}
         onRowFocused={open}
       />
