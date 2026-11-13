@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 generated automatically from the commit messages with [git-cliff](https://git-cliff.org) –
 **do not edit it by hand**.
 
+## [Unreleased]
+
+### Changed
+
+- **settings**: The auto-play save test checks the row after the server's answer
+
 ## [0.4.0] - 2026-11-13
 
 ### Added
