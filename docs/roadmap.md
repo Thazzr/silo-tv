@@ -126,11 +126,11 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
 - 🟨 Subtitle appearance as Silo's web dialog (user decision 2026-11-11, replacing the TV-only page of 2026-11-10): size, font, colours, opacity, outline, background style, colour and opacity, position, with a live preview; each change is saved at once for the profile on all devices (`playback.subtitle_appearance` at `profile`; this TV's own value is dropped, as the web app does), and "Use fallback style" returns to the server's default; opened from "Appearance…" in the player's Subtitles menu and from the settings' Playback section
 - ✅ Skip intro, recap, credits and previews; automatic skipping following the profile settings (TV 2026-11-10)
-- ⬜ Up Next for episodes: a card in the corner, opened `playback.next_up_prompt_seconds` before the end, with a countdown to the next episode when `playback.auto_play_next` is on
-  - skipping credits that run to the end opens the card at once, with a 10 s countdown
-  - an Up Next button on the overlay opens it without a countdown
-- ⬜ "Are you still watching?" after `player.passout_threshold` episodes that started on their own without a key press (default 3, 0 never asks). It is kept on the TV only, as Silo's settings contract defines it.
-- ⬜ On Deck at the end of a movie and of a series' last episode: Continue Watching and Next Up items, nothing starts on its own
+- 🟨 "Als Nächstes" as Silo's web player does it (user decision 2026-11-12, after checking the web live; it replaces the earlier corner-card plan):
+  - a card bottom right at the credits (or the preview, with `playback.auto_play_next_preview`): "Als Nächstes in N Sek.", Play now and Cancel; after 10 s the next episode starts and the rest of the credits is skipped
+  - for series episodes a full screen 30 s before the end: the next episode, Play now with a countdown that starts once the video has ended, the Autoplay switch (`playback.auto_play_next` for the profile), Close, and a "Laufend" row of the viewer's continue-watching titles without the current series; after the last episode the finished state
+  - a movie ends on its page, as on the web
+- 🟨 Still watching: after `player.passout_threshold` automatic starts in a row (default 3, 0 never; kept on this TV only, as Silo's settings contract defines it, and set in the settings) the card and the end screen wait without a countdown; any start the viewer makes resets the count. Like the web, no question pops up.
 - ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people.
 - ❌ Playback speed: dropped (user decision 2026-11-11). On the TV, direct play through the native video element accepts a new speed but then stutters at about half speed with no sound (TV probe 2026-11-11, webOS 26: 1.5× measured 0.49×, 0.5× measured 0.27×). A difference from the web app's speed slider that the TV forces.
 - ❌ Aspect ratio (fit, fill, stretch): dropped (user decision 2026-11-11). Not needed on the TV, where the picture fills the screen as the TV's own settings say.

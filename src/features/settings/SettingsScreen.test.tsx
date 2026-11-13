@@ -4,6 +4,10 @@ import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLanguageSetting, setLanguageSetting } from '../../i18n/languageSetting';
 import { getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
+import {
+  getStillWatchingThreshold,
+  setStillWatchingThreshold,
+} from '../../playback/upnext/stillWatching';
 import { getTimeMode, setTimeMode } from '../../playback/timeDisplay';
 import { Session } from '../../api/session';
 import { BASE_URL, account } from '../../test/apiFixtures';
@@ -43,7 +47,7 @@ describe('SettingsScreen sections', () => {
     expect(screen.getByText('Applies to this TV only')).toBeInTheDocument();
   });
 
-  it('puts the three rows in the device section: language, time display, rewind', () => {
+  it('puts the four rows in the device section: language, time display, rewind, still watching', () => {
     setup();
     const section = within(screen.getByTestId('settings-device'));
     const groups = section.getAllByRole('radiogroup');
@@ -51,17 +55,20 @@ describe('SettingsScreen sections', () => {
       'settings-language',
       'settings-time',
       'settings-rewind',
+      'settings-still-watching',
     ]);
     expect(groups.map((g) => g.getAttribute('aria-labelledby'))).toEqual([
       'settings-language-label',
       'settings-time-label',
       'settings-rewind-label',
+      'settings-still-watching-label',
     ]);
     expect(section.getByText('Language')).toBeInTheDocument();
     expect(section.getByText('Time display in the player')).toBeInTheDocument();
     expect(section.getByText('Rewind on resume')).toBeInTheDocument();
+    expect(section.getByText('Still watching?')).toBeInTheDocument();
     // Everything on the screen is in that one section for now.
-    expect(screen.getAllByRole('radiogroup')).toHaveLength(3);
+    expect(screen.getAllByRole('radiogroup')).toHaveLength(4);
   });
 
   it('keeps the section heading and note out of the focus order', () => {
@@ -130,6 +137,35 @@ describe('SettingsScreen in German', () => {
         .getAllByRole('radio')
         .map((p) => p.textContent),
     ).toEqual(['Kombiniert', 'Position/Länge', 'Restzeit', 'Endet um']);
+  });
+});
+
+describe('SettingsScreen still-watching row', () => {
+  it('lists its pills, with Never for 0', () => {
+    setup();
+    expect(
+      group('settings-still-watching')
+        .getAllByRole('radio')
+        .map((p) => p.textContent),
+    ).toEqual(['Never', '1', '2', '3', '5', '10', '20']);
+  });
+
+  it('marks 3 by default and stores a pick for this TV', () => {
+    setup();
+    expect(pill('3')).toHaveClass('selected');
+    fireEvent.click(pill('5'));
+    expect(getStillWatchingThreshold()).toBe(5);
+    expect(pill('5')).toHaveClass('selected');
+    expect(pill('3')).not.toHaveClass('selected');
+    expect(window.localStorage.getItem('silo-tv.settings.stillWatchingThreshold')).toBe('5');
+  });
+
+  it('Never stores 0, and a stored value is selected when the screen opens', () => {
+    setStillWatchingThreshold(10);
+    setup();
+    expect(pill('10')).toHaveClass('selected');
+    fireEvent.click(pill('Never'));
+    expect(getStillWatchingThreshold()).toBe(0);
   });
 });
 

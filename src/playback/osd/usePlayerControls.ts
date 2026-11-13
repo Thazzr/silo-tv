@@ -12,6 +12,8 @@ interface Args {
   engine: PlayerEngine | null;
   /** The first frame has played; before that only Back works. */
   started: boolean;
+  /** The end screen covers the player: the keys and Back are the screen's, not the controls'. */
+  locked: boolean;
   paused: boolean;
   /** A stall: waiting for data while not paused. */
   buffering: boolean;
@@ -285,6 +287,8 @@ export function usePlayerControls(args: Args): PlayerControls {
       const key = getPlatform().mapKey(e);
       if (!key || key === 'back') return;
       const { args: a, skip: s, scrub: sc, osd: o, focus: current } = latest.current;
+      // Left alone entirely: the arrows and OK are the navigation's, the Play key the screen's.
+      if (a.locked) return;
       if (isPopover(a.panel.open)) {
         // The menu's own keys (arrows, OK) are left alone; the media keys act as ever, without
         // touching the overlay.

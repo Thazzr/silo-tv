@@ -22,15 +22,17 @@ import {
 import { I18nProvider } from '../i18n';
 import { ProfileLaunchPrefs, type LaunchMode } from '../features/profiles/launchPrefs';
 import { clearInstallationCache } from '../playback/session/startSession';
+import { resetStillWatchingStreak } from '../playback/upnext/stillWatching';
 import { episodeOf, itemDetail, seasonOf, serveDetail } from '../test/detailFixtures';
 import { homeCapabilities, homeSection, resumeEpisode } from '../test/homeFixtures';
-import { installFakeMedia } from '../test/fakeVideo';
+import { fakeVideo, installFakeMedia } from '../test/fakeVideo';
 import {
   playableDecision,
   servePlayback,
   terminalDecision,
   watchDetail,
   watchUserData,
+  watchVersion,
 } from '../test/playbackFixtures';
 import { serveSettings } from '../test/settingsFixtures';
 import { KEY, pressKey } from '../test/keys';
@@ -615,6 +617,79 @@ describe('FlowApp', () => {
       restoreMedia();
     }
   });
+
+  it('counts an episode that started by itself towards the still-watching gate: the next player shows no credits card', async () => {
+    // One automatic advance is allowed; the next episode then waits for the viewer.
+    window.localStorage.setItem('silo-tv.settings.stillWatchingThreshold', '1');
+    resetStillWatchingStreak();
+    serveData();
+    server.use(
+      http.get(`${BASE_URL}/api/v2/home/sections`, () =>
+        HttpResponse.json({
+          sections: [
+            homeSection('cw', 0, {
+              section_type: 'continue_watching',
+              items: [resumeEpisode('e1')],
+              total_count: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    const calls = servePlayback(server, { start: [playableDecision()] });
+    server.use(
+      http.get(`${BASE_URL}/api/v2/watch/:id`, ({ params }) =>
+        HttpResponse.json(
+          watchDetail({
+            content_id: String(params.id),
+            type: 'episode',
+            series_id: 's1',
+            series_title: 'A Show',
+            season_number: 1,
+            episode_number: 2,
+            title: 'Episode 1.2',
+            versions: [watchVersion({ credits: { start_seconds: 5100, end_seconds: 5400 } })],
+          }),
+        ),
+      ),
+    );
+    const files = [{ file_id: 'f', hdr: false, file_size: 1 }];
+    serveDetail(server, {
+      seasons: [seasonOf(1)],
+      episodes: () => [1, 2, 3].map((n) => episodeOf(1, n, { files })),
+    });
+    const restoreMedia = installFakeMedia();
+    try {
+      signedIn(BASE_URL, 'p1');
+      flow();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Home' })).toHaveFocus());
+      await screen.findByTestId('row-cw');
+      await pressKey(KEY.down);
+      fireEvent.keyDown(document.activeElement!, { keyCode: 415 });
+      await screen.findByTestId('player');
+      const enterCredits = async () => {
+        const video = document.querySelector('video')!;
+        fakeVideo(video).duration = 5400;
+        fireEvent.playing(video);
+        await waitFor(() =>
+          expect(document.querySelector('[data-focus-key="nextEpisode"]')).not.toBeNull(),
+        );
+        fakeVideo(video).currentTime = 5100;
+        fireEvent.timeUpdate(video);
+      };
+      await enterCredits();
+      // The first card runs out: an automatic start opens the next episode in its place.
+      expect(await screen.findByTestId('player-upnext')).toBeInTheDocument();
+      await waitFor(() => expect(calls.start).toHaveLength(2), { timeout: 15_000 });
+      await waitFor(() => expect(screen.queryByTestId('player-upnext')).toBeNull());
+      // That was the one automatic advance: the new player's credits show no card.
+      await enterCredits();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(screen.queryByTestId('player-upnext')).toBeNull();
+    } finally {
+      restoreMedia();
+    }
+  }, 30_000);
 
   it('drops the detail queries of the old profile when the profile is switched', async () => {
     serveData(BASE_URL, [profile({ id: 'p1' }), profile({ id: 'p2', name: 'Sam' })]);

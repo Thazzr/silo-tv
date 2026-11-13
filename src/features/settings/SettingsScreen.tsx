@@ -12,11 +12,12 @@ import {
 import { REWIND_CHOICES, getResumeRewind, setResumeRewind } from '../../playback/resumeRewind';
 import { TIME_MODES, getTimeMode, setTimeMode, type TimeMode } from '../../playback/timeDisplay';
 import {
-  useProfileSettings,
-  useResetProfileDeviceSetting,
-  useServerKnowsSetting,
-  useSetProfileSettingAt,
-} from './profileSettings';
+  STILL_WATCHING_CHOICES,
+  getStillWatchingThreshold,
+  setStillWatchingThreshold,
+} from '../../playback/upnext/stillWatching';
+import { useAutoPlayNext } from './autoPlayNext';
+import { useProfileSettings, useServerKnowsSetting } from './profileSettings';
 import { SubtitleAppearanceDialog } from './SubtitleAppearanceDialog';
 import { summarizeAppearance } from './subtitleOptions';
 
@@ -127,8 +128,6 @@ const LANGUAGE_TEXT: Record<LanguageSetting, MessageKey> = {
   en: 'settings.language.en',
 };
 
-const AUTO_PLAY_KEY = 'playback.auto_play_next';
-
 /**
  * The settings screen: the profile's playback section (auto-play next and the subtitle appearance,
  * stored on the server for the profile, as Silo's web app does) and the device section: the app
@@ -140,25 +139,13 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const t = useT();
   // The row only exists where the server knows the setting it edits.
   const knowsSubtitles = useServerKnowsSetting('playback.subtitle_appearance');
-  const knowsAutoPlay = useServerKnowsSetting(AUTO_PLAY_KEY);
+  const { known: knowsAutoPlay, enabled: autoPlay, set: setAutoPlay } = useAutoPlayNext();
   const { values } = useProfileSettings();
-  const setProfile = useSetProfileSettingAt('profile');
-  const resetDevice = useResetProfileDeviceSetting();
   const [rewind, setRewind] = useState(getResumeRewind);
+  const [stillWatching, setStillWatching] = useState(() => getStillWatchingThreshold());
   const [timeMode, setMode] = useState(getTimeMode);
   const language = useSyncExternalStore(subscribeLanguageSetting, getLanguageSetting);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
-
-  // Saved at the profile, and this TV's own value dropped: it would outrank the profile's and the
-  // row would snap back (what the web app does). A failed write leaves the shown value as it was.
-  const pickAutoPlay = async (value: 'on' | 'off') => {
-    try {
-      await setProfile(AUTO_PLAY_KEY, value === 'on');
-      await resetDevice(AUTO_PLAY_KEY);
-    } catch {
-      // The row shows the stored value still.
-    }
-  };
 
   return (
     <Screen title={t('settings.title')} onBack={onBack} testId="settings-screen">
@@ -177,9 +164,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                 { value: 'on', label: t('settings.autoPlay.on') },
                 { value: 'off', label: t('settings.autoPlay.off') },
               ]}
-              selected={values[AUTO_PLAY_KEY] ? 'on' : 'off'}
+              selected={autoPlay ? 'on' : 'off'}
               autoFocus
-              onPick={(value) => void pickAutoPlay(value)}
+              onPick={(value) => void setAutoPlay(value === 'on')}
             />
           ) : null}
           {knowsSubtitles ? (
@@ -240,6 +227,20 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           onPick={(seconds) => {
             setResumeRewind(seconds);
             setRewind(seconds);
+          }}
+        />
+        <PillRow
+          id="settings-still-watching"
+          title={t('settings.stillWatching.title')}
+          hint={t('settings.stillWatching.hint')}
+          choices={STILL_WATCHING_CHOICES.map((count) => ({
+            value: count,
+            label: count === 0 ? t('settings.stillWatching.never') : String(count),
+          }))}
+          selected={stillWatching}
+          onPick={(count) => {
+            setStillWatchingThreshold(count);
+            setStillWatching(count);
           }}
         />
       </SettingsSection>

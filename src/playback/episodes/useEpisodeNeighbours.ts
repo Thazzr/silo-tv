@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import type { components } from '../../api/generated/schema';
 import { useSeasonEpisodes, useSeasons } from '../../features/detail/queries';
 import {
   NO_NEIGHBOURS,
@@ -7,6 +8,15 @@ import {
   nextSeasonNumber,
   type Neighbours,
 } from './neighbours';
+
+export interface EpisodeNeighbours extends Neighbours {
+  /** The reads are in (or failed): `next` null then means there is none, not "not known yet". */
+  settled: boolean;
+  /** The catalog's own entry of `next` (still, overview, air date), for the Up Next screens. */
+  nextEntry: components['schemas']['Episode'] | null;
+}
+
+const UNKNOWN: EpisodeNeighbours = { ...NO_NEIGHBOURS, settled: false, nextEntry: null };
 
 /**
  * The previous and next episode of an episode that plays. It reads the series' seasons (to learn
@@ -18,7 +28,7 @@ export function useEpisodeNeighbours(
   seriesId: string | undefined,
   seasonNumber: number,
   episodeNumber: number,
-): Neighbours {
+): EpisodeNeighbours {
   const id = seriesId ?? '';
   const seasons = useSeasons(id, id !== '');
   const next = seasons.data ? nextSeasonNumber(seasons.data, seasonNumber) : undefined;
@@ -31,8 +41,20 @@ export function useEpisodeNeighbours(
   const settled =
     (seasons.isSuccess || seasons.isError) &&
     (next === undefined || following.isSuccess || following.isError);
+  const currentFailed = current.isError;
   return useMemo(() => {
-    if (!currentItems || !settled) return NO_NEIGHBOURS;
-    return neighboursOf(neighbourList(currentItems, followingItems), seasonNumber, episodeNumber);
-  }, [currentItems, followingItems, settled, seasonNumber, episodeNumber]);
+    if (!settled || (!currentItems && !currentFailed)) return UNKNOWN;
+    // The season's own list failed: there is nothing to step to.
+    if (!currentItems) return { ...NO_NEIGHBOURS, settled: true, nextEntry: null };
+    const neighbours = neighboursOf(
+      neighbourList(currentItems, followingItems),
+      seasonNumber,
+      episodeNumber,
+    );
+    const nextEntry =
+      [...currentItems, ...(followingItems ?? [])].find(
+        (episode) => episode.content_id === neighbours.next?.contentId,
+      ) ?? null;
+    return { ...neighbours, settled: true, nextEntry };
+  }, [currentItems, currentFailed, followingItems, settled, seasonNumber, episodeNumber]);
 }

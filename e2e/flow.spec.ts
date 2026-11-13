@@ -140,6 +140,12 @@ interface FakeOptions {
    * titles), which is the hero carousel; it is read on its own, like the web does.
    */
   featured?: boolean;
+  /**
+   * The Continue Watching rewatch (e9, the first of two episodes; use it with `rewatch`) is 2700 s
+   * long, as its plan says, and the server speaks the settings contract with auto-play on. With
+   * `credits` its file has a credits marker from 2400 s to the end; the second episode has none.
+   */
+  upNext?: { credits: boolean };
 }
 
 interface FakeProfile {
@@ -325,7 +331,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
     options.themeMusic === undefined &&
     options.subtitles === undefined &&
     options.buffering === undefined &&
-    options.badges === undefined;
+    options.badges === undefined &&
+    options.upNext === undefined;
   const sagaFilms = [
     { content_id: 'f1', title: 'Saga One', type: 'movie', year: 2001, played: true },
     { content_id: 'm2', title: 'Second Title', type: 'movie', year: 2021, played: false },
@@ -874,6 +881,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                 file_size: 1000,
                 hdr: false,
                 marker_segments: [],
+                ...(options.upNext?.credits
+                  ? { credits: { start_seconds: 2400, end_seconds: 2700 } }
+                  : {}),
                 resolution: '1080p',
                 trickplay_available: false,
               },
@@ -960,13 +970,15 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                   ? (options.titleArt ?? true)
                   : key.startsWith('catalog.hide_unwatched')
                     ? (options.spoilers ?? false)
-                    : key === 'ui.theme_music_enabled'
-                      ? (options.themeMusic ?? false)
-                      : key === 'playback.buffering_quality_mode'
-                        ? (options.buffering ?? 'always')
-                        : key.startsWith('ui.card_overlays')
-                          ? null
-                          : false,
+                    : key === 'playback.auto_play_next'
+                      ? options.upNext !== undefined
+                      : key === 'ui.theme_music_enabled'
+                        ? (options.themeMusic ?? false)
+                        : key === 'playback.buffering_quality_mode'
+                          ? (options.buffering ?? 'always')
+                          : key.startsWith('ui.card_overlays')
+                            ? null
+                            : false,
               source: 'profile',
               definition_revision: 1,
             })),
@@ -1110,7 +1122,8 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
               effective_recipe: options.buffering ? { bitrate_kbps: 10_000 } : {},
               // A quality choice, so the options panel has a Video tab.
               available_qualities: [{ label: '1080p', preserves_source: false }],
-              source: { duration_seconds: 5400 },
+              ...(options.upNext ? { effective_media_file_id: 'file-e9' } : {}),
+              source: { duration_seconds: options.upNext ? 2700 : 5400 },
               stream: { container: 'mp4', url: '/api/v2/stream/e2e-session?st=x' },
               timeline: { player_start_seconds: 0, timeline_offset_seconds: 0 },
             },
@@ -4380,16 +4393,17 @@ test('Magic Remote wheel: on the settings screen in a small window nothing scrol
   await expect(page.getByRole('heading', { level: 1, name: 'Einstellungen' })).toBeVisible();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
   await page.setViewportSize({ width: 1920, height: 300 });
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
+  await expect(page.getByRole('radio', { name: '5', exact: true })).toBeFocused();
   await page.evaluate('window.scrollTo(0, 0)');
-  // The rewind row is the last one: Down has nowhere to go, so the wheel must not fall back to
-  // scrolling the page by itself.
+  // The still-watching row is the last one: Down has nowhere to go, so the wheel must not fall back
+  // to scrolling the page by itself.
   await page.mouse.wheel(0, 400);
   await page.waitForTimeout(WHEEL_GAP_MS);
   await page.mouse.wheel(0, 400);
-  await expect(page.getByRole('radio', { name: '10 s' })).toBeFocused();
+  await expect(page.getByRole('radio', { name: '5', exact: true })).toBeFocused();
   expect(await page.evaluate<number>('window.scrollY')).toBe(0);
 });
 
@@ -5588,4 +5602,210 @@ test('rows mode keeps the focused row inside the safe area: its last caption lin
   for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
   await expect(page.locator('.card-poster:focus')).toBeFocused();
   expect(await captionEnd()).toBeLessThanOrEqual(1026);
+});
+
+/**
+ * No media plays in the fake server: the video element gets a playhead of its own, which the test
+ * moves, and the events the player listens to are sent by hand. Call it once per episode that
+ * starts (every episode has a new element).
+ */
+async function armVideo(page: Page) {
+  await page.evaluate(`(() => {
+    const video = document.querySelector('video');
+    let time = 0;
+    Object.defineProperty(video, 'currentTime', {
+      get: () => time,
+      set: (value) => { time = value; },
+      configurable: true,
+    });
+    window.__moveTo = (seconds) => {
+      time = seconds;
+      video.dispatchEvent(new Event('timeupdate'));
+    };
+    window.__endVideo = () => video.dispatchEvent(new Event('ended'));
+    video.dispatchEvent(new Event('playing'));
+  })()`);
+}
+const moveTo = (page: Page, seconds: number) => page.evaluate(`window.__moveTo(${seconds})`);
+
+/** Home to the rewatch card (the second card of Continue Watching), and the Play key on it. */
+async function playRewatchFromHome(page: Page, origin: string) {
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+}
+
+test('player: the credits card counts down in the credits and starts the next episode, and Abbrechen keeps the credits playing, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    rewatch: true,
+    seasons: 1,
+    upNext: { credits: true },
+  });
+  const starts = () =>
+    seen.filter((e) => e.method === 'POST' && e.path === '/api/v2/playback/start');
+  await playRewatchFromHome(page, origin);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+
+  // Before the credits: no card. At their start it shows, bottom right in the safe area, with the
+  // focus on Jetzt abspielen.
+  await moveTo(page, 2399);
+  await expect(page.getByTestId('player-upnext')).toHaveCount(0);
+  await moveTo(page, 2400);
+  const card = page.getByTestId('player-upnext');
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId('player-upnext-in')).toContainText('Als Nächstes in');
+  await expect(page.getByTestId('player-upnext-episode')).toHaveText('S1:F2 — Episode 1.2');
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  await expect(page.getByTestId('player-skip')).toHaveCount(0);
+  const box = (await card.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(1920 - 96 + 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(1080 - 54 + 1);
+  expect(box.x).toBeGreaterThan(960);
+  expect(box.y).toBeGreaterThan(540);
+
+  // Left alone, it runs out after 10 s and the next episode plays in its place.
+  await expect.poll(() => starts().length, { timeout: 20_000 }).toBe(2);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');
+  expect(seen.some((e) => e.path === '/api/v2/watch/e12')).toBe(true);
+
+  // Back leaves to Home; the rewatch again: Right moves to Abbrechen and OK hides the card, and the
+  // credits play on without the next episode starting.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('home')).toBeVisible();
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await pressPlayKey(page);
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect.poll(() => starts().length).toBe(3);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+  await moveTo(page, 2400);
+  await expect(page.getByTestId('player-upnext')).toBeVisible();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Abbrechen' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player-upnext')).toHaveCount(0);
+  await expect(page.getByTestId('player-skip')).toBeVisible();
+  await page.waitForTimeout(11_000);
+  expect(starts()).toHaveLength(3);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+});
+
+test('player: without a credits marker the end screen comes 30 s before the end, counts down after it and plays the next episode, and the last episode shows the finished state, keyboard only', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    rewatch: true,
+    seasons: 1,
+    upNext: { credits: false },
+  });
+  const starts = () =>
+    seen.filter((e) => e.method === 'POST' && e.path === '/api/v2/playback/start');
+  await playRewatchFromHome(page, origin);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+
+  // 40 s before the end nothing shows; at 30 s the end screen covers the picture and waits for the
+  // credits to end.
+  await moveTo(page, 2660);
+  await expect(page.getByTestId('player-end')).toHaveCount(0);
+  await expect(page.getByTestId('player-upnext')).toHaveCount(0);
+  await moveTo(page, 2670);
+  const end = page.getByTestId('player-end');
+  await expect(end).toBeVisible();
+  await expect(end.getByText('Als Nächstes', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('player-end-series')).toHaveText('A Show');
+  await expect(page.getByTestId('player-end-episode')).toHaveText('S1:F2 — Episode 1.2');
+  await expect(page.getByTestId('player-end-waits')).toHaveText(
+    'Startet automatisch nach dem Abspann',
+  );
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  const covered = (await end.boundingBox())!;
+  expect([covered.x, covered.y, covered.width, covered.height]).toEqual([0, 0, 1920, 1080]);
+
+  // Down reaches the switch, Down again the On Deck row ("Laufend"), Up returns.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('player-end-autoplay')).toBeFocused();
+  await expect(page.getByTestId('player-end-autoplay')).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('player-end-ondeck')).toBeVisible();
+  await expect(page.getByTestId('player-end-ondeck').getByText('Laufend')).toBeVisible();
+  await expect(page.getByTestId('player-end-ondeck').locator('[data-focus-key]:focus')).toHaveCount(
+    1,
+  );
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.getByRole('button', { name: 'Jetzt abspielen' })).toBeFocused();
+  // Still waiting for the end: nothing starts by itself.
+  await page.waitForTimeout(1500);
+  expect(starts()).toHaveLength(1);
+
+  // The stream ends: the countdown runs and the next episode starts by itself.
+  await page.evaluate('window.__endVideo()');
+  await expect(page.getByTestId('player-end-startsin')).toContainText('Startet in');
+  await expect.poll(() => starts().length, { timeout: 20_000 }).toBe(2);
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.2');
+
+  // The second episode is the last one of the series: the finished state, Back button first.
+  await armVideo(page);
+  await moveTo(page, 2670);
+  await expect(page.getByTestId('player-end-finished')).toBeVisible();
+  await expect(page.getByText('Du hast A Show beendet')).toBeVisible();
+  await expect(page.getByTestId('player-end-back')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toHaveCount(0);
+  await expect(page.getByTestId('home')).toBeVisible();
+});
+
+test('player: Back on the end screen stops playback and leads to the episode page', async ({
+  page,
+}) => {
+  const { origin, seen } = await startFakeSilo({
+    rewatch: true,
+    seasons: 1,
+    upNext: { credits: false },
+  });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeFocused({
+    timeout: 10_000,
+  });
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.9');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('player')).toBeVisible();
+  await expect(page.getByTestId('player-detail')).toContainText('EPISODE 1.1');
+  await armVideo(page);
+  await moveTo(page, 2670);
+  await expect(page.getByTestId('player-end')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('player')).toHaveCount(0);
+  await expect(page.getByTestId('detail-title')).toHaveText('Episode 1.9');
+  await expect(page.getByTestId('detail-primary')).toBeFocused();
+  await expect
+    .poll(
+      () => seen.some((e) => e.method === 'DELETE' && e.path === '/api/v2/playback/e2e-session'),
+      {
+        timeout: 15_000,
+      },
+    )
+    .toBe(true);
 });

@@ -1201,6 +1201,391 @@ h3 {
   }
 }
 
+/* The credits card: the next episode, bottom right in the skip pill's corner (it takes the corner
+   from the skip pill). The line at its bottom fills over the 10 s countdown (transform only). */
+.player-upnext {
+  position: absolute;
+  right: var(--safe-x);
+  bottom: var(--safe-y);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 700px;
+  padding: 24px 28px 30px;
+  overflow: hidden;
+  color: var(--text);
+  background: rgba(21, 23, 28, 0.92);
+  border: 2px solid var(--chrome-border);
+  border-radius: 32px;
+}
+
+.player-upnext[data-raised='true'] {
+  bottom: calc(var(--safe-y) + 250px);
+}
+
+.player-upnext-body {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.player-upnext-still {
+  position: relative;
+  flex: none;
+  width: 192px;
+  height: 108px;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+}
+
+.player-upnext-text {
+  min-width: 0;
+}
+
+.player-upnext-in {
+  margin: 0;
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.player-upnext-episode {
+  display: -webkit-box;
+  margin: 6px 0 0;
+  overflow: hidden;
+  font-size: var(--fs-card-title);
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.player-upnext-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.player-upnext-button {
+  box-sizing: border-box;
+  flex: 1;
+  height: 80px;
+  padding: 0 24px;
+  font: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--chrome-border);
+  border-radius: 40px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-upnext-button[data-focused='true'],
+.player-upnext-button:hover {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  transform: scale(1.05);
+}
+
+.player-upnext-line {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 6px;
+  background: var(--focus-fill);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: player-upnext-line linear forwards;
+}
+
+@keyframes player-upnext-line {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* The end screen over the picture: the next episode, Play now with its countdown, the auto-play
+   switch and the On Deck row. Nearly opaque (97 % black): the picture shimmers through only
+   faintly, and the video stays on its own plane underneath. */
+.player-end {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--text);
+  background: rgba(8, 9, 12, 0.97);
+}
+
+.player-end-body {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--safe-y) var(--safe-x) 0;
+}
+
+.player-end-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--target);
+}
+
+.player-end-heading {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.player-end-close {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--target);
+  height: var(--target);
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--chrome);
+  border: 2px solid var(--chrome-border);
+  border-radius: 50%;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-end-next {
+  display: flex;
+  flex: none;
+  gap: 48px;
+  margin-top: 20px;
+}
+
+.player-end-still {
+  position: relative;
+  flex: none;
+  width: 480px;
+  height: 270px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border-radius: var(--radius-card);
+}
+
+.player-end-nostill {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-card-title);
+  color: var(--text-secondary);
+}
+
+.player-end-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.player-end-series {
+  margin: 0;
+  font-size: var(--fs-row-title);
+  font-weight: 600;
+}
+
+.player-end-episode {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.player-end-meta {
+  margin: 0;
+  font-size: var(--fs-card-title);
+  color: var(--text-secondary);
+}
+
+.player-end-overview {
+  display: -webkit-box;
+  max-width: 1000px;
+  margin: 6px 0 0;
+  overflow: hidden;
+  font-size: var(--fs-card-title);
+  line-height: 1.35;
+  color: var(--text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.player-end-ghost {
+  height: 40px;
+  background: var(--surface-raised);
+  border-radius: var(--radius-control);
+}
+
+.player-end-ghost:first-child {
+  width: 420px;
+}
+
+.player-end-actions {
+  display: flex;
+  flex: none;
+  gap: 32px;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.player-end-play {
+  box-sizing: border-box;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  min-width: 340px;
+  height: 88px;
+  padding: 0 48px;
+  font: inherit;
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  background: var(--chrome-selected);
+  border: 2px solid var(--chrome-border);
+  border-radius: 44px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-end-countdown {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.player-end-ring {
+  transform: rotate(-90deg);
+}
+
+.player-end-ring-track,
+.player-end-ring-fill {
+  fill: none;
+  stroke-width: 5;
+}
+
+.player-end-ring-track {
+  stroke: var(--chrome-selected);
+}
+
+.player-end-ring-fill {
+  stroke: var(--focus-fill);
+  stroke-linecap: round;
+}
+
+.player-end-switch {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  gap: 20px;
+  align-items: center;
+  align-self: flex-start;
+  height: var(--target);
+  padding: 0 28px;
+  margin: 12px 0 0 -28px;
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 40px;
+  outline: none;
+  transition: transform var(--transition);
+}
+
+.player-end-switch-track {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 40px;
+  background: var(--chrome-selected);
+  border-radius: 20px;
+}
+
+.player-end-switch-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 32px;
+  height: 32px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+}
+
+.player-end-switch[aria-checked='true'] .player-end-switch-track {
+  background: var(--focus-fill);
+}
+
+.player-end-switch[aria-checked='true'] .player-end-switch-knob {
+  background: var(--focus-content);
+  transform: translateX(32px);
+}
+
+.player-end-close:focus,
+.player-end-play:focus,
+.player-end-switch:focus {
+  color: var(--focus-content);
+  background: var(--focus-fill);
+  border-color: var(--focus-fill);
+  transform: scale(1.05);
+}
+
+.player-end-switch:focus .player-end-switch-track {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.player-end-switch[aria-checked='true']:focus .player-end-switch-track {
+  background: var(--focus-content);
+}
+
+.player-end-switch[aria-checked='true']:focus .player-end-switch-knob {
+  background: var(--focus-fill);
+}
+
+.player-end-finished {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 40px;
+}
+
+.player-end-finished .player-end-play {
+  margin-top: 20px;
+}
+
+/* The row sits at the bottom, edge to edge: its own inset lines the cards up with the text. */
+.player-end-row {
+  flex: none;
+  margin: auto -96px 0;
+}
+
 /* App shell: the top bar (side inset 88 px, tabs 26 px / 600), the content below it, and the
    avatar menu. Focus is always a fill or a ring; --accent only adds a small underline. */
 html {

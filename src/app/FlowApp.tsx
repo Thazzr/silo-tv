@@ -60,8 +60,11 @@ type FlowScreen =
   | ({ name: 'person' } & PersonTarget)
   /** A box set of movies: the hero with Play, and its films. */
   | ({ name: 'boxSet' } & BoxSetTarget)
-  /** The intent says how it starts; without one the player asks when there is something to resume. */
-  | { name: 'player'; contentId: string; title: string; intent?: StartIntent }
+  /**
+   * The intent says how it starts; without one the player asks when there is something to resume.
+   * `automatic`: a countdown opened it, not the viewer (see the player's still-watching gate).
+   */
+  | { name: 'player'; contentId: string; title: string; intent?: StartIntent; automatic?: boolean }
   /** The device settings. */
   | { name: 'settings' };
 
@@ -444,6 +447,7 @@ export function FlowApp({
             contentId={screen.contentId}
             title={screen.title}
             intent={screen.intent}
+            automatic={screen.automatic}
             onExit={nav.pop}
             // Back from the new episode goes where Back from this one would have gone.
             onEpisode={(episode) =>
@@ -452,6 +456,7 @@ export function FlowApp({
                 contentId: episode.contentId,
                 title: episode.title,
                 intent: { kind: 'resume' },
+                automatic: episode.automatic,
               })
             }
           />,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { suspendWheel, useBackHandler } from '../app/nav';
 import { Button, Screen } from '../app/ui';
+import { protectsEpisodeStill } from '../ui/media';
 import { useSilo } from '../app/SiloContext';
 import { useLanguage, useT, type MessageKey } from '../i18n';
 import { SubtitleAppearanceDialog } from '../features/settings/SubtitleAppearanceDialog';
@@ -30,7 +31,7 @@ import {
   type TrackText,
 } from './menus/trackMenus';
 import { isPopover, MENU_ORDER, usePanelState, type PanelState } from './menus/usePanelState';
-import { useEpisodeNeighbours } from './episodes/useEpisodeNeighbours';
+import { useEpisodeNeighbours, type EpisodeNeighbours } from './episodes/useEpisodeNeighbours';
 import { PlayerOsd } from './osd/PlayerOsd';
 import { bufferedUntil, SPINNER_DELAY_MS, SPINNER_MIN_MS, titleBlock } from './osd/timing';
 import { useDelayedFlag } from './osd/useDelayedFlag';
@@ -39,6 +40,11 @@ import { useTrickplay } from './osd/useTrickplay';
 import { SkipPillButton } from './skip/SkipPill';
 import { useSkipPill } from './skip/useSkipPill';
 import { PlayerSubtitles } from './subtitles/SubtitleOverlay';
+import { autoplayRegion } from './upnext/autoplayRegion';
+import { EndScreen } from './upnext/EndScreen';
+import { recordAutoAdvance, resetStillWatchingStreak } from './upnext/stillWatching';
+import { UpNextCard } from './upnext/UpNextCard';
+import { useUpNextCard } from './upnext/useUpNextCard';
 import type { StartIntent } from './resume';
 import { isHlsStream } from './engine/PlayerEngine';
 import { authHeadersFor, mediaUrlWithToken } from './mediaUrl';
@@ -51,6 +57,8 @@ import type { Heading, MediaFacts, PreviewFacts, Plan, SessionFailure } from './
 export const QUALITY_NOTICE_MS = 4_000;
 /** How long the buffering notices ("Quality lowered", "can't go lower") stay on screen. */
 export const BUFFERING_NOTICE_MS = 5_000;
+/** The end screen comes up this long before the end of an episode (the web's post-roll). */
+export const POST_ROLL_SECONDS = 30;
 
 const ROUTE_TEXT: Record<Route, MessageKey> = {
   direct: 'player.info.routeDirect',
@@ -74,8 +82,16 @@ export interface PlayerScreenProps {
   onExit: () => void;
   /** The stream played to its end and the session is stopped. Defaults to leaving the player. */
   onEnded?: () => void;
-  /** Opens another episode (previous or next) in this player's place. */
-  onEpisode: (episode: { contentId: string; title: string }) => void;
+  /**
+   * Opens another episode (previous or next) in this player's place. `automatic` is set when
+   * nobody asked for it: the countdown of the credits card or the end screen ran out.
+   */
+  onEpisode: (episode: { contentId: string; title: string; automatic?: true }) => void;
+  /**
+   * This player was opened by an automatic start. Any other start is the viewer's and clears the
+   * count of automatic advances in a row (the still-watching gate).
+   */
+  automatic?: boolean;
 }
 
 /** Plays one title through the playback session: resume prompt, full-screen video, diagnostics. */
@@ -86,19 +102,20 @@ export function PlayerScreen({
   onExit,
   onEnded,
   onEpisode,
+  automatic = false,
 }: PlayerScreenProps) {
   const t = useT();
   const { session: auth } = useSilo();
   const panel = usePanelState();
+  useEffect(() => {
+    if (!automatic) resetStillWatchingStreak();
+  }, [automatic]);
   // The session has shown its first frame. It lives here, above the playing view: a reload of the
   // stream (a replan, a seek that needs a new stream) mounts a new view, and the keys must not
   // go dead until a frame plays again (a paused reload never plays one).
   const [started, setStarted] = useState(false);
   const markStarted = useCallback(() => setStarted(true), []);
-  // The player has its own keys; the wheel would only press Up and Down there. An open menu is a
-  // list like any other, so the wheel moves its focus while it is open.
   const popoverOpen = isPopover(panel.open);
-  useEffect(() => (popoverOpen ? undefined : suspendWheel()), [popoverOpen]);
   // A start with no quality of its own sends the profile's preferred one, once it is known.
   const profileSettings = useProfileSettings();
   const preferredQuality = profileSettings.values['playback.preferred_quality'];
@@ -130,8 +147,51 @@ export function PlayerScreen({
       showForced,
     ],
   );
-  const playback = usePlaybackSession(contentId, intent, onEnded ?? onExit, profile);
-  const { state } = playback;
+  // An episode that played to its end stays on the end screen; anything else leaves, as it did.
+  const [ended, setEnded] = useState(false);
+  const endsOnScreen = useRef(false);
+  const handleEnded = useCallback(() => {
+    if (endsOnScreen.current) setEnded(true);
+    else (onEnded ?? onExit)();
+  }, [onEnded, onExit]);
+  const playback = usePlaybackSession(contentId, intent, handleEnded, profile);
+  const { state, stop } = playback;
+  const ready = state.kind === 'ready' ? state : null;
+  useEffect(() => {
+    endsOnScreen.current = ready?.media.isEpisode === true;
+  });
+  // The end screen: from 30 s before the end, or when the stream ended before that was noticed.
+  const [postRollEntered, setPostRollEntered] = useState(false);
+  const enterPostRoll = useCallback(() => setPostRollEntered(true), []);
+  const postRoll = ended || postRollEntered;
+  // The player has its own keys; the wheel would only press Up and Down there. An open menu is a
+  // list like any other, and so is the end screen, so the wheel moves their focus while they show.
+  const wheelFree = popoverOpen || postRoll;
+  useEffect(() => (wheelFree ? undefined : suspendWheel()), [wheelFree]);
+  // The viewer's cancel of the credits card holds for the rest of the episode.
+  const [cancelled, setCancelled] = useState(false);
+  const cancelCard = useCallback(() => setCancelled(true), []);
+  // The next and previous episode, read here so a reloaded stream and the end screen share them.
+  const neighbours = useEpisodeNeighbours(
+    ready?.media.isEpisode ? ready.media.seriesId : undefined,
+    ready?.heading?.seasonNumber ?? 0,
+    ready?.heading?.episodeNumber ?? 0,
+  );
+  // The session ends as Back ends it; the host swaps this entry for the episode, which starts by
+  // the resume rule with no tracks carried over.
+  const startEpisode = useCallback(
+    (target: { contentId: string; title: string }, byItself: boolean) => {
+      void stop();
+      if (byItself) recordAutoAdvance();
+      const episode = { contentId: target.contentId, title: target.title };
+      onEpisode(byItself ? { ...episode, automatic: true } : episode);
+    },
+    [stop, onEpisode],
+  );
+  const leave = useCallback(() => {
+    void stop();
+    onExit();
+  }, [stop, onExit]);
   // The subtitle delay and the track saves live here, above the playing view: a track change may
   // reload the stream and mount a new view while a write is still due.
   const subtitleDelay = useSubtitleDelay();
@@ -225,8 +285,13 @@ export function PlayerScreen({
         title={title}
         token={token}
         playback={playback}
-        onExit={onExit}
-        onEpisode={onEpisode}
+        neighbours={neighbours}
+        postRoll={postRoll}
+        onPostRoll={enterPostRoll}
+        cardCancelled={cancelled}
+        onCardCancel={cancelCard}
+        leave={leave}
+        startEpisode={startEpisode}
       />
       {notice ? (
         <p className="player-notice" role="status" data-testid="player-quality-notice">
@@ -242,6 +307,22 @@ export function PlayerScreen({
           )}
         </p>
       ) : null}
+      {postRoll ? (
+        <EndScreen
+          seriesId={state.media.seriesId}
+          seriesTitle={state.heading?.seriesTitle}
+          neighbours={neighbours}
+          ended={ended}
+          // Narrowing only: the screen offers Play now only with a next episode.
+          onPlayNext={(byItself) => {
+            if (neighbours.next) startEpisode(neighbours.next, byItself);
+          }}
+          onPlayItem={(item) =>
+            startEpisode({ contentId: item.content_id, title: item.title }, false)
+          }
+          onClose={leave}
+        />
+      ) : null}
     </>
   );
 }
@@ -251,7 +332,7 @@ export function PlayerScreen({
  * inside the player lands on the picture, whichever layer of the overlay it hit.
  */
 const OWN_CLICK =
-  'button, [role="slider"], .player-popover, .player-info, .player-buffering, .dialog-backdrop';
+  'button, [role="slider"], .player-popover, .player-info, .player-buffering, .player-upnext, .dialog-backdrop';
 
 /** The centred spinner both loading views show, so the hand-over from one to the other is invisible. */
 function LoadingCue() {
@@ -293,8 +374,13 @@ function PlayingView({
   title,
   token,
   playback,
-  onExit,
-  onEpisode,
+  neighbours,
+  postRoll,
+  onPostRoll,
+  cardCancelled,
+  onCardCancel,
+  leave,
+  startEpisode,
 }: {
   plan: Plan;
   mediaUrl: string;
@@ -313,8 +399,17 @@ function PlayingView({
   title: string;
   token: string | undefined;
   playback: PlaybackSession;
-  onExit: () => void;
-  onEpisode: PlayerScreenProps['onEpisode'];
+  neighbours: EpisodeNeighbours;
+  /** The end screen is up: it has the keys, and the corner card and pills give way. */
+  postRoll: boolean;
+  /** The last 30 s of an episode began. */
+  onPostRoll(): void;
+  /** The viewer cancelled the credits card for this episode. */
+  cardCancelled: boolean;
+  onCardCancel(): void;
+  leave(): void;
+  /** Stops this session and opens an episode in its place; `byItself` for an automatic start. */
+  startEpisode(target: { contentId: string; title: string }, byItself: boolean): void;
 }) {
   const t = useT();
   const lang = useLanguage();
@@ -330,7 +425,6 @@ function PlayingView({
     onEnded,
     onMediaError,
     seekTo,
-    stop,
     mediaError,
   } = playback;
   const [video, setVideo] = useState<HTMLVideoElement | null>(null);
@@ -403,20 +497,10 @@ function PlayingView({
     [attachEngine],
   );
 
-  const leave = useCallback(() => {
-    void stop();
-    onExit();
-  }, [stop, onExit]);
-
   // The episode buttons, as the web player has them: with at least one neighbour both slots are
   // reserved and the missing one is a spacer; with none (a movie, or the season lists not in yet
   // or failed) there are no slots. Only an episode has neighbours: another title of a series
   // (an extra) may carry the series id too.
-  const neighbours = useEpisodeNeighbours(
-    media.isEpisode ? media.seriesId : undefined,
-    heading?.seasonNumber ?? 0,
-    heading?.episodeNumber ?? 0,
-  );
   const episodes =
     neighbours.previous || neighbours.next
       ? { previous: neighbours.previous !== null, next: neighbours.next !== null }
@@ -425,10 +509,7 @@ function PlayingView({
     const target = neighbours[which];
     // Narrowing only: a slot without a neighbour is a spacer, which cannot be pressed.
     if (!target) return;
-    // The session ends as Back ends it; the host swaps this entry for the neighbour, which starts
-    // by the resume rule with no tracks carried over.
-    void stop();
-    onEpisode({ contentId: target.contentId, title: target.title });
+    startEpisode(target, false);
   };
 
   const duration = total ?? (video && Number.isFinite(video.duration) ? video.duration : 0);
@@ -446,18 +527,52 @@ function PlayingView({
     seekTo: (sourceSeconds) => void seekTo(sourceSeconds),
   });
   // The buffering prompt or undo pill takes the skip pill's corner once the skip pill is gone.
-  const skipShowing = skip.pill !== null && !popoverOpen;
+  // The credits card takes the corner from the skip pill, as the web's does, and the end screen
+  // takes everything.
+  const region = useMemo(
+    () =>
+      autoplayRegion(
+        previews.segments,
+        duration,
+        settings.values['playback.auto_play_next_preview'],
+      ),
+    [previews.segments, duration, settings.values],
+  );
+  const card = useUpNextCard({
+    enabled: started && !postRoll && !popoverOpen,
+    region,
+    next: neighbours.next,
+    position,
+    cancelled: cardCancelled,
+    cancel: onCardCancel,
+    start: (byItself) => {
+      if (neighbours.next) startEpisode(neighbours.next, byItself);
+    },
+  });
+  const skipPill = card.shown || postRoll ? null : skip.pill;
+  const skipShowing = skipPill !== null && !popoverOpen;
   const bufferingOffer = playback.buffering.offer;
   const bufferingPill = useBufferingPill({
     offer: bufferingOffer,
-    slotFree: started && !skipShowing && !popoverOpen,
+    slotFree: started && !skipShowing && !card.shown && !postRoll && !popoverOpen,
     paused,
     answer: playback.bufferingAnswer,
     shown: playback.bufferingShown,
   });
+  // The last 30 s of an episode bring up the end screen.
+  const lastStretch =
+    media.isEpisode &&
+    started &&
+    duration > 0 &&
+    position > 0 &&
+    duration - position <= POST_ROLL_SECONDS;
+  useEffect(() => {
+    if (lastStretch) onPostRoll();
+  }, [lastStretch, onPostRoll]);
   const controls = usePlayerControls({
     engine,
     started,
+    locked: postRoll,
     paused,
     buffering,
     position,
@@ -471,11 +586,19 @@ function PlayingView({
     episodes,
     onEpisode: openEpisode,
     panel,
-    pill:
-      skip.pill !== null || !bufferingPill.visible
+    pill: card.shown
+      ? {
+          shown: true,
+          // The card holds the focus for its whole countdown.
+          holdsFocus: true,
+          activate: card.activate,
+          dismiss: card.dismiss,
+          move: card.move,
+        }
+      : skipPill !== null || !bufferingPill.visible
         ? {
-            shown: skip.pill !== null,
-            holdsFocus: skip.focusWindow,
+            shown: skipPill !== null,
+            holdsFocus: skipPill !== null && skip.focusWindow,
             activate: skip.activate,
             dismiss: skip.dismiss,
           }
@@ -673,7 +796,7 @@ function PlayingView({
         offsetMs={subtitleDelay.delayMs}
       />
       <PlayerOsd
-        visible={controls.visible}
+        visible={controls.visible && !postRoll}
         title={block.title}
         detail={block.detail}
         position={controls.shownPosition}
@@ -734,9 +857,32 @@ function PlayingView({
           }}
         />
       ) : null}
-      {skip.pill && !popoverOpen ? (
+      {card.shown && neighbours.next ? (
+        <UpNextCard
+          next={neighbours.next}
+          entry={neighbours.nextEntry}
+          protectStill={
+            neighbours.nextEntry !== null &&
+            protectsEpisodeStill(neighbours.nextEntry, {
+              images: settings.values['catalog.hide_unwatched_episode_images'],
+              overviews: settings.values['catalog.hide_unwatched_episode_overviews'],
+            })
+          }
+          seconds={card.seconds}
+          focused={controls.focus === 'pill'}
+          choice={card.choice}
+          raised={controls.visible}
+          onPlay={card.playNow}
+          onCancel={card.cancelCard}
+          onFocus={(choice) => {
+            card.setChoice(choice);
+            controls.setFocus('pill');
+          }}
+        />
+      ) : null}
+      {skipPill && !popoverOpen ? (
         <SkipPillButton
-          pill={skip.pill}
+          pill={skipPill}
           focused={controls.focus === 'pill'}
           filling={skip.focusWindow}
           raised={controls.visible}
