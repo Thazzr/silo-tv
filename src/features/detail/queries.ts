@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { toApiError } from '../../api/client';
 import { SiloApiError } from '../../api/problem';
-import { useSilo } from '../../app/SiloContext';
+import { useSilo, type SiloContextValue } from '../../app/SiloContext';
 import { IMAGE_WIDTHS } from '../../ui/media';
 
 /**
@@ -38,14 +38,16 @@ export const seasonEpisodesKey = (
   season: number | undefined,
 ) => ['detail', 'episodes', baseUrl, profileId, seriesId, season ?? -1] as const;
 
-export function useItemDetail(itemId: string, enabled = true) {
-  const { client, baseUrl, session } = useSilo();
+/** The read of one item's detail; the page and the end screen's On Deck row share its cache entry. */
+export function itemDetailOptions(
+  { client, baseUrl, session }: Pick<SiloContextValue, 'client' | 'baseUrl' | 'session'>,
+  itemId: string,
+) {
   const profileId = session.get()?.profileId ?? '';
-  return useQuery({
+  return {
     queryKey: itemDetailKey(baseUrl, profileId, itemId),
-    enabled,
     // The page comes back after the player: the watch state must be read again, not reused.
-    refetchOnMount: 'always',
+    refetchOnMount: 'always' as const,
     retry: retryUnlessMissing,
     queryFn: async () => {
       const { data, error, response } = await client.GET('/api/v2/catalog/items/{id}', {
@@ -57,7 +59,11 @@ export function useItemDetail(itemId: string, enabled = true) {
       if (!data) throw toApiError(error, response);
       return data;
     },
-  });
+  };
+}
+
+export function useItemDetail(itemId: string, enabled = true) {
+  return useQuery({ ...itemDetailOptions(useSilo(), itemId), enabled });
 }
 
 export function useSeasons(seriesId: string, enabled: boolean) {

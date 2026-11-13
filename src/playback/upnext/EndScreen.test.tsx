@@ -10,8 +10,13 @@ import { Session } from '../../api/session';
 import { setFocus } from '../../app/nav';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { episodeOf } from '../../test/detailFixtures';
-import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import {
+  onDeckEpisode,
+  serveOnDeck,
+  type OnDeckEntry,
+  type OnDeckServe,
+} from '../../test/onDeckFixtures';
 import { memoryStorage, renderWithSilo } from '../../test/renderFlow';
 import { serveSettings } from '../../test/settingsFixtures';
 import type { EpisodeRef } from '../episodes/neighbours';
@@ -58,7 +63,9 @@ interface Options {
   /** Stored settings of the profile. */
   values?: Record<string, unknown>;
   seriesTitle?: string;
-  onDeck?: ReturnType<typeof resumeEpisode>[];
+  onDeck?: OnDeckEntry[];
+  /** The progress list fails, or waits for this. */
+  onDeckList?: OnDeckServe['list'];
   /** The server does not know the settings contract. */
   noSettings?: boolean;
   lang?: 'de' | 'en';
@@ -77,14 +84,7 @@ function setup(options: Options = {}) {
     values: stored,
     ...(options.noSettings ? { capabilities: 'fail' as const } : {}),
   });
-  serveHome(server, {
-    sections: [
-      homeSection('continue_watching', 0, {
-        section_type: 'continue_watching',
-        items: options.onDeck ?? [],
-      }),
-    ],
-  });
+  serveOnDeck(server, { entries: options.onDeck, list: options.onDeckList });
   server.use(
     http.put(`${BASE_URL}/api/v2/settings/values/:key`, async ({ request, params }) => {
       const body = (await request.json()) as { value: unknown };
@@ -177,7 +177,7 @@ describe('the next episode block', () => {
 
   it('names the episode in German with the web’s code', async () => {
     serveSettings(server, {});
-    serveHome(server, { sections: [] });
+    serveOnDeck(server);
     const session = new Session(memoryStorage());
     session.set({
       accessToken: 'tok',
@@ -413,34 +413,86 @@ describe('the last episode', () => {
 });
 
 describe('the On Deck row', () => {
-  it('lists the continue-watching items without the current series, each as a wide card', async () => {
+  it('lists the progress entries in their order as wide cards, without the current series', async () => {
     setup({
       onDeck: [
-        resumeEpisode('x1', { series_id: 'ser1', series_title: 'A Show', title: 'Same series' }),
-        resumeEpisode('x2', {
-          series_id: 'other',
-          series_title: 'Other Show',
-          title: 'Pilot',
-          season_number: 1,
-          episode_number: 7,
-          position_seconds: 600,
-          duration_seconds: 2400,
-        }),
+        onDeckEpisode('x3', { series_title: 'Third Show' }),
+        onDeckEpisode('x1', { series_id: 'ser1', series_title: 'A Show', title: 'Same series' }),
+        onDeckEpisode('x2', { series_title: 'Other Show' }),
       ],
     });
     const row = await screen.findByTestId('player-end-ondeck');
     expect(within(row).getByText('On Deck')).toBeInTheDocument();
-    const cards = within(row).getAllByTestId('card-title');
-    expect(cards.map((c) => c.textContent)).toEqual(['Other Show']);
+    await waitFor(() => expect(within(row).getAllByTestId('card-title')).toHaveLength(2));
+    expect(
+      within(row)
+        .getAllByTestId('card-title')
+        .map((c) => c.textContent),
+    ).toEqual(['Third Show', 'Other Show']);
+  });
+
+  it('shows title, episode line, minutes left and the bar from position and length', async () => {
+    setup({
+      onDeck: [
+        onDeckEpisode(
+          'x2',
+          { series_title: 'Other Show', title: 'Pilot', season_number: 1, episode_number: 7 },
+          { position_seconds: 600, duration_seconds: 2400 },
+        ),
+      ],
+    });
+    const row = await screen.findByTestId('player-end-ondeck');
+    expect(within(row).getByTestId('card-title')).toHaveTextContent('Other Show');
     expect(within(row).getByTestId('card-episode')).toHaveTextContent('Season 1 Episode 7 • Pilot');
     expect(within(row).getByTestId('card-status')).toHaveTextContent('30 min left');
-    expect(within(row).getByTestId('card-progress')).toBeInTheDocument();
+    expect(within(row).getByTestId('card-progress')).toHaveStyle({ width: '25%' });
+  });
+
+  it('takes the position and length from the progress entry, not from the detail', async () => {
+    setup({
+      onDeck: [
+        onDeckEpisode(
+          'x2',
+          { series_title: 'Other Show', position_seconds: 2000, duration_seconds: 2100 },
+          { position_seconds: 1200, duration_seconds: 2400 },
+        ),
+      ],
+    });
+    const row = await screen.findByTestId('player-end-ondeck');
+    expect(within(row).getByTestId('card-status')).toHaveTextContent('20 min left');
+    expect(within(row).getByTestId('card-progress')).toHaveStyle({ width: '50%' });
+  });
+
+  it('leaves out an entry whose detail failed', async () => {
+    setup({
+      onDeck: [
+        { ...onDeckEpisode('x1'), detail: 'fail' },
+        onDeckEpisode('x2', { series_title: 'Other Show' }),
+      ],
+    });
+    const row = await screen.findByTestId('player-end-ondeck');
+    await waitFor(() => expect(within(row).getAllByTestId('card-title')).toHaveLength(1));
+    expect(within(row).getByTestId('card-title')).toHaveTextContent('Other Show');
   });
 
   it('is not shown when nothing else is on deck', async () => {
     setup({
-      onDeck: [resumeEpisode('x1', { series_id: 'ser1' })],
+      onDeck: [onDeckEpisode('x1', { series_id: 'ser1' })],
     });
+    await ready();
+    await waitFor(() => expect(screen.queryByTestId('row-skeleton')).toBeNull());
+    expect(screen.queryByTestId('player-end-ondeck')).toBeNull();
+  });
+
+  it('is not shown when the progress list is empty', async () => {
+    setup({ onDeck: [] });
+    await ready();
+    await waitFor(() => expect(screen.queryByTestId('row-skeleton')).toBeNull());
+    expect(screen.queryByTestId('player-end-ondeck')).toBeNull();
+  });
+
+  it('is not shown, and leaves no skeleton, when the progress list fails', async () => {
+    setup({ onDeckList: 'fail' });
     await ready();
     await waitFor(() => expect(screen.queryByTestId('row-skeleton')).toBeNull());
     expect(screen.queryByTestId('player-end-ondeck')).toBeNull();
@@ -448,7 +500,7 @@ describe('the On Deck row', () => {
 
   it('is reached with Down twice from Play now, OK plays the card, and Up returns to the switch', async () => {
     const { onPlayItem } = setup({
-      onDeck: [resumeEpisode('x2', { series_id: 'other', title: 'Pilot', series_title: 'Other' })],
+      onDeck: [onDeckEpisode('x2', { series_id: 'other', title: 'Pilot', series_title: 'Other' })],
     });
     const row = await screen.findByTestId('player-end-ondeck');
     await ready();
@@ -465,21 +517,13 @@ describe('the On Deck row', () => {
     expect(onPlayItem.mock.calls[0]![0]).toMatchObject({ content_id: 'x2' });
   });
 
-  it('shows a row skeleton while Home’s list is read', async () => {
+  it('shows a row skeleton while the progress list is read', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     serveSettings(server, {});
-    server.use(
-      http.get(`${BASE_URL}/api/v2/home/capabilities`, () =>
-        HttpResponse.json({ allowed: true, revision: 'r', state: 'available' }),
-      ),
-      http.get(`${BASE_URL}/api/v2/home/sections`, async () => {
-        await gate;
-        return HttpResponse.json({ sections: [] });
-      }),
-    );
+    serveOnDeck(server, { list: gate });
     const session = new Session(memoryStorage());
     session.set({
       accessToken: 'tok',
@@ -508,12 +552,7 @@ describe('the On Deck row', () => {
 
   it('shows the skeleton in the row’s own card size, three cards and a fourth', async () => {
     serveSettings(server, {});
-    server.use(
-      http.get(`${BASE_URL}/api/v2/home/capabilities`, () =>
-        HttpResponse.json({ allowed: true, revision: 'r', state: 'available' }),
-      ),
-      http.get(`${BASE_URL}/api/v2/home/sections`, () => new Promise(() => undefined)),
-    );
+    serveOnDeck(server, { list: new Promise(() => undefined) });
     const session = new Session(memoryStorage());
     session.set({
       accessToken: 'tok',
@@ -598,8 +637,8 @@ describe('the mini player', () => {
   it('is reached with Left from the first On Deck card but not from the second', async () => {
     setup({
       onDeck: [
-        resumeEpisode('x2', { series_id: 'other', series_title: 'Other', title: 'Pilot' }),
-        resumeEpisode('x3', { series_id: 'third', series_title: 'Third', title: 'Pilot' }),
+        onDeckEpisode('x2', { series_id: 'other', series_title: 'Other', title: 'Pilot' }),
+        onDeckEpisode('x3', { series_id: 'third', series_title: 'Third', title: 'Pilot' }),
       ],
     });
     const row = await screen.findByTestId('player-end-ondeck');
@@ -670,7 +709,7 @@ describe('the On Deck cards in the column', () => {
   it('has a progress bar on its cards and no quality or audio badges', async () => {
     const { settings } = setup({
       onDeck: [
-        resumeEpisode('x2', {
+        onDeckEpisode('x2', {
           series_id: 'other',
           series_title: 'Other',
           title: 'Pilot',

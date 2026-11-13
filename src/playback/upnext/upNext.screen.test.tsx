@@ -10,8 +10,8 @@ import { Session } from '../../api/session';
 import { BASE_URL, account } from '../../test/apiFixtures';
 import { episodeOf, seasonOf } from '../../test/detailFixtures';
 import { fakeVideo, installFakeMedia } from '../../test/fakeVideo';
-import { homeSection, resumeEpisode, serveHome } from '../../test/homeFixtures';
 import { KEY, pressKey } from '../../test/keys';
+import { onDeckEpisode, serveOnDeck, type OnDeckEntry } from '../../test/onDeckFixtures';
 import {
   ACCESS_TOKEN,
   SESSION_ID,
@@ -83,7 +83,7 @@ interface Options {
   /** The episodes of season 1; the second one is the next. */
   episodes?: S['Episode'][];
   values?: Record<string, unknown>;
-  onDeck?: S['CatalogItem'][];
+  onDeck?: OnDeckEntry[];
   /** The season's episode list is not found: there are no neighbours to read. */
   noEpisodes?: boolean;
   /** The season's episode list waits for this before it answers. */
@@ -113,14 +113,7 @@ async function mount(options: Options = {}) {
     }),
   });
   serveSettings(server, { values: options.values });
-  serveHome(server, {
-    sections: [
-      homeSection('continue_watching', 0, {
-        section_type: 'continue_watching',
-        items: options.onDeck ?? [],
-      }),
-    ],
-  });
+  const deck = serveOnDeck(server, { entries: options.onDeck });
   server.use(
     http.get(`${BASE_URL}/api/v2/catalog/series/*`, ({ request }) => {
       const path = new URL(request.url).pathname;
@@ -186,7 +179,7 @@ async function mount(options: Options = {}) {
     state.currentTime = seconds;
     fireEvent.timeUpdate(video);
   };
-  return { calls, video, state, onExit, onEpisode, at, view };
+  return { calls, deck, video, state, onExit, onEpisode, at, view };
 }
 
 /** An episode without markers, so no credits card stands in the way of the end screen. */
@@ -555,8 +548,8 @@ describe('the end screen', () => {
     vi.useRealTimers();
     const { at, onEpisode } = await mountPlain({
       onDeck: [
-        resumeEpisode('x1', { series_id: 'ser1', series_title: 'A Show', title: 'Same' }),
-        resumeEpisode('x2', { series_id: 'other', series_title: 'Other Show', title: 'Pilot' }),
+        onDeckEpisode('x1', { series_id: 'ser1', series_title: 'A Show', title: 'Same' }),
+        onDeckEpisode('x2', { series_id: 'other', series_title: 'Other Show', title: 'Pilot' }),
       ],
     });
     vi.useRealTimers();
@@ -575,6 +568,24 @@ describe('the end screen', () => {
     );
     await pressKey(KEY.enter);
     expect(onEpisode).toHaveBeenCalledWith({ contentId: 'x2', title: 'Pilot' });
+  });
+
+  it('reads the progress list and the item details only once the end screen shows', async () => {
+    vi.useRealTimers();
+    const { at, deck } = await mountPlain({
+      onDeck: [onDeckEpisode('x2', { series_id: 'other', series_title: 'Other Show' })],
+    });
+    vi.useRealTimers();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(deck.lists).toHaveLength(0);
+    expect(deck.details).toEqual([]);
+    at(5380);
+    await screen.findByTestId('player-end-ondeck');
+    expect(deck.lists).toHaveLength(1);
+    expect(deck.lists[0]!.get('status')).toBe('in_progress');
+    expect(deck.lists[0]!.get('limit')).toBe('20');
+    expect(deck.lists[0]!.has('library_id')).toBe(false);
+    expect(deck.details).toEqual(['x2']);
   });
 
   it('lets the Magic Remote wheel move its focus, where the playing picture ignores it', async () => {

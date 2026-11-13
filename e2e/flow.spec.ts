@@ -1178,6 +1178,31 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
             section_item_limit_max: 100,
             row_item_limit_max: 100,
           });
+        case 'GET /api/v2/progress':
+          // What the end screen's On Deck row reads: the movie, and the rewatch episode of the
+          // series that plays (which the row leaves out).
+          return send(200, {
+            items: [
+              {
+                media_item_id: 'm2',
+                position_seconds: 1350,
+                duration_seconds: 5400,
+                completed: false,
+                updated_at: '2026-01-02T03:04:05.000Z',
+              },
+              ...(withRewatch
+                ? [
+                    {
+                      media_item_id: 'e9',
+                      position_seconds: 600,
+                      duration_seconds: 2700,
+                      completed: false,
+                      updated_at: '2026-01-01T03:04:05.000Z',
+                    },
+                  ]
+                : []),
+            ],
+          });
         case 'GET /api/v2/home/sections/trending/items':
           return send(200, featuredSection('trending'));
         case 'GET /api/v2/library/lib-1/sections/lib-trending/items':
@@ -6109,6 +6134,7 @@ test('player: without a credits marker the end screen comes 30 s before the end,
   await moveTo(page, 2660);
   await expect(page.getByTestId('player-end')).toHaveCount(0);
   await expect(page.getByTestId('player-upnext')).toHaveCount(0);
+  expect(seen.some((e) => e.path === '/api/v2/progress')).toBe(false);
   await moveTo(page, 2670);
   const end = page.getByTestId('player-end');
   await expect(end).toBeVisible();
@@ -6142,8 +6168,17 @@ test('player: without a credits marker the end screen comes 30 s before the end,
     427,
     240,
   ]);
+  // The row reads the progress list and the items' details, and leaves the playing series out.
   const ondeck = page.getByTestId('player-end-ondeck');
   const cards = ondeck.locator('.card-landscape');
+  await expect(cards).toHaveCount(1);
+  await expect(ondeck.getByTestId('card-title')).toHaveText('Second Title');
+  // 1350 s of 5400 s: a quarter of the bar's track.
+  await expect(ondeck.getByTestId('card-progress')).toHaveAttribute('style', 'width: 25%;');
+  const progressReads = seen.filter((e) => e.path === '/api/v2/progress');
+  expect(progressReads).toHaveLength(1);
+  expect(progressReads[0]!.search).toContain('status=in_progress');
+  expect(progressReads[0]!.search).toContain('limit=20');
   expect((await boxOf(cards.first()))[2]).toBe(240);
   await expect(ondeck.getByTestId('card-badge')).toHaveCount(0);
   await expect(ondeck.getByTestId('card-progress').first()).toBeVisible();
