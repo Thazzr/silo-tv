@@ -421,7 +421,7 @@ describe('PersonScreen: the filmography', () => {
       const page = () => screen.getByTestId('person').querySelector<HTMLElement>('.person-page')!;
       expect(page().style.transform).toBe('translateY(0px)');
       // Top zone: a hovered filmography card is focused, the page stays (inGrid).
-      fireEvent.mouseEnter(screen.getByRole('button', { name: /Movie 2/ }));
+      fireEvent.mouseMove(screen.getByRole('button', { name: /Movie 2/ }));
       await focusKeyIs(cardKey('mov-2'));
       await act(async () => {});
       expect(page().style.transform).toBe('translateY(0px)');
@@ -431,7 +431,7 @@ describe('PersonScreen: the filmography', () => {
       await focusKeyIs(cardKey('mov-3'));
       expect(page().style.transform).toBe('translateY(-446px)');
       // Grid zone: a hovered pill is focused, the page stays (inTop).
-      fireEvent.mouseEnter(screen.getByRole('tab', { name: /All/ }));
+      fireEvent.mouseMove(screen.getByRole('tab', { name: /All/ }));
       await focusKeyIs('person-pill:all');
       await act(async () => {});
       expect(page().style.transform).toBe('translateY(-446px)');

@@ -56,7 +56,10 @@ export function Scrubber({
     const fraction = fractionAt(e);
     if (fraction !== null) onSeek(fraction);
   };
-  const move = (e: MouseEvent) => onHoverMove(fractionAt(e));
+  const move = (e: MouseEvent) => {
+    onHover();
+    onHoverMove(fractionAt(e));
+  };
 
   return (
     <div
@@ -72,7 +75,6 @@ export function Scrubber({
       data-focused={focused}
       data-scrubbing={scrubbing}
       data-testid="player-scrubber"
-      onMouseEnter={onHover}
       onClick={click}
       onMouseMove={move}
       onMouseLeave={() => onHoverMove(null)}

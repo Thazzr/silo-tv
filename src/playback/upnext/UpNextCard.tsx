@@ -84,7 +84,7 @@ export function UpNextCard(props: Props) {
           className="player-upnext-button"
           data-focused={focused && choice === 'play'}
           data-testid="player-upnext-play"
-          onMouseEnter={() => props.onFocus('play')}
+          onMouseMove={() => props.onFocus('play')}
           onClick={props.onPlay}
         >
           {t('player.upNext.playNow')}
@@ -96,7 +96,7 @@ export function UpNextCard(props: Props) {
           className="player-upnext-button"
           data-focused={focused && choice === 'cancel'}
           data-testid="player-upnext-cancel"
-          onMouseEnter={() => props.onFocus('cancel')}
+          onMouseMove={() => props.onFocus('cancel')}
           onClick={props.onCancel}
         >
           {t('player.upNext.cancel')}

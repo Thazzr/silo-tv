@@ -87,7 +87,14 @@ describe('UpNextCard', () => {
   it('hovering a button asks for its focus', () => {
     const props = setup();
     fireEvent.mouseEnter(screen.getByTestId('player-upnext-cancel'));
+    expect(props.onFocus).not.toHaveBeenCalled();
+    fireEvent.mouseMove(screen.getByTestId('player-upnext-cancel'));
     expect(props.onFocus).toHaveBeenCalledWith('cancel');
+    vi.mocked(props.onFocus).mockClear();
+    fireEvent.mouseEnter(screen.getByTestId('player-upnext-play'));
+    expect(props.onFocus).not.toHaveBeenCalled();
+    fireEvent.mouseMove(screen.getByTestId('player-upnext-play'));
+    expect(props.onFocus).toHaveBeenCalledWith('play');
   });
 
   it('stands above the controls while they are open', () => {

@@ -397,7 +397,7 @@ describe('the episode slots', () => {
     expect(spacer).not.toHaveAttribute('tabindex');
     expect(spacer).not.toHaveAttribute('data-focus-key');
     key(KEY.up);
-    fireEvent.mouseEnter(spacer);
+    fireEvent.mouseMove(spacer);
     expect(focused()).toEqual(['scrubber']);
     fireEvent.click(spacer);
     expect(onEpisode).not.toHaveBeenCalled();

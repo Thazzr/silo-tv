@@ -64,7 +64,7 @@ export function BufferingPill(props: Props) {
             className="player-buffering-button"
             data-focused={focused}
             data-testid="player-buffering-restore"
-            onMouseEnter={() => props.onFocus('lower')}
+            onMouseMove={() => props.onFocus('lower')}
             onClick={props.onRestore}
           >
             {t('player.buffering.restore')}
@@ -78,7 +78,7 @@ export function BufferingPill(props: Props) {
               className="player-buffering-button"
               data-focused={focused && choice === 'lower'}
               data-testid="player-buffering-lower"
-              onMouseEnter={() => props.onFocus('lower')}
+              onMouseMove={() => props.onFocus('lower')}
               onClick={props.onLower}
             >
               {t('player.buffering.lower')}
@@ -90,7 +90,7 @@ export function BufferingPill(props: Props) {
               className="player-buffering-button"
               data-focused={focused && choice === 'keep'}
               data-testid="player-buffering-keep"
-              onMouseEnter={() => props.onFocus('keep')}
+              onMouseMove={() => props.onFocus('keep')}
               onClick={props.onKeep}
             >
               {t('player.buffering.keep')}

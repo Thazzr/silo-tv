@@ -74,14 +74,15 @@ function useNavItem<E extends HTMLElement>({
     if (disabled || getCurrentFocusKey() === focusKey) return;
     void (fromPointer ? setFocusFromPointer(focusKey) : setFocus(focusKey));
   };
-  // Hover moves the focus but never scrolls (see origin.ts). onFocus covers DOM focus that did
-  // not come from the service (touch, a script).
-  return { ref, handlers: { onMouseEnter: focusHere(true), onFocus: focusHere(false) } };
+  // Hover moves the focus but never scrolls (see origin.ts). It follows real pointer movement, not
+  // mouseenter: Chromium fires that under a resting cursor whenever the layout under it changes.
+  // onFocus covers DOM focus that did not come from the service (touch, a script).
+  return { ref, handlers: { onMouseMove: focusHere(true), onFocus: focusHere(false) } };
 }
 
 export interface FocusableProps
   extends
-    Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'autoFocus' | 'onMouseEnter' | 'onFocus'>,
+    Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'autoFocus' | 'onMouseMove' | 'onFocus'>,
     ItemOptions {}
 
 /** A button that takes part in 5-way navigation. */
@@ -113,7 +114,7 @@ export function Focusable({
 
 export interface FocusableInputProps
   extends
-    Omit<InputHTMLAttributes<HTMLInputElement>, 'autoFocus' | 'onMouseEnter' | 'onFocus'>,
+    Omit<InputHTMLAttributes<HTMLInputElement>, 'autoFocus' | 'onMouseMove' | 'onFocus'>,
     ItemOptions {}
 
 /** A text field that takes part in 5-way navigation; Left, Right and Enter stay with the field. */

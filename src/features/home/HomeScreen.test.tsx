@@ -241,7 +241,7 @@ describe('HomeScreen: the pointer', () => {
     await waitFor(() =>
       expect(document.querySelector(`[data-focus-key="${key('b', 'b-1')}"]`)).not.toBeNull(),
     );
-    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${key('b', 'b-1')}"]`)!);
+    fireEvent.mouseMove(document.querySelector(`[data-focus-key="${key('b', 'b-1')}"]`)!);
     await focusKeyIs(key('b', 'b-1'));
     await act(async () => {});
     expect(inner.style.transform).toBe('translateY(0px)');

@@ -612,7 +612,7 @@ describe('DetailScreen: the pointer', () => {
       await focusKeyIs('detail-play');
       const page = () => document.querySelector<HTMLElement>('.detail-page')!;
       expect(page().style.transform).toBe('translateY(0px)');
-      fireEvent.mouseEnter(similar);
+      fireEvent.mouseMove(similar);
       await focusKeyIs('card:similar:x1');
       await act(async () => {});
       expect(page().style.transform).toBe('translateY(0px)');

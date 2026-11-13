@@ -237,7 +237,7 @@ describe('opening and closing', () => {
   it("Back after the pointer hovered another button still puts the focus on the menu's own button", async () => {
     await mount();
     await openMenu('settings');
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Info' }));
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'Info' }));
     key(KEY.back);
     expect(menu('settings')).toBeNull();
     expect(osdFocused('settings')).toBe(true);
@@ -350,7 +350,7 @@ describe('the pointer in a menu', () => {
       await openMenu('chapters');
       await focusOn('player-menu-chapter-0');
       scrollIntoView.mockClear();
-      fireEvent.mouseEnter(screen.getByRole('menuitem', { name: /Finale/ }));
+      fireEvent.mouseMove(screen.getByRole('menuitem', { name: /Finale/ }));
       await focusOn('player-menu-chapter-2');
       expect(scrollIntoView).not.toHaveBeenCalled();
       await pressKey(KEY.up);
@@ -482,7 +482,7 @@ describe('keys while a menu is open', () => {
   it('a hovered row takes the focus, a click on it acts', async () => {
     const { calls } = await mount({ replan: [playableDecision(planOnStream(2))] });
     await openMenu('settings');
-    fireEvent.mouseEnter(screen.getByRole('menuitemradio', { name: /720p/ }));
+    fireEvent.mouseMove(screen.getByRole('menuitemradio', { name: /720p/ }));
     await focusOn('player-menu-quality-720p');
     fireEvent.click(screen.getByRole('menuitemradio', { name: /720p/ }));
     await until(() => calls.replan.length === 1);
@@ -1222,7 +1222,7 @@ describe('a chapter pick after the pointer hovered another button', () => {
   it('still returns the focus to the Chapters button', async () => {
     const { state } = await mount({ watch: withChapters() });
     await openMenu('chapters');
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Info' }));
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'Info' }));
     await pressKey(KEY.down);
     await focusOn('player-menu-chapter-1');
     await pressKey(KEY.enter);

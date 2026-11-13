@@ -203,7 +203,7 @@ describe('Grid', () => {
     await act(async () => {});
     await focusAt(key('g1'));
     // Row 2 sits below the first row; the window is scrolled to row 0.
-    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${key('g13')}"]`)!);
+    fireEvent.mouseMove(document.querySelector(`[data-focus-key="${key('g13')}"]`)!);
     await waitFor(() => expect(getCurrentFocusKey()).toBe(key('g13')));
     await act(async () => {});
     expect(track().style.transform).toBe('translateY(0px)');

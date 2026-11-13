@@ -378,7 +378,7 @@ describe('ShellScreen tab activation', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await act(async () => {
-        fireEvent.mouseEnter(tab('Movies'));
+        fireEvent.mouseMove(tab('Movies'));
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
       });
       expect(tab('Movies')).toHaveFocus();
@@ -1074,7 +1074,7 @@ describe('ShellScreen floating top bar', () => {
     expect(bar()).toHaveAttribute('data-hidden', 'false');
     expect(screen.queryByTestId('topbar-reveal')).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.mouseEnter(tab('Movies'));
+      fireEvent.mouseMove(tab('Movies'));
       for (let i = 0; i < 20; i += 1) await Promise.resolve();
     });
     // The hovered tab has the focus, and the content is still in its rows mode.

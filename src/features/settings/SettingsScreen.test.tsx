@@ -239,7 +239,7 @@ describe('SettingsScreen rewind row', () => {
 
   it('hover only moves the highlight; a click selects', async () => {
     setup();
-    fireEvent.mouseEnter(pill('30 s'));
+    fireEvent.mouseMove(pill('30 s'));
     await waitFor(() => expect(pill('30 s')).toHaveFocus());
     expect(getResumeRewind()).toBe(7);
     expect(pill('30 s')).not.toHaveClass('selected');

@@ -141,8 +141,10 @@ describe('BufferingPill', () => {
     expect(handlers.onLower).toHaveBeenCalledTimes(1);
     expect(handlers.onRestore).not.toHaveBeenCalled();
     fireEvent.mouseEnter(screen.getByTestId('player-buffering-keep'));
+    expect(handlers.onFocus).not.toHaveBeenCalled();
+    fireEvent.mouseMove(screen.getByTestId('player-buffering-keep'));
     expect(handlers.onFocus).toHaveBeenLastCalledWith('keep');
-    fireEvent.mouseEnter(screen.getByTestId('player-buffering-lower'));
+    fireEvent.mouseMove(screen.getByTestId('player-buffering-lower'));
     expect(handlers.onFocus).toHaveBeenLastCalledWith('lower');
   });
 
@@ -151,7 +153,7 @@ describe('BufferingPill', () => {
     fireEvent.click(screen.getByTestId('player-buffering-restore'));
     expect(handlers.onRestore).toHaveBeenCalledTimes(1);
     expect(handlers.onKeep).not.toHaveBeenCalled();
-    fireEvent.mouseEnter(screen.getByTestId('player-buffering-restore'));
+    fireEvent.mouseMove(screen.getByTestId('player-buffering-restore'));
     expect(handlers.onFocus).toHaveBeenCalledWith('lower');
   });
 });

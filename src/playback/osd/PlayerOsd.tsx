@@ -223,7 +223,7 @@ export function PlayerOsd(props: PlayerOsdProps) {
         data-focused={focus === name && !(menu?.popover && menu.open)}
         data-open={menu?.open ? true : undefined}
         data-testid={testId ?? `player-btn-${name}`}
-        onMouseEnter={() => props.onFocus(name)}
+        onMouseMove={() => props.onFocus(name)}
         onClick={() => props.onAction(name)}
         aria-haspopup={menu?.popover ? 'menu' : undefined}
         aria-expanded={menu?.popover ? menu.open : undefined}

@@ -779,7 +779,7 @@ describe('SearchScreen: moving between the keyboard and the results', () => {
       await found('Title 1');
       const page = screen.getByTestId('search-page');
       expect(page.style.transform).toBe('translateY(0px)');
-      fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${titleCard('title-1')}"]`)!);
+      fireEvent.mouseMove(document.querySelector(`[data-focus-key="${titleCard('title-1')}"]`)!);
       await focusKeyIs(titleCard('title-1'));
       await act(async () => {});
       expect(page.style.transform).toBe('translateY(0px)');
@@ -795,7 +795,7 @@ describe('SearchScreen: moving between the keyboard and the results', () => {
       const page = screen.getByTestId('search-page');
       await focusOn(titleCard('title-1'));
       await waitFor(() => expect(page.style.transform).toBe(gridOffset));
-      fireEvent.mouseEnter(screen.getByTestId('osk-b'));
+      fireEvent.mouseMove(screen.getByTestId('osk-b'));
       await focusKeyIs(key('b'));
       await act(async () => {});
       expect(page.style.transform).toBe(gridOffset);
@@ -811,7 +811,7 @@ describe('SearchScreen: moving between the keyboard and the results', () => {
       const page = screen.getByTestId('search-page');
       await focusOn(titleCard('title-1'));
       await waitFor(() => expect(page.style.transform).toBe(gridOffset));
-      fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${pill('all')}"]`)!);
+      fireEvent.mouseMove(document.querySelector(`[data-focus-key="${pill('all')}"]`)!);
       await focusKeyIs(pill('all'));
       await act(async () => {});
       expect(page.style.transform).toBe(gridOffset);

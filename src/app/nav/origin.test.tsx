@@ -16,7 +16,7 @@ function setup() {
 }
 
 const hover = async (name: string, focusKey: string) => {
-  fireEvent.mouseEnter(screen.getByText(name));
+  fireEvent.mouseMove(screen.getByText(name));
   await waitFor(() => expect(getCurrentFocusKey()).toBe(focusKey));
 };
 

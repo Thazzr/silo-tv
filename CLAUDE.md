@@ -123,6 +123,7 @@ A local MemPalace server is attached to this session as an MCP server (`palace_q
   - Every interactive element is reachable with the arrow keys and activated with OK.
   - Back (webOS key code 461; `Escape`/`Backspace` in the browser) is defined everywhere.
   - The Magic Remote pointer works too, but is never the only way.
+  - The pointer never scrolls anything, and its hover state comes only from movement (`mousemove`), never from `mouseenter`/`mouseover`: Chromium fires those under a resting cursor whenever the layout under it changes (CI 2026-11-13, top bar; browser, detail page). A key press forgets the pointer.
 - **Performance on TV hardware:**
   - Virtualize long rows and grids.
   - Request images at a fitting width (`poster_width`, `backdrop_width`, …).

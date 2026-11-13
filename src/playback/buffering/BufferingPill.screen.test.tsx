@@ -499,7 +499,7 @@ describe('the pill in the full screen, round 5', () => {
     twoStalls();
     tap(K.up); // the overlay opens with the focus on the scrubber
     expect(lowerButton()).toHaveAttribute('data-focused', 'false');
-    fireEvent.mouseEnter(keepButton());
+    fireEvent.mouseMove(keepButton());
     expect(keepButton()).toHaveAttribute('data-focused', 'true');
     expect(lowerButton()).toHaveAttribute('data-focused', 'false');
   });

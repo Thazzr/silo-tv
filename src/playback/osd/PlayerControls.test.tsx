@@ -854,8 +854,12 @@ describe('Magic Remote pointer', () => {
     await mount();
     tap(K.up);
     fireEvent.mouseEnter(screen.getByRole('button', { name: 'Exit' }));
+    expect(focused('close')).toBe(false);
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'Exit' }));
     expect(focused('close')).toBe(true);
     fireEvent.mouseEnter(scrubber());
+    expect(focused('scrubber')).toBe(false);
+    fireEvent.mouseMove(scrubber());
     expect(focused('scrubber')).toBe(true);
   });
 

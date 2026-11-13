@@ -1,7 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { KEY, pressKey } from '../../test/keys';
-import { FocusGroup, Focusable, FocusableInput, FocusTrackerContext, Navigator } from '.';
+import {
+  FocusGroup,
+  Focusable,
+  FocusableInput,
+  FocusTrackerContext,
+  Navigator,
+  focusFromPointer,
+} from '.';
 
 function setup(onPick: (name: string) => void = () => undefined) {
   render(
@@ -35,8 +42,30 @@ describe('pointer and 5-way share one focus state', () => {
   it('focuses an element when the pointer enters it', async () => {
     setup();
     await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
-    fireEvent.mouseEnter(screen.getByText('delta'));
+    fireEvent.mouseMove(screen.getByText('delta'));
     await waitFor(() => expect(screen.getByText('delta')).toHaveFocus());
+  });
+
+  it('does not focus an element that the pointer only rests on: mouseenter alone is no hover', async () => {
+    setup();
+    await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
+    fireEvent.mouseEnter(screen.getByText('delta'));
+    fireEvent.mouseOver(screen.getByText('delta'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText('alpha')).toHaveFocus();
+  });
+
+  it('leaves the focus alone on a further move over the element that already has it', async () => {
+    setup();
+    await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
+    fireEvent.mouseMove(screen.getByText('beta'));
+    await waitFor(() => expect(focusFromPointer()).toBe(true));
+    // A key press forgets the pointer; a move over the focused element must not claim it again.
+    await pressKey(KEY.left);
+    expect(focusFromPointer()).toBe(false);
+    fireEvent.mouseMove(screen.getByText('beta'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(focusFromPointer()).toBe(false);
   });
 
   it('activates an element on click', () => {
@@ -49,7 +78,7 @@ describe('pointer and 5-way share one focus state', () => {
   it('continues arrow navigation from the hovered element', async () => {
     setup();
     await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
-    fireEvent.mouseEnter(screen.getByText('delta'));
+    fireEvent.mouseMove(screen.getByText('delta'));
     await waitFor(() => expect(screen.getByText('delta')).toHaveFocus());
     await pressKey(KEY.down);
     expect(screen.getByText('epsilon')).toHaveFocus();
@@ -62,7 +91,7 @@ describe('pointer and 5-way share one focus state', () => {
   it('does not focus a disabled element under the pointer', async () => {
     setup();
     await waitFor(() => expect(screen.getByText('alpha')).toHaveFocus());
-    fireEvent.mouseEnter(screen.getByText('gamma'));
+    fireEvent.mouseMove(screen.getByText('gamma'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByText('alpha')).toHaveFocus();
   });
@@ -163,7 +192,7 @@ describe('focus reports', () => {
     expect(own).toHaveBeenCalledTimes(1);
     await pressKey(KEY.up);
     expect(own).toHaveBeenCalledTimes(2);
-    fireEvent.mouseEnter(screen.getByText('beta'));
+    fireEvent.mouseMove(screen.getByText('beta'));
     await waitFor(() => expect(screen.getByText('beta')).toHaveFocus());
     expect(tracked).toEqual(['a', 'b', 'a', 'b']);
   });

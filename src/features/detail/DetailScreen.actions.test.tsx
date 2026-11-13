@@ -1026,7 +1026,7 @@ describe('round 2: what the first tests left open', () => {
     await pressKey(KEY.right);
     expect(lit()).toBe(4);
     // The pointer moves the focus to the heart.
-    fireEvent.mouseEnter(heart());
+    fireEvent.mouseMove(heart());
     await focusKeyIs('detail-favorite');
     expect(stars()).toHaveAttribute('data-picking', 'false');
     expect(lit()).toBe(2);

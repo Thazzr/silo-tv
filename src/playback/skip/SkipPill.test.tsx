@@ -157,6 +157,18 @@ describe('the skip pill in ask mode', () => {
     expect(pill()).toBeInTheDocument();
   });
 
+  it('takes the focus from a pointer that moves over it, not from one that only rests on it', async () => {
+    const { at } = await mount({ list: [INTRO] });
+    at(10);
+    advance(5000);
+    tap(K.up);
+    expect(pillFocused()).toBe(false);
+    fireEvent.mouseEnter(pill()!);
+    expect(pillFocused()).toBe(false);
+    fireEvent.mouseMove(pill()!);
+    expect(pillFocused()).toBe(true);
+  });
+
   it('is reached with Right from the last button, activates with OK, and Left goes back', async () => {
     const { state, at } = await mount({ list: [INTRO] });
     at(10);

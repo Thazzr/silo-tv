@@ -199,7 +199,7 @@ describe('Recommended: the two modes of the hero', () => {
     await carousel();
     await screen.findByText('First');
     const first = cardFocusKey('lib-1/first', 'first-1');
-    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${first}"]`)!);
+    fireEvent.mouseMove(document.querySelector(`[data-focus-key="${first}"]`)!);
     await waitFor(() => expect(getCurrentFocusKey()).toBe(first));
     await act(async () => {});
     expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'false');
@@ -222,7 +222,7 @@ describe('Recommended: the two modes of the hero', () => {
     await waitFor(() =>
       expect(document.querySelector('.library-stage')).toHaveAttribute('data-rows', 'true'),
     );
-    fireEvent.mouseEnter(
+    fireEvent.mouseMove(
       screen.getByTestId('hero-carousel').querySelector(`[data-focus-key="${HERO_PLAY_KEY}"]`)!,
     );
     await waitFor(() => expect(getCurrentFocusKey()).toBe(HERO_PLAY_KEY));

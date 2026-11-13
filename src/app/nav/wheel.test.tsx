@@ -100,7 +100,7 @@ describe('wheel navigation', () => {
 
   it('presses Down from an element the pointer focused, and the press ends the pointer focus', async () => {
     const onArrow = renderGroup();
-    fireEvent.mouseEnter(screen.getByText('b'));
+    fireEvent.mouseMove(screen.getByText('b'));
     await waitFor(() => expect(getCurrentFocusKey()).toBe('b'));
     expect(focusFromPointer()).toBe(true);
     await wheel({ deltaY: 100 });

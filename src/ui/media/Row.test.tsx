@@ -132,7 +132,7 @@ describe('Row', () => {
     await focusAt(key('r', 'i1'));
     // Eight poster cards fit; the ninth is mounted and peeks in at the right edge.
     const peeking = document.querySelector(`[data-focus-key="${key('r', 'i9')}"]`)!;
-    fireEvent.mouseEnter(peeking);
+    fireEvent.mouseMove(peeking);
     await waitFor(() => expect(getCurrentFocusKey()).toBe(key('r', 'i9')));
     await act(async () => {});
     expect(track().style.transform).toBe('translateX(0px)');

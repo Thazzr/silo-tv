@@ -287,7 +287,7 @@ describe('Home: the two modes of the hero', () => {
   });
 
   const hover = async (element: Element, focusKey: string) => {
-    fireEvent.mouseEnter(element);
+    fireEvent.mouseMove(element);
     await focusKeyIs(focusKey);
     await act(async () => {});
   };

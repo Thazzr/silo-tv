@@ -3575,6 +3575,52 @@ test('detail page: a season shows Besetzung and a Crew row of person cards; a ca
   await expect(page.getByRole('button', { name: /Pat Producer/ })).toBeFocused();
 });
 
+test('detail page: a mouse resting on a card the page scrolls under never takes the focus back while the arrow keys scroll the page between Besetzung and Crew', async ({
+  page,
+}) => {
+  const { origin } = await startFakeSilo({ series: true, seasonCredits: true });
+  await page.goto(`${distIndexUrl}?server=${origin}`);
+  await expect(page.getByLabel('Serveradresse')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('row-continue_watching')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /A Show/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('detail-title')).toHaveText('A Show');
+  await expect(page.getByRole('button', { name: 'Ab Folge 1 starten' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Staffel 1/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('episode-grid')).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+
+  // The mouse rests on the second crew card and never moves again. Up scrolls the page to
+  // Besetzung and slides the second cast card under the mouse; Down slides the crew card back.
+  // The keys decide where the focus goes, and the pointer's old position is no hover.
+  await page.waitForTimeout(800);
+  const crewCard = (await page.getByRole('button', { name: /Wen Writer/ }).boundingBox())!;
+  await page.mouse.move(crewCard.x + crewCard.width / 2, crewCard.y + crewCard.height / 2);
+  await page.keyboard.press('ArrowLeft');
+  for (let i = 0; i < 4; i += 1) {
+    await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
+    await page.waitForTimeout(500);
+  }
+});
+
 test('detail page: Down from the last row of a scrolling episode grid lands on Besetzung, Up from it on the grid card it left', async ({
   page,
 }) => {

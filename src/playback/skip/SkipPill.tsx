@@ -44,7 +44,7 @@ export function SkipPillButton({ pill, focused, filling, raised, onActivate, onF
       data-focused={focused}
       data-raised={raised}
       data-testid="player-skip"
-      onMouseEnter={onFocus}
+      onMouseMove={onFocus}
       onClick={onActivate}
     >
       {filling ? <span className="player-skip-fill" data-testid="player-skip-fill" /> : null}

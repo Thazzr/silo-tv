@@ -165,7 +165,7 @@ describe('BoxSetScreen: the hero', () => {
       const text = () => screen.getByTestId('boxset-hero').querySelector('.detail-text')!;
       expect(page().style.transform).toBe('translateY(0px)');
       // Hero zone: a hovered film is focused, the page stays (inFilms).
-      fireEvent.mouseEnter(screen.getByRole('button', { name: /Film 2/ }));
+      fireEvent.mouseMove(screen.getByRole('button', { name: /Film 2/ }));
       await focusKeyIs(cardKey('film-2'));
       await act(async () => {});
       expect(page().style.transform).toBe('translateY(0px)');
@@ -175,7 +175,7 @@ describe('BoxSetScreen: the hero', () => {
       await focusKeyIs(cardKey('film-3'));
       expect(page().style.transform).toBe('translateY(-446px)');
       // Films zone: a hovered Play is focused, the page stays (inTop).
-      fireEvent.mouseEnter(screen.getByRole('button', { name: /Play Film 1/ }));
+      fireEvent.mouseMove(screen.getByRole('button', { name: /Play Film 1/ }));
       await focusKeyIs('boxset-play');
       await act(async () => {});
       expect(page().style.transform).toBe('translateY(-446px)');

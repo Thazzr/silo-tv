@@ -136,7 +136,7 @@ describe('library pills', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await act(async () => {
-        fireEvent.mouseEnter(screen.getByRole('tab', { name: 'Films B' }));
+        fireEvent.mouseMove(screen.getByRole('tab', { name: 'Films B' }));
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
       });
       expect(getCurrentFocusKey()).toBe('lib-pill:lib-b');
@@ -340,7 +340,7 @@ describe('sub-view pills', () => {
     const inner = () => document.querySelector<HTMLElement>('.library-rows-inner')!;
     expect(inner().style.transform).toBe('translateY(0px)');
     const lower = cardFocusKey('lib-a/y', 'y-1');
-    fireEvent.mouseEnter(document.querySelector(`[data-focus-key="${lower}"]`)!);
+    fireEvent.mouseMove(document.querySelector(`[data-focus-key="${lower}"]`)!);
     await waitFor(() => expect(getCurrentFocusKey()).toBe(lower));
     await act(async () => {});
     expect(inner().style.transform).toBe('translateY(0px)');
