@@ -29,10 +29,11 @@ It works with any Silo server (API v2): you enter the server's address on the TV
 | **Profiles** | a picker with avatars, PIN-protected and kids profiles, creating a profile, and how the app picks the profile at launch |
 | **Home** | the rows your server's home page is built from (Continue Watching, Next Up, Recently Added and the rest), with a hero |
 | **Movies and Series** | recommended rows, collections, and a browse grid with sort, filters (genre, decade, content rating, watch state) and a letter rail |
-| **Detail pages** | title art, ratings, quality badges, seasons and episodes, cast, similar titles, box sets, and person pages with filmography |
+| **Detail pages** | laid out like Silo's web app: title art, ratings, quality badges, season and episode pages of their own, cast and crew, similar titles, box sets, and person pages with filmography; mark watched, favourite, rate and add to the watchlist; pick the version, audio and subtitles before playing |
 | **Search** | results while you type: box sets, people, movies, series and episodes; the keyboard has ä, ö, ü and ß |
 | **Playback** | Silo's playback protocol v3: direct play, and HLS remux and transcode through hls.js; resume and start over, with an optional rewind on resume |
-| **The player** | the layout of Silo's web player: a scrubber with buffer, trickplay previews, chapters and coloured intro, recap and credits; skips by your profile's steps; skip intro, recap and credits; a quality menu that respects your bitrate limit; an Info panel; subtitles in your profile's appearance, set in the web app's dialog with a live preview |
+| **The player** | the layout of Silo's web player: a scrubber with buffer, trickplay previews, chapters and coloured intro, recap and credits; skips by your profile's steps; skip intro, recap and credits; previous and next episode; audio and subtitle menus that remember your pick per series or movie, with a subtitle delay; a quality menu that respects your bitrate limit; an Info panel; subtitles in your profile's appearance, set in the web app's dialog with a live preview |
+| **Up Next** | a card at the credits that starts the next episode when your profile's auto-play is on, and an end screen with the episode still playing in a mini player, the next episode and what you are watching elsewhere |
 | **Extras** | Trailers & More (YouTube trailers open in the TV's YouTube app), theme music, spoiler protection for unwatched episodes, AI translation of descriptions, each when your profile and server turn it on |
 | **Made for the remote** | arrows, OK and Back everywhere, the Magic Remote pointer and wheel, and focus that comes back to where you were |
 | **Your server's look** | its name, logo, sign-in background and accent colour |
@@ -73,9 +74,9 @@ Early development; there is no release yet. The goal is a listing in the LG Cont
 |---|---|---|
 | 0 · Feasibility | build for webOS, CORS, API client, code sign-in, a first playback | ✅ on the TV (webOS 24 and 26); webOS 6 itself not yet tested on hardware |
 | 1 · Foundation | servers, sign-in, profiles, app shell, TV navigation | 🟨 on the TV (all flows, 2026-11-11); loading, empty and error states still to finish |
-| 2 · Browse | home, libraries, detail pages, search, person pages, extras | 🟨 mostly on the TV; AI translation still to check there; next: detail pages like Silo's web app (own season and episode pages), the featured hero |
-| 3 · Player | playback, overlay, skips, quality, audio and subtitles; next: the redesign after Silo's web player, Up Next, shuffle | 🟨 in progress; the playback core, the overlay, skips and the quality menu are checked on the TV |
-| 4 · Personal | For You, calendar, watchlist, requests, profile settings | ⬜ planned |
+| 2 · Browse | home, libraries, detail pages, search, person pages, extras | 🟨 mostly on the TV; the detail pages after Silo's web app and the featured hero are built and partly checked there; AI translation still to check |
+| 3 · Player | playback, the overlay after Silo's web player, skips, quality, audio and subtitles, Up Next and the end screen | 🟨 released in v0.4.0; on the TV (2026-11-13): direct play with seeking, HLS, auto-play and the end screen; HDR titles still to check |
+| 4 · Personal | For You, calendar, watchlist, requests, profile settings, shuffle, subtitle search | ⬜ planned |
 | 5 · Extras | Watch Party, notifications, music and audiobooks | ⬜ planned |
 | 6 · Samsung Tizen | the same app for Samsung TVs | ⬜ after the LG release |
 

@@ -58,7 +58,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - 🟨 the primary button as in the web app: "Start from Episode 1", "Play Next", "Resume", "Play First Episode", "Play Episode"; with progress, one Play button with a progress fill that asks "Resume playback?" (resume or start over), replacing the Resume and Start over pair
   - 🟨 the actions: mark watched or unwatched, favourite, a star rating (one focus stop: OK starts, Left/Right picks 1–5, OK saves, Back cancels, the set star again clears it), and a More menu with watchlist, not interested, mark unwatched and start over (shuffle joins with Shuffle)
   - 🟨 the series page: a row of season posters with the watched check and progress, specials first (a series with one season lists its episodes directly); the season page: a grid of its episodes (still, "S01E01 · Title", date and runtime, three lines of synopsis)
-  - 🟨 the episode page: the still as the backdrop, "Series › Season 1 › Episode 3", runtime and air date with the quality badges, "Play Episode", and "More Episodes" with the current one marked (a sibling's page starts on its card in that row)
+  - 🟨 the episode page: the still as the backdrop, "Series › Season 1 › Episode 3", runtime and air date with the quality badges, "Play Episode", and "More Episodes" with the current one marked (a sibling's page starts on its card in that row; on the TV 2026-11-13, with Back from the player landing on Play)
   - 🟨 cast and crew: on movies and series one row with the creator or director first, then the writers, then the cast, with group labels, as in the web app; on seasons and episodes a cast row and a crew row of person cards (directors, writers, producers, each person once with all their jobs)
   - 🟨 the sections in the web app's order per page type, with local extras (one row per kind) and "Trailers & More" (YouTube) as two sections; Down and Up walk them block by block
   - 🟨 quality and audio badges on cards, following the profile's card overlay settings (`ui.card_overlays`, `ui.card_overlays_enabled`) or the server's defaults, at most three per corner, with the web's icons where its style shows them; the watch status in the top right (a check, or the episodes left); the web's 16 px card radius
@@ -83,6 +83,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 ## Phase 3 – Player (target v0.4.0)
 
+Released in v0.4.0 (2026-11-13). Shuffle and the subtitle search moved to Phase 4 (user decision 2026-11-13).
+
 - ✅ Play, resume and start over, following the server's progress; one resume rule everywhere (past 30 s and more than 5 s before the end, also for a rewatch of a played item); Continue Watching and Next Up cards resume directly (TV 2026-11-09)
 - ✅ Rewind on resume: Silo's device setting `player.resume_rewind_seconds` (0–30 s, default 7, 0 turns it off) in the app's settings screen (TV 2026-11-09)
 - 🟨 Choose version, audio track and subtitle on the detail page beforehand, as pills under the action row like Silo's web app ("Audio Auto: German · EAC3 · 5.1", "Subtitles Auto: …"; a Version pill only when the title has several versions). Audio and subtitle picks are saved as the title's server preferences; the version holds while the page is open (Silo keeps no version preference: the version played last is the next default)
@@ -93,7 +95,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - the session stop goes out 2 s after the video is unloaded: on webOS 26 a stop that aborts a stream the media stack still reads makes every later direct-play MKV hang
   - a load that brings neither metadata nor an error within 20 s asks the server for another route
   - implausible times from webOS (INT64_MAX nanoseconds, "unknown") never reach the overlay or the progress report
-- ✅ Direct play, HLS remux and transcode verified on the TV (webOS 26, 2026-11-10)
+- ✅ Direct play, HLS remux and transcode verified on the TV (webOS 26, 2026-11-10; again for v0.4.0 on 2026-11-13, with seeking)
   - HLS plays through hls.js over Media Source Extensions: Silo's transcode playlists use HLS variable substitution (`EXT-X-DEFINE`), which webOS's own HLS player cannot read; direct play stays on the native element
   - 🟨 device profile with H.264, HEVC, VP9, AV1, HDR10, HDR10+, Dolby Vision and multichannel audio, as far as the TV supports them (HDR and Dolby Vision titles still to be checked)
 - ✅ Controls (TV 2026-11-10 on webOS 26):
@@ -124,7 +126,6 @@ Answers the platform questions before any real UI is built. Looks do not matter 
     - the prompt and the pill hold the focus for 15 s (user decision 2026-11-11)
     - still to check on the TV: whether webOS reports media data on direct play (`progress` events, a growing buffer)
 - 🟨 Audio and subtitle menus: changes during playback (replan) are saved for the series or movie, as in Silo's web client; a subtitle no route can show is refused with a note, and the old picture plays on. Audio shows from two tracks on: the web player shows it dimmed with one track, but on a TV a button that does nothing would be a dead focus stop
-- ⬜ Search and download subtitles through the server's subtitle providers
 - 🟨 Subtitles drawn by the app from WebVTT sidecars, in the profile's appearance (size, colours, background style, position)
 - 🟨 Subtitle appearance as Silo's web dialog (user decision 2026-11-11, replacing the TV-only page of 2026-11-10): size, font, colours, opacity, outline, background style, colour and opacity, position, with a live preview; each change is saved at once for the profile on all devices (`playback.subtitle_appearance` at `profile`; this TV's own value is dropped, as the web app does), and "Use fallback style" returns to the server's default; opened from "Appearance…" in the player's Subtitles menu and from the settings' Playback section
 - ✅ Skip intro, recap, credits and previews; automatic skipping following the profile settings (TV 2026-11-10)
@@ -132,8 +133,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
   - a card bottom right at the credits (or the preview, with `playback.auto_play_next_preview`): "Als Nächstes in N Sek.", Play now and Cancel; after 10 s the next episode starts and the rest of the credits is skipped. With `playback.auto_play_next` off the card waits without a countdown, and while it is open the end screen does not come by time (both differ from the web, see below)
   - for series episodes the end screen 30 s before the end: the finishing episode keeps playing in a mini player on the left (OK returns to the full picture; the end of the episode brings the screen back), and one column on the right with the next episode, Play now with a countdown that starts once the video has ended, the Autoplay switch (`playback.auto_play_next` for the profile), Close, and "Laufend", the titles of the profile's watch progress (`/api/v2/progress`, as the web reads it) without the current series; after the last episode the finished state
   - a movie ends on its page, as on the web
+  - on the TV (2026-11-13): the credits card with auto-play, and the end screen's layout with the mini player and "Laufend"; returning from the mini player and the finished state still to check there
 - 🟨 Still watching: after `player.passout_threshold` automatic starts in a row (default 3, 0 never; kept on this TV only, as Silo's settings contract defines it, and set in the settings) the card and the end screen wait without a countdown; any start the viewer makes resets the count. Like the web, no question pops up.
-- ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people.
 - ❌ Playback speed: dropped (user decision 2026-11-11). On the TV, direct play through the native video element accepts a new speed but then stutters at about half speed with no sound (TV probe 2026-11-11, webOS 26: 1.5× measured 0.49×, 0.5× measured 0.27×). A difference from the web app's speed slider that the TV forces.
 - ❌ Aspect ratio (fit, fill, stretch): dropped (user decision 2026-11-11). Not needed on the TV, where the picture fills the screen as the TV's own settings say.
 - 🟨 Subtitle delay in the Subtitles menu (`player.subtitle_sync_ms`, ±100 ms per press up to ±10 s, saved 600 ms after the last press for the profile, as Silo's web client does); an audio delay is not possible with the webOS video element
@@ -150,6 +151,8 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ⬜ "For You" with the server's recommendation rows
 - ⬜ Calendar: one week of releases and airings for followed, trending or all titles
+- ⬜ Shuffle for a library, collection, series and season, where the server offers that scope. Silo has no shuffle for box sets or people. (Moved from Phase 3, user decision 2026-11-13.)
+- ⬜ Search and download subtitles through the server's subtitle providers, in the player's Subtitles menu. (Moved from Phase 3, user decision 2026-11-13.)
 - ⬜ Watchlist, favorites and history pages, each with removal (marking watched, favourites, ratings and the watchlist on the detail page come with the detail pages in Phase 2)
 - ⬜ Requests, when the server offers them:
   - Discover rows

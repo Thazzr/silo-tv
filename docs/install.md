@@ -43,7 +43,7 @@ You do this only once. Key Server is needed only while adding the TV; you can sw
 ## 4. Install silo-tv
 
 1. Open the [latest silo-tv release](https://github.com/Thazzr/silo-tv/releases/latest).
-2. Download the file ending in `.ipk`, e.g. `io.github.thazzr.silotv_0.3.0_all.ipk`.
+2. Download the file ending in `.ipk`, e.g. `io.github.thazzr.silotv_0.4.0_all.ipk`.
 3. In Dev Manager, choose to install an app and select the downloaded `.ipk`.
 4. silo-tv appears among the TV's apps. Start it, enter your Silo server's address, and sign in: with the code the TV shows, confirmed on your phone, or with your password.
 
