@@ -391,7 +391,7 @@ describe('DetailScreen: the cast row of a season and an episode', () => {
   });
 });
 
-describe('DetailScreen: the Crew box of a season and an episode', () => {
+describe('DetailScreen: the Crew row of a season and an episode', () => {
   const episode = (overrides: Overrides = {}) =>
     itemDetail({
       content_id: 'e1',
@@ -403,6 +403,17 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
       episode_number: 1,
       ...overrides,
     });
+  const season = (overrides: Overrides = {}) =>
+    itemDetail({
+      content_id: 'season-1',
+      type: 'season',
+      title: 'Season 1',
+      series_id: 's1',
+      series_title: 'A Show',
+      season_number: 1,
+      versions: [],
+      ...overrides,
+    });
   const serveEpisode = (overrides: Overrides) =>
     serveDetail(server, {
       item: (id) =>
@@ -412,271 +423,226 @@ describe('DetailScreen: the Crew box of a season and an episode', () => {
       seasons: [seasonOf(1)],
       episodes: () => [episodeOf(1, 1, { content_id: 'e1' })],
     });
-  const names = (row: string) =>
-    within(screen.getByTestId(`crew-row-${row}`))
-      .getAllByTestId(/crew-name/)
-      .map((el) => el.textContent);
+  const serveSeason = (overrides: Overrides) =>
+    serveDetail(server, { item: () => season(overrides), episodes: () => [episodeOf(1, 1)] });
   const withCast = [{ name: 'Ann Actor', character: 'Ada', order: 0, person_id: 'p1' }];
+  const credits = [
+    crew('Pia Producer', 'Producer', 'pr1'),
+    crew('Wen Writer', 'Writer', 'w1'),
+    crew('Dana Director', 'Director', 'd1'),
+    crew('Dana Director', 'Director', 'd1'),
+    crew('Dee Director', 'Director', 'd2'),
+  ];
+  const subs = (row: HTMLElement) =>
+    within(row)
+      .getAllByTestId('card-sub')
+      .map((el) => el.textContent);
+  const dividers = (row: HTMLElement) =>
+    within(row)
+      .queryAllByTestId('credit-divider')
+      .map((el) => el.textContent);
+  /** Down from the buttons to the cast row (a lone episode has no episode row). */
+  const toCast = async () => {
+    await screen.findByTestId('row-crew');
+    await screen.findByTestId('episode-grid').catch(() => undefined);
+    await focusKeyIs('detail-play');
+    await pressKey(KEY.down);
+    await focusKeyIs('detail-pill-subtitles');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:cast:cast:p1');
+  };
 
-  it('has a row for Director, Writer and Producer, in that order, each name once', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [
-        crew('Pia Producer', 'Producer', 'pr1'),
-        crew('Wen Writer', 'Writer', 'w1'),
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dee Director', 'Director', 'd2'),
-      ],
-    });
+  it('shows the Crew row of an episode under Besetzung: cards, one per person, with dividers', async () => {
+    serveEpisode({ cast: withCast, crew: credits });
     setup({ itemId: 'e1' });
-    const box = await screen.findByTestId('crew-box');
-    expect(screen.getByRole('heading', { name: 'Crew' })).toBeInTheDocument();
-    const rows = Array.from(box.querySelectorAll('[data-testid^="crew-row-"]')).map((el) =>
-      el.getAttribute('data-testid'),
-    );
-    expect(rows).toEqual(['crew-row-director', 'crew-row-writer', 'crew-row-producer']);
-    expect(Array.from(box.querySelectorAll('.crew-label')).map((el) => el.textContent)).toEqual([
-      'Directors',
-      'Writers',
-      'Producers',
+    const row = await screen.findByTestId('row-crew');
+    expect(within(row).getByRole('heading', { name: 'Crew' })).toBeInTheDocument();
+    expect(cardTitles(row)).toEqual([
+      'Dana Director',
+      'Dee Director',
+      'Wen Writer',
+      'Pia Producer',
     ]);
-    expect(names('director')).toEqual(['Dana Director', 'Dee Director']);
-    expect(names('writer')).toEqual(['Wen Writer']);
-    expect(names('producer')).toEqual(['Pia Producer']);
+    expect(subs(row)).toEqual(['Director', 'Director', 'Writer', 'Producer']);
+    expect(dividers(row)).toEqual(['Writers', 'Producers']);
+    expect(screen.queryByTestId('crew-box')).toBeNull();
+    expect(zones()).toEqual(['cast', 'crew']);
   });
 
-  it('words the labels in German', async () => {
-    serveEpisode({
-      crew: [
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Wen Writer', 'Writer', 'w1'),
-        crew('Pia Producer', 'Producer', 'pr1'),
-      ],
-    });
+  it('shows the same row on a season page, after the episodes and the cast', async () => {
+    serveSeason({ cast: withCast, crew: credits });
+    setup({ itemId: 'season-1' });
+    const row = await screen.findByTestId('row-crew');
+    expect(cardTitles(row)).toEqual([
+      'Dana Director',
+      'Dee Director',
+      'Wen Writer',
+      'Pia Producer',
+    ]);
+    expect(zones()).toEqual(['episodes', 'cast', 'crew']);
+  });
+
+  it('words the heading, subtitles and dividers in German', async () => {
+    serveEpisode({ crew: credits });
     setup({ itemId: 'e1' }, 'de');
-    const box = await screen.findByTestId('crew-box');
-    expect(screen.getByRole('heading', { name: 'Crew' })).toBeInTheDocument();
-    expect(Array.from(box.querySelectorAll('.crew-label')).map((el) => el.textContent)).toEqual([
-      'Regie',
-      'Drehbuch',
-      'Produktion',
-    ]);
+    const row = await screen.findByTestId('row-crew');
+    expect(within(row).getByRole('heading', { name: 'Crew' })).toBeInTheDocument();
+    expect(subs(row)).toEqual(['Regie', 'Regie', 'Drehbuch', 'Produktion']);
+    expect(dividers(row)).toEqual(['Drehbuch', 'Produktion']);
   });
 
-  it('leaves out a row without credits, and does not list a Screenplay credit as a writer', async () => {
+  it('lists a director who also wrote once, with both jobs, and leaves Screenplay out', async () => {
     serveEpisode({
-      crew: [crew('Sam Screen', 'Screenplay', 's1'), crew('Dana Director', 'Director', 'd1')],
+      crew: [
+        crew('Both', 'Director', 'b'),
+        crew('Both', 'Writer', 'b'),
+        crew('Sam Screen', 'Screenplay', 's1'),
+      ],
     });
     setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    expect(screen.getByTestId('crew-row-director')).toBeInTheDocument();
-    expect(screen.queryByTestId('crew-row-writer')).toBeNull();
-    expect(screen.queryByTestId('crew-row-producer')).toBeNull();
-    // The hero's credit line counts Screenplay as writing; the box does not.
-    expect(within(screen.getByTestId('crew-box')).queryByText('Sam Screen')).toBeNull();
+    const row = await screen.findByTestId('row-crew');
+    expect(cardTitles(row)).toEqual(['Both']);
+    expect(subs(row)).toEqual(['Director, Writer']);
   });
 
-  it('has no box, and no heading, without a listed job', async () => {
+  it('has no crew row, and no heading, without a listed job', async () => {
     serveEpisode({ cast: withCast, crew: [crew('Dee Dop', 'Director of Photography', 'x')] });
     setup({ itemId: 'e1' });
     await screen.findByTestId('row-cast');
-    expect(screen.queryByTestId('crew-box')).toBeNull();
+    expect(screen.queryByTestId('row-crew')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Crew' })).toBeNull();
   });
 
-  it('walks a row with Left and Right and stops at its ends', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dee Director', 'Director', 'd2'),
-        crew('Wen Writer', 'Writer', 'w1'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await focusKeyIs('card:cast:cast:p1');
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
-    await pressKey(KEY.left);
-    await focusKeyIs('crew:director:d1');
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    // The end of the row does not jump to a name of another row.
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    await pressKey(KEY.left);
-    await focusKeyIs('crew:director:d1');
+  it('has no crew row on a movie and a series: their strip is unchanged', async () => {
+    serveDetail(server, { item: () => movie() });
+    setup({ itemId: 'm1' });
+    const strip = await screen.findByTestId('row-cast');
+    expect(cardTitles(strip)).toEqual(['Dana Director', 'Wen Writer', 'Ann Actor', 'Bo Actor']);
+    expect(screen.queryByTestId('row-crew')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Crew' })).toBeNull();
+    expect(zones()).toEqual(['cast']);
   });
 
-  it('moves between the rows with Down and Up, keeps the column and skips a row without a target', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dee Director', 'Director', 'd2'),
-        // Only names without a person: nothing in this row can take the focus.
-        crew('Wen Writer', 'Writer'),
-        crew('Pia Producer', 'Producer', 'pr1'),
-        crew('Pat Producer', 'Producer', 'pr2'),
-        crew('Pol Producer', 'Producer', 'pr3'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    // Down skips the writers, lands on the same column of the producers.
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:producer:pr2');
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:producer:pr3');
-    // Up lands on the last name of a shorter row.
-    await pressKey(KEY.up);
-    await focusKeyIs('crew:director:d2');
-    // Up from the first row leaves the box for the cast row above.
-    await pressKey(KEY.up);
-    await focusKeyIs('card:cast:cast:p1');
-    // Down enters the box again, on the name it left.
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d2');
-  });
-
-  it('clamps the column on a shorter row', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dee Director', 'Director', 'd2'),
-        crew('Wen Writer', 'Writer', 'w1'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:writer:w1');
-    // Past the last row nothing moves.
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:writer:w1');
-  });
-
-  it('shows a name without a person id as plain text that cannot take the focus', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [crew('Dana Director', 'Director', 'd1'), crew('Dan Nobody', 'Director')],
-    });
-    setup({ itemId: 'e1' });
-    const plain = await screen.findByText('Dan Nobody');
-    expect(plain).toHaveAttribute('data-testid', 'crew-name-plain');
-    expect(screen.queryByRole('button', { name: 'Dan Nobody' })).toBeNull();
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d1');
-  });
-
-  it('opens the person page on OK, and Back returns to the same name', async () => {
-    serveEpisode({
-      cast: withCast,
-      crew: [
-        crew('Dana Director', 'Director', 'd1'),
-        crew('Dee Director', 'Director', 'd2'),
-        crew('Pia Producer', 'Producer', 'pr1'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await pressKey(KEY.down);
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    await pressKey(KEY.enter);
-    expect(await screen.findByTestId('person-stub')).toHaveTextContent('d2|Dee Director');
-    await pressKey(KEY.back);
-    await screen.findByTestId('crew-box');
-    await focusKeyIs('crew:director:d2');
-  });
-
-  it('scrolls a row that is wider than the box by a transform, so the focused name is in view', async () => {
-    const left = vi.spyOn(HTMLElement.prototype, 'offsetLeft', 'get').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      return this.textContent === 'Dee Director' ? 1500 : 0;
-    });
-    const width = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
-    const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
-    try {
-      serveEpisode({
-        cast: withCast,
-        crew: [crew('Dana Director', 'Director', 'd1'), crew('Dee Director', 'Director', 'd2')],
-      });
-      setup({ itemId: 'e1' });
-      await screen.findByTestId('crew-box');
-      await focusKeyIs('detail-play');
-      await pressKey(KEY.down);
-      await focusKeyIs('detail-pill-subtitles');
-      await pressKey(KEY.down);
-      await pressKey(KEY.down);
-      await focusKeyIs('crew:director:d1');
-      const track = () => document.querySelector<HTMLElement>('.crew-track')!;
-      expect(track().style.transform).toBe('translateX(0px)');
-      await pressKey(KEY.right);
-      await focusKeyIs('crew:director:d2');
-      // 1500 + 400 = 1900 must end 24 px before the 1000 px edge: 1900 - 1000 + 24.
-      await waitFor(() => expect(track().style.transform).toBe('translateX(-924px)'));
-      await pressKey(KEY.left);
-      await focusKeyIs('crew:director:d1');
-      await waitFor(() => expect(track().style.transform).toBe('translateX(0px)'));
-    } finally {
-      left.mockRestore();
-      width.mockRestore();
-      client.mockRestore();
-    }
-  });
-
-  it('shows the crew box of a season page after its cast', async () => {
+  it('has no crew row on a series page', async () => {
     serveDetail(server, {
       item: () =>
         itemDetail({
-          content_id: 'season-1',
-          type: 'season',
-          title: 'Season 1',
-          series_id: 's1',
-          series_title: 'A Show',
-          season_number: 1,
+          content_id: 's1',
+          type: 'series',
+          title: 'A Show',
           versions: [],
-          cast: withCast,
           crew: [crew('Dana Director', 'Director', 'd1')],
         }),
+      seasons: [seasonOf(1)],
       episodes: () => [episodeOf(1, 1)],
     });
-    setup({ itemId: 'season-1' });
-    await screen.findByTestId('crew-box');
-    expect(zones()).toEqual(['episodes', 'cast', 'crew']);
+    setup({ itemId: 's1' });
+    await screen.findByTestId('row-cast');
+    expect(screen.queryByTestId('row-crew')).toBeNull();
+  });
+
+  it('walks Down from Besetzung to the first crew card and Up back, and Right along the row', async () => {
+    serveEpisode({ cast: withCast, crew: credits });
+    setup({ itemId: 'e1' });
+    await toCast();
+    await pressKey(KEY.down);
+    await focusKeyIs('card:crew:crew:d1');
+    await pressKey(KEY.right);
+    await focusKeyIs('card:crew:crew:d2');
+    await pressKey(KEY.up);
+    await focusKeyIs('card:cast:cast:p1');
+  });
+
+  it('reaches the crew row with Down and leaves it with Up whatever the spatial search would pick', async () => {
+    serveEpisode({ cast: withCast, crew: credits });
+    setup({ itemId: 'e1' });
+    await toCast();
+    // The crew card lies far to the side in the fake layout: only the page's own block walk finds it.
+    document.querySelector<HTMLElement>('[data-focus-key="card:crew:crew:d1"]')!.dataset.rect =
+      '90000,2000,100,100';
+    await pressKey(KEY.down);
+    await focusKeyIs('card:crew:crew:d1');
+    document.querySelector<HTMLElement>('[data-focus-key="card:cast:cast:p1"]')!.dataset.rect =
+      '90000,0,100,100';
+    await pressKey(KEY.up);
+    await focusKeyIs('card:cast:cast:p1');
+  });
+
+  it('comes back onto the crew card it left when entered again from above', async () => {
+    serveEpisode({ cast: withCast, crew: credits });
+    setup({ itemId: 'e1' });
+    await toCast();
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await pressKey(KEY.right);
+    await focusKeyIs('card:crew:crew:w1');
+    await pressKey(KEY.up);
+    await focusKeyIs('card:cast:cast:p1');
+    await pressKey(KEY.down);
+    await focusKeyIs('card:crew:crew:w1');
+  });
+
+  it('opens the person page on OK, and Back returns to the same crew card', async () => {
+    serveEpisode({ cast: withCast, crew: credits });
+    setup({ itemId: 'e1' });
+    await toCast();
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await focusKeyIs('card:crew:crew:d2');
+    await pressKey(KEY.enter);
+    expect(await screen.findByTestId('person-stub')).toHaveTextContent('d2|Dee Director');
+    await pressKey(KEY.back);
+    await screen.findByTestId('row-crew');
+    await focusKeyIs('card:crew:crew:d2');
+  });
+
+  it('takes the focus on a card without a person id but opens nothing', async () => {
+    serveEpisode({ cast: withCast, crew: [crew('Dan Nobody', 'Director')] });
+    setup({ itemId: 'e1' });
+    await toCast();
+    await pressKey(KEY.down);
+    await focusKeyIs('card:crew:crew:Dan Nobody');
+    await pressKey(KEY.enter);
+    expect(screen.queryByTestId('person-stub')).toBeNull();
+    await focusKeyIs('card:crew:crew:Dan Nobody');
+  });
+
+  it('keeps the cast row and the crew row apart: each remembers its own card', async () => {
+    serveEpisode({
+      cast: [...withCast, { name: 'Bo Actor', character: 'Bea', order: 1, person_id: 'p2' }],
+      crew: credits,
+    });
+    setup({ itemId: 'e1' });
+    await toCast();
+    await pressKey(KEY.right);
+    await focusKeyIs('card:cast:cast:p2');
+    await pressKey(KEY.down);
+    await pressKey(KEY.right);
+    await focusKeyIs('card:crew:crew:d2');
+    await pressKey(KEY.up);
+    await focusKeyIs('card:cast:cast:p2');
+  });
+
+  it('scrolls the page to the Crew row when a card takes the focus', async () => {
+    // jsdom has no layout: the zones get tops by name.
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const zone = this.getAttribute('data-zone');
+      return zone === 'crew' ? 1500 : zone === null ? 0 : 900;
+    });
+    try {
+      serveEpisode({ cast: withCast, crew: [crew('Dir One', 'Director', 'd1')] });
+      setup({ itemId: 'e1' });
+      await toCast();
+      const page = () => document.querySelector<HTMLElement>('.detail-page')!;
+      await waitFor(() => expect(page().style.transform).toBe('translateY(-846px)'));
+      await pressKey(KEY.down);
+      await focusKeyIs('card:crew:crew:d1');
+      await waitFor(() => expect(page().style.transform).toBe('translateY(-1446px)'));
+    } finally {
+      top.mockRestore();
+    }
   });
 });
 
@@ -828,7 +794,7 @@ describe('DetailScreen: the order of the sections under the hero', () => {
       episodes: () => [episodeOf(1, 1, { content_id: 'e1' })],
     });
     setup({ itemId: 'season-1' });
-    await screen.findByTestId('crew-box');
+    await screen.findByTestId('row-crew');
     await screen.findByTestId('episode-grid');
     expect(zones()).toEqual(['episodes', 'cast', 'crew']);
     await focusKeyIs('detail-play');
@@ -837,7 +803,7 @@ describe('DetailScreen: the order of the sections under the hero', () => {
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
     await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
+    await focusKeyIs('card:crew:crew:d1');
     await pressKey(KEY.up);
     await focusKeyIs('card:cast:cast:p1');
     await pressKey(KEY.up);
@@ -867,7 +833,7 @@ describe('DetailScreen: the order of the sections under the hero', () => {
       ],
     });
     setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
+    await screen.findByTestId('row-crew');
     await screen.findByTestId('detail-more-episodes');
     expect(zones()).toEqual(['episodes', 'cast', 'crew']);
     await focusKeyIs('detail-play');
@@ -878,7 +844,7 @@ describe('DetailScreen: the order of the sections under the hero', () => {
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
     await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
+    await focusKeyIs('card:crew:crew:d1');
   });
 
   it('fades the blocks above the focus by the order of the type: on a series the extras fade over the cast', async () => {
@@ -927,7 +893,7 @@ describe('DetailScreen: Up and Down walk the sections of the page, block by bloc
         Array.from({ length: 12 }, (_, i) => episodeOf(1, i + 1, { content_id: `e${i + 1}` })),
     });
     setup({ itemId: 'season-1' });
-    await screen.findByTestId('crew-box');
+    await screen.findByTestId('row-crew');
     await screen.findByTestId('episode-grid');
     await focusKeyIs('detail-play');
     // Five columns: rows of e1, e6 and e11.
@@ -937,184 +903,11 @@ describe('DetailScreen: Up and Down walk the sections of the page, block by bloc
     await focusKeyIs('gcard:episodes:season-1:e6');
     await pressKey(KEY.down);
     await focusKeyIs('gcard:episodes:season-1:e11');
-    // The next block is Besetzung, not the Crew box.
+    // The next block is Besetzung, not the Crew row.
     await pressKey(KEY.down);
     await focusKeyIs('card:cast:cast:p1');
     // Up lands on the grid card it was left from, not on the buttons above.
     await pressKey(KEY.up);
     await focusKeyIs('gcard:episodes:season-1:e11');
-  });
-});
-
-describe('DetailScreen: the Crew box keys', () => {
-  const episode = (overrides: Overrides) =>
-    itemDetail({
-      content_id: 'e1',
-      type: 'episode',
-      title: 'An Episode',
-      series_id: 's1',
-      series_title: 'A Show',
-      season_number: 1,
-      episode_number: 1,
-      cast: [{ name: 'Ann Actor', character: 'Ada', order: 0, person_id: 'p1' }],
-      ...overrides,
-    });
-  const serveEpisode = (overrides: Overrides) =>
-    serveDetail(server, {
-      item: (id) =>
-        id === 'e1'
-          ? episode(overrides)
-          : itemDetail({ content_id: id, type: 'series', title: 'A Show', versions: [] }),
-      seasons: [seasonOf(1)],
-      episodes: () => [episodeOf(1, 1, { content_id: 'e1' })],
-    });
-  const key = (focusKey: string) =>
-    document.querySelector<HTMLElement>(`[data-focus-key="${focusKey}"]`)!;
-  /** jsdom has no layout: put the named elements where the test wants the spatial search to see them. */
-  const place = (rects: Record<string, string>) => {
-    for (const [focusKey, rect] of Object.entries(rects)) key(focusKey).dataset.rect = rect;
-  };
-  /** Down from the buttons to the cast row (the page has no episode row for a lone episode). */
-  const toCast = async () => {
-    await screen.findByTestId('crew-box');
-    await screen.findByTestId('episode-grid').catch(() => undefined);
-    await focusKeyIs('detail-play');
-    await pressKey(KEY.down);
-    await focusKeyIs('detail-pill-subtitles');
-    await pressKey(KEY.down);
-    await focusKeyIs('card:cast:cast:p1');
-  };
-  const three = {
-    crew: [
-      crew('Dir One', 'Director', 'd1'),
-      crew('Dir Two', 'Director', 'd2'),
-      crew('Wri One', 'Writer', 'w1'),
-      crew('Wri Two', 'Writer', 'w2'),
-      crew('Pro One', 'Producer', 'p1'),
-      crew('Pro Two', 'Producer', 'p2'),
-    ],
-  };
-
-  it('holds Left and Right at the ends of a row, also where a name of another row lies beside it', async () => {
-    serveEpisode({
-      crew: [
-        crew('Dir One', 'Director', 'd1'),
-        crew('Wri One', 'Writer', 'w1'),
-        crew('Wri Two', 'Writer', 'w2'),
-        crew('Wri Three', 'Writer', 'w3'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await toCast();
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
-    // The writers' names stand to the right of the lone director in the fake layout.
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d1');
-    await pressKey(KEY.left);
-    await focusKeyIs('crew:director:d1');
-  });
-
-  it('walks Down through three rows and Up back, to the same column, whatever the spatial search would pick', async () => {
-    serveEpisode(three);
-    setup({ itemId: 'e1' });
-    await toCast();
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
-    // Rows are 1000 px apart; in every row the first name sits at the far side of the second.
-    place({
-      'crew:director:d1': '0,0,100,100',
-      'crew:director:d2': '5000,0,100,100',
-      'crew:writer:w1': '5000,1000,100,100',
-      'crew:writer:w2': '0,1000,100,100',
-      'crew:producer:p1': '0,2000,100,100',
-      'crew:producer:p2': '5000,2000,100,100',
-    });
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:writer:w1');
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:producer:p1');
-    await pressKey(KEY.up);
-    await focusKeyIs('crew:writer:w1');
-    await pressKey(KEY.up);
-    await focusKeyIs('crew:director:d1');
-  });
-
-  it('comes back onto the name it left when entered again from below', async () => {
-    serveEpisode(three);
-    setup({ itemId: 'e1' });
-    await toCast();
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d1');
-    await pressKey(KEY.right);
-    await focusKeyIs('crew:director:d2');
-    await pressKey(KEY.up);
-    await focusKeyIs('card:cast:cast:p1');
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:director:d2');
-  });
-
-  it('takes no focus when no name has a person page: Down from the cast stays on the cast', async () => {
-    serveEpisode({ crew: [crew('Nobody One', 'Director'), crew('Nobody Two', 'Writer')] });
-    setup({ itemId: 'e1' });
-    await toCast();
-    // jsdom has no layout: put the box below the cast, where the search would find it.
-    screen.getByTestId('crew-box').dataset.rect = '0,90000,100,100';
-    await pressKey(KEY.down);
-    await focusKeyIs('card:cast:cast:p1');
-  });
-
-  it('enters on the first name that can take the focus, past a row of names without a page', async () => {
-    serveEpisode({
-      crew: [
-        crew('Nobody One', 'Director'),
-        crew('Wri One', 'Writer', 'w1'),
-        crew('Wri Two', 'Writer', 'w2'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await toCast();
-    // The second writer is the one nearest the origin for the spatial search.
-    place({ 'crew:writer:w1': '5000,1000,100,100', 'crew:writer:w2': '0,1000,100,100' });
-    await pressKey(KEY.down);
-    await focusKeyIs('crew:writer:w1');
-  });
-
-  it('puts a comma between names and none before the first', async () => {
-    serveEpisode({
-      crew: [
-        crew('Dir One', 'Director', 'd1'),
-        crew('Dir Two', 'Director', 'd2'),
-        crew('Dir Three', 'Director', 'd3'),
-      ],
-    });
-    setup({ itemId: 'e1' });
-    await screen.findByTestId('crew-box');
-    const track = screen.getByTestId('crew-row-director').querySelector('.crew-track')!;
-    expect(track.querySelectorAll('.crew-sep')).toHaveLength(2);
-    expect(track.firstElementChild).toHaveAttribute('data-testid', 'crew-name');
-    expect(track.children).toHaveLength(5);
-  });
-
-  it('scrolls the page to the Crew box when a name takes the focus', async () => {
-    // jsdom has no layout: the zones get tops by name.
-    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      const zone = this.getAttribute('data-zone');
-      return zone === 'crew' ? 1500 : zone === null ? 0 : 900;
-    });
-    try {
-      serveEpisode({ crew: [crew('Dir One', 'Director', 'd1')] });
-      setup({ itemId: 'e1' });
-      await toCast();
-      const page = () => document.querySelector<HTMLElement>('.detail-page')!;
-      await waitFor(() => expect(page().style.transform).toBe('translateY(-846px)'));
-      await pressKey(KEY.down);
-      await focusKeyIs('crew:director:d1');
-      await waitFor(() => expect(page().style.transform).toBe('translateY(-1446px)'));
-    } finally {
-      top.mockRestore();
-    }
   });
 });

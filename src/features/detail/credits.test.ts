@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { translate, type MessageKey } from '../../i18n';
 import { itemDetail } from '../../test/detailFixtures';
-import { CAST_ROW_LIMIT, STRIP_CAST_LIMIT, castCrewStrip, castRow, crewBoxRows } from './credits';
+import { CAST_ROW_LIMIT, STRIP_CAST_LIMIT, castCrewStrip, castRow, crewRow } from './credits';
 import type { ItemDetail } from './info';
 
 const en = (key: MessageKey) => translate('en', key);
@@ -318,81 +318,139 @@ describe('castRow', () => {
   });
 });
 
-describe('crewBoxRows', () => {
-  it('lists Director, Writer and Producer in that order, each only with credits', () => {
-    const rows = crewBoxRows(
+describe('crewRow', () => {
+  it('groups Director, Writer and Producer in that order, keeping credit order inside a group', () => {
+    const row = crewRow(
       detail({
         crew: [
-          crew('Pro', 'Producer', 'p'),
-          crew('Wri', 'Writer', 'w'),
-          crew('Dir', 'Director', 'd'),
+          crew('Pro One', 'Producer', 'p1'),
+          crew('Wri One', 'Writer', 'w1'),
+          crew('Dir One', 'Director', 'd1'),
+          crew('Pro Two', 'Producer', 'p2'),
+          crew('Dir Two', 'Director', 'd2'),
+          crew('Wri Two', 'Writer', 'w2'),
         ],
       }),
+      en,
     );
-    expect(rows.map((r) => [r.job, r.label, r.names.map((n) => n.name)])).toEqual([
-      ['director', 'detail.crewRow.directors', ['Dir']],
-      ['writer', 'detail.crewRow.writers', ['Wri']],
-      ['producer', 'detail.crewRow.producers', ['Pro']],
+    expect(shape(row)).toEqual([
+      'Dir One / Director',
+      'Dir Two / Director',
+      '[Writers] Wri One / Writer',
+      'Wri Two / Writer',
+      '[Producers] Pro One / Producer',
+      'Pro Two / Producer',
     ]);
   });
 
-  it('leaves a row out when it has no credits', () => {
-    const rows = crewBoxRows(detail({ crew: [crew('Pro', 'Producer', 'p')] }));
-    expect(rows.map((r) => r.job)).toEqual(['producer']);
+  it('draws no divider before the first group, whichever it is, and none before an empty one', () => {
+    expect(
+      shape(
+        crewRow(detail({ crew: [crew('Pro', 'Producer', 'p'), crew('Wri', 'Writer', 'w')] }), en),
+      ),
+    ).toEqual(['Wri / Writer', '[Producers] Pro / Producer']);
+    expect(shape(crewRow(detail({ crew: [crew('Pro', 'Producer', 'p')] }), en))).toEqual([
+      'Pro / Producer',
+    ]);
+    expect(
+      shape(
+        crewRow(detail({ crew: [crew('Dir', 'Director', 'd'), crew('Pro', 'Producer', 'p')] }), en),
+      ),
+    ).toEqual(['Dir / Director', '[Producers] Pro / Producer']);
   });
 
-  it('does not count Screenplay as Writer, nor any other job', () => {
-    const rows = crewBoxRows(
+  it('words the subtitles and dividers in German', () => {
+    const row = crewRow(
+      detail({
+        crew: [
+          crew('Dir', 'Director', 'd'),
+          crew('Wri', 'Writer', 'w'),
+          crew('Pro', 'Producer', 'p'),
+        ],
+      }),
+      de,
+    );
+    expect(row.map((e) => e.subtitle)).toEqual(['Regie', 'Drehbuch', 'Produktion']);
+    expect(row.map((e) => e.divider)).toEqual([undefined, 'Drehbuch', 'Produktion']);
+  });
+
+  it('shows a director who also wrote once, in the director group, with both jobs', () => {
+    const credits = [
+      crew('Both', 'Writer', 'b'),
+      crew('Both', 'Director', 'b'),
+      crew('Wri', 'Writer', 'w'),
+    ];
+    expect(shape(crewRow(detail({ crew: credits }), en))).toEqual([
+      'Both / Director, Writer',
+      '[Writers] Wri / Writer',
+    ]);
+    expect(crewRow(detail({ crew: credits }), de)[0]!.subtitle).toBe('Regie, Drehbuch');
+  });
+
+  it('shows a person credited twice for one job once', () => {
+    const row = crewRow(
+      detail({ crew: [crew('Dir', 'Director', 'd'), crew('Dir', 'Director', 'd')] }),
+      en,
+    );
+    expect(shape(row)).toEqual(['Dir / Director']);
+  });
+
+  it('leaves out Screenplay and every other job', () => {
+    const row = crewRow(
       detail({
         crew: [
           crew('Screen', 'Screenplay', 's'),
           crew('Cam', 'Director of Photography', 'c'),
           crew('Cre', 'Creator', 'k'),
+          crew('Dir', 'Director', 'd'),
         ],
       }),
+      en,
     );
-    expect(rows).toEqual([]);
+    expect(shape(row)).toEqual(['Dir / Director']);
   });
 
-  it('lists a person once per row, in credit order, also by name without an id', () => {
-    const rows = crewBoxRows(
+  it('keeps a person whose first credit is another job in their listed group', () => {
+    const row = crewRow(
+      detail({ crew: [crew('Ed', 'Editor', 'e'), crew('Ed', 'Producer', 'e')] }),
+      en,
+    );
+    expect(shape(row)).toEqual(['Ed / Producer']);
+  });
+
+  it('carries the card fields, and a credit without a person id is still a card', () => {
+    const row = crewRow(
       detail({
         crew: [
-          crew('Dir One', 'Director', 'd1'),
-          crew('Dir Two', 'Director'),
-          crew('Dir One', 'Director', 'd1'),
-          crew('Dir Two', 'Director'),
+          { ...crew('Known', 'Director', 'k1'), photo_url: '/p.jpg', photo_thumbhash: 'hash' },
+          crew('Unknown', 'Director'),
         ],
       }),
+      en,
     );
-    expect(rows[0]!.names.map((n) => n.name)).toEqual(['Dir One', 'Dir Two']);
-  });
-
-  it('lists a person in every row of a job they hold', () => {
-    const rows = crewBoxRows(
-      detail({ crew: [crew('Both', 'Director', 'b'), crew('Both', 'Writer', 'b')] }),
-    );
-    expect(rows.map((r) => r.names.map((n) => n.name))).toEqual([['Both'], ['Both']]);
-  });
-
-  it('carries the person id, none for a credit without one', () => {
-    const rows = crewBoxRows(
-      detail({ crew: [crew('Known', 'Director', 'k1'), crew('Unknown', 'Director')] }),
-    );
-    expect(rows[0]!.names.map((n) => n.personId)).toEqual(['k1', undefined]);
+    expect(row[0]).toEqual({
+      key: 'crew:k1',
+      name: 'Known',
+      personId: 'k1',
+      photo: '/p.jpg',
+      thumbhash: 'hash',
+      subtitle: 'Director',
+      divider: undefined,
+    });
+    expect(row[1]).toMatchObject({ key: 'crew:Unknown', name: 'Unknown', personId: undefined });
   });
 
   it('is empty without crew', () => {
-    expect(crewBoxRows(detail({}))).toEqual([]);
+    expect(crewRow(detail({}), en)).toEqual([]);
   });
 });
 
 describe('credits: padded jobs and the identity of a person', () => {
-  it('reads a job with padding or another case as the job (strip and crew box)', () => {
+  it('reads a job with padding or another case as the job (strip and crew row)', () => {
     const padded = detail({
       crew: [
         crew('Dir', ' Director ', 'd'),
-        crew('Wri', ' Writer ', 'w'),
+        crew('Wri', ' WRITER ', 'w'),
         crew('Pro', ' Producer ', 'p'),
       ],
     });
@@ -400,16 +458,16 @@ describe('credits: padded jobs and the identity of a person', () => {
       'Dir / Director',
       '[Writers] Wri / Writer',
     ]);
-    expect(crewBoxRows(padded).map((r) => [r.job, r.names.map((n) => n.name)])).toEqual([
-      ['director', ['Dir']],
-      ['writer', ['Wri']],
-      ['producer', ['Pro']],
+    expect(shape(crewRow(padded, en))).toEqual([
+      'Dir / Director',
+      '[Writers] Wri / Writer',
+      '[Producers] Pro / Producer',
     ]);
   });
 
   it('shows the same person without ids once, however the name is padded', () => {
     const jane = detail({ crew: [crew('Jane ', 'Director'), crew('Jane', 'Director')] });
-    expect(crewBoxRows(jane)[0]!.names).toHaveLength(1);
+    expect(crewRow(jane, en)).toHaveLength(1);
     expect(castCrewStrip(jane, false, en)).toHaveLength(1);
   });
 
@@ -420,8 +478,8 @@ describe('credits: padded jobs and the identity of a person', () => {
     const strip = castCrewStrip(twins, false, en);
     expect(strip).toHaveLength(2);
     expect(new Set(strip.map((e) => e.key)).size).toBe(2);
-    const names = crewBoxRows(twins)[0]!.names;
-    expect(names).toHaveLength(2);
-    expect(new Set(names.map((n) => n.key)).size).toBe(2);
+    const row = crewRow(twins, en);
+    expect(row).toHaveLength(2);
+    expect(new Set(row.map((e) => e.key)).size).toBe(2);
   });
 });

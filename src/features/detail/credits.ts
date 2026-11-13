@@ -1,6 +1,7 @@
 // The people on a detail page, as pure functions: the "Cast & Crew" strip of a movie or series, the
-// "Cast" row and the "Crew" box of a season or episode. The rules are the web's (castCrewGroups,
+// "Cast" row and the "Crew" row of a season or episode. The rules are the web's (castCrewGroups,
 // CrewList): who leads, who is left out because another card already shows them, how many cards.
+// Only the form of the season and episode crew differs: cards, not the web's text box.
 import type { MessageKey } from '../../i18n';
 import type { ItemDetail } from './info';
 
@@ -16,7 +17,7 @@ export const CAST_ROW_LIMIT = 20;
 const LEAD_DIRECTORS_MAX = 2;
 const WRITERS_MAX = 3;
 
-/** One card of the strip or of the cast row. */
+/** One card of the strip or of the cast or crew row. */
 export interface CreditEntry {
   /** Unique in the row: a person can be a director and an actor of one title. */
   key: string;
@@ -24,7 +25,10 @@ export interface CreditEntry {
   personId: string | undefined;
   photo: string | undefined;
   thumbhash: string | undefined;
-  /** The role (Director, Writer, ...) or, for a cast member, the character. */
+  /**
+   * The role (Director, Writer, ...) or, for a cast member, the character. In the crew row, all of
+   * the person's jobs among the three, joined with ", ".
+   */
   subtitle: string;
   /** The label of the divider drawn before this card: set on the first card of every later group. */
   divider: string | undefined;
@@ -119,38 +123,44 @@ export function castRow(detail: ItemDetail): CreditEntry[] {
     .map((person) => ({ ...castCard(person, 'cast'), divider: undefined }));
 }
 
-/** The jobs of the "Crew" box, in its order. `Screenplay` is not a writer here. */
+/** The jobs of the "Crew" row, in its order. `Screenplay` is not a writer here. */
 const CREW_JOBS = [
-  { job: 'director', label: 'detail.crewRow.directors' },
-  { job: 'writer', label: 'detail.crewRow.writers' },
-  { job: 'producer', label: 'detail.crewRow.producers' },
-] as const satisfies readonly { job: string; label: MessageKey }[];
+  { job: 'director', role: 'detail.role.director', divider: undefined },
+  { job: 'writer', role: 'detail.role.writer', divider: 'detail.crewRow.writers' },
+  { job: 'producer', role: 'detail.role.producer', divider: 'detail.crewRow.producers' },
+] as const satisfies readonly {
+  job: string;
+  role: MessageKey;
+  divider: MessageKey | undefined;
+}[];
 
-export type CrewJob = (typeof CREW_JOBS)[number]['job'];
-
-export interface CrewName {
-  /** Unique in its row. */
-  key: string;
-  name: string;
-  /** A name without a person has no page to open. */
-  personId: string | undefined;
-}
-
-export interface CrewBoxRow {
-  job: CrewJob;
-  label: MessageKey;
-  names: CrewName[];
-}
-
-/** The rows of the "Crew" box: only jobs with credits, each person once, in credit order. */
-export function crewBoxRows(detail: ItemDetail): CrewBoxRow[] {
-  return CREW_JOBS.map(({ job: wanted, label }) => ({
-    job: wanted,
-    label,
-    names: uniquePeople(detail.crew.filter((p) => job(p) === wanted)).map((person) => ({
-      key: personKey(person),
-      name: person.name,
-      personId: person.person_id,
-    })),
-  })).filter((row) => row.names.length > 0);
+/**
+ * The "Crew" row of a season or an episode: directors, writers and producers as cards like the
+ * cast's, no other job. A person is one card, in the group of their first job, and the subtitle
+ * lists all their jobs. Within a group people keep their credit order, and every group after the
+ * first non-empty one starts with a divider label.
+ */
+export function crewRow(detail: ItemDetail, t: Translate): CreditEntry[] {
+  const listed = detail.crew.filter((p) => CREW_JOBS.some((wanted) => wanted.job === job(p)));
+  const cards = uniquePeople(listed).map((person) => {
+    const jobs = CREW_JOBS.filter((wanted) =>
+      listed.some((p) => personKey(p) === personKey(person) && job(p) === wanted.job),
+    );
+    // A listed person has at least one of the three jobs.
+    const first = jobs[0]!;
+    return {
+      first,
+      card: crewCard(person, 'crew', jobs.map((wanted) => t(wanted.role)).join(', ')),
+    };
+  });
+  // The sort is stable: people keep their credit order inside a group.
+  cards.sort((a, b) => CREW_JOBS.indexOf(a.first) - CREW_JOBS.indexOf(b.first));
+  return cards.map(({ first, card }, index) => ({
+    ...card,
+    divider:
+      // `first.divider` is narrowing only: directors sort first, so a later group always has its key.
+      index > 0 && cards[index - 1]!.first !== first && first.divider
+        ? t(first.divider)
+        : undefined,
+  }));
 }

@@ -3509,7 +3509,7 @@ test('detail page: Cast & Crew leads with the director, a rotated label stands b
   await expect(page.getByRole('button', { name: /Wen Writer/ })).toBeFocused();
 });
 
-test('detail page: a season shows Besetzung and the Crew box; a name opens the person page, and Back returns to the same name, keyboard only', async ({
+test('detail page: a season shows Besetzung and a Crew row of person cards; a card opens the person page, and Back returns to the same card, keyboard only', async ({
   page,
 }) => {
   const { origin } = await startFakeSilo({ series: true, seasonCredits: true });
@@ -3533,7 +3533,8 @@ test('detail page: a season shows Besetzung and the Crew box; a name opens the p
   await expect(page.getByTestId('detail-breadcrumb')).toContainText('Staffel 1');
   await expect(page.getByTestId('episode-grid')).toBeVisible();
 
-  // Besetzung: the cast only. Crew: a box with a row per job; Screenplay is no writer here.
+  // Besetzung: the cast only. Crew: a row of person cards, one group per job; Screenplay is no
+  // writer here.
   await expect(
     page.getByTestId('row-cast').getByRole('heading', { name: 'Besetzung' }),
   ).toBeVisible();
@@ -3541,46 +3542,36 @@ test('detail page: a season shows Besetzung and the Crew box; a name opens the p
     'Ann Actor',
     'Bo Actor',
   ]);
-  const box = page.getByTestId('crew-box');
-  await expect(page.getByRole('heading', { name: 'Crew', exact: true })).toBeVisible();
-  await expect(box.locator('.crew-label')).toHaveText(['Regie', 'Drehbuch', 'Produktion']);
-  await expect(page.getByTestId('crew-row-writer').getByTestId('crew-name')).toHaveText([
+  const crew = page.getByTestId('row-crew');
+  await expect(crew.getByRole('heading', { name: 'Crew', exact: true })).toBeVisible();
+  await expect(crew.getByTestId('card-title')).toHaveText([
+    'Dana Director',
     'Wen Writer',
-  ]);
-  await expect(box.getByText('Sam Screen')).toHaveCount(0);
-  await expect(page.getByTestId('crew-row-producer').getByTestId('crew-name')).toHaveText([
     'Pia Producer',
     'Pat Producer',
   ]);
-  // A name is a target of at least 75 px.
-  const name = (await page.getByRole('button', { name: 'Pia Producer' }).boundingBox())!;
-  expect(name.height).toBeGreaterThanOrEqual(75);
+  await expect(crew.getByText('Sam Screen')).toHaveCount(0);
+  await expect(crew.getByTestId('credit-divider')).toHaveText(['Drehbuch', 'Produktion']);
 
-  // Down into the grid and past it to Besetzung, then to the Crew box and down to the producers.
+  // Down into the grid and past it to Besetzung, then to the first crew card.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1.1/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: 'Dana Director' })).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: 'Wen Writer' })).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: 'Pia Producer' })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Dana Director/ })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('button', { name: 'Pat Producer' })).toBeFocused();
-  // The focused name is a light fill with dark text, as every focused button.
-  expect(
-    await page
-      .getByRole('button', { name: 'Pat Producer' })
-      .evaluate((el) => el.ownerDocument.defaultView!.getComputedStyle(el).backgroundColor),
-  ).toBe('rgb(255, 255, 255)');
+  await expect(page.getByRole('button', { name: /Wen Writer/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Pia Producer/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('button', { name: /Pat Producer/ })).toBeFocused();
   // OK opens the person page.
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('person-name')).toHaveText(/./);
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('detail-breadcrumb')).toContainText('Staffel 1');
-  await expect(page.getByRole('button', { name: 'Pat Producer' })).toBeFocused();
+  await expect(page.getByRole('button', { name: /Pat Producer/ })).toBeFocused();
 });
 
 test('detail page: Down from the last row of a scrolling episode grid lands on Besetzung, Up from it on the grid card it left', async ({
@@ -3612,7 +3603,7 @@ test('detail page: Down from the last row of a scrolling episode grid lands on B
   await expect(page.getByRole('button', { name: /Episode 1\.6(?!\d)/ })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Episode 1\.11(?!\d)/ })).toBeFocused();
-  // Down again: the next block is Besetzung, not the Crew box.
+  // Down again: the next block is Besetzung, not the Crew row.
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('button', { name: /Ann Actor/ })).toBeFocused();
   // Up: the grid, on the card it was left from, not the Play button.

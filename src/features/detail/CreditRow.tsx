@@ -27,17 +27,20 @@ const CREDIT_CARDS: CardMetrics = {
 
 /**
  * A row of people: the "Cast & Crew" strip of a movie or series (directors, writers, cast, with a
- * rotated label in the gap before each later group) or the "Cast" row of a season or an episode.
+ * rotated label in the gap before each later group), or the "Cast" row or the "Crew" row of a
+ * season or an episode (each its own `rowId`, so each remembers its own card).
  * A card opens its person's page; a credit without a person id has none to open. The divider
  * belongs to the first card of its group, so it scrolls with the row and costs no card slot.
  */
 export const CreditRow = memo(function CreditRow({
+  rowId,
   title,
   entries,
   memory,
   onRowFocused,
   onOpenPerson,
 }: {
+  rowId: 'cast' | 'crew';
   title: string;
   entries: readonly CreditEntry[];
   memory: FocusIndexMemory;
@@ -71,7 +74,7 @@ export const CreditRow = memo(function CreditRow({
   );
   return (
     <Row
-      rowId="cast"
+      rowId={rowId}
       title={title}
       shape="poster"
       metrics={CREDIT_CARDS}

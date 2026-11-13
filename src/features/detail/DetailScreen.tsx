@@ -42,9 +42,8 @@ import { DetailSkeleton } from './DetailSkeleton';
 import { episodeGridId, type DetailEntryMemory, type DetailTarget } from './detailMemory';
 import { EpisodeGrid, EpisodeGridSkeleton } from './EpisodeGrid';
 import { EPISODE_ROW_ID, EpisodeRow } from './EpisodeRow';
-import { castCrewStrip, castRow, crewBoxRows } from './credits';
+import { castCrewStrip, castRow, crewRow } from './credits';
 import { CreditRow } from './CreditRow';
-import { CREW_BOX_KEY, CrewBox } from './CrewBox';
 import { extraGroups, youtubeVideos } from './extras';
 import { ExtrasSection } from './ExtrasSection';
 import {
@@ -351,14 +350,14 @@ function DetailBody({
 
   // --- Cast and crew ---------------------------------------------------------------------------
   // A movie and a series show one strip (directors or creators, writers, cast); a season and an
-  // episode show the cast and, in a box of its own, the crew.
+  // episode show the cast and, in a row of its own below, the crew.
   const people = useMemo(
     () => (season || episode ? castRow(detail) : castCrewStrip(detail, series, t)),
     [detail, season, episode, series, t],
   );
-  const crewRows = useMemo(
-    () => (season || episode ? crewBoxRows(detail) : []),
-    [detail, season, episode],
+  const crew = useMemo(
+    () => (season || episode ? crewRow(detail, t) : []),
+    [detail, season, episode, t],
   );
   // --- Extras and Trailers & More ---------------------------------------------------------------
   // Local extras (played in the app), then the YouTube videos (handed to the TV's app). Only movies
@@ -595,7 +594,7 @@ function DetailBody({
     extras.length > 0 ? 'extras' : '',
     videos.length > 0 ? 'trailers' : '',
     people.length > 0 ? 'cast' : '',
-    crewRows.length > 0 ? 'crew' : '',
+    crew.length > 0 ? 'crew' : '',
     boxSetFilms.length > 0 ? 'boxSet' : '',
     similarItems.length > 0 ? 'similar' : '',
   ].join('|');
@@ -650,6 +649,7 @@ function DetailBody({
       people.length > 0 ? (
         <div data-zone="cast" data-faded={fade('cast')}>
           <CreditRow
+            rowId="cast"
             title={t(season || episode ? 'detail.cast' : 'detail.castCrew')}
             entries={people}
             memory={memory.rows}
@@ -659,9 +659,16 @@ function DetailBody({
         </div>
       ) : null,
     crew:
-      crewRows.length > 0 ? (
+      crew.length > 0 ? (
         <div data-zone="crew" data-faded={fade('crew')}>
-          <CrewBox rows={crewRows} onFocused={inCrew} onOpenPerson={onOpenPerson} />
+          <CreditRow
+            rowId="crew"
+            title={t('detail.crew')}
+            entries={crew}
+            memory={memory.rows}
+            onRowFocused={inCrew}
+            onOpenPerson={onOpenPerson}
+          />
         </div>
       ) : null,
     boxSet:
@@ -726,10 +733,7 @@ function DetailBody({
     extras: extras.map((group) => rowFocusKey(`extras-${group.kind}`)),
     trailers: [videos.length > 0 ? rowFocusKey('trailers') : undefined],
     cast: [people.length > 0 ? rowFocusKey('cast') : undefined],
-    // A box of names without a person page holds no focus.
-    crew: [
-      crewRows.some((row) => row.names.some((name) => name.personId)) ? CREW_BOX_KEY : undefined,
-    ],
+    crew: [crew.length > 0 ? rowFocusKey('crew') : undefined],
     boxSet: [boxSetFilms.length > 0 ? rowFocusKey('boxset') : undefined],
     similar: [similarItems.length > 0 ? rowFocusKey('similar') : undefined],
   };

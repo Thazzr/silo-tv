@@ -457,7 +457,7 @@
   "detail.role.director": "Director",
   "detail.role.creator": "Creator",
   "detail.role.writer": "Writer",
-  "detail.crewRow.directors": "Directors",
+  "detail.role.producer": "Producer",
   "detail.crewRow.writers": "Writers",
   "detail.crewRow.producers": "Producers",
   "detail.trailers": "Trailers & More",
