@@ -6,6 +6,7 @@ import type { SetupServer } from 'msw/node';
 import type { components } from '../api/generated/schema';
 import { BASE_URL } from './apiFixtures';
 import { catalogItem } from './flowFixtures';
+import { recipeCatalog } from './progressFixtures';
 
 type S = components['schemas'];
 
@@ -158,4 +159,28 @@ export function primeHomeCapabilities(
   // before the screen that reads them mounts.
   queryClient.setQueryDefaults(['home', 'capabilities', BASE_URL], { gcTime: Infinity });
   queryClient.setQueryData(['home', 'capabilities', BASE_URL], capabilities);
+}
+
+/**
+ * Serves the recipe gallery: the given types avoid duplicates, 'fail' answers an error and
+ * 'pending' never answers.
+ */
+export function serveRecipes(
+  server: SetupServer,
+  avoiding: readonly string[] | 'fail' | 'pending',
+) {
+  server.use(
+    http.get(`${BASE_URL}/api/v2/sections/recipes`, () => {
+      if (avoiding === 'pending') return new Promise<Response>(() => undefined);
+      if (avoiding === 'fail') return new HttpResponse(null, { status: 500 });
+      return HttpResponse.json({
+        categories: [
+          {
+            category: 'personal',
+            recipes: avoiding.map((type) => recipeCatalog(type).categories[0]!.recipes[0]!),
+          },
+        ],
+      });
+    }),
+  );
 }

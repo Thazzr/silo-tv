@@ -17,6 +17,7 @@ import {
 } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { HERO_KEY } from '../home/Carousel';
+import { useDedupedSections } from '../home/dedupe';
 import { featuredSlides, firstFeatured } from '../home/featured';
 import { Hero, type Featured } from '../home/Hero';
 import { ROW_ITEM_LIMIT } from '../home/queries';
@@ -27,6 +28,7 @@ import {
   useLibraryFeaturedSection,
   useLibrarySections,
   type LibraryKind,
+  type LibrarySection,
   type UserLibrary,
 } from './queries';
 import type { ExploreTarget } from './targets';
@@ -89,6 +91,8 @@ export function libraryRows(
   });
 }
 
+const NO_SECTIONS: readonly LibrarySection[] = [];
+
 const lastRowKey = (library: UserLibrary, kind: LibraryKind) => `lastrow:${library.id}:${kind}`;
 
 /**
@@ -139,9 +143,11 @@ export function RecommendedView({
       featured = { kind: 'slides', slides, onPlay: play, onOpen: open };
     }
   }
+  // A card a row above shows is dropped from the section types the recipes mark.
+  const sections = useDedupedSections(query.data ?? NO_SECTIONS);
   const rows = useMemo(
-    () => (query.data ? libraryRows(query.data, library, kind, titleOf, featuredId) : []),
-    [query.data, library, kind, titleOf, featuredId],
+    () => libraryRows(sections, library, kind, titleOf, featuredId),
+    [sections, library, kind, titleOf, featuredId],
   );
   const [focusedRow, setFocusedRow] = useState(
     () => memory.indices.get(lastRowKey(library, kind)) ?? 0,

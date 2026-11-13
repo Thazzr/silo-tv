@@ -46,6 +46,11 @@ interface FakeOptions {
   seriesLibrary?: boolean;
   /** The home capabilities request never gets an answer (the real server sometimes takes minutes). */
   homeCapabilitiesNeverAnswer?: boolean;
+  /**
+   * Serves the recipe gallery with these section types marked avoid_duplicates, and Recently Added
+   * repeats "Second Title", the card Continue Watching shows above it.
+   */
+  avoidDuplicates?: string[];
   /** Adds a watched episode that is being watched again (position 600 s of 2700 s) to Continue Watching. */
   rewatch?: boolean;
   /**
@@ -1168,6 +1173,23 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
         case 'GET /api/v2/stream/e2e-session':
           // The media never answers: the player keeps its loading cue.
           return;
+        case 'GET /api/v2/sections/recipes':
+          if (!options.avoidDuplicates) return send(404, { title: 'not found', status: 404 });
+          return send(200, {
+            categories: [
+              {
+                category: 'personal',
+                recipes: options.avoidDuplicates.map((type) => ({
+                  admin_only: false,
+                  avoid_duplicates: true,
+                  category: 'personal',
+                  presets: [],
+                  supports_rotation: false,
+                  type,
+                })),
+              },
+            ],
+          });
         case 'GET /api/v2/home/capabilities':
           // The request just hangs, like the media stream below.
           if (options.homeCapabilitiesNeverAnswer) return;
@@ -1284,6 +1306,9 @@ async function startFakeSilo(options: FakeOptions = {}): Promise<{ origin: strin
                             : {}),
                         },
                       ]
+                    : []),
+                  ...(options.avoidDuplicates
+                    ? [{ content_id: 'm2', title: 'Second Title', type: 'movie', year: 2018 }]
                     : []),
                   {
                     content_id: 'm1',
@@ -6303,4 +6328,21 @@ test('player: Back on the end screen stops playback and leads to the episode pag
       },
     )
     .toBe(true);
+});
+
+test('Home: a row of a type the recipes mark does not repeat a card the row above shows, and the keys still walk the rows', async ({
+  page,
+}) => {
+  await openHome(page, { avoidDuplicates: ['recently_added'] });
+  const above = page.getByTestId('row-continue_watching');
+  const below = page.getByTestId('row-recently_added');
+  await expect(above.getByRole('button', { name: /Second Title/ })).toBeVisible();
+  await expect(below.getByRole('button', { name: /First Title/ })).toBeVisible();
+  await expect(below.getByRole('button', { name: /Second Title/ })).toHaveCount(0);
+  await page.keyboard.press('ArrowDown');
+  await expect(above.getByRole('button', { name: /Second Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(below.getByRole('button', { name: /First Title/ })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(below.getByRole('button', { name: /Third Title/ })).toBeFocused();
 });

@@ -29,6 +29,7 @@ import {
 } from '../../ui/media';
 import type { DetailTarget } from '../detail/detailMemory';
 import { HERO_KEY } from './Carousel';
+import { useDedupedSections } from './dedupe';
 import { featuredSlides, firstFeatured } from './featured';
 import { Hero, HeroSkeleton, type Featured } from './Hero';
 import {
@@ -74,7 +75,7 @@ function surfaceOf(sectionType: string): DismissSurface | null {
 
 function rowFrom(
   section: HomeSection,
-  override: Override | undefined,
+  failed: boolean,
   titleOf: (section: HomeSection) => string,
 ): RowModel | null {
   const base = {
@@ -83,13 +84,12 @@ function rowFrom(
     shape: sectionCardShape(section.section_type),
     surface: surfaceOf(section.section_type),
   };
-  if (override?.kind === 'failed') return { ...base, items: [], hasMore: false, failed: true };
-  const source = override?.section ?? section;
+  if (failed) return { ...base, items: [], hasMore: false, failed: true };
   // The server cuts the rows already; the client holds the line when it did not.
-  const items = source.items.slice(0, ROW_ITEM_LIMIT);
+  const items = section.items.slice(0, ROW_ITEM_LIMIT);
   // An empty section is not shown at all.
   if (items.length === 0) return null;
-  const hasMore = source.has_more === true || source.total_count > items.length;
+  const hasMore = section.has_more === true || section.total_count > items.length;
   return { ...base, items, hasMore, failed: false };
 }
 
@@ -165,14 +165,25 @@ export function HomeScreen({ rowMemory, onPlay, onOpenDetail, onExploreSection }
     }
   }
 
+  // A section read again replaces the list's version; then a card a row above shows is dropped
+  // from the section types the recipes mark. A row that loses all its cards is not drawn.
+  const served = useMemo(
+    () =>
+      (query.data ?? []).map((section) => {
+        const override = activeOverrides[section.id];
+        return override?.kind === 'section' ? override.section : section;
+      }),
+    [query.data, activeOverrides],
+  );
+  const sections = useDedupedSections(served);
   const rows = useMemo(
     () =>
-      (query.data ?? []).flatMap((section) => {
+      sections.flatMap((section) => {
         if (section.id === featuredId) return [];
-        const row = rowFrom(section, activeOverrides[section.id], titleOf);
+        const row = rowFrom(section, activeOverrides[section.id]?.kind === 'failed', titleOf);
         return row ? [row] : [];
       }),
-    [query.data, activeOverrides, titleOf, featuredId],
+    [sections, activeOverrides, titleOf, featuredId],
   );
 
   const [focusedRow, setFocusedRow] = useState(() => rowMemory.get(LAST_ROW_KEY) ?? 0);

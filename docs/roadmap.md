@@ -39,7 +39,7 @@ Answers the platform questions before any real UI is built. Looks do not matter 
 
 - ✅ Home built from the server's home sections: Continue Watching, Next Up, Recently Added and every other row the admin configures (TV 2026-11-09)
 - 🟨 Rows and cards as in Silo's web app: wide cards for Continue Watching and Next Up with the episode and time-left lines under them, posters with the title and the year ("1997 SERIE") in every other row, the web's sizes; the focused row stays inside the safe area
-- ⬜ A card a row above already shows is dropped from a lower row, for the section types the server's recipe catalogue marks, as the web app does (needs `GET /api/v2/sections/recipes` pinned first)
+- 🟨 A card a row above already shows is dropped from a lower row, for the section types the server's recipe catalogue marks (`avoid_duplicates`), as the web app does; on Home and in the library's Recommended view
 - 🟨 Row titles in the viewer's language: the server's built-in sections carry a title key, which the app shows in German as the web app does ("Diese Woche im Trend"); a title an admin typed shows as typed
 - 🟨 Rows of at most 20 cards plus an "Explore all" card that opens the full, paged page
 - 🟨 Library tabs for Movies and Series (the browse grid with its filters checked on the TV, 2026-11-09):
